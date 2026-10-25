@@ -27,7 +27,7 @@ which has been largely rewritten.
   Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
 - **Tools** (Claude models): **weather** ("Quel temps fera-t-il demain à Namur ?", from Open-Meteo, free and
-  without key) and **volume** ("Parle plus fort", "Mets le volume à 50"; applied after the answer, kept
+  without key) and **volume** ("Parle plus fort", "Mets le volume à 50"; applied at once if nothing is playing, else after the answer; kept
   across restarts). Claude decides when to call them; a tool adds about 1 to 4 s to the answer.
 - **Knows the date and time**: each question is sent with the current date and time ("[Nous sommes le dimanche
   25 octobre 2026, il est 20 h 07.]"), so "what day is it?" or "how many days until Christmas?" work.

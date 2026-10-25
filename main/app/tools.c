@@ -30,7 +30,8 @@ static const char s_definitions_json[] =
     "{\"name\":\"set_volume\","
     "\"description\":\"Change the speaker volume (0 to 100). Use 'change' for relative requests (about +15 "
     "for 'louder', -15 for 'quieter', more for 'much louder') and 'level' for an exact level. The result gives "
-    "the previous and new levels. The new volume applies right after your answer, which should be short.\","
+    "the previous and new levels and whether the new volume is already applied (else it applies right after "
+    "your answer). Keep the answer short.\","
     "\"input_schema\":{\"type\":\"object\",\"properties\":{"
     "\"level\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
     "\"change\":{\"type\":\"integer\",\"minimum\":-100,\"maximum\":100}}}}"
@@ -64,9 +65,10 @@ static char *run_set_volume(const cJSON *input, bool *is_error)
         return strdup("{\"error\":\"give 'level' or 'change'\"}");
     }
     int applied = app_volume_request(target);
+    bool now = (app_volume_get() == applied && !app_volume_pending());
     char *text = NULL;
-    asprintf(&text, "{\"previous_level\":%d,\"new_level\":%d%s}", previous, applied,
-             applied != target ? ",\"note\":\"limited to 0..100\"" : "");
+    asprintf(&text, "{\"previous_level\":%d,\"new_level\":%d,\"applied_now\":%s%s}", previous, applied,
+             now ? "true" : "false", applied != target ? ",\"note\":\"limited to 0..100\"" : "");
     return text;
 }
 

@@ -64,6 +64,12 @@ void tts_stream_end(void);
  */
 void tts_stream_cancel(void);
 
+/**
+ * @brief True when nothing has been sent to the speaker for at least this long (the I2S output has drained):
+ *        the codec registers can then be written without crackles.
+ */
+bool tts_stream_is_silent(uint32_t ms);
+
 #ifdef __cplusplus
 }
 #endif

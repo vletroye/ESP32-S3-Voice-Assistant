@@ -10,6 +10,10 @@
 #include "bsp_board.h"
 #include "settings.h"
 #include "app_volume.h"
+#include "tts_stream.h"
+
+/* Silence needed before writing the codec at once (the last samples must have left the I2S output) */
+#define VOLUME_SILENCE_MS   300
 
 static const char *TAG = "volume";
 
@@ -34,7 +38,17 @@ int app_volume_request(int level)
 {
     level = level < 0 ? 0 : (level > 100 ? 100 : level);
     s_pending = level;
+    // Nothing playing (the answer is not spoken yet): applied now, so that the answer is heard at the new
+    // level; otherwise once the reply has been spoken
+    if (tts_stream_is_silent(VOLUME_SILENCE_MS)) {
+        app_volume_apply_pending();
+    }
     return level;
+}
+
+bool app_volume_pending(void)
+{
+    return s_pending >= 0;
 }
 
 void app_volume_apply_pending(void)

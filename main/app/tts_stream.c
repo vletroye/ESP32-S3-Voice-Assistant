@@ -78,6 +78,8 @@ static char *s_voice = NULL;
 /* Voice requested by tts_stream_set_voice(), applied by the synthesis task (empty: none) */
 static char s_pending_voice[24];
 static volatile bool s_voice_change = false;
+/* Last audio sent to the speaker (tts_stream_is_silent) */
+static volatile int64_t s_last_play_us = 0;
 /* The session configuration (voice, format, instructions) was sent on the current connection */
 static bool s_session_ready = false;
 static char *s_instructions = NULL;
@@ -636,6 +638,7 @@ static void playback_task(void *arg)
             }
             size_t written = 0;
             bsp_i2s_write(stereo, frames * 2 * sizeof(int16_t), &written, portMAX_DELAY);
+            s_last_play_us = esp_timer_get_time();
         } else {
             /* Ran dry: wait for the end of the reply, or refill the reserve before resuming */
             playing = false;
@@ -647,6 +650,11 @@ static void playback_task(void *arg)
 }
 
 /* ---------- public API ---------- */
+
+bool tts_stream_is_silent(uint32_t ms)
+{
+    return esp_timer_get_time() - s_last_play_us >= (int64_t)ms * 1000;
+}
 
 esp_err_t tts_stream_init(void)
 {

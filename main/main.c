@@ -143,6 +143,36 @@ static bool transcription_is_noise(const char *text)
     return false;
 }
 
+/* "Au revoir" alone (punctuation and case ignored) ends the conversation */
+static bool transcription_is_goodbye(const char *text)
+{
+    const char *const *goodbyes = app_lang_get()->goodbyes;
+    if (goodbyes == NULL) {
+        return false;
+    }
+    // Lowercase letters and digits, every other character becomes one space
+    char norm[48];
+    size_t n = 0;
+    for (const char *p = text; *p && n < sizeof(norm) - 1; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (isalnum(c) || (c & 0x80)) {
+            norm[n++] = tolower(c);
+        } else if (n > 0 && norm[n - 1] != ' ') {
+            norm[n++] = ' ';
+        }
+    }
+    while (n > 0 && norm[n - 1] == ' ') {
+        n--;
+    }
+    norm[n] = '\0';
+    for (; *goodbyes; goodbyes++) {
+        if (strcmp(norm, *goodbyes) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void on_sentence(const char *sentence, void *ctx)
 {
     tts_stream_say(sentence);
@@ -238,6 +268,14 @@ void assistant_listen_end(void)
 
     if (transcription_is_noise(text)) {
         ESP_LOGW(TAG, "Ignored transcription (silence or noise): \"%s\"", text);
+        ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
+        goto err;
+    }
+
+    if (transcription_is_goodbye(text)) {
+        // Back to sleep: no answer, no follow-up listening, the next conversation starts afresh
+        ESP_LOGI(TAG, "Goodbye: \"%s\", going to sleep", text);
+        llm_reset();
         ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
         goto err;
     }

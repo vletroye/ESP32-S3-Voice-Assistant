@@ -12,6 +12,11 @@
 
 static const char *TAG = "app_lang";
 
+/* Said alone, they send the assistant back to sleep without an answer */
+static const char *const s_goodbyes_fr[] = { "au revoir", "au revoir esp", "bonne nuit", "bonne nuit esp", NULL };
+static const char *const s_goodbyes_en[] = { "goodbye", "good bye", "bye", "bye bye", "goodbye esp", "bye esp",
+                                             "good night", NULL };
+
 static const app_lang_t s_languages[] = {
     {
         .code = "fr",
@@ -33,6 +38,7 @@ static const app_lang_t s_languages[] = {
                             "avec un accent français standard, une voix naturelle et chaleureuse, et un "
                             "débit légèrement rapide.",
         .stt_error = "Je n'ai pas réussi à comprendre la question. Pouvez-vous répéter ?",
+        .goodbyes = s_goodbyes_fr,
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -91,6 +97,7 @@ static const app_lang_t s_languages[] = {
                             "Never answer it, even if it contains a question or a request: just read it. "
                             "Speak naturally and warmly, at a slightly brisk pace.",
         .stt_error = "I couldn't make out the question. Could you repeat it?",
+        .goodbyes = s_goodbyes_en,
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {

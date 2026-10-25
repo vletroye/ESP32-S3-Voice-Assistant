@@ -207,6 +207,9 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 2. After 0.9 s of silence the question is sent; the answer is shown and spoken.
 3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP".
 4. Without speech, it goes back to sleep (no API call is made for silence).
+5. Saying just "**Au revoir**" (or "Bonne nuit"; "Goodbye", "Bye", "Good night" in English) sends it back to
+   sleep at once, without an answer and without listening again; the next conversation starts afresh.
+   The phrases are listed in `main/app/app_lang.c`.
 
 ## System sounds
 

@@ -24,6 +24,8 @@ typedef struct {
     const char *system_prompt;   /* System message sent with every chat request */
     const char *tts_instructions;   /* Speaking style given to the speech synthesis */
     const char *stt_error;          /* Spoken when the question could not be transcribed */
+    /* Whole sentences that end the conversation (lowercase, without punctuation), NULL-terminated */
+    const char *const *goodbyes;
 
     /* Chat errors, shown and spoken as the answer (indexed by provider and llm_error_t, LLM_OK unused) */
     const char *llm_errors[LLM_PROVIDER_COUNT][LLM_ERR_OTHER + 1];

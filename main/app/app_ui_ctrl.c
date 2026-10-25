@@ -49,6 +49,20 @@ static void label_localize(lv_obj_t *label, const char *text, const lv_font_t *f
     lv_label_set_text(label, text);
 }
 
+/* Text under "Listening": show its last line, scrolling up smoothly when the text grows */
+static void listen_label_set_text(const char *text)
+{
+    lv_label_set_text(ui_LabelListenSpeak, text);
+    lv_obj_update_layout(ui_LabelListenSpeak);
+    lv_coord_t bottom = lv_obj_get_scroll_bottom(ui_LabelListenSpeak);
+    if (bottom > 0) {
+        lv_obj_scroll_by(ui_LabelListenSpeak, 0, -bottom, LV_ANIM_ON);
+    } else if (bottom < 0) {
+        // Shorter text (new session): back to the top at once
+        lv_obj_scroll_to_y(ui_LabelListenSpeak, 0, LV_ANIM_OFF);
+    }
+}
+
 /* ---------- Settings screen: language and model, saved to NVS with the Save button, then restart ---------- */
 
 #define SETTINGS_RESTART_DELAY_MS       1000
@@ -219,6 +233,15 @@ static void ui_ctrl_localize(void)
 
     // Generated UI fonts lack accented glyphs: use the Latin-1 fonts (CJK falls back to KaiTi)
     lv_obj_set_style_text_font(ui_LabelListenSpeak, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    /*
+     * Text under "Listening": wrapped on several lines, one line shown, scrolled up to the last line as the
+     * transcript grows (the generated label scrolls horizontally on a single line)
+     */
+    lv_label_set_long_mode(ui_LabelListenSpeak, LV_LABEL_LONG_WRAP);
+    lv_obj_set_height(ui_LabelListenSpeak, lv_font_get_line_height(&ui_font_Latin20));
+    lv_obj_set_scroll_dir(ui_LabelListenSpeak, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(ui_LabelListenSpeak, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_text_font(ui_LabelReplyQuestion, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_LabelReplyContent, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
     label_localize(ui_LabelSetupWifi, lang->wifi_connecting, &ui_font_Latin20);
@@ -283,7 +306,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         hide_panel[1] = ui_PanelGet;
         hide_panel[2] = ui_PanelReply;
         lv_obj_clear_flag(ui_ImageListenSettings, LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text(ui_LabelListenSpeak, " ");
+        listen_label_set_text(" ");
         break;
     case UI_CTRL_PANEL_LISTEN:
         show_panel = ui_PanelListen;
@@ -291,7 +314,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         hide_panel[1] = ui_PanelGet;
         hide_panel[2] = ui_PanelReply;
         lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text(ui_LabelListenSpeak, app_lang_get()->listening);
+        listen_label_set_text(app_lang_get()->listening);
         // Reset flags and timer of reply
         reply_content_get = false;
         reply_audio_start = false;
@@ -304,7 +327,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         hide_panel[1] = ui_PanelListen;
         hide_panel[2] = ui_PanelReply;
         lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text(ui_LabelListenSpeak, app_lang_get()->thinking);
+        listen_label_set_text(app_lang_get()->thinking);
         break;
     case UI_CTRL_PANEL_REPLY:
         show_panel = ui_PanelReply;
@@ -394,7 +417,7 @@ void ui_ctrl_label_show_text(ui_ctrl_label_t label, const char *text)
         switch (label) {
         case UI_CTRL_LABEL_LISTEN_SPEAK:
             ESP_LOGI(TAG, "update listen speak");
-            lv_label_set_text(ui_LabelListenSpeak, text);
+            listen_label_set_text(text);
             break;
         case UI_CTRL_LABEL_REPLY_QUESTION:
             ESP_LOGI(TAG, "update reply question");

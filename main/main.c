@@ -269,9 +269,10 @@ static char *build_system_prompt(void)
     if (where[0]) {
         snprintf(location, sizeof(location), lang->location_line, where);
     }
+    const char *home = sys_param->homey_url[0] ? lang->home_line : "";
     char *prompt = NULL;
-    asprintf(&prompt, "%s%s%s%s%s%s%s%s%s", lang->system_prompt,
-             location[0] ? "\n\n" : "", location,
+    asprintf(&prompt, "%s%s%s%s%s%s%s%s%s%s%s", lang->system_prompt,
+             location[0] ? "\n\n" : "", location, home[0] ? "\n\n" : "", home,
              persona[0] ? "\n\n" : "", persona,
              notes[0] ? "\n\n" : "", notes[0] ? lang->memory_header : "", notes[0] ? "\n" : "", notes);
     return prompt;

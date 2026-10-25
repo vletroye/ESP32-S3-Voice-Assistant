@@ -424,8 +424,13 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - **Homey**: with `Homey_url` set, the main task opens an MCP session (`initialize`, then
   `notifications/initialized`) once the Wi-Fi is up, reads `tools/list` (~190 tools, ~180 KB, parsed in
   PSRAM) and keeps 16 of them (`s_selected` in `homey_mcp.c`, ~2,900 tokens of definitions instead of ~50,000).
-  Calls go through `tools/call` on the local network; results are cut at 4,000 characters; an expired session
-  is reopened. Retried every minute while the Homey cannot be reached.
+  Calls go through `tools/call` on the local network. JSON results lose their useless fields (icons, update
+  dates, parent zone, flow folder, empty sub-zone lists: the room list goes from ~7,300 to ~3,600 characters)
+  and are cut at 12,000 characters (logged when it happens). Once answered, the history keeps only their first
+  600 characters, so a long list is not sent again in full with every question. The instructions then tell
+  the model to call the Homey tools again for every question about the home instead of answering from the
+  conversation. An expired session is reopened; retried every minute while the Homey cannot be reached.
+  After an update, say "au revoir" once if the saved conversation still holds old, wrong answers about the home.
 - **Web search**: the server tool `web_search_20250305` is added to the request when the model's description
   (read by the prewarm, `GET /v1/models/{model}`) says it is supported. Its results (encrypted page contents)
   are dropped from the history once the answer is complete, so that they are not sent again with every later

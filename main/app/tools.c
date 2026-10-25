@@ -131,6 +131,6 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
         ESP_LOGW(TAG, "Unknown tool %s", name);
         return NULL;
     }
-    ESP_LOGI(TAG, "-> %.300s", result ? result : "(none)");
+    ESP_LOGI(TAG, "-> (%u chars) %.300s", result ? (unsigned)strlen(result) : 0, result ? result : "(none)");
     return result;
 }

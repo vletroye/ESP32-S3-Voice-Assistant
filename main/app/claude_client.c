@@ -746,6 +746,40 @@ int claude_client_web_searches(void)
     return s_web_search_calls;
 }
 
+/*
+ * Tool results of an answered exchange are shortened in the history: the answer already used them, and kept
+ * whole (a room list, a home briefing) they would be sent again with every later question
+ */
+#define TOOL_RESULT_KEEP_CHARS  600
+
+static void shorten_tool_results(int from)
+{
+    if (exchange_has_thinking(from)) {
+        return;     // kept verbatim, as the API checks thinking exchanges
+    }
+    for (int i = from; i < cJSON_GetArraySize(s_messages); i++) {
+        cJSON *block;
+        cJSON_ArrayForEach(block, cJSON_GetObjectItem(cJSON_GetArrayItem(s_messages, i), "content")) {
+            const cJSON *type = cJSON_GetObjectItem(block, "type");
+            cJSON *content = cJSON_GetObjectItem(block, "content");
+            if (!cJSON_IsString(type) || strcmp(type->valuestring, "tool_result") != 0 || !cJSON_IsString(content) ||
+                    strlen(content->valuestring) <= TOOL_RESULT_KEEP_CHARS) {
+                continue;
+            }
+            size_t keep = TOOL_RESULT_KEEP_CHARS;
+            while (keep > 0 && ((unsigned char)content->valuestring[keep] & 0xC0) == 0x80) {
+                keep--;     // do not cut a UTF-8 character
+            }
+            char *shorter = NULL;
+            asprintf(&shorter, "%.*s [... only the start is kept here: call the tool again to get the whole result]", (int)keep, content->valuestring);
+            if (shorter) {
+                cJSON_ReplaceItemInObject(block, "content", cJSON_CreateString(shorter));
+                free(shorter);
+            }
+        }
+    }
+}
+
 static void add_message(const char *role, cJSON *content)
 {
     cJSON *msg = cJSON_CreateObject();
@@ -848,6 +882,7 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
     }
     if (error == LLM_OK) {
         drop_web_search_blocks(start_count);
+        shorten_tool_results(start_count);
         trim_history();
         if (full_text) {
             *full_text = answer.p;

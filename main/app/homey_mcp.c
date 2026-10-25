@@ -18,8 +18,11 @@
 #define HOMEY_TIMEOUT_MS        10000
 /* The full tool list is large (~190 tools, ~180 KB): read into PSRAM, then only the selection is kept */
 #define HOMEY_MAX_BODY          (512 * 1024)
-/* Results kept short: they go back to the model and stay in the conversation */
-#define HOMEY_MAX_RESULT        4000
+/*
+ * Results given to the model, after the useless fields are removed (the room list is ~3,600 characters, the
+ * home briefing ~6,600); the conversation keeps a shortened copy once answered (claude_client.c)
+ */
+#define HOMEY_MAX_RESULT        12000
 #define HOMEY_PROTOCOL          "2025-06-18"
 
 static const char *TAG = "homey";
@@ -223,7 +226,53 @@ bool homey_mcp_has_tool(const char *name)
     return i >= 0 && s_available[i];
 }
 
-/* Text of a tools/call answer: the text items of "content", shortened */
+/*
+ * Fields of no use to answer by voice, removed from JSON results: icons, update dates, the parent of a zone
+ * (the nesting already gives it), the folder of a flow. Empty "children" lists go too.
+ */
+static const char *const s_dropped_fields[] = {
+    "icon", "iconObj", "iconOverride", "activeLastUpdated", "lastUpdated", "parent", "folder", NULL
+};
+
+static void compact_json(cJSON *node)
+{
+    cJSON *child = node ? node->child : NULL;
+    while (child) {
+        cJSON *next = child->next;
+        bool drop = false;
+        if (child->string) {
+            for (const char *const *f = s_dropped_fields; *f && !drop; f++) {
+                drop = (strcmp(child->string, *f) == 0);
+            }
+            drop |= (strcmp(child->string, "children") == 0 && cJSON_IsArray(child) && !child->child);
+        }
+        if (drop) {
+            cJSON_Delete(cJSON_DetachItemViaPointer(node, child));
+        } else {
+            compact_json(child);
+        }
+        child = next;
+    }
+}
+
+/* A JSON text without its useless fields (the text itself if it is not JSON) */
+static char *compact_text(char *text)
+{
+    cJSON *json = (text && (text[0] == '{' || text[0] == '[')) ? cJSON_Parse(text) : NULL;
+    if (!json) {
+        return text;
+    }
+    compact_json(json);
+    char *compact = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    if (!compact) {
+        return text;
+    }
+    free(text);
+    return compact;
+}
+
+/* Text of a tools/call answer: the text items of "content", without useless fields, shortened if still long */
 static char *result_text(const cJSON *result, bool *is_error)
 {
     *is_error = cJSON_IsTrue(cJSON_GetObjectItem(result, "isError"));
@@ -238,11 +287,19 @@ static char *result_text(const cJSON *result, bool *is_error)
             llm_buf_append(&text, t->valuestring, strlen(t->valuestring));
         }
     }
-    if (text.len > HOMEY_MAX_RESULT) {
-        text.p[HOMEY_MAX_RESULT] = '\0';
-        llm_buf_append(&text, " [...]", 6);
+    char *out = compact_text(text.p ? text.p : strdup("{}"));
+    size_t len = strlen(out);
+    if (len > HOMEY_MAX_RESULT) {
+        ESP_LOGW(TAG, "result of %u characters cut at %d", (unsigned)len, HOMEY_MAX_RESULT);
+        out[HOMEY_MAX_RESULT] = '\0';
+        char *cut = NULL;
+        asprintf(&cut, "%s [... cut]", out);
+        if (cut) {
+            free(out);
+            out = cut;
+        }
     }
-    return text.p ? text.p : strdup("{}");
+    return out;
 }
 
 char *homey_mcp_call(const char *name, const cJSON *input, bool *is_error)

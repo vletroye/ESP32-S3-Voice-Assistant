@@ -429,7 +429,8 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   and are cut at 12,000 characters (logged when it happens). Once answered, the history keeps only their first
   600 characters, so a long list is not sent again in full with every question. The instructions then tell
   the model to call the Homey tools again for every question about the home instead of answering from the
-  conversation. An expired session is reopened; retried every minute while the Homey cannot be reached.
+  conversation, and to answer an action in a few words ("C'est fait.", or what failed and the one question
+  needed to go on). An expired session is reopened; retried every minute while the Homey cannot be reached.
   After an update, say "au revoir" once if the saved conversation still holds old, wrong answers about the home.
 - **Web search**: the server tool `web_search_20250305` is added to the request when the model's description
   (read by the prewarm, `GET /v1/models/{model}`) says it is supported. Its results (encrypted page contents)

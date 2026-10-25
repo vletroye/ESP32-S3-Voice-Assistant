@@ -79,7 +79,10 @@ static const app_lang_t s_languages[] = {
         .home_line = "Pour toute question sur la maison (pièces, appareils, leur état, ambiances, flows, présence, "
                      "consommation), appelle chaque fois les outils de la Homey : les résultats plus anciens de la "
                      "conversation peuvent être raccourcis ou dépassés, ne réponds jamais de mémoire. Pour la liste "
-                     "des pièces, appelle zones_list.",
+                     "des pièces, appelle zones_list. Quand il demande une action (allumer, éteindre, régler, "
+                     "activer une ambiance, lancer un flow), réponds en quelques mots : « C'est fait. » si tout a "
+                     "marché, sinon dis brièvement ce qui n'a pas marché et pose la seule question utile pour "
+                     "continuer. Ne décris pas les appareils, les outils ni les étapes, ne propose rien d'autre.",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -180,7 +183,11 @@ static const app_lang_t s_languages[] = {
                          "not give news from other countries unless asked.",
         .home_line = "For any question about the home (rooms, devices, their state, moods, flows, presence, "
                      "consumption), call the Homey tools every time: older results in the conversation may be "
-                     "shortened or out of date, never answer from memory. For the list of rooms, call zones_list.",
+                     "shortened or out of date, never answer from memory. For the list of rooms, call zones_list. "
+                     "When the user asks for an action (switch on or off, set, activate a mood, start a flow), "
+                     "answer in a few words: \"Done.\" if everything worked, otherwise say briefly what failed and "
+                     "ask the one question needed to go on. Do not describe the devices, the tools or the steps, "
+                     "do not offer anything else.",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {

@@ -26,6 +26,9 @@ which has been largely rewritten.
   `/spiffs/history.json` after each answer), so you can ask later "what were we talking about?".
   Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
+- **Tools** (Claude models): **weather** ("Quel temps fera-t-il demain à Namur ?", from Open-Meteo, free and
+  without key) and **volume** ("Parle plus fort", "Mets le volume à 50"; applied after the answer, kept
+  across restarts). Claude decides when to call them; a tool adds about 1 to 4 s to the answer.
 - **Knows the date and time**: each question is sent with the current date and time ("[Nous sommes le dimanche
   25 octobre 2026, il est 20 h 07.]"), so "what day is it?" or "how many days until Christmas?" work.
 - **Long-term memory**: "Souviens-toi que …" / "Retiens que …" (English: "Remember that …") stores a note,
@@ -139,6 +142,7 @@ Main modules of the assistant (`main/app/`):
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
 | `tts_stream.c` | Speech synthesis (OpenAI Realtime), resampling and I2S playback |
 | `app_lang.c` | UI texts, model and voice instructions, error messages (fr / en) |
+| `tools.c` | Tools offered to Claude (definitions, dispatch); `weather.c` (Open-Meteo), `app_volume.c` |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Clock of the sleep screen (SNTP time, seven-segment digits drawn by a single LVGL object) |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, live text, translations, Settings screen |
@@ -273,13 +277,15 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - **Costs**: transcription is billed by the duration of audio sent (only while listening); according to
   OpenAI's documentation, idle open connections are not billed. Answer costs depend on the chosen model
   (Opus and Astra are the most expensive).
-- **Claude tools**: `claude_client.c` handles `stop_reason: tool_use` (logged, extension point
-  `handle_tool_use()`), but no tool is declared yet.
+- **Tools**: `claude_client.c` loops on `stop_reason: tool_use` (up to 3 rounds per question): the tool
+  results go back as `tool_result` blocks and stay in the history. To add a tool, declare it in `tools.c`
+  (JSON definition + a case in `tools_run()`). GPT models get no tools yet (OpenAI's function calling with
+  `store: false` and reasoning models needs more work).
 
 ## Roadmap
 
 - Echo cancellation and voice barge-in (if the BOX-3 provides a reference channel).
-- Tools for the assistant (time, weather, home automation…).
+- More tools: timers and alarms, web search, home automation…
 - NVS encryption to protect the API keys.
 
 ## Credits and licenses

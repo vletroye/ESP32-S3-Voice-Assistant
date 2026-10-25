@@ -6,8 +6,13 @@
 
 #include <ctype.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
+#include "cJSON.h"
 #include "llm.h"
 #include "claude_client.h"
 #include "openai_chat.h"
@@ -28,8 +33,17 @@ const llm_model_t llm_models[] = {
 };
 const size_t llm_model_count = sizeof(llm_models) / sizeof(llm_models[0]);
 
+/* Conversation history kept across sleep and restarts (SPIFFS "storage" partition) */
+#define LLM_HISTORY_FILE        "/spiffs/history.json"
+#define LLM_HISTORY_TMP_FILE    "/spiffs/history.tmp"
+
 static llm_provider_t s_provider = LLM_PROVIDER_CLAUDE;
 static bool s_ready = false;
+static char s_model[64];
+/* Held while the history is used (stream, save) */
+static SemaphoreHandle_t s_lock = NULL;
+/* History changed since the last save */
+static bool s_dirty = false;
 
 llm_provider_t llm_provider_of(const char *model)
 {
@@ -55,6 +69,83 @@ static const char *effort_of(const char *model)
     return "low";
 }
 
+static const cJSON *history_get(void)
+{
+    return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_history() : claude_client_history();
+}
+
+/* Reload the conversation saved for the same model (another model's history has another format) */
+static void history_restore(void)
+{
+    FILE *f = fopen(LLM_HISTORY_FILE, "r");
+    if (!f) {
+        return;
+    }
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *text = size > 0 ? malloc(size + 1) : NULL;
+    size_t n = text ? fread(text, 1, size, f) : 0;
+    fclose(f);
+    if (!text) {
+        return;
+    }
+    text[n] = '\0';
+    cJSON *saved = cJSON_Parse(text);
+    free(text);
+
+    const cJSON *model = cJSON_GetObjectItem(saved, "model");
+    cJSON *messages = cJSON_DetachItemFromObject(saved, "messages");
+    if (cJSON_IsString(model) && strcmp(model->valuestring, s_model) == 0 && cJSON_IsArray(messages)) {
+        int count = cJSON_GetArraySize(messages);
+        if (s_provider == LLM_PROVIDER_OPENAI) {
+            openai_chat_set_history(messages);
+        } else {
+            claude_client_set_history(messages);
+        }
+        ESP_LOGI(TAG, "Conversation restored: %d messages", count);
+    } else {
+        ESP_LOGI(TAG, "Saved conversation ignored (other model or unreadable)");
+        cJSON_Delete(messages);
+    }
+    cJSON_Delete(saved);
+}
+
+void llm_history_save(void)
+{
+    if (!s_ready || !s_dirty || xSemaphoreTake(s_lock, 0) != pdTRUE) {
+        return;
+    }
+    cJSON *saved = cJSON_CreateObject();
+    cJSON_AddStringToObject(saved, "model", s_model);
+    cJSON_AddItemReferenceToObject(saved, "messages", (cJSON *)history_get());
+    char *text = cJSON_PrintUnformatted(saved);
+    cJSON_Delete(saved);
+    s_dirty = false;
+    xSemaphoreGive(s_lock);
+    if (!text) {
+        return;
+    }
+
+    // Written to a temporary file first: a power cut during the write keeps the previous conversation
+    FILE *f = fopen(LLM_HISTORY_TMP_FILE, "w");
+    size_t len = strlen(text);
+    bool ok = f && fwrite(text, 1, len, f) == len;
+    if (f) {
+        ok &= (fclose(f) == 0);
+    }
+    free(text);
+    if (ok) {
+        remove(LLM_HISTORY_FILE);
+        ok = (rename(LLM_HISTORY_TMP_FILE, LLM_HISTORY_FILE) == 0);
+    }
+    if (ok) {
+        ESP_LOGI(TAG, "Conversation saved (%u bytes)", (unsigned)len);
+    } else {
+        ESP_LOGE(TAG, "Failed to save the conversation");
+    }
+}
+
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
                    const char *system_prompt)
 {
@@ -69,6 +160,13 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
         ret = claude_client_init(claude_key, model, system_prompt, effort_of(model));
     }
     s_ready = (ret == ESP_OK);
+    strlcpy(s_model, model, sizeof(s_model));
+    if (!s_lock) {
+        s_lock = xSemaphoreCreateMutex();
+    }
+    if (s_ready) {
+        history_restore();
+    }
     return ret;
 }
 
@@ -85,10 +183,14 @@ llm_error_t llm_stream(const char *text, llm_text_cb_t on_text, void *ctx, char 
     if (!s_ready) {
         return LLM_ERR_NO_KEY;
     }
-    if (s_provider == LLM_PROVIDER_OPENAI) {
-        return openai_chat_stream(text, on_text, ctx, full_text);
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    llm_error_t err = s_provider == LLM_PROVIDER_OPENAI ? openai_chat_stream(text, on_text, ctx, full_text)
+                      : claude_client_stream(text, on_text, ctx, full_text);
+    if (err == LLM_OK) {
+        s_dirty = true;
     }
-    return claude_client_stream(text, on_text, ctx, full_text);
+    xSemaphoreGive(s_lock);
+    return err;
 }
 
 void llm_prewarm(void)
@@ -108,9 +210,14 @@ void llm_reset(void)
     if (!s_ready) {
         return;
     }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
     if (s_provider == LLM_PROVIDER_OPENAI) {
         openai_chat_reset();
     } else {
         claude_client_reset();
     }
+    s_dirty = false;
+    xSemaphoreGive(s_lock);
+    remove(LLM_HISTORY_FILE);
+    ESP_LOGI(TAG, "Conversation cleared");
 }

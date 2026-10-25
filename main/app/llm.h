@@ -82,8 +82,17 @@ llm_error_t llm_stream(const char *text, llm_text_cb_t on_text, void *ctx, char 
 /** Open the HTTPS connection in advance (blocking, ~1 s when not already open) */
 void llm_prewarm(void);
 
-/** Forget the conversation history */
+/** Forget the conversation history, also the saved one */
 void llm_reset(void);
+
+/**
+ * @brief Save the conversation history to flash if it changed since the last save.
+ *
+ * Restored by llm_init() when the model is the same, so that a conversation can go on after the device
+ * slept or restarted. Writing to flash pauses the other tasks briefly: call it when no audio is playing,
+ * from a task whose stack is in internal RAM.
+ */
+void llm_history_save(void);
 
 #ifdef __cplusplus
 }

@@ -22,6 +22,10 @@ which has been largely rewritten.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
+- **Conversation memory**: the last 10 exchanges are kept across sleep and restarts (saved to flash in
+  `/spiffs/history.json` after each answer), so you can ask later "what were we talking about?".
+  Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
+  `idf.py flash` erases it (the `storage` partition is rewritten).
 - Saying "Bonjour ESP" during an answer **interrupts** it.
 - **Clock** under the sleeping robot: `HH:MM` in glowing seven-segment digits and the date (`DIM 25/10/26`),
   synchronized over the Internet (NTP).
@@ -47,8 +51,8 @@ flowchart LR
 | Wake word | local (ESP-SR 2.5.5) | WakeNet9 "Bonjour ESP" + "Hi ESP", 2-mic AFE |
 | End of speech | local | ESP-SR VAD, 0.9 s of silence |
 | Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output streamed continuously |
-| Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 4 exchanges of history |
-| Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 4 exchanges of history |
+| Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 10 exchanges of history |
+| Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 10 exchanges of history |
 | Speech synthesis | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice `marin` | Permanent WebSocket, one response per sentence, read verbatim |
 | Playback | local | 24 → 16 kHz resampling, I2S fixed at 16 kHz (shared with the mics) |
 
@@ -216,7 +220,8 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP".
 4. Without speech, it goes back to sleep (no API call is made for silence).
 5. Saying just "**Au revoir**" (or "Bonne nuit"; "Goodbye", "Bye", "Good night" in English) sends it back to
-   sleep at once, without an answer and without listening again; the next conversation starts afresh.
+   sleep at once, without an answer and without listening again, and clears the saved conversation: the next
+   one starts afresh. Otherwise the conversation goes on after sleep or a restart.
    The phrases are listed in `main/app/app_lang.c`.
 
 ## System sounds

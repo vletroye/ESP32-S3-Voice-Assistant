@@ -7,6 +7,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include "cJSON.h"
 #include "llm.h"
 
 #ifdef __cplusplus
@@ -37,6 +38,12 @@ void openai_chat_prewarm(void);
 
 /** Forget the conversation history */
 void openai_chat_reset(void);
+
+/** Conversation history (JSON array of messages, owned by the client), to save it */
+const cJSON *openai_chat_history(void);
+
+/** Replace the conversation history (taken over by the client), e.g. when restored at start-up */
+void openai_chat_set_history(cJSON *messages);
 
 #ifdef __cplusplus
 }

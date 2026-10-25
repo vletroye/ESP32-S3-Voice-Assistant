@@ -25,8 +25,8 @@
 #define CLAUDE_MAX_TOKENS       2048
 #define CLAUDE_TIMEOUT_MS       30000
 #define CLAUDE_READ_CHUNK       512
-/* History kept for follow-up questions: the last 4 exchanges (user + assistant messages) */
-#define CLAUDE_HISTORY_MAX_MSGS 8
+/* History kept for follow-up questions: the last 10 exchanges (user + assistant messages) */
+#define CLAUDE_HISTORY_MAX_MSGS 20
 
 static const char *TAG = "claude";
 
@@ -419,6 +419,18 @@ static void trim_history(void)
         cJSON_DeleteItemFromArray(s_messages, 0);
         cJSON_DeleteItemFromArray(s_messages, 0);
     }
+}
+
+const cJSON *claude_client_history(void)
+{
+    return s_messages;
+}
+
+void claude_client_set_history(cJSON *messages)
+{
+    cJSON_Delete(s_messages);
+    s_messages = messages;
+    trim_history();
 }
 
 /*

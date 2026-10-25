@@ -43,7 +43,6 @@ extern void assistant_listen_start(void);
 extern void assistant_listen_end(void);
 extern void assistant_listen_abort(void);
 extern void assistant_prewarm(void);
-extern void openai_conversation_reset(void);
 extern void assistant_reply_stop(void);
 extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
 
@@ -310,10 +309,6 @@ void sr_handler_task(void *pvParam)
         if (WAKENET_DETECTED == result.wakenet_mode) {
             // A new question interrupts the reply being spoken
             assistant_reply_stop();
-            if (!result.followup) {
-                // Woken by wake word or touch: start a new conversation
-                openai_conversation_reset();
-            }
             audio_record_start();
             // Connect to the transcription service while the user speaks (the audio is buffered meanwhile)
             assistant_listen_start();

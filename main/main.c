@@ -42,12 +42,8 @@ static sys_param_t *sys_param = NULL;
 static sentence_splitter_t s_splitter;
 /* End of transcription, to measure the time to the first spoken audio */
 static int64_t s_reply_t0 = 0;
-
-/* Forget the conversation history. Called when a new conversation starts (wake word or touch). */
-void openai_conversation_reset(void)
-{
-    llm_reset();
-}
+/* A reply has been spoken: the conversation is saved by the main task (flash writes pause the audio) */
+static volatile bool s_history_save_pending = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -191,6 +187,7 @@ static void on_reply_audio(tts_event_t event)
 
     // TTS_EVENT_DONE: the whole reply has been spoken
     ESP_LOGI(TAG, "[timing] reply spoken, %lld ms after the transcription", elapsed_ms(s_reply_t0));
+    s_history_save_pending = true;
     if (record_flag) {
         // Reply interrupted by a new listening session (wake word or touch)
         return;
@@ -394,8 +391,17 @@ void app_main()
     tts_stream_configure(sys_param->url, sys_param->key, CONFIG_ASSISTANT_TTS_MODEL, CONFIG_ASSISTANT_TTS_VOICE,
                          app_lang_get()->tts_instructions);
 
-    while (true) {
+    for (int seconds = 0; ; seconds++) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
 
+        // Conversation saved after each spoken reply (this task's stack is in internal RAM, as flash writes need)
+        if (s_history_save_pending) {
+            s_history_save_pending = false;
+            llm_history_save();
+        }
+        if (seconds % 30) {
+            continue;
+        }
         // Internal RAM is the scarce resource (task stacks, DMA); PSRAM holds the large buffers
         ESP_LOGI(TAG, "[heap] internal free %u (min %u, largest block %u), PSRAM free %u (min %u)",
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL),
@@ -403,6 +409,5 @@ void app_main()
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL),
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
                  (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
-        vTaskDelay(pdMS_TO_TICKS(30 * 1000));
     }
 }

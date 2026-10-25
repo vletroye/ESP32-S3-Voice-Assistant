@@ -533,6 +533,11 @@ static void tts_task(void *arg)
  */
 #define PREBUFFER_START_BYTES   (200 * 16 * sizeof(int16_t))    /* 200 ms at 16 kHz mono */
 #define PREBUFFER_RESUME_BYTES  (100 * 16 * sizeof(int16_t))    /* 100 ms after running dry */
+/*
+ * When the synthesis is slower than real time (slow network or service), each underrun doubles the reserve
+ * waited for before resuming (100 ms, 200 ms ... 1.6 s): a few longer pauses instead of choppy speech
+ */
+#define PREBUFFER_RESUME_MAX_SHIFT  4
 
 static void playback_task(void *arg)
 {
@@ -562,7 +567,8 @@ static void playback_task(void *arg)
         size_t available = xStreamBufferBytesAvailable(s_audio);
 
         if (!playing) {
-            size_t needed = started ? PREBUFFER_RESUME_BYTES : PREBUFFER_START_BYTES;
+            unsigned shift = underruns < PREBUFFER_RESUME_MAX_SHIFT ? underruns : PREBUFFER_RESUME_MAX_SHIFT;
+            size_t needed = started ? (PREBUFFER_RESUME_BYTES << shift) : PREBUFFER_START_BYTES;
             if (available >= needed || (synth_done && available > 0)) {
                 playing = true;
             } else {

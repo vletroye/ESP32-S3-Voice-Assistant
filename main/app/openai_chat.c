@@ -22,8 +22,8 @@
 #define OPENAI_MAX_OUTPUT_TOKENS    2048
 #define OPENAI_TIMEOUT_MS           30000
 #define OPENAI_READ_CHUNK           512
-/* History kept for follow-up questions: the last 4 exchanges (user + assistant messages) */
-#define OPENAI_HISTORY_MAX_MSGS     8
+/* History kept for follow-up questions: the last 10 exchanges (user + assistant messages) */
+#define OPENAI_HISTORY_MAX_MSGS     20
 #define OPENAI_URL_SIZE             160
 
 static const char *TAG = "openai_chat";
@@ -298,6 +298,18 @@ static void trim_history(void)
         cJSON_DeleteItemFromArray(s_messages, 0);
         cJSON_DeleteItemFromArray(s_messages, 0);
     }
+}
+
+const cJSON *openai_chat_history(void)
+{
+    return s_messages;
+}
+
+void openai_chat_set_history(cJSON *messages)
+{
+    cJSON_Delete(s_messages);
+    s_messages = messages;
+    trim_history();
 }
 
 static void add_message(const char *role, const char *text)

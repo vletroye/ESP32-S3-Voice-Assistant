@@ -7,6 +7,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include "cJSON.h"
 #include "llm.h"
 
 #ifdef __cplusplus
@@ -50,6 +51,12 @@ void claude_client_prewarm(void);
  * @brief Forget the conversation history.
  */
 void claude_client_reset(void);
+
+/** Conversation history (JSON array of messages, owned by the client), to save it */
+const cJSON *claude_client_history(void);
+
+/** Replace the conversation history (taken over by the client), e.g. when restored at start-up */
+void claude_client_set_history(cJSON *messages);
 
 #ifdef __cplusplus
 }

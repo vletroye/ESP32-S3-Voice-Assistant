@@ -270,8 +270,9 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 ## Design notes
 
-- **Memory**: internal RAM (~30 KB free while running) is reserved for stacks and DMA; large buffers,
-  JSON trees, TLS buffers (mbedTLS) and the network task stacks live in PSRAM.
+- **Memory**: internal RAM (~46 KB free while running) is reserved for stacks, DMA and the network; large
+  buffers, JSON trees, TLS buffers (mbedTLS), the network task stacks and the LVGL objects live in PSRAM
+  (LVGL's allocator is redirected by `main/lvgl_psram/lv_psram.h` and the top-level `CMakeLists.txt`).
 - **No echo cancellation**: speech detection ignores the start of each listening window (beep, end of the
   answer) and filters by volume; empty transcripts and typical Whisper hallucinations on silence are ignored.
 - **Costs**: transcription is billed by the duration of audio sent (only while listening); according to

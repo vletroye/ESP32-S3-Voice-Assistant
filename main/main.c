@@ -58,6 +58,7 @@ typedef struct {
     size_t cap;
     int64_t last_refresh_us;
     bool shown;
+    size_t part_start;      /* start of the text written since the last tool call */
 } reply_view_t;
 
 static void reply_view_append(reply_view_t *v, const char *s)
@@ -99,9 +100,15 @@ static void on_llm_text(const char *delta, void *ctx)
 {
     reply_view_t *v = (reply_view_t *)ctx;
     if (delta == NULL) {
-        // A tool runs (web search...): speak what was written so far, even a short "Je regarde."
+        // A tool runs (web search...): speak what was written so far, even a short "Je regarde.", but take
+        // this waiting sentence off the screen, which keeps only the answer
         sentence_splitter_finish(&s_splitter);
         sentence_splitter_init(&s_splitter, on_sentence, NULL);
+        if (v->text && v->len > v->part_start) {
+            v->len = v->part_start;
+            v->text[v->len] = '\0';
+            reply_view_refresh(v);
+        }
         return;
     }
     sentence_splitter_feed(&s_splitter, delta);
@@ -336,6 +343,7 @@ void assistant_listen_end(void)
     reply_view_append(&view, sys_param->chat_model);
     reply_view_append(&view, "] ");
     size_t prefix_len = view.len;
+    view.part_start = prefix_len;
 
     // Each sentence is spoken as soon as the model has written it
     s_reply_t0 = esp_timer_get_time();

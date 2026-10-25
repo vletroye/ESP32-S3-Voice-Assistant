@@ -31,7 +31,7 @@ which has been largely rewritten.
   across restarts), and **web search** for current information ("Quelles sont les dernières nouvelles en
   Belgique ?"; run by Anthropic, about $0.01 per search, 3 searches at most per question, enabled when the
   model supports it). Claude decides when to call them; a tool adds about 1 to 4 s to the answer, and a
-  short "Je regarde." is spoken while it runs.
+  short "Je regarde." is spoken (not shown) while it runs.
 - **Knows the date and time**: each question is sent with the current date and time ("[Nous sommes le dimanche
   25 octobre 2026, il est 20 h 07.]"), so "what day is it?" or "how many days until Christmas?" work.
 - **Long-term memory**: "Souviens-toi que …" / "Retiens que …" (English: "Remember that …") stores a note,

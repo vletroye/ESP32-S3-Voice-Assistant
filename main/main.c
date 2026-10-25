@@ -388,7 +388,7 @@ void app_main()
     ESP_ERROR_CHECK(stt_stream_init());
     stt_stream_configure(sys_param->key, CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
     ESP_ERROR_CHECK(tts_stream_init());
-    tts_stream_configure(sys_param->url, sys_param->key, CONFIG_ASSISTANT_TTS_MODEL, CONFIG_ASSISTANT_TTS_VOICE,
+    tts_stream_configure(sys_param->url, sys_param->key, CONFIG_ASSISTANT_TTS_MODEL, sys_param->voice,
                          app_lang_get()->tts_instructions);
 
     for (int seconds = 0; ; seconds++) {

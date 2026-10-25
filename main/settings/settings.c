@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -143,6 +144,16 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
     }
 
+    // Voice of the answers (optional)
+    len = sizeof(g_sys_param.voice);
+    if (nvs_get_str(my_handle, "Voice", g_sys_param.voice, &len) != ESP_OK || len <= 1) {
+        strlcpy(g_sys_param.voice, CONFIG_ASSISTANT_TTS_VOICE, sizeof(g_sys_param.voice));
+    }
+    str_trim(g_sys_param.voice);
+    for (char *p = g_sys_param.voice; *p; p++) {
+        *p = tolower((unsigned char)*p);
+    }
+
     // Scrolling mode of the answer (optional): "line" (default) or "smooth"
     char mode[12] = {0};
     len = sizeof(mode);
@@ -165,6 +176,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
+    ESP_LOGI(TAG, "voice:%s", g_sys_param.voice);
     ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s, %s", g_sys_param.lang, g_sys_param.scroll_cps,
              g_sys_param.scroll_smooth ? "smooth" : "line by line");
     ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars)", g_sys_param.chat_model,

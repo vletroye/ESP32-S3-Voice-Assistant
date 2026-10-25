@@ -75,6 +75,11 @@ static char *s_uri = NULL;
 static char *s_auth_header = NULL;
 static char *s_model = NULL;
 static char *s_voice = NULL;
+/* Voice requested by tts_stream_set_voice(), applied by the synthesis task (empty: none) */
+static char s_pending_voice[24];
+static volatile bool s_voice_change = false;
+/* The session configuration (voice, format, instructions) was sent on the current connection */
+static bool s_session_ready = false;
 static char *s_instructions = NULL;
 
 /* ---------- 24 kHz -> 16 kHz resampler ---------- */
@@ -216,6 +221,12 @@ void tts_stream_configure(const char *base_url, const char *api_key, const char 
     replace_str(&s_voice, voice);
     replace_str(&s_instructions, instructions);
     ESP_LOGI(TAG, "model: %s, voice: %s", s_model ? s_model : "-", s_voice ? s_voice : "-");
+}
+
+void tts_stream_set_voice(const char *voice)
+{
+    strlcpy(s_pending_voice, voice, sizeof(s_pending_voice));
+    s_voice_change = true;
 }
 
 /* Send audio to the playback buffer, giving up if the reply was cancelled meanwhile */
@@ -443,6 +454,10 @@ static void synthesize(esp_websocket_client_handle_t client, const char *text, u
         ESP_LOGE(TAG, "Not connected: sentence dropped");
         return;
     }
+    /* Just (re)connected: the session configuration must go first */
+    if (!s_session_ready && send_session_update(client)) {
+        s_session_ready = true;
+    }
     s_resampler = (resampler_t) {0};
     s_first_audio_us = 0;
     s_audio_bytes = 0;
@@ -474,6 +489,25 @@ static void synthesize(esp_websocket_client_handle_t client, const char *text, u
              (esp_timer_get_time() - s_request_us) / 1000, (unsigned)s_audio_bytes, s_response_status);
 }
 
+/* New voice: a new session (a session cannot change its voice once it has spoken) */
+static void apply_voice_change(esp_websocket_client_handle_t *client, int64_t *down_since)
+{
+    if (!s_voice_change) {
+        return;
+    }
+    s_voice_change = false;
+    replace_str(&s_voice, s_pending_voice);
+    ESP_LOGI(TAG, "voice: %s, reconnecting", s_voice);
+    if (*client) {
+        esp_websocket_client_stop(*client);
+        esp_websocket_client_destroy(*client);
+    }
+    xEventGroupClearBits(s_events, EV_CONNECTED);
+    s_session_ready = false;
+    *client = (WIFI_STATUS_CONNECTED_OK == wifi_connected_already()) ? create_client() : NULL;
+    *down_since = esp_timer_get_time();
+}
+
 static void tts_task(void *arg)
 {
     /* Nothing to do before the network is up */
@@ -481,20 +515,21 @@ static void tts_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     esp_websocket_client_handle_t client = create_client();
-    bool session_ready = false;
     int64_t down_since = esp_timer_get_time();
 
     for (;;) {
+        apply_voice_change(&client, &down_since);
+
         /* Connection supervision: (re)send the session configuration after each connection */
         bool connected = client && esp_websocket_client_is_connected(client) &&
                          (xEventGroupGetBits(s_events) & EV_CONNECTED);
-        if (connected && !session_ready) {
+        if (connected && !s_session_ready) {
             if (send_session_update(client)) {
-                session_ready = true;
+                s_session_ready = true;
                 ESP_LOGI(TAG, "connected in %lld ms", (esp_timer_get_time() - down_since) / 1000);
             }
-        } else if (!connected && session_ready) {
-            session_ready = false;
+        } else if (!connected && s_session_ready) {
+            s_session_ready = false;
             down_since = esp_timer_get_time();
             ESP_LOGW(TAG, "connection lost, reconnecting");
         }
@@ -513,6 +548,8 @@ static void tts_task(void *arg)
         if (xQueueReceive(s_sentences, &item, pdMS_TO_TICKS(200)) != pdTRUE) {
             continue;
         }
+        /* A voice chosen just before this sentence (e.g. its sample) must already apply to it */
+        apply_voice_change(&client, &down_since);
         if (item.generation == s_generation) {
             if (item.text && client) {
                 synthesize(client, item.text, item.generation);

@@ -169,8 +169,11 @@ Tap the gear icon on the home screen:
 
 - **Langue / Language**: Français or English (interface, transcription, answers and voice).
 - **Modèle / Model**: the model answering the questions (see the table above).
+- **Voix / Voice**: the OpenAI voice reading the answers: Marin, Cedar (both recommended by OpenAI), Alloy,
+  Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
+  session reconnects (~2 s) and the new voice introduces itself.
 
-Change one or both, then press **Save** (bottom right, enabled once something changed): the choice is saved to the device's NVS and the device restarts to apply it.
+For the language and the model, press **Save** (bottom right, enabled once something changed): the choice is saved to the device's NVS and the device restarts to apply it.
 The folder-and-gear icon (top right) switches to the configuration mode described below.
 
 ### On the device: `CONFIG.INI`
@@ -187,6 +190,7 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
 | `Language` | Assistant language | `fr` or `en` |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
+| `Voice` | Voice of the answers (also set from the Settings screen) | `marin`, `cedar`, `coral`… |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
@@ -204,7 +208,7 @@ stored in plain text in the device's NVS and never appear in the logs (only thei
 | `CONFIG_ASSISTANT_STT_MODEL` | `gpt-live-transcribe` | Transcription model |
 | `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
 | `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Speech synthesis model |
-| `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice |
+| `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice when `Voice` is not set |
 | `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |
 | `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |

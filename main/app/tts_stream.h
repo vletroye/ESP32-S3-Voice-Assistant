@@ -39,6 +39,12 @@ void tts_stream_configure(const char *base_url, const char *api_key, const char 
                           const char *instructions);
 
 /**
+ * @brief Change the voice (e.g. "cedar"). A Realtime session keeps its voice once it has spoken, so the
+ *        synthesis reconnects with a new session; the next sentences use the new voice.
+ */
+void tts_stream_set_voice(const char *voice);
+
+/**
  * @brief Start a new spoken reply; cancels the previous one if still playing.
  */
 void tts_stream_begin(tts_event_cb_t cb);

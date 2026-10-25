@@ -38,6 +38,8 @@ typedef struct {
     const char *settings_title;
     const char *settings_language;
     const char *settings_model;
+    const char *settings_voice;
+    const char *voice_sample;       /* Spoken with a voice just chosen, %s = its name */
     const char *settings_save;      /* Save button, enabled once the language or the model is changed */
     const char *settings_saved;     /* Shown while the device restarts after saving */
     const char *reset_title;

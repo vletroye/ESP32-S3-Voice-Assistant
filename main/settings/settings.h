@@ -17,6 +17,7 @@
 #define LANG_SIZE 8
 #define MODEL_SIZE 48
 #define CLAUDE_KEY_SIZE 256
+#define VOICE_SIZE 24
 
 typedef struct {
     char ssid[SSID_SIZE];             /* SSID of target AP. */
@@ -28,6 +29,7 @@ typedef struct {
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude or GPT). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
+    char voice[VOICE_SIZE];           /* OpenAI voice reading the answers (marin, cedar...). */
 } sys_param_t;
 
 esp_err_t settings_factory_reset(void);

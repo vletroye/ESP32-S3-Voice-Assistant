@@ -187,6 +187,8 @@ void app_main(void)
         nvs_init_str_if_missing("Scroll_speed", scroll_speed);
         // How the answer scrolls: "line" (one line at a time) or "smooth" (continuous)
         nvs_init_str_if_missing("Scroll_mode", "line");
+        // Voice of the answers (same default as the assistant's ASSISTANT_TTS_VOICE)
+        nvs_init_str_if_missing("Voice", "marin");
     }
     nvs_close(my_handle);
 

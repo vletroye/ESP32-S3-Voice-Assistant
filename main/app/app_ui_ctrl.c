@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: CC0-1.0
  */
 
+#include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include "esp_log.h"
@@ -15,6 +17,7 @@
 #include "app_lang.h"
 #include "llm.h"
 #include "app_clock.h"
+#include "tts_stream.h"
 #include "settings.h"
 #include "bsp/esp-bsp.h"
 
@@ -157,14 +160,44 @@ static void settings_save_clicked_cb(lv_event_t *e)
     }
 }
 
-static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uint16_t selected)
+static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uint16_t selected,
+                                    lv_event_cb_t changed_cb)
 {
     lv_dropdown_set_options(dropdown, options);
     lv_dropdown_set_selected(dropdown, selected);
     // Accented names: Latin font for the field and its list (the arrow keeps the default font and its symbol)
     lv_obj_set_style_text_font(dropdown, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(lv_dropdown_get_list(dropdown), &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_add_event_cb(dropdown, settings_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(dropdown, changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+/* OpenAI Realtime voices, the recommended ones first */
+static const char *const s_settings_voices[] = {
+    "marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse",
+};
+#define SETTINGS_VOICE_COUNT    (sizeof(s_settings_voices) / sizeof(s_settings_voices[0]))
+
+/* The voice applies at once (no restart): saved, the synthesis reconnects, then a sample is spoken */
+static void settings_voice_changed_cb(lv_event_t *e)
+{
+    uint16_t selected = lv_dropdown_get_selected(lv_event_get_target(e));
+    if (selected >= SETTINGS_VOICE_COUNT) {
+        return;     // the voice set in CONFIG.INI (not listed), already in use
+    }
+    const char *voice = s_settings_voices[selected];
+    settings_save_str("Voice", voice);
+    sys_param_t *param = settings_get_parameter();
+    strlcpy(param->voice, voice, sizeof(param->voice));
+    tts_stream_set_voice(voice);
+
+    char name[24];
+    strlcpy(name, voice, sizeof(name));
+    name[0] = toupper((unsigned char)name[0]);
+    char sample[96];
+    snprintf(sample, sizeof(sample), app_lang_get()->voice_sample, name);
+    tts_stream_begin(NULL);
+    tts_stream_say(sample);
+    tts_stream_end();
 }
 
 /* A row of the Settings panel: label on the left, dropdown on the right (same look as the generated row) */
@@ -218,7 +251,7 @@ static void settings_screen_setup(void)
         }
     }
     s_lang_stored = lang_selected;
-    settings_dropdown_setup(ui_DropdownSettingsRegion, "Français\nEnglish", lang_selected);
+    settings_dropdown_setup(ui_DropdownSettingsRegion, "Français\nEnglish", lang_selected, settings_changed_cb);
 
     // Model row: the listed models, plus the current one if it was set in CONFIG.INI and is not listed
     s_model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
@@ -236,7 +269,27 @@ static void settings_screen_setup(void)
         strlcat(options, param->chat_model, sizeof(options));
     }
     s_model_stored = model_selected;
-    settings_dropdown_setup(s_model_dropdown, options, model_selected);
+    settings_dropdown_setup(s_model_dropdown, options, model_selected, settings_changed_cb);
+
+    // Voice row: applied immediately, without the Save button
+    lv_obj_t *voice_dropdown = settings_row_create(lang->settings_voice, lv_pct(62));
+    options[0] = '\0';
+    uint16_t voice_selected = SETTINGS_VOICE_COUNT;
+    for (size_t i = 0; i < SETTINGS_VOICE_COUNT; i++) {
+        char name[24];
+        strlcpy(name, s_settings_voices[i], sizeof(name));
+        name[0] = toupper((unsigned char)name[0]);
+        strlcat(options, i ? "\n" : "", sizeof(options));
+        strlcat(options, name, sizeof(options));
+        if (strcmp(param->voice, s_settings_voices[i]) == 0) {
+            voice_selected = i;
+        }
+    }
+    if (voice_selected == SETTINGS_VOICE_COUNT) {
+        strlcat(options, "\n", sizeof(options));
+        strlcat(options, param->voice, sizeof(options));
+    }
+    settings_dropdown_setup(voice_dropdown, options, voice_selected, settings_voice_changed_cb);
 
     // Save button (bottom right), enabled once a selection differs from the stored settings
     s_save_btn = lv_btn_create(ui_ScreenSettings);

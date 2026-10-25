@@ -72,8 +72,10 @@ static const app_lang_t s_languages[] = {
         .country_unknown = "Je ne connais pas ce pays. Redis-moi « change mon pays » pour réessayer.",
         .place_saved = "C'est enregistré.",
         .place_cancelled = "D'accord, je ne change rien.",
-        .location_line = "Lieu de l'utilisateur : %s. Sans lieu précisé, les nouvelles, la météo et les "
-                         "informations locales concernent ce lieu.",
+        .location_line = "Lieu de l'utilisateur : %s (le code à deux lettres est celui du pays). Quand il demande "
+                         "l'actualité, la météo ou une information locale sans préciser de lieu, il s'agit de ce "
+                         "lieu et de ce pays : pour l'actualité, cherche celle de ce pays en le nommant dans ta "
+                         "recherche, et ne donne pas l'actualité d'autres pays sauf s'il le demande.",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -168,8 +170,10 @@ static const app_lang_t s_languages[] = {
         .country_unknown = "I don't know this country. Say \"change my country\" again to retry.",
         .place_saved = "Saved.",
         .place_cancelled = "All right, nothing changed.",
-        .location_line = "User's location: %s. Without a place given, news, weather and local information are "
-                         "about this place.",
+        .location_line = "User's location: %s (the two-letter code is the country's). When the user asks for the "
+                         "news, the weather or local information without naming a place, it is about this place and "
+                         "country: for the news, search the news of this country by naming it in your search, and do "
+                         "not give news from other countries unless asked.",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {

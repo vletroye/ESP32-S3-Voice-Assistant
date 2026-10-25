@@ -383,8 +383,14 @@ void app_main()
     ESP_LOGI(TAG, "speech recognition start");
     app_sr_start(false);
 
+    // The Persona of CONFIG.INI (name, who made it, who it talks to...) completes the base instructions
+    char *system_prompt = NULL;
+    if (sys_param->persona) {
+        asprintf(&system_prompt, "%s\n\n%s", app_lang_get()->system_prompt, sys_param->persona);
+    }
     llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,
-             app_lang_get()->system_prompt);
+             system_prompt ? system_prompt : app_lang_get()->system_prompt);
+    free(system_prompt);
     ESP_ERROR_CHECK(stt_stream_init());
     stt_stream_configure(sys_param->key, CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
     ESP_ERROR_CHECK(tts_stream_init());

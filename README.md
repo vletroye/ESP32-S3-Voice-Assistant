@@ -190,8 +190,15 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
 | `Language` | Assistant language | `fr` or `en` |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
+| `Persona` | Context always given to the assistant: its name, who made it, who you are… (one line, free text, ~1,500 characters at most) | `Tu t'appelles Jarvis. Tu es un assistant vocal créé par …` |
 | `Voice` | Voice of the answers (also set from the Settings screen) | `marin`, `cedar`, `coral`… |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
+
+`Persona` is added to the assistant's base instructions for every question (Claude and GPT alike) and is kept
+across conversations, "Au revoir" included. Write it on **one line** (CONFIG.INI values cannot span several
+lines). The whole CONFIG.INI is limited to 2,048 bytes by the USB configuration component, of which the other
+keys use about 500: if the Persona is longer than what remains, the configuration mode shortens it when it
+starts (logged on the serial port).
 
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
 starts with this version. Spaces and line breaks pasted by mistake around the values are ignored. Keys are

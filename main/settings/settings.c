@@ -154,6 +154,30 @@ esp_err_t settings_read_parameter_from_nvs(void)
         *p = tolower((unsigned char)*p);
     }
 
+    // Persona (optional): free text, may contain accents, so only spaces and line endings are trimmed
+    free(g_sys_param.persona);
+    g_sys_param.persona = NULL;
+    len = 0;
+    if (nvs_get_str(my_handle, "Persona", NULL, &len) == ESP_OK && len > 1) {
+        g_sys_param.persona = malloc(len);
+        if (g_sys_param.persona && nvs_get_str(my_handle, "Persona", g_sys_param.persona, &len) == ESP_OK) {
+            char *p = g_sys_param.persona;
+            size_t n = strlen(p);
+            while (n > 0 && (unsigned char)p[n - 1] <= ' ') {
+                p[--n] = '\0';
+            }
+            size_t start = 0;
+            while (start < n && (unsigned char)p[start] <= ' ') {
+                start++;
+            }
+            memmove(p, p + start, n - start + 1);
+        }
+        if (g_sys_param.persona && g_sys_param.persona[0] == '\0') {
+            free(g_sys_param.persona);
+            g_sys_param.persona = NULL;
+        }
+    }
+
     // Scrolling mode of the answer (optional): "line" (default) or "smooth"
     char mode[12] = {0};
     len = sizeof(mode);
@@ -176,7 +200,8 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
-    ESP_LOGI(TAG, "voice:%s", g_sys_param.voice);
+    ESP_LOGI(TAG, "voice:%s, persona: %d chars", g_sys_param.voice,
+             g_sys_param.persona ? (int)strlen(g_sys_param.persona) : 0);
     ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s, %s", g_sys_param.lang, g_sys_param.scroll_cps,
              g_sys_param.scroll_smooth ? "smooth" : "line by line");
     ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars)", g_sys_param.chat_model,

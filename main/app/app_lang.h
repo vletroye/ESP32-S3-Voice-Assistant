@@ -37,6 +37,10 @@ typedef struct {
     const char *memory_list_intro;
     /* Day abbreviations of the clock under the sleeping robot, Sunday first */
     const char *weekdays[7];
+    /* Current date and time given with each question: %s day, %d day of month, %s month, %d year, %02d:%02d */
+    const char *now_format;
+    const char *weekdays_long[7];   /* Sunday first */
+    const char *months[12];
 
     /* Chat errors, shown and spoken as the answer (indexed by provider and llm_error_t, LLM_OK unused) */
     const char *llm_errors[LLM_PROVIDER_COUNT][LLM_ERR_OTHER + 1];

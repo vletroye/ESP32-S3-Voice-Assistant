@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -221,6 +222,28 @@ static char *build_system_prompt(void)
     return prompt;
 }
 
+/*
+ * The question as sent to the model, starting with the current date and time ("[Nous sommes le dimanche
+ * 25 octobre 2026, il est 20 h 07.]"): in the user message rather than in the instructions, which stay
+ * identical and cached. NULL when the clock is not synchronized yet. Allocated, to be freed.
+ */
+static char *with_current_time(const char *text)
+{
+    time_t now = time(NULL);
+    struct tm t;
+    localtime_r(&now, &t);
+    if (t.tm_year + 1900 < 2024) {
+        return NULL;
+    }
+    const app_lang_t *lang = app_lang_get();
+    char stamp[96];
+    snprintf(stamp, sizeof(stamp), lang->now_format, lang->weekdays_long[t.tm_wday], t.tm_mday,
+             lang->months[t.tm_mon], t.tm_year + 1900, t.tm_hour, t.tm_min);
+    char *question = NULL;
+    asprintf(&question, "%s %s", stamp, text);
+    return question;
+}
+
 /* Start of a listening session (wake word, touch or follow-up). Called from app_audio.c */
 void assistant_listen_start(void)
 {
@@ -305,7 +328,9 @@ void assistant_listen_end(void)
     sentence_splitter_init(&s_splitter, on_sentence, NULL);
 
     t_start = esp_timer_get_time();
-    llm_error_t llm_err = llm_stream(text, on_llm_text, &view, &response);
+    char *question = with_current_time(text);
+    llm_error_t llm_err = llm_stream(question ? question : text, on_llm_text, &view, &response);
+    free(question);
     ESP_LOGI(TAG, "[timing] chat (%s, streamed): %lld ms", llm_provider_name(llm_provider()), elapsed_ms(t_start));
 
     if (llm_err == LLM_OK) {

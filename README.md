@@ -26,6 +26,8 @@ which has been largely rewritten.
   `/spiffs/history.json` after each answer), so you can ask later "what were we talking about?".
   Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
+- **Knows the date and time**: each question is sent with the current date and time ("[Nous sommes le dimanche
+  25 octobre 2026, il est 20 h 07.]"), so "what day is it?" or "how many days until Christmas?" work.
 - **Long-term memory**: "Souviens-toi que …" / "Retiens que …" (English: "Remember that …") stores a note,
   "Oublie que …" removes the closest one, "Oublie tout" clears them, "Dis-moi tout ce que tu as mémorisé"
   reads them out. These are answered on the device (no model call); the notes are given to the model with

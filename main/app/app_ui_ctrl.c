@@ -603,12 +603,47 @@ static void reply_scroll_follow(lv_coord_t visible, lv_coord_t max_offset)
     lv_anim_start(&a);
 }
 
+/*
+ * Line by line: the text moves up one whole line when the estimated reading position reaches the next
+ * line (one redraw per line instead of a continuous movement)
+ */
+static void reply_scroll_by_line(lv_coord_t visible, lv_coord_t max_offset)
+{
+    size_t chars = 0;
+    for (const char *p = lv_label_get_text(ui_LabelReplyContent); *p; p++) {
+        chars += ((*p & 0xC0) != 0x80);     // UTF-8: count characters, not bytes
+    }
+    lv_coord_t line_h = lv_font_get_line_height(lv_obj_get_style_text_font(ui_LabelReplyContent, LV_PART_MAIN)) +
+                        lv_obj_get_style_text_line_space(ui_LabelReplyContent, LV_PART_MAIN);
+    if (chars == 0 || max_offset <= 0 || line_h <= 0) {
+        return;
+    }
+    int64_t read_chars = (esp_timer_get_time() - reply_audio_start_us) *
+                         settings_get_parameter()->scroll_cps / 1000000;
+    if (read_chars > (int64_t)chars) {
+        read_chars = chars;
+    }
+    lv_coord_t reading_y = (lv_coord_t)(content_height * read_chars / (int64_t)chars);
+    lv_coord_t lead = visible / REPLY_SCROLL_LEAD_DIV;
+    lv_coord_t target = reading_y > lead ? ((reading_y - lead) / line_h) * line_h : 0;
+    if (target > max_offset) {
+        target = max_offset;
+    }
+    if (target > lv_obj_get_scroll_y(ui_ContainerReplyContent)) {
+        lv_obj_scroll_to_y(ui_ContainerReplyContent, target, LV_ANIM_OFF);
+    }
+}
+
 static void reply_content_scroll_timer_handler()
 {
     if (reply_content_get && reply_audio_start) {
         lv_coord_t visible = lv_obj_get_height(ui_ContainerReplyContent);
         lv_coord_t max_offset = content_height > visible ? content_height - visible : 0;
-        reply_scroll_follow(visible, max_offset);
+        if (settings_get_parameter()->scroll_smooth) {
+            reply_scroll_follow(visible, max_offset);
+        } else {
+            reply_scroll_by_line(visible, max_offset);
+        }
 
         if (lv_obj_get_scroll_y(ui_ContainerReplyContent) >= max_offset && reply_audio_end) {
             ESP_LOGI(TAG, "reply scroll timer stop");

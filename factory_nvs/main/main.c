@@ -185,6 +185,8 @@ void app_main(void)
         char scroll_speed[8];
         snprintf(scroll_speed, sizeof(scroll_speed), "%d", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
         nvs_init_str_if_missing("Scroll_speed", scroll_speed);
+        // How the answer scrolls: "line" (one line at a time) or "smooth" (continuous)
+        nvs_init_str_if_missing("Scroll_mode", "line");
     }
     nvs_close(my_handle);
 

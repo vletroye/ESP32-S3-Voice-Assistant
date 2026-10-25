@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include "esp_err.h"
 
 #define SSID_SIZE 32
@@ -26,6 +27,7 @@ typedef struct {
     char claude_key[CLAUDE_KEY_SIZE]; /* Anthropic key, empty if not configured. */
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude or GPT). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
+    bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
 } sys_param_t;
 
 esp_err_t settings_factory_reset(void);

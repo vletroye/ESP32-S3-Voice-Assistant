@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -142,6 +143,15 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
     }
 
+    // Scrolling mode of the answer (optional): "line" (default) or "smooth"
+    char mode[12] = {0};
+    len = sizeof(mode);
+    g_sys_param.scroll_smooth = false;
+    if (nvs_get_str(my_handle, "Scroll_mode", mode, &len) == ESP_OK) {
+        str_trim(mode);
+        g_sys_param.scroll_smooth = (strcasecmp(mode, "smooth") == 0);
+    }
+
     nvs_close(my_handle);
 
     // SSID and password may legitimately contain spaces: only the other values are trimmed
@@ -155,7 +165,8 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
-    ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s", g_sys_param.lang, g_sys_param.scroll_cps);
+    ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s, %s", g_sys_param.lang, g_sys_param.scroll_cps,
+             g_sys_param.scroll_smooth ? "smooth" : "line by line");
     ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars)", g_sys_param.chat_model,
              (int)strlen(g_sys_param.claude_key));
     return ESP_OK;

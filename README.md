@@ -183,6 +183,7 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
 | `Language` | Assistant language | `fr` or `en` |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
+| `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
 starts with this version. Spaces and line breaks pasted by mistake around the values are ignored. Keys are

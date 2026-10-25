@@ -41,6 +41,13 @@ menu "Example Configuration"
         help
             OpenAI voice, e.g. marin, cedar, coral, nova.
 
+    config ASSISTANT_TIMEZONE
+        string "Time zone (POSIX TZ)"
+        default "CET-1CEST,M3.5.0,M10.5.0/3"
+        help
+            Time zone of the clock shown while the robot sleeps (time from pool.ntp.org).
+            Default: Central European Time with summer time (Brussels, Paris).
+
     config ASSISTANT_FOLLOWUP_WINDOW_MS
         int "Follow-up listening window (ms)"
         default 4000

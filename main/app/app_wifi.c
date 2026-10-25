@@ -20,6 +20,7 @@
 
 #include "app_wifi.h"
 #include "settings.h"
+#include "app_clock.h"
 
 /* The examples use WiFi configuration that you can set via project configuration menu
 
@@ -247,6 +248,8 @@ static void network_task(void *args)
     net_event_t net_event;
 
     wifi_init_sta();
+    // The network stack exists now: the clock synchronizes once connected
+    app_clock_sync_start(CONFIG_ASSISTANT_TIMEZONE);
 
     while (1) {
         /* Block until an event arrives (the task has nothing else to do) */

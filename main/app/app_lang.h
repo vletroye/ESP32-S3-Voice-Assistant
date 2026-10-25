@@ -26,6 +26,8 @@ typedef struct {
     const char *stt_error;          /* Spoken when the question could not be transcribed */
     /* Whole sentences that end the conversation (lowercase, without punctuation), NULL-terminated */
     const char *const *goodbyes;
+    /* Day abbreviations of the clock under the sleeping robot, Sunday first */
+    const char *weekdays[7];
 
     /* Chat errors, shown and spoken as the answer (indexed by provider and llm_error_t, LLM_OK unused) */
     const char *llm_errors[LLM_PROVIDER_COUNT][LLM_ERR_OTHER + 1];

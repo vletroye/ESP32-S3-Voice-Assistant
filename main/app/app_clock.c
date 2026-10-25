@@ -1,0 +1,207 @@
+/*
+ * SPDX-FileCopyrightText: 2026
+ *
+ * SPDX-License-Identifier: CC0-1.0
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include "esp_log.h"
+#include "esp_netif_sntp.h"
+#include "app_clock.h"
+
+LV_FONT_DECLARE(ui_font_Latin16);
+
+/* Seven-segment digit geometry (pixels) */
+#define DIGIT_W         20
+#define DIGIT_H         36
+#define SEG_T           5       /* segment thickness */
+#define SEG_GAP         1       /* gap between segments, gives the segmented look */
+#define DIGIT_SPACING   6
+#define COLON_W         14
+#define DOT_SIZE        5
+#define GLOW_WIDTH      10
+
+/* Position: bottom of the digits and of the date, from the bottom of the screen */
+#define CLOCK_BOTTOM_Y  (-26)
+#define DATE_BOTTOM_Y   (-4)
+
+/* Colours: pale blue-white segments with a blue glow, like the robot's eyes */
+#define COLOR_ON        0xDDE9FF
+#define COLOR_GLOW      0x4F86FF
+#define COLOR_OFF       0x26305A
+#define COLOR_DATE      0xB9CCF5
+
+/* Valid once the year is past this one: the clock was synchronized */
+#define SYNCED_MIN_YEAR 2024
+
+static const char *TAG = "clock";
+
+/* Segments a..g of each character, bit 0 = a ... bit 6 = g */
+static const uint8_t s_digit_segments[10] = {
+    0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F,
+};
+#define SEGMENTS_DASH   0x40
+
+/* Segments (relative to the clock box) and what is lit; drawn by one object to spare internal RAM */
+static lv_area_t s_segment_areas[4][7];
+static lv_area_t s_dot_areas[2];
+static uint8_t s_lit[4];
+static lv_obj_t *s_box;
+static lv_obj_t *s_date;
+static const char *const *s_weekdays;
+static int s_shown_minute = -1;
+
+void app_clock_sync_start(const char *tz)
+{
+    setenv("TZ", tz, 1);
+    tzset();
+    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+    esp_err_t ret = esp_netif_sntp_init(&config);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SNTP init failed (0x%x)", ret);
+    }
+}
+
+static void set_area(lv_area_t *a, lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coord_t h)
+{
+    a->x1 = x;
+    a->y1 = y;
+    a->x2 = x + w - 1;
+    a->y2 = y + h - 1;
+}
+
+static void digit_layout(lv_coord_t x0, lv_area_t seg[7])
+{
+    const lv_coord_t half = DIGIT_H / 2;
+    const lv_coord_t hor_w = DIGIT_W - 2 * (SEG_T / 2 + SEG_GAP);
+    const lv_coord_t ver_h = half - SEG_T / 2 - 2 * SEG_GAP;
+    const lv_coord_t hor_x = x0 + SEG_T / 2 + SEG_GAP;
+
+    set_area(&seg[0], hor_x, 0, hor_w, SEG_T);                                   /* a */
+    set_area(&seg[1], x0 + DIGIT_W - SEG_T, SEG_T / 2 + SEG_GAP, SEG_T, ver_h);   /* b */
+    set_area(&seg[2], x0 + DIGIT_W - SEG_T, half + SEG_GAP, SEG_T, ver_h);        /* c */
+    set_area(&seg[3], hor_x, DIGIT_H - SEG_T, hor_w, SEG_T);                      /* d */
+    set_area(&seg[4], x0, half + SEG_GAP, SEG_T, ver_h);                          /* e */
+    set_area(&seg[5], x0, SEG_T / 2 + SEG_GAP, SEG_T, ver_h);                     /* f */
+    set_area(&seg[6], hor_x, half - SEG_T / 2, hor_w, SEG_T);                     /* g */
+}
+
+static void draw_segment(lv_draw_ctx_t *draw_ctx, const lv_area_t *origin, const lv_area_t *rel,
+                         const lv_draw_rect_dsc_t *dsc)
+{
+    lv_area_t a = *rel;
+    lv_area_move(&a, origin->x1, origin->y1);
+    lv_draw_rect(draw_ctx, dsc, &a);
+}
+
+static void clock_event_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_REFR_EXT_DRAW_SIZE) {
+        // Room for the glow around the segments
+        lv_event_set_ext_draw_size(e, GLOW_WIDTH);
+        return;
+    }
+    if (code != LV_EVENT_DRAW_MAIN) {
+        return;
+    }
+    lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
+    lv_area_t origin;
+    lv_obj_get_coords(s_box, &origin);
+
+    lv_draw_rect_dsc_t on;
+    lv_draw_rect_dsc_init(&on);
+    on.radius = SEG_T / 2;
+    on.bg_color = lv_color_hex(COLOR_ON);
+    on.shadow_color = lv_color_hex(COLOR_GLOW);
+    on.shadow_width = GLOW_WIDTH;
+    on.shadow_opa = LV_OPA_70;
+
+    lv_draw_rect_dsc_t off;
+    lv_draw_rect_dsc_init(&off);
+    off.radius = SEG_T / 2;
+    off.bg_color = lv_color_hex(COLOR_OFF);
+
+    for (int d = 0; d < 4; d++) {
+        for (int i = 0; i < 7; i++) {
+            draw_segment(draw_ctx, &origin, &s_segment_areas[d][i], (s_lit[d] & (1 << i)) ? &on : &off);
+        }
+    }
+    on.radius = LV_RADIUS_CIRCLE;
+    for (int i = 0; i < 2; i++) {
+        draw_segment(draw_ctx, &origin, &s_dot_areas[i], &on);
+    }
+}
+
+static void digit_show(int digit, uint8_t segments)
+{
+    s_lit[digit] = segments;
+}
+
+static void clock_refresh(lv_timer_t *timer)
+{
+    time_t now = time(NULL);
+    struct tm t;
+    localtime_r(&now, &t);
+    bool synced = t.tm_year + 1900 >= SYNCED_MIN_YEAR;
+    int minute = synced ? t.tm_hour * 60 + t.tm_min : -2;
+    if (minute == s_shown_minute) {
+        return;
+    }
+    s_shown_minute = minute;
+
+    if (!synced) {
+        // Not synchronized yet: "--:--" and no date
+        for (int d = 0; d < 4; d++) {
+            digit_show(d, SEGMENTS_DASH);
+        }
+        lv_label_set_text(s_date, "");
+        lv_obj_invalidate(s_box);
+        return;
+    }
+    digit_show(0, s_digit_segments[t.tm_hour / 10]);
+    digit_show(1, s_digit_segments[t.tm_hour % 10]);
+    digit_show(2, s_digit_segments[t.tm_min / 10]);
+    digit_show(3, s_digit_segments[t.tm_min % 10]);
+    lv_obj_invalidate(s_box);
+    lv_label_set_text_fmt(s_date, "%s %02d/%02d/%02d", s_weekdays[t.tm_wday], t.tm_mday, t.tm_mon + 1,
+                          t.tm_year % 100);
+}
+
+void app_clock_create(lv_obj_t *parent, const char *const weekdays[7])
+{
+    s_weekdays = weekdays;
+
+    const lv_coord_t width = 4 * DIGIT_W + 2 * DIGIT_SPACING + COLON_W;
+    s_box = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_box);
+    lv_obj_clear_flag(s_box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(s_box, width, DIGIT_H);
+    lv_obj_align(s_box, LV_ALIGN_BOTTOM_MID, 0, CLOCK_BOTTOM_Y);
+    lv_obj_add_event_cb(s_box, clock_event_cb, LV_EVENT_ALL, NULL);
+
+    lv_coord_t x = 0;
+    for (int d = 0; d < 4; d++) {
+        digit_layout(x, s_segment_areas[d]);
+        x += DIGIT_W + (d == 1 ? COLON_W : DIGIT_SPACING);
+    }
+    // Colon between the hours and the minutes
+    lv_coord_t colon_x = 2 * DIGIT_W + DIGIT_SPACING + (COLON_W - DOT_SIZE) / 2;
+    set_area(&s_dot_areas[0], colon_x, DIGIT_H / 3 - DOT_SIZE / 2, DOT_SIZE, DOT_SIZE);
+    set_area(&s_dot_areas[1], colon_x, 2 * DIGIT_H / 3 - DOT_SIZE / 2, DOT_SIZE, DOT_SIZE);
+    lv_obj_refresh_ext_draw_size(s_box);
+
+    s_date = lv_label_create(parent);
+    lv_obj_set_style_text_font(s_date, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_date, lv_color_hex(COLOR_DATE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_letter_space(s_date, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(s_date, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_date, LV_ALIGN_BOTTOM_MID, 0, DATE_BOTTOM_Y);
+    lv_label_set_text(s_date, "");
+
+    clock_refresh(NULL);
+    lv_timer_create(clock_refresh, 1000, NULL);
+}

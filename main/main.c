@@ -156,7 +156,9 @@ static bool transcription_is_goodbye(const char *text)
     for (const char *p = text; *p && n < sizeof(norm) - 1; p++) {
         unsigned char c = (unsigned char)*p;
         if (isalnum(c) || (c & 0x80)) {
-            norm[n++] = tolower(c);
+            // UTF-8 Latin-1 capitals (C3 80..C3 9E, e.g. "À") to lowercase, like ASCII
+            bool latin1_upper = n > 0 && (unsigned char)norm[n - 1] == 0xC3 && c >= 0x80 && c <= 0x9E && c != 0x97;
+            norm[n++] = latin1_upper ? c + 0x20 : tolower(c);
         } else if (n > 0 && norm[n - 1] != ' ') {
             norm[n++] = ' ';
         }

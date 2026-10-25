@@ -13,7 +13,7 @@
 static const char *TAG = "app_lang";
 
 /* Said alone, they send the assistant back to sleep without an answer */
-static const char *const s_goodbyes_fr[] = { "au revoir", "au revoir esp", "bonne nuit", "bonne nuit esp", "à demain", "à plus", NULL };
+static const char *const s_goodbyes_fr[] = { "au revoir", "au revoir esp", "bonne nuit", "bonne nuit esp", "à demain", "à plus", "ciao", NULL };
 static const char *const s_goodbyes_en[] = { "goodbye", "good bye", "bye", "bye bye", "goodbye esp", "bye esp",
                                              "good night", NULL };
 
@@ -39,6 +39,7 @@ static const app_lang_t s_languages[] = {
                             "débit légèrement rapide.",
         .stt_error = "Je n'ai pas réussi à comprendre la question. Pouvez-vous répéter ?",
         .goodbyes = s_goodbyes_fr,
+        .weekdays = { "DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM" },
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -98,6 +99,7 @@ static const app_lang_t s_languages[] = {
                             "Speak naturally and warmly, at a slightly brisk pace.",
         .stt_error = "I couldn't make out the question. Could you repeat it?",
         .goodbyes = s_goodbyes_en,
+        .weekdays = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" },
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {

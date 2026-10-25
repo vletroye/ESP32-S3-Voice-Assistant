@@ -22,6 +22,8 @@ which has been largely rewritten.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
 - Saying "Bonjour ESP" during an answer **interrupts** it.
+- **Clock** under the sleeping robot: `HH:MM` in glowing seven-segment digits and the date (`DIM 25/10/26`),
+  synchronized over the Internet (NTP).
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
 - French or English interface and voice, switchable from the Settings screen.
 
@@ -126,6 +128,7 @@ Main modules of the assistant (`main/app/`):
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
 | `tts_stream.c` | Speech synthesis (OpenAI Realtime), resampling and I2S playback |
 | `app_lang.c` | UI texts, model and voice instructions, error messages (fr / en) |
+| `app_clock.c` | Clock of the sleep screen (SNTP time, seven-segment digits drawn by a single LVGL object) |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, live text, translations, Settings screen |
 | `main.c` | Listen → transcribe → answer → speak pipeline |
 
@@ -195,6 +198,7 @@ stored in plain text in the device's NVS and never appear in the logs (only thei
 | `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
 | `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Speech synthesis model |
 | `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice |
+| `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |
 | `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |
 | `CONFIG_VOLUME_LEVEL` | `90` | Speaker volume |
 

@@ -13,6 +13,7 @@
 #include "app_wifi.h"
 #include "app_lang.h"
 #include "llm.h"
+#include "app_clock.h"
 #include "settings.h"
 #include "bsp/esp-bsp.h"
 
@@ -284,6 +285,7 @@ void ui_ctrl_init(void)
 
     ui_init();
     ui_ctrl_localize();
+    app_clock_create(ui_PanelSleep, app_lang_get()->weekdays);
 
     scroll_timer_handle = lv_timer_create(reply_content_scroll_timer_handler, REPLY_SCROLL_TIMER_INTERVAL_MS / REPLY_SCROLL_SPEED, NULL);
     lv_timer_pause(scroll_timer_handle);

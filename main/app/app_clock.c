@@ -11,6 +11,7 @@
 #include "esp_log.h"
 #include "esp_netif_sntp.h"
 #include "app_clock.h"
+#include "app_volume.h"
 
 LV_FONT_DECLARE(ui_font_Latin16);
 
@@ -34,6 +35,14 @@ LV_FONT_DECLARE(ui_font_Latin16);
 #define COLOR_OFF       0x26305A
 #define COLOR_DATE      0xB9CCF5
 
+/* Volume indicator, bottom left: bar (filled from the bottom), speaker icon, percentage */
+#define VOLUME_COLUMN_X     4       /* left of the column, from the screen's left edge */
+#define VOLUME_COLUMN_W     48
+#define VOLUME_BAR_W        8
+#define VOLUME_BAR_H        50
+#define VOLUME_BAR_BOTTOM_Y (-48)
+#define VOLUME_ICON_BOTTOM_Y (-24)
+
 /* Valid once the year is past this one: the clock was synchronized */
 #define SYNCED_MIN_YEAR 2024
 
@@ -53,6 +62,10 @@ static lv_obj_t *s_box;
 static lv_obj_t *s_date;
 static const char *const *s_weekdays;
 static int s_shown_minute = -1;
+static lv_obj_t *s_volume_bar;
+static lv_obj_t *s_volume_icon;
+static lv_obj_t *s_volume_text;
+static int s_shown_volume = -1;
 
 void app_clock_sync_start(const char *tz)
 {
@@ -141,8 +154,59 @@ static void digit_show(int digit, uint8_t segments)
     s_lit[digit] = segments;
 }
 
+/* Volume bar: dark track, lit part from the bottom with the glow of the digits */
+static void volume_bar_event_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_REFR_EXT_DRAW_SIZE) {
+        lv_event_set_ext_draw_size(e, GLOW_WIDTH);
+        return;
+    }
+    if (code != LV_EVENT_DRAW_MAIN) {
+        return;
+    }
+    lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
+    lv_area_t area;
+    lv_obj_get_coords(s_volume_bar, &area);
+
+    lv_draw_rect_dsc_t off;
+    lv_draw_rect_dsc_init(&off);
+    off.radius = VOLUME_BAR_W / 2;
+    off.bg_color = lv_color_hex(COLOR_OFF);
+    lv_draw_rect(draw_ctx, &off, &area);
+
+    int level = s_shown_volume < 0 ? 0 : s_shown_volume;
+    lv_coord_t lit = (lv_coord_t)(VOLUME_BAR_H * level / 100);
+    if (lit > 0) {
+        lv_draw_rect_dsc_t on;
+        lv_draw_rect_dsc_init(&on);
+        on.radius = VOLUME_BAR_W / 2;
+        on.bg_color = lv_color_hex(COLOR_ON);
+        on.shadow_color = lv_color_hex(COLOR_GLOW);
+        on.shadow_width = GLOW_WIDTH;
+        on.shadow_opa = LV_OPA_70;
+        area.y1 = area.y2 - lit + 1;
+        lv_draw_rect(draw_ctx, &on, &area);
+    }
+}
+
+static void volume_refresh(void)
+{
+    int level = app_volume_get();
+    if (level == s_shown_volume) {
+        return;
+    }
+    s_shown_volume = level;
+    lv_label_set_text(s_volume_icon, level == 0 ? LV_SYMBOL_MUTE : (level < 50 ? LV_SYMBOL_VOLUME_MID :
+                                                                    LV_SYMBOL_VOLUME_MAX));
+    lv_label_set_text_fmt(s_volume_text, "%d %%", level);
+    lv_obj_invalidate(s_volume_bar);
+}
+
 static void clock_refresh(lv_timer_t *timer)
 {
+    volume_refresh();
+
     time_t now = time(NULL);
     struct tm t;
     localtime_r(&now, &t);
@@ -201,6 +265,30 @@ void app_clock_create(lv_obj_t *parent, const char *const weekdays[7])
     lv_obj_set_style_text_align(s_date, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_align(s_date, LV_ALIGN_BOTTOM_MID, 0, DATE_BOTTOM_Y);
     lv_label_set_text(s_date, "");
+
+    // Volume: bar, speaker icon (symbol font) and percentage, centred in a column at the bottom left
+    s_volume_bar = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_volume_bar);
+    lv_obj_clear_flag(s_volume_bar, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(s_volume_bar, VOLUME_BAR_W, VOLUME_BAR_H);
+    lv_obj_align(s_volume_bar, LV_ALIGN_BOTTOM_LEFT, VOLUME_COLUMN_X + (VOLUME_COLUMN_W - VOLUME_BAR_W) / 2,
+                 VOLUME_BAR_BOTTOM_Y);
+    lv_obj_add_event_cb(s_volume_bar, volume_bar_event_cb, LV_EVENT_ALL, NULL);
+    lv_obj_refresh_ext_draw_size(s_volume_bar);
+
+    s_volume_icon = lv_label_create(parent);
+    lv_obj_set_width(s_volume_icon, VOLUME_COLUMN_W);
+    lv_obj_set_style_text_font(s_volume_icon, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_volume_icon, lv_color_hex(COLOR_DATE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(s_volume_icon, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_volume_icon, LV_ALIGN_BOTTOM_LEFT, VOLUME_COLUMN_X, VOLUME_ICON_BOTTOM_Y);
+
+    s_volume_text = lv_label_create(parent);
+    lv_obj_set_width(s_volume_text, VOLUME_COLUMN_W);
+    lv_obj_set_style_text_font(s_volume_text, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_volume_text, lv_color_hex(COLOR_DATE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(s_volume_text, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_volume_text, LV_ALIGN_BOTTOM_LEFT, VOLUME_COLUMN_X, DATE_BOTTOM_Y);
 
     clock_refresh(NULL);
     lv_timer_create(clock_refresh, 1000, NULL);

@@ -37,7 +37,8 @@ which has been largely rewritten.
   every question and can be edited in `MEMORY.TXT`.
 - Saying "Bonjour ESP" during an answer, or **double-tapping the screen**, **interrupts** it and listens again.
 - **Clock** under the sleeping robot: `HH:MM` in glowing seven-segment digits and the date (`DIM 25/10/26`),
-  synchronized over the Internet (NTP).
+  synchronized over the Internet (NTP), and the speaker volume at the bottom left (bar, speaker icon,
+  percentage) in the same style.
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
 - French or English interface and voice, switchable from the Settings screen.
 

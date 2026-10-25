@@ -23,6 +23,7 @@
 #define KEY_SIZE 256
 #define URL_SIZE 64
 #define LANG_SIZE 8
+#define MODEL_SIZE 48
 
 
 static const char *TAG = "ChatGPT_NVS";
@@ -49,7 +50,7 @@ static void ui_localize(const char *lang)
     lv_label_set_text(ui_LabelSetupStepContent,
                       "1. Branchez la box sur votre PC.\n"
                       "2. Ouvrez le lecteur « ESP-Box ».\n"
-                      "3. Dans « CONFIG.INI », renseignez le Wi-Fi, les clés OpenAI et Claude, la langue et le modèle Claude.\n"
+                      "3. Dans « CONFIG.INI », renseignez le Wi-Fi, les clés OpenAI et Claude, la langue et le modèle.\n"
                       "4. Enregistrez le fichier.\n"
                       "5. Redémarrez l'appareil.");
     lv_obj_set_style_text_font(ui_LabelSetupBtn, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -163,7 +164,22 @@ void app_main(void)
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "removed obsolete keys Model / Provider");
         }
-        nvs_init_str_if_missing("Claude_model", CONFIG_ASSISTANT_CLAUDE_MODEL);
+        // "Claude_model" became "Chat_model" when the GPT models were added: keep the chosen model
+        char model[MODEL_SIZE] = {0};
+        buf_len_long = sizeof(model);
+        if (nvs_get_str(my_handle, "Chat_model", NULL, &buf_len_long) != ESP_OK) {
+            buf_len_long = sizeof(model);
+            if (nvs_get_str(my_handle, "Claude_model", model, &buf_len_long) != ESP_OK || buf_len_long <= 1) {
+                strlcpy(model, CONFIG_ASSISTANT_CHAT_MODEL, sizeof(model));
+            }
+            ESP_ERROR_CHECK(nvs_set_str(my_handle, "Chat_model", model));
+            ESP_ERROR_CHECK(nvs_commit(my_handle));
+            ESP_LOGI(TAG, "Chat_model set to %s", model);
+        }
+        if (nvs_erase_key(my_handle, "Claude_model") == ESP_OK) {
+            ESP_ERROR_CHECK(nvs_commit(my_handle));
+            ESP_LOGI(TAG, "removed obsolete key Claude_model");
+        }
         nvs_init_str_if_missing("Claude_key", CONFIG_ANTHROPIC_API_KEY);
     }
     nvs_close(my_handle);

@@ -107,12 +107,18 @@ esp_err_t settings_read_parameter_from_nvs(void)
     }
 
 
-    // Read Claude settings (optional)
-    len = sizeof(g_sys_param.claude_model);
-    ret = nvs_get_str(my_handle, "Claude_model", g_sys_param.claude_model, &len);
+    // Read the chat model (optional; "Claude_model" before the GPT models were added)
+    len = sizeof(g_sys_param.chat_model);
+    ret = nvs_get_str(my_handle, "Chat_model", g_sys_param.chat_model, &len);
     if (ret != ESP_OK || len <= 1) {
-        strlcpy(g_sys_param.claude_model, CONFIG_ASSISTANT_CLAUDE_MODEL, sizeof(g_sys_param.claude_model));
+        len = sizeof(g_sys_param.chat_model);
+        ret = nvs_get_str(my_handle, "Claude_model", g_sys_param.chat_model, &len);
     }
+    if (ret != ESP_OK || len <= 1) {
+        strlcpy(g_sys_param.chat_model, CONFIG_ASSISTANT_CHAT_MODEL, sizeof(g_sys_param.chat_model));
+    }
+
+    // Read the Claude key (optional)
     len = sizeof(g_sys_param.claude_key);
     ret = nvs_get_str(my_handle, "Claude_key", g_sys_param.claude_key, &len);
     if (ret == ESP_ERR_NVS_INVALID_LENGTH) {
@@ -129,14 +135,14 @@ esp_err_t settings_read_parameter_from_nvs(void)
     str_trim(g_sys_param.url);
     str_trim(g_sys_param.lang);
     str_trim(g_sys_param.claude_key);
-    str_trim(g_sys_param.claude_model);
+    str_trim(g_sys_param.chat_model);
 
     ESP_LOGI(TAG, "stored ssid:%s", g_sys_param.ssid);
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
     ESP_LOGI(TAG, "language:%s", g_sys_param.lang);
-    ESP_LOGI(TAG, "Claude model:%s, Claude key: (%d chars)", g_sys_param.claude_model,
+    ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars)", g_sys_param.chat_model,
              (int)strlen(g_sys_param.claude_key));
     return ESP_OK;
 
@@ -151,4 +157,19 @@ err:
 sys_param_t *settings_get_parameter(void)
 {
     return &g_sys_param;
+}
+
+esp_err_t settings_save_str(const char *key, const char *value)
+{
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READWRITE, &handle);
+    ESP_RETURN_ON_ERROR(ret, TAG, "nvs open failed (0x%x)", ret);
+    ret = nvs_set_str(handle, key, value);
+    if (ret == ESP_OK) {
+        ret = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    ESP_RETURN_ON_ERROR(ret, TAG, "failed to save %s (0x%x)", key, ret);
+    ESP_LOGI(TAG, "saved %s:%s", key, value);
+    return ESP_OK;
 }

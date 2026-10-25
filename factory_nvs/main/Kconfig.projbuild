@@ -25,11 +25,11 @@ menu "Example Configuration"
         default "fr"
         help
             ISO-639-1 code (fr, en, ...) written to the "Language" key when it does not exist yet.
-    config ASSISTANT_CLAUDE_MODEL
-        string "Default Claude model"
+    config ASSISTANT_CHAT_MODEL
+        string "Default chat model"
         default "claude-haiku-5-5"
         help
-            Claude model written to the "Claude_model" key when it does not exist yet.
+            Model (claude-... or gpt-...) written to the "Chat_model" key when it does not exist yet.
     config ANTHROPIC_API_KEY
         string "Anthropic (Claude) key"
         default ""

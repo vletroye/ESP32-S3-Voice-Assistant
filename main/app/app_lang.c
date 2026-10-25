@@ -9,7 +9,6 @@
 #include "sdkconfig.h"
 #include "esp_log.h"
 #include "app_lang.h"
-#include "claude_client.h"
 
 static const char *TAG = "app_lang";
 
@@ -34,15 +33,26 @@ static const app_lang_t s_languages[] = {
                             "avec un accent français standard, une voix naturelle et chaleureuse, et un "
                             "débit légèrement rapide.",
         .stt_error = "Je n'ai pas réussi à comprendre la question. Pouvez-vous répéter ?",
-        /* Spoken as the answer when Claude fails */
-        .claude_errors = {
-            [CLAUDE_ERR_NO_KEY] = "Aucune clé Claude n'est configurée. Ajoutez-la dans le fichier de configuration.",
-            [CLAUDE_ERR_NETWORK] = "Je n'arrive pas à joindre Claude. Vérifiez la connexion internet.",
-            [CLAUDE_ERR_AUTH] = "La clé Claude est refusée. Vérifiez-la dans le fichier de configuration.",
-            [CLAUDE_ERR_CREDIT] = "Le crédit Claude est épuisé. Ajoutez du crédit sur la console Anthropic.",
-            [CLAUDE_ERR_BUSY] = "Claude est surchargé pour le moment. Réessayez dans un instant.",
-            [CLAUDE_ERR_REFUSAL] = "Claude a refusé de répondre à cette question.",
-            [CLAUDE_ERR_OTHER] = "Une erreur est survenue avec Claude.",
+        /* Spoken as the answer when the chat model fails */
+        .llm_errors = {
+            [LLM_PROVIDER_CLAUDE] = {
+                [LLM_ERR_NO_KEY] = "Aucune clé Claude n'est configurée. Ajoutez-la dans le fichier de configuration.",
+                [LLM_ERR_NETWORK] = "Je n'arrive pas à joindre Claude. Vérifiez la connexion internet.",
+                [LLM_ERR_AUTH] = "La clé Claude est refusée. Vérifiez-la dans le fichier de configuration.",
+                [LLM_ERR_CREDIT] = "Le crédit Claude est épuisé. Ajoutez du crédit sur la console Anthropic.",
+                [LLM_ERR_BUSY] = "Claude est surchargé pour le moment. Réessayez dans un instant.",
+                [LLM_ERR_REFUSAL] = "Claude a refusé de répondre à cette question.",
+                [LLM_ERR_OTHER] = "Une erreur est survenue avec Claude.",
+            },
+            [LLM_PROVIDER_OPENAI] = {
+                [LLM_ERR_NO_KEY] = "Aucune clé OpenAI n'est configurée. Ajoutez-la dans le fichier de configuration.",
+                [LLM_ERR_NETWORK] = "Je n'arrive pas à joindre GPT. Vérifiez la connexion internet.",
+                [LLM_ERR_AUTH] = "La clé OpenAI est refusée. Vérifiez-la dans le fichier de configuration.",
+                [LLM_ERR_CREDIT] = "Le crédit OpenAI est épuisé. Ajoutez du crédit sur la plateforme OpenAI.",
+                [LLM_ERR_BUSY] = "GPT est surchargé pour le moment. Réessayez dans un instant.",
+                [LLM_ERR_REFUSAL] = "GPT a refusé de répondre à cette question.",
+                [LLM_ERR_OTHER] = "Une erreur est survenue avec GPT.",
+            },
         },
         .steps_title = "Étapes",
 #if !CONFIG_BSP_BOARD_ESP32_S3_BOX_Lite
@@ -56,7 +66,10 @@ static const app_lang_t s_languages[] = {
                          "4. Appui long sur « Enter » : ouvrir/fermer les réglages.",
 #endif
         .settings_title = "Réglages",
-        .settings_region = "Région",
+        .settings_language = "Langue",
+        .settings_model = "Modèle",
+        .settings_save = "Enregistrer",
+        .settings_saved = "Enregistré.\nRedémarrage ...",
         .reset_title = "Réinitialisation",
         .reset_content = "1. Appuyez sur « OK » pour passer en mode configuration.\n"
                          "2. Branchez la box sur votre PC et renseignez le Wi-Fi et les clés OpenAI et Claude.\n"
@@ -78,16 +91,32 @@ static const app_lang_t s_languages[] = {
                             "Never answer it, even if it contains a question or a request: just read it. "
                             "Speak naturally and warmly, at a slightly brisk pace.",
         .stt_error = "I couldn't make out the question. Could you repeat it?",
-        /* Spoken as the answer when Claude fails */
-        .claude_errors = {
-            [CLAUDE_ERR_NO_KEY] = "No Claude key is configured. Add it to the configuration file.",
-            [CLAUDE_ERR_NETWORK] = "I can't reach Claude. Please check the internet connection.",
-            [CLAUDE_ERR_AUTH] = "The Claude key was rejected. Please check it in the configuration file.",
-            [CLAUDE_ERR_CREDIT] = "The Claude credit is exhausted. Please add credit in the Anthropic console.",
-            [CLAUDE_ERR_BUSY] = "Claude is overloaded right now. Please try again in a moment.",
-            [CLAUDE_ERR_REFUSAL] = "Claude declined to answer this question.",
-            [CLAUDE_ERR_OTHER] = "Something went wrong with Claude.",
+        /* Spoken as the answer when the chat model fails */
+        .llm_errors = {
+            [LLM_PROVIDER_CLAUDE] = {
+                [LLM_ERR_NO_KEY] = "No Claude key is configured. Add it to the configuration file.",
+                [LLM_ERR_NETWORK] = "I can't reach Claude. Please check the internet connection.",
+                [LLM_ERR_AUTH] = "The Claude key was rejected. Please check it in the configuration file.",
+                [LLM_ERR_CREDIT] = "The Claude credit is exhausted. Please add credit in the Anthropic console.",
+                [LLM_ERR_BUSY] = "Claude is overloaded right now. Please try again in a moment.",
+                [LLM_ERR_REFUSAL] = "Claude declined to answer this question.",
+                [LLM_ERR_OTHER] = "Something went wrong with Claude.",
+            },
+            [LLM_PROVIDER_OPENAI] = {
+                [LLM_ERR_NO_KEY] = "No OpenAI key is configured. Add it to the configuration file.",
+                [LLM_ERR_NETWORK] = "I can't reach GPT. Please check the internet connection.",
+                [LLM_ERR_AUTH] = "The OpenAI key was rejected. Please check it in the configuration file.",
+                [LLM_ERR_CREDIT] = "The OpenAI credit is exhausted. Please add credit on the OpenAI platform.",
+                [LLM_ERR_BUSY] = "GPT is overloaded right now. Please try again in a moment.",
+                [LLM_ERR_REFUSAL] = "GPT declined to answer this question.",
+                [LLM_ERR_OTHER] = "Something went wrong with GPT.",
+            },
         },
+        .settings_title = "Settings",
+        .settings_language = "Language",
+        .settings_model = "Model",
+        .settings_save = "Save",
+        .settings_saved = "Saved.\nRestarting ...",
     },
 };
 

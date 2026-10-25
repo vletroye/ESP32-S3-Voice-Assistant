@@ -8,18 +8,12 @@ menu "Example Configuration"
             answers and the on-screen texts. Overridden by the "Language" key of the
             device configuration (CONFIG.INI) when present.
 
-    config ASSISTANT_CLAUDE_MODEL
-        string "Default Claude model"
+    config ASSISTANT_CHAT_MODEL
+        string "Default chat model"
         default "claude-haiku-5-5"
         help
-            Claude model id. Overridden by the "Claude_model" key of CONFIG.INI.
-
-    config ASSISTANT_CLAUDE_EFFORT
-        string "Claude effort"
-        default "low"
-        help
-            output_config.effort sent to Claude ("low", "medium", "high"...). Lower is faster.
-            Empty to use the model default.
+            Model answering the questions: a Claude model id (claude-...) or an OpenAI one (gpt-...).
+            Overridden by the "Chat_model" key of CONFIG.INI, which the Settings screen also sets.
 
     config ASSISTANT_STT_MODEL
         string "Speech-to-text model"

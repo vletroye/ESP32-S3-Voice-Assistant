@@ -18,8 +18,10 @@ which has been largely rewritten.
 - Answer **streamed** by the chosen model and shown as it arrives, with an icon of the provider (Claude or
   OpenAI, or a globe when the web was searched) and prefixed with the model id
   (`[claude-haiku-5-5] …`).
-- **Model chosen on the device**: Claude Haiku 5.5, Sonnet 5.5, Opus 5.5 (Anthropic) or GPT-6 Luna,
-  GPT-6.1 Sol, GPT-6 Astra (OpenAI).
+- **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
+  (Anthropic) or GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI); French or English; 10 OpenAI voices.
+- **Persona**: a free text (name, who made it, who you are…) given to the assistant with every question,
+  edited in `PERSONA.TXT` from the PC.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
@@ -27,12 +29,15 @@ which has been largely rewritten.
   `/spiffs/history.json` after each answer), so you can ask later "what were we talking about?".
   Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
-- **Tools** (Claude models): **weather** ("Quel temps fera-t-il demain à Namur ?", from Open-Meteo, free and
-  without key) and **volume** ("Parle plus fort", "Mets le volume à 50"; applied at once if nothing is playing, else after the answer; the assistant then goes back to sleep; kept
-  across restarts), and **web search** for current information ("Quelles sont les dernières nouvelles en
-  Belgique ?"; run by Anthropic, about $0.01 per search, 3 searches at most per question, enabled when the
-  model supports it). Claude decides when to call them; a tool adds about 1 to 4 s to the answer, and a
-  short "Je regarde." is spoken (not shown) while it runs.
+- **Tools** (Claude models), called by Claude when the question needs them:
+  - **weather** ("Quel temps fera-t-il demain à Namur ?"), from Open-Meteo, free and without key;
+  - **volume** ("Parle plus fort", "Mets le volume à 50"), applied at once if nothing is playing (else after
+    the answer), kept across restarts; the assistant then goes back to sleep;
+  - **web search** for current information ("Quelles sont les dernières nouvelles en Belgique ?"), run by
+    Anthropic, about $0.01 per search, 3 searches at most per question, enabled when the model supports it.
+
+  A short "Je regarde." is spoken (not shown) while a tool runs; the icon left of the answer turns into a
+  globe when the web was searched.
 - **Knows the date and time**: each question is sent with the current date and time ("[Nous sommes le dimanche
   25 octobre 2026, il est 20 h 07.]"), so "what day is it?" or "how many days until Christmas?" work.
 - **Long-term memory**: "Souviens-toi que …" / "Retiens que …" (English: "Remember that …") stores a note,
@@ -40,12 +45,12 @@ which has been largely rewritten.
   reads them out. These are answered on the device (no model call); the notes are given to the model with
   every question and can be edited in `MEMORY.TXT`.
 - Saying "Bonjour ESP" during an answer, or **double-tapping the screen**, **interrupts** it and listens again.
-- **Clock** under the sleeping robot: `HH:MM` in glowing seven-segment digits and the date (`DIM 25/10/26`),
-  synchronized over the Internet (NTP), and the speaker volume at the bottom left (bar, speaker icon,
-  percentage) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out when
+- **Sleep screen**: under the sleeping robot, the time in glowing seven-segment digits and the date
+  (`DIM 25/10/26`), synchronized over the Internet (NTP); the speaker volume at the bottom left (bar, speaker
+  icon, percentage) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out when
   disconnected), in the same style.
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
-- French or English interface and voice, switchable from the Settings screen.
+- **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
 
 ## Architecture
 
@@ -68,7 +73,7 @@ flowchart LR
 | Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output streamed continuously |
 | Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 10 exchanges of history |
 | Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 10 exchanges of history |
-| Speech synthesis | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice `marin` | Permanent WebSocket, one response per sentence, read verbatim |
+| Speech synthesis | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice chosen in Settings (default `marin`) | Permanent WebSocket, one response per sentence, read verbatim |
 | Playback | local | 24 → 16 kHz resampling, I2S fixed at 16 kHz (shared with the mics) |
 
 The stages overlap: FreeRTOS tasks are chained through queues (model text → sentences → synthesis →
@@ -80,8 +85,8 @@ transcription and voice) and opened while the user is still speaking.
 | Model | Provider | Price in / out (per 1M tokens) | ≈ cost per 1,000 questions | Speed | Reasoning | Settings used |
 | --- | --- | --- | --- | --- | --- | --- |
 | `claude-haiku-5-5` (default) | Anthropic | $0.10 / $0.50 | $0.15 | ★★★ fastest | none | thinking `disabled`, effort `low` |
-| `gpt-6-luna` | OpenAI | $0.10 / $0.50 | $0.15 | ★★★ fastest | none | reasoning effort `none` |
-| `claude-sonnet-5-5` | Anthropic | $2 / $10 | $3 | ★★☆ | none (thinks only between tool calls, and no tools are offered) | thinking `between_tools`, effort `low` |
+| `gpt-6-luna` | OpenAI | $0.10 / $0.50 | $0.15 | ★☆☆ measured slow: 4 to 9 s to the first word | none | reasoning effort `none` |
+| `claude-sonnet-5-5` | Anthropic | $2 / $10 | $3 | ★★☆ | only between tool calls (weather, web search…) | thinking `between_tools`, effort `low` |
 | `gpt-6.1-sol` | OpenAI | $2 / $10 | $3 + reasoning | ★★☆ | light (always some reasoning) | reasoning effort `low` |
 | `claude-opus-5-5` | Anthropic | $4 / $20 | $6 + thinking | ★☆☆ | adaptive (cannot be disabled; thinks when the question needs it) | thinking left to the model, effort `low` |
 | `gpt-6-astra` | OpenAI | $10 / $50 | $15 + reasoning | ★☆☆ slowest | light, on the most capable OpenAI model | reasoning effort `low` |
@@ -89,9 +94,11 @@ transcription and voice) and opened while the user is still speaking.
 How to read this table:
 
 - **Cheapest → most expensive**: Haiku 5.5 = GPT-6 Luna < Sonnet 5.5 = GPT-6.1 Sol < Opus 5.5 < GPT-6 Astra.
-- **Fastest → slowest** (time to the first spoken word): Haiku 5.5 and GPT-6 Luna (no reasoning), then Sonnet 5.5
-  and GPT-6.1 Sol, then Opus 5.5 and GPT-6 Astra (larger models that reason before answering). Only Haiku 5.5 has
-  been measured on the device (see the latencies below); the other ratings are expected, not measured.
+- **Fastest → slowest** (time to the first spoken word): Haiku 5.5, then Sonnet 5.5 and GPT-6.1 Sol, then Opus 5.5
+  and GPT-6 Astra (larger models that reason before answering). Measured on the device: Haiku 5.5 0.7 to 1.6 s
+  (see the latencies below), GPT-6 Luna 4 to 9 s despite no reasoning (time spent waiting on OpenAI's side);
+  the other ratings are expected, not measured.
+- **Tools** (weather, volume, web search) are offered to the Claude models only.
 - **Deepest reasoning**: Opus 5.5 and GPT-6 Astra are the most capable models and the only ones that really
   think before answering; GPT-6.1 Sol reasons a little; Haiku 5.5, GPT-6 Luna and Sonnet 5.5 answer directly.
   For short spoken answers, the fast models are usually enough; the larger ones help with tricky questions
@@ -114,6 +121,8 @@ The list lives in `main/app/llm.c` (`llm_models[]`). Any other model id can be s
 | End of speech → final transcript | 0.6 to 0.8 s |
 | First word from the model | 0.7 to 1.6 s |
 | Transcript → first sound | 1.4 to 2.8 s |
+| Weather question (Open-Meteo lookup) | + 3 to 4 s for the answer |
+| Web search ("Je regarde." spoken meanwhile) | first sound after 1.9 s, answer after about 3 s |
 
 ## Hardware and software
 
@@ -132,26 +141,29 @@ Two firmwares live side by side in flash:
 | `main/` (root project) | `factory` (6 MB) | The voice assistant |
 | `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `PERSONA.TXT` and `MEMORY.TXT` (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `PERSONA.TXT` and `MEMORY.TXT`, files that can grow when edited, and a bound-checked `CONFIG.INI`) |
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
-| `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep) |
+| `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep); the conversation (`history.json`) is saved there at run time |
 
 Main modules of the assistant (`main/app/`):
 
 | File | Role |
 | --- | --- |
 | `app_sr.c` | ESP-SR: AFE, wake word, speech and end-of-speech detection |
-| `app_audio.c` | Listening sessions, system sounds |
+| `app_audio.c` | Listening sessions, system sounds (wake beep preloaded in PSRAM) |
 | `stt_stream.c` | Live transcription (OpenAI Realtime, permanent WebSocket) |
 | `llm.c` | Model list and dispatch to the provider of the chosen model |
-| `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, `stop_reason` handling (ready for `tool_use`) |
+| `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
 | `openai_chat.c` | GPT client (Responses API, SSE streaming), history |
 | `llm_sse.c` | Server-sent events parser shared by both clients |
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
-| `tts_stream.c` | Speech synthesis (OpenAI Realtime), resampling and I2S playback |
+| `tts_stream.c` | Speech synthesis (OpenAI Realtime), voice change at run time, resampling and I2S playback |
 | `app_lang.c` | UI texts, model and voice instructions, error messages (fr / en) |
-| `tools.c` | Tools offered to Claude (definitions, dispatch); `weather.c` (Open-Meteo), `app_volume.c` |
+| `tools.c` | Tools offered to Claude (definitions, dispatch) |
+| `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast) |
+| `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
-| `app_clock.c` | Clock of the sleep screen (SNTP time, seven-segment digits drawn by a single LVGL object) |
-| `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, live text, translations, Settings screen |
+| `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
+| `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, answer scrolling, answer icon, double tap, translations, Settings screen |
+| `images/` | Answer icons (Claude, web globe) |
 | `main.c` | Listen → transcribe → answer → speak pipeline |
 
 ## Build and flash
@@ -205,9 +217,10 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Base_url` | OpenAI API URL | `https://api.openai.com/v1/` |
 | `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
-| `Language` | Assistant language | `fr` or `en` |
-| `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
+| `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
 | `Voice` | Voice of the answers (also set from the Settings screen) | `marin`, `cedar`, `coral`… |
+| `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
+| `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 
 The drive also holds **`PERSONA.TXT`**: free text always given to the assistant with every question
@@ -219,8 +232,11 @@ Valéry habite à ...
 ```
 
 `MEMORY.TXT` holds the notes of the long-term memory, one per line (`- note (25/10/26)`): you can correct or
-delete them there. Both files follow the same rules: several lines are allowed, up to about 3,900 characters; lines starting with `#` are ignored (an empty file
-shows a short help in such lines). The text is stored in the NVS key `Persona` and read at start-up.
+delete them there.
+
+Both files follow the same rules: several lines are allowed, up to about 3,900 characters; lines starting with
+`#` are ignored (an empty file shows a short help in such lines). They are stored in the NVS keys `Persona` and
+`Memory` and read at start-up.
 
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
 starts with this version. Spaces and line breaks pasted by mistake around the values are ignored. Keys are
@@ -241,7 +257,7 @@ stored in plain text in the device's NVS and never appear in the logs (only thei
 | `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |
 | `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |
-| `CONFIG_VOLUME_LEVEL` | `90` | Speaker volume |
+| `CONFIG_VOLUME_LEVEL` | `90` | Speaker volume when `Volume` is not set |
 
 An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to change a value, use
 `idf.py menuconfig` (or delete `sdkconfig` before rebuilding).
@@ -250,9 +266,11 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 
 1. Say "**Bonjour ESP**" (beep), then ask your question ("J'écoute …" is shown while you speak).
 2. After 0.9 s of silence the question is sent; the answer is shown and spoken.
-3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP".
-4. Without speech, it goes back to sleep (no API call is made for silence).
-5. Saying just "**Au revoir**" (or "Bonne nuit"; "Goodbye", "Bye", "Good night" in English) sends it back to
+3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP"
+   (not after a volume change, which sends it back to sleep).
+4. To interrupt an answer, say "Bonjour ESP" again or **double-tap** the screen: it stops and listens.
+5. Without speech, it goes back to sleep (no API call is made for silence).
+6. Saying just "**Au revoir**" (or "Bonne nuit"; "Goodbye", "Bye", "Good night" in English) sends it back to
    sleep at once, without an answer and without listening again, and clears the saved conversation: the next
    one starts afresh. Otherwise the conversation goes on after sleep or a restart.
    The phrases are listed in `main/app/app_lang.c`.
@@ -260,7 +278,8 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 ## System sounds
 
 The sounds in `spiffs/` must be **16-bit PCM WAV at 16 kHz** (mono or stereo): the I2S bus is shared with
-the microphones and stays at 16 kHz, other rates are rejected. After changing them, do a full flash
+the microphones and stays at 16 kHz, other rates are rejected. The wake beep is loaded into PSRAM at start-up
+and played once an interrupted answer has left the speaker. After changing the sounds, do a full flash
 (`idf.py flash`).
 
 ## Logs and diagnostics
@@ -272,6 +291,8 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - `openai_chat: first text after … ms, … tokens in … (cached …), out … (reasoning …)`
 - `tts: "…": first audio … ms` per sentence, `tts: reply played, N underrun(s)`
 - `stt: committed … ms of audio; at the end of speech … ms were still to send`
+- `tools: get_weather({…})`, `weather: … in … ms`, `claude: server tool: web_search`, `… web search(es)`
+- `claude: web search: available` (capability read at the first wake)
 - `[heap] internal free …` every 30 s (internal RAM is the critical resource)
 
 ## Design notes
@@ -295,8 +316,9 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 ## Roadmap
 
-- Echo cancellation and voice barge-in (if the BOX-3 provides a reference channel).
 - More tools: timers and alarms, home automation…
+- Tools for the GPT models.
+- Cost of each exchange (transcription, model, voice) shown on screen.
 - NVS encryption to protect the API keys.
 
 ## Credits and licenses

@@ -23,7 +23,9 @@
 #define OPENAI_TIMEOUT_MS           30000
 #define OPENAI_READ_CHUNK           512
 /* History kept for follow-up questions: the last 10 exchanges (user + assistant messages) */
-#define OPENAI_HISTORY_MAX_MSGS     20
+#define OPENAI_HISTORY_MAX_MSGS     24
+/* Past the maximum, cut down to this size in one go, so that the start (and OpenAI's prompt cache) stays */
+#define OPENAI_HISTORY_TRIM_TO      12
 #define OPENAI_URL_SIZE             160
 
 static const char *TAG = "openai_chat";
@@ -299,7 +301,10 @@ void openai_chat_prewarm(void)
 /* Keep the history short; older exchanges are dropped in user/assistant pairs */
 static void trim_history(void)
 {
-    while (cJSON_GetArraySize(s_messages) > OPENAI_HISTORY_MAX_MSGS) {
+    if (cJSON_GetArraySize(s_messages) <= OPENAI_HISTORY_MAX_MSGS) {
+        return;
+    }
+    while (cJSON_GetArraySize(s_messages) > OPENAI_HISTORY_TRIM_TO) {
         cJSON_DeleteItemFromArray(s_messages, 0);
         cJSON_DeleteItemFromArray(s_messages, 0);
     }

@@ -25,7 +25,7 @@ which has been largely rewritten.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
-- **Conversation memory**: the last 10 exchanges are kept across sleep and restarts (saved to flash in
+- **Conversation memory**: the last 6 to 12 exchanges are kept across sleep and restarts (saved to flash in
   `/spiffs/history.json` once the assistant is back to sleep, never during an exchange), so you can ask later "what were we talking about?".
   Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
@@ -71,8 +71,8 @@ flowchart LR
 | Wake word | local (ESP-SR 2.5.5) | WakeNet9 "Bonjour ESP" + "Hi ESP", 2-mic AFE |
 | End of speech | local | ESP-SR VAD, 0.9 s of silence |
 | Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output streamed continuously |
-| Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 10 exchanges of history |
-| Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 10 exchanges of history |
+| Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
+| Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
 | Speech synthesis | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice chosen in Settings (default `marin`) | Permanent WebSocket, one response per sentence, read verbatim |
 | Playback | local | 24 → 16 kHz resampling, I2S fixed at 16 kHz (shared with the mics) |
 

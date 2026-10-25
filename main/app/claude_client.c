@@ -6,6 +6,7 @@
  * Claude client: Anthropic Messages API with server-sent events (stream: true).
  */
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +37,13 @@
 #define CLAUDE_TIMEOUT_MS       30000
 #define CLAUDE_READ_CHUNK       512
 /* History kept for follow-up questions: about the last 10 exchanges (user + assistant messages) */
-#define CLAUDE_HISTORY_MAX_MSGS 20
+#define CLAUDE_HISTORY_MAX_MSGS 24
+/*
+ * Past the maximum, the history is cut down to this size in one go: its start then stays the same for several
+ * questions, and so does the prompt cache (dropping the oldest exchange at every question changes the prefix
+ * and makes every request rewrite the cache)
+ */
+#define CLAUDE_HISTORY_TRIM_TO  12
 /* Tool calls answered per question, before giving up */
 #define CLAUDE_MAX_TOOL_ROUNDS  3
 
@@ -531,12 +538,14 @@ static bool is_tool_result_message(const cJSON *msg)
 }
 
 /*
- * Keep the history short; older messages are dropped in user/assistant pairs, and the history always starts
- * with a question (not with the results of tools called in a dropped exchange)
+ * Keep the history short: past CLAUDE_HISTORY_MAX_MSGS, older messages are dropped in user/assistant pairs down
+ * to CLAUDE_HISTORY_TRIM_TO, and the history always starts with a question (not with the results of tools
+ * called in a dropped exchange)
  */
 static void trim_history(void)
 {
-    while (cJSON_GetArraySize(s_messages) > CLAUDE_HISTORY_MAX_MSGS ||
+    int keep = cJSON_GetArraySize(s_messages) > CLAUDE_HISTORY_MAX_MSGS ? CLAUDE_HISTORY_TRIM_TO : INT_MAX;
+    while (cJSON_GetArraySize(s_messages) > keep ||
             (cJSON_GetArraySize(s_messages) > 0 && is_tool_result_message(cJSON_GetArrayItem(s_messages, 0)))) {
         cJSON_DeleteItemFromArray(s_messages, 0);
         cJSON_DeleteItemFromArray(s_messages, 0);

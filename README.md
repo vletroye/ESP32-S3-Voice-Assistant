@@ -26,7 +26,7 @@ which has been largely rewritten.
   `/spiffs/history.json` after each answer), so you can ask later "what were we talking about?".
   Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
-- Saying "Bonjour ESP" during an answer **interrupts** it.
+- Saying "Bonjour ESP" during an answer, or **double-tapping the screen**, **interrupts** it and listens again.
 - **Clock** under the sleeping robot: `HH:MM` in glowing seven-segment digits and the date (`DIM 25/10/26`),
   synchronized over the Internet (NTP).
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.

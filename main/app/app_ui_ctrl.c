@@ -17,6 +17,7 @@
 #include "app_lang.h"
 #include "llm.h"
 #include "app_clock.h"
+#include "app_sr.h"
 #include "tts_stream.h"
 #include "settings.h"
 #include "bsp/esp-bsp.h"
@@ -74,6 +75,23 @@ static void label_localize(lv_obj_t *label, const char *text, const lv_font_t *f
 static void robot_raise(lv_obj_t *obj)
 {
     lv_obj_set_y(obj, lv_obj_get_style_y(obj, LV_PART_MAIN) - ROBOT_RAISE_PX);
+}
+
+/* Two taps within this delay on the answer stop it and listen again */
+#define DOUBLE_TAP_MS                   (400)
+
+/* Double tap on the answer: same as the wake word (the reply stops, the assistant listens) */
+static void reply_double_tap_cb(lv_event_t *e)
+{
+    static int64_t last_tap_us = 0;
+    int64_t now = esp_timer_get_time();
+    if (now - last_tap_us <= DOUBLE_TAP_MS * 1000LL) {
+        last_tap_us = 0;
+        ESP_LOGI(TAG, "double tap: reply stopped, listening");
+        app_sr_start_once();
+    } else {
+        last_tap_us = now;
+    }
 }
 
 /* Text under "Listening": show its last line, scrolling up smoothly when the text grows */
@@ -348,6 +366,9 @@ void ui_ctrl_init(void)
     ui_init();
     ui_ctrl_localize();
     app_clock_create(ui_PanelSleep, app_lang_get()->weekdays);
+    // Taps on the answer land on the panel or on the scrolling text container (both clickable)
+    lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
 
     scroll_timer_handle = lv_timer_create(reply_content_scroll_timer_handler, REPLY_SCROLL_TIMER_INTERVAL_MS, NULL);
     lv_timer_pause(scroll_timer_handle);

@@ -38,6 +38,18 @@ static const char s_definitions_json[] =
     "]";
 
 static cJSON *s_definitions = NULL;
+/* Set by a tool whose answer ends the exchange (no follow-up listening) */
+static volatile bool s_sleep_after_reply = false;
+
+void tools_reset_requests(void)
+{
+    s_sleep_after_reply = false;
+}
+
+bool tools_sleep_after_reply(void)
+{
+    return s_sleep_after_reply;
+}
 
 const cJSON *tools_definitions(void)
 {
@@ -65,6 +77,8 @@ static char *run_set_volume(const cJSON *input, bool *is_error)
         return strdup("{\"error\":\"give 'level' or 'change'\"}");
     }
     int applied = app_volume_request(target);
+    // A volume change ends the exchange: back to sleep after the confirmation
+    s_sleep_after_reply = true;
     bool now = (app_volume_get() == applied && !app_volume_pending());
     char *text = NULL;
     asprintf(&text, "{\"previous_level\":%d,\"new_level\":%d,\"applied_now\":%s%s}", previous, applied,

@@ -25,6 +25,12 @@ const cJSON *tools_definitions(void);
  */
 char *tools_run(const char *name, const cJSON *input, bool *is_error);
 
+/** Forget the requests of the previous answer (call before each question) */
+void tools_reset_requests(void);
+
+/** A tool asked to go back to sleep after the answer instead of listening for a follow-up (volume change) */
+bool tools_sleep_after_reply(void);
+
 #ifdef __cplusplus
 }
 #endif

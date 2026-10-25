@@ -28,6 +28,7 @@
 #include "llm.h"
 #include "app_memory.h"
 #include "app_volume.h"
+#include "tools.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -183,11 +184,14 @@ static void on_reply_audio(tts_event_t event)
         return;
     }
 #if CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS > 0
-    // Keep listening so that the conversation can continue without the wake word
-    app_sr_start_followup(CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS);
-#else
-    ui_ctrl_reply_set_audio_end_flag(true);
+    if (!tools_sleep_after_reply()) {
+        // Keep listening so that the conversation can continue without the wake word
+        app_sr_start_followup(CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS);
+        return;
+    }
 #endif
+    // Back to sleep once the answer has scrolled (no follow-up, or a volume change)
+    ui_ctrl_reply_set_audio_end_flag(true);
 }
 
 /* Stop the reply being spoken. Called from app_audio.c when a new listening session starts. */
@@ -331,6 +335,7 @@ void assistant_listen_end(void)
     sentence_splitter_init(&s_splitter, on_sentence, NULL);
 
     t_start = esp_timer_get_time();
+    tools_reset_requests();
     char *question = with_current_time(text);
     llm_error_t llm_err = llm_stream(question ? question : text, on_llm_text, &view, &response);
     free(question);

@@ -46,6 +46,7 @@ typedef struct {
     const char *id;         /* API model id */
     const char *label;      /* Name shown in the list */
     const char *effort;     /* Claude output_config.effort / OpenAI reasoning.effort, NULL for the default */
+    const char *spoken;     /* Short name in the spoken list of models ("Haiku") */
 } llm_model_t;
 
 extern const llm_model_t llm_models[];
@@ -74,6 +75,9 @@ void llm_set_system_prompt(const char *system_prompt);
 
 /** Web searches made for the current (or last) answer */
 int llm_web_searches(void);
+
+/** Where the user lives (2-letter country code, town): localizes the web search (Claude) */
+void llm_set_location(const char *country, const char *city);
 
 /** Provider of the configured model */
 llm_provider_t llm_provider(void);

@@ -25,12 +25,12 @@ static const char *TAG = "llm";
  * reasoning ("none"), GPT-6.1 Sol and GPT-6 Astra start at "low".
  */
 const llm_model_t llm_models[] = {
-    { "claude-haiku-5-5",  "Claude Haiku 5.5",  "low" },
-    { "claude-sonnet-5-5", "Claude Sonnet 5.5", "low" },
-    { "claude-opus-5-5",   "Claude Opus 5.5",   "low" },
-    { "gpt-6-luna",        "GPT-6 Luna",        "none" },
-    { "gpt-6.1-sol",       "GPT-6.1 Sol",       "low" },
-    { "gpt-6-astra",       "GPT-6 Astra",       "low" },
+    { "claude-haiku-5-5",  "Claude Haiku 5.5",  "low",  "Haiku" },
+    { "claude-sonnet-5-5", "Claude Sonnet 5.5", "low",  "Sonnet" },
+    { "claude-opus-5-5",   "Claude Opus 5.5",   "low",  "Opus" },
+    { "gpt-6-luna",        "GPT-6 Luna",        "none", "Luna" },
+    { "gpt-6.1-sol",       "GPT-6.1 Sol",       "low",  "Sol" },
+    { "gpt-6-astra",       "GPT-6 Astra",       "low",  "Astra" },
 };
 const size_t llm_model_count = sizeof(llm_models) / sizeof(llm_models[0]);
 
@@ -150,6 +150,10 @@ void llm_history_save(void)
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
                    const char *system_prompt)
 {
+    // Called again when the model is changed at run time: wait for an answer being generated
+    if (s_lock) {
+        xSemaphoreTake(s_lock, portMAX_DELAY);
+    }
     s_provider = llm_provider_of(model);
     esp_err_t ret;
     if (s_provider == LLM_PROVIDER_OPENAI) {
@@ -164,11 +168,14 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
     }
     s_ready = (ret == ESP_OK);
     strlcpy(s_model, model, sizeof(s_model));
-    if (!s_lock) {
+    s_dirty = false;
+    if (s_lock) {
+        xSemaphoreGive(s_lock);
+    } else {
         s_lock = xSemaphoreCreateMutex();
     }
     if (s_ready) {
-        history_restore();
+        history_restore();      // the conversation saved for this model, if any
     }
     return ret;
 }
@@ -185,6 +192,11 @@ void llm_set_system_prompt(const char *system_prompt)
         claude_client_set_system(system_prompt);
     }
     xSemaphoreGive(s_lock);
+}
+
+void llm_set_location(const char *country, const char *city)
+{
+    claude_client_set_location(country, city);
 }
 
 int llm_web_searches(void)

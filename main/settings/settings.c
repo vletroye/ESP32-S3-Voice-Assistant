@@ -181,6 +181,27 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.volume = level < 0 ? 0 : (level > 100 ? 100 : level);
     }
 
+    // Where the user lives (optional): localizes the web search and tells the model
+    len = sizeof(g_sys_param.country);
+    if (nvs_get_str(my_handle, "Country", g_sys_param.country, &len) != ESP_OK) {
+        g_sys_param.country[0] = '\0';
+    }
+    str_trim(g_sys_param.country);
+    for (char *p = g_sys_param.country; *p; p++) {
+        *p = toupper((unsigned char)*p);
+    }
+    if (strlen(g_sys_param.country) != 2 || !isalpha((unsigned char)g_sys_param.country[0]) ||
+            !isalpha((unsigned char)g_sys_param.country[1])) {
+        if (g_sys_param.country[0]) {
+            ESP_LOGW(TAG, "Country \"%s\" ignored: a 2-letter code is expected (BE, FR...)", g_sys_param.country);
+        }
+        g_sys_param.country[0] = '\0';
+    }
+    len = sizeof(g_sys_param.city);
+    if (nvs_get_str(my_handle, "City", g_sys_param.city, &len) != ESP_OK) {
+        g_sys_param.city[0] = '\0';
+    }
+
     // Voice of the answers (optional)
     len = sizeof(g_sys_param.voice);
     if (nvs_get_str(my_handle, "Voice", g_sys_param.voice, &len) != ESP_OK || len <= 1) {
@@ -219,7 +240,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
-    ESP_LOGI(TAG, "volume:%d", g_sys_param.volume);
+    ESP_LOGI(TAG, "volume:%d, country:%s, city:%s", g_sys_param.volume, g_sys_param.country, g_sys_param.city);
     ESP_LOGI(TAG, "voice:%s, persona: %d chars, memory: %d chars", g_sys_param.voice,
              g_sys_param.persona ? (int)strlen(g_sys_param.persona) : 0,
              g_sys_param.memory ? (int)strlen(g_sys_param.memory) : 0);

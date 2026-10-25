@@ -76,6 +76,9 @@ static stt_partial_cb_t s_on_partial = NULL;
 static char *s_auth_header = NULL;
 static char *s_model = NULL;
 static char *s_language = NULL;
+/* Language requested by stt_stream_set_language(), applied by the connection task */
+static char s_pending_language[8];
+static volatile bool s_language_change = false;
 
 /* Received frame being assembled, partial and final transcripts (PSRAM) */
 static char *s_rx = NULL;
@@ -361,6 +364,13 @@ static void stt_task(void *arg)
     size_t backlog_at_end = 0;
 
     for (;;) {
+        /* New language: the session configuration is sent again (no reconnection needed) */
+        if (s_language_change) {
+            s_language_change = false;
+            replace_str(&s_language, s_pending_language);
+            session_ready = false;
+            ESP_LOGI(TAG, "language: %s", s_language);
+        }
         /* ----- connection supervision ----- */
         bool connected = client && esp_websocket_client_is_connected(client) &&
                          (xEventGroupGetBits(s_events) & EV_CONNECTED);
@@ -464,6 +474,12 @@ esp_err_t stt_stream_init(void)
     s_out = heap_caps_malloc(STT_CHUNK_OUT_SAMPLES * sizeof(int16_t), MALLOC_CAP_SPIRAM);
     ESP_RETURN_ON_FALSE(s_events && s_audio && s_in && s_out, ESP_ERR_NO_MEM, TAG, "Out of memory");
     return ESP_OK;
+}
+
+void stt_stream_set_language(const char *language)
+{
+    strlcpy(s_pending_language, language, sizeof(s_pending_language));
+    s_language_change = true;
 }
 
 void stt_stream_configure(const char *api_key, const char *model, const char *language)

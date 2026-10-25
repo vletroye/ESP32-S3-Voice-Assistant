@@ -18,6 +18,8 @@
 #define MODEL_SIZE 48
 #define CLAUDE_KEY_SIZE 256
 #define VOICE_SIZE 24
+#define COUNTRY_SIZE 4
+#define CITY_SIZE 48
 
 typedef struct {
     char ssid[SSID_SIZE];             /* SSID of target AP. */
@@ -30,6 +32,8 @@ typedef struct {
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
     char voice[VOICE_SIZE];           /* OpenAI voice reading the answers (marin, cedar...). */
+    char country[COUNTRY_SIZE];       /* Where the user lives: ISO 3166-1 alpha-2 code ("BE"), "" if unknown. */
+    char city[CITY_SIZE];             /* Where the user lives: town ("Evere"), "" if unknown. */
     int volume;                       /* Speaker volume 0..100, changed by voice ("parle plus fort"). */
     char *persona;                    /* Context always given to the assistant (allocated), NULL if none. */
     char *memory;                     /* Notes it was asked to remember at start-up (allocated), NULL if none. */

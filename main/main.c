@@ -28,6 +28,7 @@
 #include "llm.h"
 #include "app_memory.h"
 #include "voice_cmd.h"
+#include "assistant.h"
 #include "app_volume.h"
 #include "tools.h"
 #include "weather.h"
@@ -55,8 +56,6 @@ static int64_t s_reply_t0 = 0;
 #define SAVE_AFTER_SILENCE_MS           1000
 /* From the start of an answer until it has been spoken or interrupted (no flash write meanwhile) */
 static volatile bool s_reply_active = false;
-/* The language or the model was changed by voice: restart once the confirmation has been spoken */
-static volatile bool s_restart_after_reply = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -207,9 +206,6 @@ static void on_reply_audio(tts_event_t event)
     voice_cmd_reply_spoken();
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();
-    if (s_restart_after_reply) {
-        return;     // the main task restarts the device (new language)
-    }
     if (record_flag) {
         // Reply interrupted by a new listening session (wake word or touch)
         return;
@@ -262,8 +258,17 @@ static char *build_system_prompt(void)
     const app_lang_t *lang = app_lang_get();
     const char *notes = app_memory_notes();
     const char *persona = sys_param->persona ? sys_param->persona : "";
+    // "Lieu de l'utilisateur : Evere, BE." (country and town from CONFIG.INI or "change mon pays / ma ville")
+    char where[64] = "";
+    char location[256] = "";
+    snprintf(where, sizeof(where), "%s%s%s", sys_param->city, sys_param->city[0] && sys_param->country[0] ? ", " : "",
+             sys_param->country);
+    if (where[0]) {
+        snprintf(location, sizeof(location), lang->location_line, where);
+    }
     char *prompt = NULL;
-    asprintf(&prompt, "%s%s%s%s%s%s%s", lang->system_prompt,
+    asprintf(&prompt, "%s%s%s%s%s%s%s%s%s", lang->system_prompt,
+             location[0] ? "\n\n" : "", location,
              persona[0] ? "\n\n" : "", persona,
              notes[0] ? "\n\n" : "", notes[0] ? lang->memory_header : "", notes[0] ? "\n" : "", notes);
     return prompt;
@@ -289,6 +294,71 @@ static char *with_current_time(const char *text)
     char *question = NULL;
     asprintf(&question, "%s %s", stamp, text);
     return question;
+}
+
+/* Changes asked from the Settings screen, applied by the main task (assistant_request_...) */
+static char s_requested_language[LANG_SIZE];
+static char s_requested_model[MODEL_SIZE];
+static volatile bool s_language_requested = false;
+static volatile bool s_model_requested = false;
+
+void assistant_request_language(const char *code)
+{
+    strlcpy(s_requested_language, code, sizeof(s_requested_language));
+    s_language_requested = true;
+}
+
+void assistant_request_model(const char *model)
+{
+    strlcpy(s_requested_model, model, sizeof(s_requested_model));
+    s_model_requested = true;
+}
+
+void assistant_set_language(const char *code)
+{
+    strlcpy(sys_param->lang, code, sizeof(sys_param->lang));
+    app_lang_set(code);
+    const app_lang_t *lang = app_lang_get();
+    stt_stream_set_language(lang->code);
+    tts_stream_set_instructions(lang->tts_instructions);
+    char *prompt = build_system_prompt();
+    if (prompt) {
+        llm_set_system_prompt(prompt);
+        free(prompt);
+    }
+    ui_ctrl_apply_language();
+    ESP_LOGI(TAG, "Language %s applied", code);
+}
+
+void assistant_set_location(const char *country, const char *city)
+{
+    if (country) {
+        strlcpy(sys_param->country, country, sizeof(sys_param->country));
+    }
+    if (city) {
+        strlcpy(sys_param->city, city, sizeof(sys_param->city));
+    }
+    llm_set_location(sys_param->country, sys_param->city);
+    char *prompt = build_system_prompt();
+    if (prompt) {
+        llm_set_system_prompt(prompt);
+        free(prompt);
+    }
+    ESP_LOGI(TAG, "Location: %s, %s", sys_param->city, sys_param->country);
+}
+
+void assistant_set_model(const char *model)
+{
+    // The current conversation is saved first: it is restored if this model is chosen again later
+    llm_history_save();
+    strlcpy(sys_param->chat_model, model, sizeof(sys_param->chat_model));
+    char *prompt = build_system_prompt();
+    llm_init(model, sys_param->claude_key, sys_param->key, sys_param->url,
+             prompt ? prompt : app_lang_get()->system_prompt);
+    free(prompt);
+    llm_set_location(sys_param->country, sys_param->city);
+    ui_ctrl_settings_sync();
+    ESP_LOGI(TAG, "Model %s applied", model);
 }
 
 /* Start of a listening session (wake word, touch or follow-up). Called from app_audio.c */
@@ -347,11 +417,10 @@ void assistant_listen_end(void)
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_QUESTION, text);
 
     // "Change la langue" / "change de modèle" (then the answer), "parle anglais", "utilise le modèle 3":
-    // answered here, then restart
+    // answered and applied here, without restarting
     char *cmd_reply = NULL;
     voice_cmd_t voice_cmd = voice_cmd_handle(text, &cmd_reply);
     if (voice_cmd != VOICE_CMD_NONE) {
-        s_restart_after_reply = (voice_cmd == VOICE_CMD_RESTART);
         speak_message(cmd_reply ? cmd_reply : "");
         free(cmd_reply);
         goto err;
@@ -497,6 +566,7 @@ void app_main()
     llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,
              system_prompt ? system_prompt : app_lang_get()->system_prompt);
     free(system_prompt);
+    llm_set_location(sys_param->country, sys_param->city);
     ESP_ERROR_CHECK(stt_stream_init());
     stt_stream_configure(sys_param->key, CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
     ESP_ERROR_CHECK(tts_stream_init());
@@ -506,17 +576,18 @@ void app_main()
     for (int seconds = 0; ; seconds++) {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
+        // Language or model changed from the Settings screen
+        if (s_language_requested) {
+            s_language_requested = false;
+            assistant_set_language(s_requested_language);
+        }
+        if (s_model_requested) {
+            s_model_requested = false;
+            assistant_set_model(s_requested_model);
+        }
         // Conversation and volume saved once the assistant is back to sleep (sleep panel shown, no answer in
         // progress, not listening, nothing played for a while): never during an exchange, follow-up included.
         // The saves do nothing when unchanged. This task's stack is in internal RAM, as flash writes need.
-        // New language chosen by voice: once its confirmation has been spoken, save and restart
-        if (s_restart_after_reply && !s_reply_active && tts_stream_is_silent(300)) {
-            llm_history_save();
-            app_volume_save();
-            weather_places_save();
-            ESP_LOGI(TAG, "Restarting with the new settings");
-            esp_restart();
-        }
         if (ui_ctrl_is_asleep() && !s_reply_active && !record_flag && tts_stream_is_silent(SAVE_AFTER_SILENCE_MS)) {
             llm_history_save();
             app_volume_save();

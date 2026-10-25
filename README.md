@@ -21,7 +21,10 @@ which has been largely rewritten.
   (`[claude-haiku-5-5] …`).
 - **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
   (Anthropic) or GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI); French or English; 10 OpenAI voices. The
-  language and the model can also be changed **by voice** ("Change la langue", "Utilise le modèle 3").
+  language and the model can also be changed **by voice** ("Change la langue", "Utilise le modèle 3"); both
+  apply at once, without restarting.
+- **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays", "Change ma ville"):
+  the web search favours local results, and Claude uses this place for news, weather and local questions.
 - **Persona**: a free text (name, who made it, who you are…) given to the assistant with every question,
   edited in `PERSONA.TXT` from the PC.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
@@ -87,7 +90,7 @@ transcription and voice) and opened while the user is still speaking.
 | Model | Provider | Price in / out (per 1M tokens) | ≈ cost per 1,000 questions | Speed | Reasoning | Settings used |
 | --- | --- | --- | --- | --- | --- | --- |
 | `claude-haiku-5-5` (default) | Anthropic | $0.10 / $0.50 | $0.15 | ★★★ fastest | none | thinking `disabled`, effort `low` |
-| `gpt-6-luna` | OpenAI | $0.10 / $0.50 | $0.15 | ★☆☆ measured slow: 4 to 9 s to the first word | none | reasoning effort `none` |
+| `gpt-6-luna` | OpenAI | $0.10 / $0.50 | $0.15 | ★★★ fastest | none | reasoning effort `none` |
 | `claude-sonnet-5-5` | Anthropic | $2 / $10 | $3 | ★★☆ | only between tool calls (weather, web search…) | thinking `between_tools`, effort `low` |
 | `gpt-6.1-sol` | OpenAI | $2 / $10 | $3 + reasoning | ★★☆ | light (always some reasoning) | reasoning effort `low` |
 | `claude-opus-5-5` | Anthropic | $4 / $20 | $6 + thinking | ★☆☆ | adaptive (cannot be disabled; thinks when the question needs it) | thinking left to the model, effort `low` |
@@ -162,7 +165,7 @@ Main modules of the assistant (`main/app/`):
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
-| `voice_cmd.c` | Language and model changed by voice ("change la langue", "utilise le modèle 3") |
+| `voice_cmd.c` | Settings by voice: language, model, country and town ("change la langue", "utilise le modèle 3", "change ma ville") |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, answer scrolling, answer icon, double tap, translations, Settings screen |
@@ -206,7 +209,8 @@ Tap the gear icon on the home screen:
   Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
   session reconnects (~2 s) and the new voice introduces itself.
 
-For the language and the model, press **Save** (bottom right, enabled once something changed): the choice is saved to the device's NVS and the device restarts to apply it.
+For the language and the model, press **Save** (bottom right, enabled once something changed): the choice is
+saved to the device's NVS and applied at once, without restarting (the speech session reconnects, ~2 s).
 The folder-and-gear icon (top right) switches to the configuration mode described below.
 
 ### On the device: `CONFIG.INI`
@@ -223,6 +227,8 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
 | `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
 | `Voice` | Voice of the answers (also set from the Settings screen) | `marin`, `cedar`, `coral`… |
+| `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
+| `City` | Your town (also set by voice) | `Evere` |
 | `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
@@ -305,23 +311,39 @@ in English (`main/app/app_lang.c`).
 ### Language and model
 
 Accepted in French and in English whatever the language (`main/app/voice_cmd.c`). Answered on the device; the
-new setting is saved, then the device restarts once the confirmation has been spoken. Changing the model starts
-a new conversation (each model keeps its own history).
+new setting is saved and applied at once, without restarting (the confirmation of a new language is spoken in
+that language, after the speech session has reconnected, ~2 s). Changing the model saves the conversation and
+restores the one of the new model if it was saved last, else starts a new one.
 
 | Action | French | English |
 | --- | --- | --- |
 | Change the language (asks "Quelle langue voulez-vous ? Français ou anglais ?") | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
 | Answer to that question (within 30 s after it) | français · anglais · "en anglais s'il te plaît"… | French · English |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
-| Change the model (reads the numbered list, then asks which one) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
+| Change the model (reads the short numbered list "1, Haiku. 2, Sonnet. …", then asks which one) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
 | Answer to that question (within 30 s after the list) | its number ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna"…) | its number ("three", "3", "third") or its name |
 | Change the model directly | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
 
 A direct phrase must contain only the language or the number, possibly followed by "s'il te plaît", "please"
 or "maintenant": "parle-moi de l'Angleterre en anglais" or "parle plus fort" remain normal questions. "Un" and
 "une" mean model 1 only when said alone (elsewhere they are articles). Answers: the confirmation ("Very well,
-I will now speak English. Restarting.", spoken in the new language), "Je parle déjà français." / "J'utilise
+I will now speak English.", spoken in the new language), "Je parle déjà français." / "J'utilise
 déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / "Dites un numéro de 1 à 6.".
+
+### Country and town
+
+Asked, then confirmed before saving ("Confirmes-tu que tu veux changer ton pays en Belgique ?"): "oui", "yes",
+"d'accord", "ok", "exact"… save it; anything else cancels. Applied at once to the web search and to Claude's
+instructions.
+
+| Action | French | English |
+| --- | --- | --- |
+| Change the country (asks "Quel est ton pays ?") | change mon pays · changer mon pays · change de pays · changer de pays · change le pays | change my country · change the country |
+| Change the town (asks "Quelle est ta ville ?") | change ma ville · changer ma ville · change de ville · changer de ville · change la ville | change my city · change the city · change my town |
+| Answer | the name ("Belgique", "j'habite à Evere"…) | the name ("Belgium", "I live in Evere"…) |
+
+The country must be one of about 40 known countries (Europe, North America, French-speaking Africa…, list in
+`voice_cmd.c`), as the web search needs its 2-letter code; the town is kept as said.
 
 ### Long-term memory
 
@@ -388,7 +410,8 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - **Web search**: the server tool `web_search_20250305` is added to the request when the model's description
   (read by the prewarm, `GET /v1/models/{model}`) says it is supported. Its results (encrypted page contents)
   are dropped from the history once the answer is complete, so that they are not sent again with every later
-  question; exchanges with thinking blocks (Opus) are kept verbatim. `pause_turn` is resumed.
+  question; exchanges with thinking blocks (Opus) are kept verbatim. `pause_turn` is resumed. With `Country` /
+  `City` set, the tool gets a `user_location` and the instructions say where the user lives.
 
 ## Roadmap
 

@@ -196,6 +196,9 @@ void app_main(void)
         nvs_init_str_if_missing("Persona", "");
         // Notes the assistant was asked to remember ("souviens-toi que ..."): edited in MEMORY.TXT
         nvs_init_str_if_missing("Memory", "");
+        // Where the user lives: 2-letter country code (BE, FR...) and town, for the web search and the model
+        nvs_init_str_if_missing("Country", "");
+        nvs_init_str_if_missing("City", "");
     }
     nvs_close(my_handle);
 

@@ -46,7 +46,16 @@ typedef struct {
     const char *model_ask_question;
     const char *model_already;      /* %s: model name */
     const char *model_unknown;      /* %d: number of models */
-    const char *model_switched;     /* %s: model name, before the restart */
+    const char *model_switched;     /* %s: model name */
+    /* Country and town changed by voice ("change mon pays", "change ma ville"), confirmed before saving */
+    const char *country_ask;
+    const char *city_ask;
+    const char *country_confirm;    /* %s: country name */
+    const char *city_confirm;       /* %s: town */
+    const char *country_unknown;
+    const char *place_saved;
+    const char *place_cancelled;
+    const char *location_line;      /* in the instructions, %s: "Evere, BE" */
     /* Day abbreviations of the clock under the sleeping robot, Sunday first */
     const char *weekdays[7];
     /* Current date and time given with each question: %s day, %d day of month, %s month, %d year, %02d:%02d */

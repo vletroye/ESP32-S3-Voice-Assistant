@@ -20,6 +20,7 @@
 #include "app_sr.h"
 #include "tts_stream.h"
 #include "settings.h"
+#include "assistant.h"
 #include "bsp/esp-bsp.h"
 
 #include "ui_helpers.h"
@@ -124,13 +125,18 @@ static lv_obj_t *s_save_btn = NULL;
 /* Selections matching the stored settings */
 static uint16_t s_lang_stored = 0;
 static uint16_t s_model_stored = 0;
+/* Labels of the rows created here, translated when the language changes */
+static lv_obj_t *s_model_row_label = NULL;
+static lv_obj_t *s_voice_row_label = NULL;
+static lv_obj_t *s_save_label = NULL;
 
-static void settings_restart_timer_cb(lv_timer_t *timer)
+static void settings_toast_timer_cb(lv_timer_t *timer)
 {
-    esp_restart();
+    lv_obj_del((lv_obj_t *)timer->user_data);
+    lv_timer_del(timer);
 }
 
-/* Show the confirmation over the screen, then restart so that the new settings are used everywhere */
+/* Show the confirmation over the screen for a moment: the settings apply at once, without restarting */
 static void settings_saved(void)
 {
     lv_obj_t *overlay = lv_obj_create(lv_scr_act());
@@ -149,7 +155,7 @@ static void settings_saved(void)
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_center(label);
 
-    lv_timer_create(settings_restart_timer_cb, SETTINGS_RESTART_DELAY_MS, NULL);
+    lv_timer_create(settings_toast_timer_cb, SETTINGS_RESTART_DELAY_MS, overlay);
 }
 
 /* Enable the Save button when the selection differs from the stored settings */
@@ -170,12 +176,20 @@ static void settings_save_clicked_cb(lv_event_t *e)
     uint16_t lang = lv_dropdown_get_selected(ui_DropdownSettingsRegion);
     if (lang != s_lang_stored && lang < sizeof(s_settings_languages) / sizeof(s_settings_languages[0])) {
         ret = settings_save_str("Language", s_settings_languages[lang]);
+        if (ret == ESP_OK) {
+            assistant_request_language(s_settings_languages[lang]);
+        }
     }
     // The entry after the listed models is a model set in CONFIG.INI: already the stored one
     uint16_t model = lv_dropdown_get_selected(s_model_dropdown);
     if (ret == ESP_OK && model != s_model_stored && model < llm_model_count) {
         ret = settings_save_str("Chat_model", llm_models[model].id);
+        if (ret == ESP_OK) {
+            assistant_request_model(llm_models[model].id);
+        }
     }
+    // Applied by the main task within a second; meanwhile the button is greyed out again
+    lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
     if (ret == ESP_OK) {
         settings_saved();
     }
@@ -276,6 +290,7 @@ static void settings_screen_setup(void)
 
     // Model row: the listed models, plus the current one if it was set in CONFIG.INI and is not listed
     s_model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
+    s_model_row_label = lv_obj_get_child(lv_obj_get_parent(s_model_dropdown), 0);
     options[0] = '\0';
     uint16_t model_selected = llm_model_count;
     for (size_t i = 0; i < llm_model_count; i++) {
@@ -297,6 +312,7 @@ static void settings_screen_setup(void)
 
     // Voice row: applied immediately, without the Save button
     lv_obj_t *voice_dropdown = settings_row_create(lang->settings_voice, lv_pct(62));
+    s_voice_row_label = lv_obj_get_child(lv_obj_get_parent(voice_dropdown), 0);
     options[0] = '\0';
     uint16_t voice_selected = SETTINGS_VOICE_COUNT;
     for (size_t i = 0; i < SETTINGS_VOICE_COUNT; i++) {
@@ -321,10 +337,61 @@ static void settings_screen_setup(void)
     lv_obj_set_style_bg_color(s_save_btn, lv_color_hex(0x6E47BD), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
     lv_obj_add_event_cb(s_save_btn, settings_save_clicked_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *save_label = lv_label_create(s_save_btn);
-    lv_label_set_text(save_label, lang->settings_save);
-    lv_obj_set_style_text_font(save_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_center(save_label);
+    s_save_label = lv_label_create(s_save_btn);
+    lv_label_set_text(s_save_label, lang->settings_save);
+    lv_obj_set_style_text_font(s_save_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_center(s_save_label);
+}
+
+/* Texts of the screens, applied at start-up and again when the language changes */
+static void ui_ctrl_apply_texts(void)
+{
+    const app_lang_t *lang = app_lang_get();
+    label_localize(ui_LabelSetupWifi, lang->wifi_connecting, &ui_font_Latin20);
+    label_localize(ui_LabelSetupStepTile, lang->steps_title, &ui_font_Latin20);
+    label_localize(ui_LabelSetupStepContent, lang->steps_content, &ui_font_Latin14);
+    label_localize(ui_LabelSettingsTile, lang->settings_title, &ui_font_Latin20);
+    label_localize(ui_LabelSettingsRegion, lang->settings_language, &ui_font_Latin16);
+    if (s_model_row_label) {
+        lv_label_set_text(s_model_row_label, lang->settings_model);
+        lv_label_set_text(s_voice_row_label, lang->settings_voice);
+        lv_label_set_text(s_save_label, lang->settings_save);
+    }
+    label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);
+    label_localize(ui_LabelResetContent, lang->reset_content, &ui_font_Latin14);
+    label_localize(ui_LabelWifiResetTitle, lang->reset_title, &ui_font_Latin20);
+    label_localize(ui_LabelWifiResetContent, lang->reset_content, &ui_font_Latin14);
+}
+
+void ui_ctrl_settings_sync(void)
+{
+    bsp_display_lock(0);
+    const sys_param_t *param = settings_get_parameter();
+    uint16_t lang_selected = 1;   // English UI for other languages
+    for (uint16_t i = 0; i < sizeof(s_settings_languages) / sizeof(s_settings_languages[0]); i++) {
+        if (strcasecmp(param->lang, s_settings_languages[i]) == 0) {
+            lang_selected = i;
+        }
+    }
+    s_lang_stored = lang_selected;
+    lv_dropdown_set_selected(ui_DropdownSettingsRegion, lang_selected);
+    for (size_t i = 0; i < llm_model_count; i++) {
+        if (strcmp(param->chat_model, llm_models[i].id) == 0) {
+            s_model_stored = i;
+            lv_dropdown_set_selected(s_model_dropdown, i);
+        }
+    }
+    lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+    bsp_display_unlock();
+}
+
+void ui_ctrl_apply_language(void)
+{
+    bsp_display_lock(0);
+    ui_ctrl_apply_texts();
+    app_clock_set_weekdays(app_lang_get()->weekdays);
+    bsp_display_unlock();
+    ui_ctrl_settings_sync();
 }
 
 /* Override the texts of the SquareLine-generated screens without editing the generated files */
@@ -353,16 +420,8 @@ static void ui_ctrl_localize(void)
     lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_text_font(ui_LabelReplyQuestion, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_LabelReplyContent, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
-    label_localize(ui_LabelSetupWifi, lang->wifi_connecting, &ui_font_Latin20);
-
-    label_localize(ui_LabelSetupStepTile, lang->steps_title, &ui_font_Latin20);
-    label_localize(ui_LabelSetupStepContent, lang->steps_content, &ui_font_Latin14);
-    label_localize(ui_LabelSettingsTile, lang->settings_title, &ui_font_Latin20);
     settings_screen_setup();
-    label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);
-    label_localize(ui_LabelResetContent, lang->reset_content, &ui_font_Latin14);
-    label_localize(ui_LabelWifiResetTitle, lang->reset_title, &ui_font_Latin20);
-    label_localize(ui_LabelWifiResetContent, lang->reset_content, &ui_font_Latin14);
+    ui_ctrl_apply_texts();
 }
 
 void ui_ctrl_init(void)

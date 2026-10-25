@@ -58,13 +58,22 @@ static const app_lang_t s_languages[] = {
         .lang_ask = "Quelle langue voulez-vous ? Français ou anglais ?",
         .lang_already = "Je parle déjà français.",
         .lang_unknown = "Je ne connais pas cette langue. Je parle français et anglais.",
-        .lang_switched = "Très bien, je parle maintenant français. Je redémarre.",
+        .lang_switched = "Très bien, je parle maintenant français.",
         .model_ask_intro = "Voici les modèles disponibles.",
         .model_current = ", celui que j'utilise",
         .model_ask_question = "Lequel voulez-vous ? Dites son numéro.",
         .model_already = "J'utilise déjà %s.",
         .model_unknown = "Je n'ai pas compris. Dites un numéro de 1 à %d.",
-        .model_switched = "Très bien, j'utilise maintenant %s. Je redémarre.",
+        .model_switched = "Très bien, j'utilise maintenant %s.",
+        .country_ask = "Quel est ton pays ?",
+        .city_ask = "Quelle est ta ville ?",
+        .country_confirm = "Confirmes-tu que tu veux changer ton pays en %s ?",
+        .city_confirm = "Confirmes-tu que tu veux changer ta ville en %s ?",
+        .country_unknown = "Je ne connais pas ce pays. Redis-moi « change mon pays » pour réessayer.",
+        .place_saved = "C'est enregistré.",
+        .place_cancelled = "D'accord, je ne change rien.",
+        .location_line = "Lieu de l'utilisateur : %s. Sans lieu précisé, les nouvelles, la météo et les "
+                         "informations locales concernent ce lieu.",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -103,7 +112,7 @@ static const app_lang_t s_languages[] = {
         .settings_voice = "Voix",
         .voice_sample = "Bonjour, je suis %s. Ma voix vous plaît ?",
         .settings_save = "Enregistrer",
-        .settings_saved = "Enregistré.\nRedémarrage ...",
+        .settings_saved = "Enregistré.",
         .reset_title = "Réinitialisation",
         .reset_content = "1. Appuyez sur « OK » pour passer en mode configuration.\n"
                          "2. Branchez la box sur votre PC et renseignez le Wi-Fi et les clés OpenAI et Claude.\n"
@@ -145,13 +154,22 @@ static const app_lang_t s_languages[] = {
         .lang_ask = "Which language do you want? French or English?",
         .lang_already = "I already speak English.",
         .lang_unknown = "I don't know this language. I speak French and English.",
-        .lang_switched = "Very well, I will now speak English. Restarting.",
+        .lang_switched = "Very well, I will now speak English.",
         .model_ask_intro = "Here are the available models.",
         .model_current = ", the one I use",
         .model_ask_question = "Which one do you want? Say its number.",
         .model_already = "I already use %s.",
         .model_unknown = "I didn't understand. Say a number from 1 to %d.",
-        .model_switched = "Very well, I now use %s. Restarting.",
+        .model_switched = "Very well, I now use %s.",
+        .country_ask = "What is your country?",
+        .city_ask = "What is your city?",
+        .country_confirm = "Do you confirm that you want to change your country to %s?",
+        .city_confirm = "Do you confirm that you want to change your city to %s?",
+        .country_unknown = "I don't know this country. Say \"change my country\" again to retry.",
+        .place_saved = "Saved.",
+        .place_cancelled = "All right, nothing changed.",
+        .location_line = "User's location: %s. Without a place given, news, weather and local information are "
+                         "about this place.",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -173,13 +191,28 @@ static const app_lang_t s_languages[] = {
                 [LLM_ERR_OTHER] = "Something went wrong with GPT.",
             },
         },
+        .steps_title = "Steps",
+#if !CONFIG_BSP_BOARD_ESP32_S3_BOX_Lite
+        .steps_content = "1. Wake the device up by saying \"Bonjour ESP\" (or \"Hi ESP\").\n"
+                         "2. Ask your question, then wait for the answer.\n"
+                         "3. While asleep, touch the screen to wake the device up.",
+#else
+        .steps_content = "1. Wake the device up by saying \"Bonjour ESP\" (or \"Hi ESP\").\n"
+                         "2. Ask your question, then wait for the answer.\n"
+                         "3. While asleep, press \"Enter\" to wake the device up.\n"
+                         "4. Long press on \"Enter\": open/close the settings.",
+#endif
+        .reset_title = "Factory Reset",
+        .reset_content = "1. Press \"OK\" to enter the configuration mode.\n"
+                         "2. Plug the box into your PC and fill in the Wi-Fi and the OpenAI and Claude keys.\n"
+                         "3. Follow the instructions on the screen to finish.",
         .settings_title = "Settings",
         .settings_language = "Language",
         .settings_model = "Model",
         .settings_voice = "Voice",
         .voice_sample = "Hello, I am %s. Do you like my voice?",
         .settings_save = "Save",
-        .settings_saved = "Saved.\nRestarting ...",
+        .settings_saved = "Saved.",
     },
 };
 

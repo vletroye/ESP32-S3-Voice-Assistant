@@ -44,6 +44,9 @@ void tts_stream_configure(const char *base_url, const char *api_key, const char 
  */
 void tts_stream_set_voice(const char *voice);
 
+/** Change the reading instructions (language, tone): a new session too, before the next sentence */
+void tts_stream_set_instructions(const char *instructions);
+
 /**
  * @brief Start a new spoken reply; cancels the previous one if still playing.
  */

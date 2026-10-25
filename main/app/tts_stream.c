@@ -77,7 +77,8 @@ static char *s_model = NULL;
 static char *s_voice = NULL;
 /* Voice requested by tts_stream_set_voice(), applied by the synthesis task (empty: none) */
 static char s_pending_voice[24];
-static volatile bool s_voice_change = false;
+static char *s_pending_instructions = NULL;
+static volatile bool s_voice_change = false;    /* voice and/or instructions changed: new session */
 /* Last audio sent to the speaker (tts_stream_is_silent) */
 static volatile int64_t s_last_play_us = 0;
 /* The session configuration (voice, format, instructions) was sent on the current connection */
@@ -228,6 +229,15 @@ void tts_stream_configure(const char *base_url, const char *api_key, const char 
 void tts_stream_set_voice(const char *voice)
 {
     strlcpy(s_pending_voice, voice, sizeof(s_pending_voice));
+    s_voice_change = true;
+}
+
+void tts_stream_set_instructions(const char *instructions)
+{
+    char *copy = strdup(instructions ? instructions : "");
+    char *old = s_pending_instructions;
+    s_pending_instructions = copy;
+    free(old);
     s_voice_change = true;
 }
 
@@ -498,7 +508,16 @@ static void apply_voice_change(esp_websocket_client_handle_t *client, int64_t *d
         return;
     }
     s_voice_change = false;
-    replace_str(&s_voice, s_pending_voice);
+    if (s_pending_voice[0]) {
+        replace_str(&s_voice, s_pending_voice);
+        s_pending_voice[0] = '\0';
+    }
+    char *instructions = s_pending_instructions;
+    s_pending_instructions = NULL;
+    if (instructions) {
+        replace_str(&s_instructions, instructions);
+        free(instructions);
+    }
     ESP_LOGI(TAG, "voice: %s, reconnecting", s_voice);
     if (*client) {
         esp_websocket_client_stop(*client);

@@ -325,6 +325,13 @@ static void clock_refresh(lv_timer_t *timer)
                           t.tm_year % 100);
 }
 
+void app_clock_set_weekdays(const char *const weekdays[7])
+{
+    s_weekdays = weekdays;
+    s_shown_minute = -1;    // the date is written again at the next refresh
+    clock_refresh(NULL);
+}
+
 void app_clock_create(lv_obj_t *parent, const char *const weekdays[7])
 {
     s_weekdays = weekdays;

@@ -30,6 +30,9 @@ void app_clock_sync_start(const char *tz);
  */
 void app_clock_create(lv_obj_t *parent, const char *const weekdays[7]);
 
+/** Day abbreviations of another language (call with the display locked) */
+void app_clock_set_weekdays(const char *const weekdays[7]);
+
 #ifdef __cplusplus
 }
 #endif

@@ -64,6 +64,9 @@ void claude_client_set_tools(const cJSON *definitions, claude_tool_runner_t runn
 /** Web searches started during the current (or last) answer */
 int claude_client_web_searches(void);
 
+/** Localize the web search: 2-letter country code and town (copied), "" or NULL if unknown */
+void claude_client_set_location(const char *country, const char *city);
+
 /** Replace the system prompt (copied) */
 void claude_client_set_system(const char *system_prompt);
 

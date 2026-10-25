@@ -34,6 +34,9 @@ esp_err_t stt_stream_init(void);
  */
 void stt_stream_configure(const char *api_key, const char *model, const char *language);
 
+/** Change the transcription language (ISO-639-1): the session is updated before the next question */
+void stt_stream_set_language(const char *language);
+
 /**
  * @brief Start a transcription session: connect, then stream the audio passed to stt_stream_write().
  *

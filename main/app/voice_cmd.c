@@ -17,6 +17,7 @@
 #include "llm.h"
 #include "settings.h"
 #include "voice_cmd.h"
+#include "assistant.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -47,6 +48,77 @@ static const char *const s_model_shortcut[] = {
     "modèle numéro", "modèle", "modele", "use model", "use the model", "switch to model", "model number",
     "model", NULL
 };
+static const char *const s_change_country[] = {
+    "change mon pays", "changer mon pays", "change de pays", "changer de pays", "change le pays",
+    "change my country", "change the country", NULL
+};
+static const char *const s_change_city[] = {
+    "change ma ville", "changer ma ville", "change de ville", "changer de ville", "change la ville",
+    "change my city", "change the city", "change my town", NULL
+};
+/* Words before the name in an answer ("j'habite à Evere"), skipped; articles are kept ("Le Havre") */
+static const char *const s_answer_prefix[] = {
+    "j habite à", "j habite en", "j habite au", "j habite aux", "j habite", "ma ville est", "mon pays est",
+    "c est", "en", "au", "aux", "à", "i live in", "my city is", "my country is", "it is", "it s", "in", NULL
+};
+static const char *const s_yes[] = {
+    "oui", "ouais", "yes", "yeah", "yep", "exact", "exactement", "je confirme", "confirme", "confirmé",
+    "c est ça", "c est bon", "d accord", "ok", "okay", "bien sûr", "absolument", "correct", "sure", "right",
+    "affirmatif", NULL
+};
+
+/*
+ * Countries known by voice: ISO 3166-1 alpha-2 code (the web search needs it), French and English names,
+ * other names they may be called by
+ */
+static const struct {
+    const char *code;
+    const char *fr;
+    const char *en;
+    const char *other;
+} s_countries[] = {
+    { "BE", "Belgique", "Belgium", NULL },
+    { "FR", "France", "France", NULL },
+    { "LU", "Luxembourg", "Luxembourg", NULL },
+    { "CH", "Suisse", "Switzerland", NULL },
+    { "NL", "Pays-Bas", "Netherlands", "hollande" },
+    { "DE", "Allemagne", "Germany", NULL },
+    { "AT", "Autriche", "Austria", NULL },
+    { "IT", "Italie", "Italy", NULL },
+    { "ES", "Espagne", "Spain", NULL },
+    { "PT", "Portugal", "Portugal", NULL },
+    { "GB", "Royaume-Uni", "United Kingdom", "angleterre" },
+    { "IE", "Irlande", "Ireland", NULL },
+    { "DK", "Danemark", "Denmark", NULL },
+    { "SE", "Suède", "Sweden", NULL },
+    { "NO", "Norvège", "Norway", NULL },
+    { "FI", "Finlande", "Finland", NULL },
+    { "PL", "Pologne", "Poland", NULL },
+    { "CZ", "Tchéquie", "Czech Republic", "république tchèque" },
+    { "GR", "Grèce", "Greece", NULL },
+    { "HU", "Hongrie", "Hungary", NULL },
+    { "RO", "Roumanie", "Romania", NULL },
+    { "MC", "Monaco", "Monaco", NULL },
+    { "CA", "Canada", "Canada", "québec" },
+    { "US", "États-Unis", "United States", "amérique" },
+    { "MX", "Mexique", "Mexico", NULL },
+    { "BR", "Brésil", "Brazil", NULL },
+    { "AR", "Argentine", "Argentina", NULL },
+    { "MA", "Maroc", "Morocco", NULL },
+    { "DZ", "Algérie", "Algeria", NULL },
+    { "TN", "Tunisie", "Tunisia", NULL },
+    { "SN", "Sénégal", "Senegal", NULL },
+    { "CI", "Côte d'Ivoire", "Ivory Coast", NULL },
+    { "CM", "Cameroun", "Cameroon", NULL },
+    { "CD", "République démocratique du Congo", "DR Congo", "congo" },
+    { "MG", "Madagascar", "Madagascar", NULL },
+    { "JP", "Japon", "Japan", NULL },
+    { "CN", "Chine", "China", NULL },
+    { "IN", "Inde", "India", NULL },
+    { "AU", "Australie", "Australia", NULL },
+    { "NZ", "Nouvelle-Zélande", "New Zealand", NULL },
+};
+
 /* Words allowed after the answer of a shortcut ("parle anglais s'il te plaît", "modèle 3 please") */
 static const char *const s_courtesy[] = { "s il te plait", "s il te plaît", "s il vous plait", "s il vous plaît",
                                           "maintenant", "please", "now", NULL };
@@ -77,10 +149,15 @@ typedef enum {
     ASKED_NOTHING,
     ASKED_LANGUAGE,
     ASKED_MODEL,
+    ASKED_COUNTRY,
+    ASKED_CITY,
+    CONFIRM_COUNTRY,        /* "Confirmes-tu ... ?": s_pending holds the country code */
+    CONFIRM_CITY,           /* s_pending holds the town */
 } asked_t;
 
 static asked_t s_asked = ASKED_NOTHING;
 static int64_t s_asked_us = 0;
+static char s_pending[48];
 
 /* Normalized text starts with one of the phrases (alone or followed by more words); length matched in *len */
 static bool starts_with(const char *norm, const char *const *phrases, size_t *len)
@@ -166,11 +243,11 @@ static voice_cmd_t choose_language(const char *norm, char **reply)
         *reply = reply_dup(lang->lang_unknown);
         return VOICE_CMD_ANSWERED;
     }
-    ESP_LOGI(TAG, "language %s saved, restarting after the confirmation", code);
-    // Confirmed in the new language
-    const app_lang_t *next = app_lang_find(code);
-    *reply = reply_dup(next ? next->lang_switched : lang->lang_switched);
-    return VOICE_CMD_RESTART;
+    ESP_LOGI(TAG, "language %s saved", code);
+    assistant_set_language(code);
+    // Confirmed in the new language (the voice reconnects with its instructions first)
+    *reply = reply_dup(app_lang_get()->lang_switched);
+    return VOICE_CMD_ANSWERED;
 }
 
 /* ---------- model ---------- */
@@ -226,7 +303,7 @@ static bool is_model_only(const char *rest)
     return false;
 }
 
-/* "Voici les modèles : 1, Claude Haiku 5.5 (actuel). 2, ... Lequel voulez-vous ? Dites son numéro." */
+/* "Voici les modèles disponibles. 1, Haiku, celui que j'utilise. 2, Sonnet. ... Dites son numéro." */
 static char *model_list(void)
 {
     const app_lang_t *lang = app_lang_get();
@@ -238,7 +315,7 @@ static char *model_list(void)
     strlcpy(out, lang->model_ask_intro, CMD_REPLY_SIZE);
     for (size_t i = 0; i < llm_model_count; i++) {
         size_t n = strlen(out);
-        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", (unsigned)(i + 1), llm_models[i].label,
+        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", (unsigned)(i + 1), llm_models[i].spoken,
                  strcmp(llm_models[i].id, current) == 0 ? lang->model_current : "");
     }
     strlcat(out, " ", CMD_REPLY_SIZE);
@@ -267,13 +344,109 @@ static voice_cmd_t choose_model(const char *norm, char **reply)
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
-    ESP_LOGI(TAG, "model %s saved, restarting after the confirmation", model->id);
+    ESP_LOGI(TAG, "model %s saved", model->id);
+    assistant_set_model(model->id);
     asprintf(&text, lang->model_switched, model->label);
     *reply = text ? text : reply_dup("");
-    return VOICE_CMD_RESTART;
+    return VOICE_CMD_ANSWERED;
 }
 
 /* ---------- dispatch ---------- */
+
+/* ---------- country and town ---------- */
+
+/* Name of a country in the current language */
+static const char *country_name(size_t i)
+{
+    return strcasecmp(app_lang_get()->code, "fr") == 0 ? s_countries[i].fr : s_countries[i].en;
+}
+
+static int find_country(const char *norm)
+{
+    for (size_t i = 0; i < sizeof(s_countries) / sizeof(s_countries[0]); i++) {
+        const char *names[] = { s_countries[i].fr, s_countries[i].en, s_countries[i].other };
+        for (size_t j = 0; j < 3; j++) {
+            char name[48];
+            if (!names[j]) {
+                continue;
+            }
+            app_text_normalize(names[j], name, sizeof(name));
+            if (has_word(norm, name)) {
+                return (int)i;
+            }
+        }
+    }
+    return -1;
+}
+
+/* The answer without "j'habite à", "c'est" ... and without the final punctuation: "Evere" */
+static void answer_text(const char *text, const char *norm, char *out, size_t size)
+{
+    size_t len = 0;
+    int words = 0;
+    if (starts_with(norm, s_answer_prefix, &len)) {
+        words = 1;
+        for (size_t i = 0; i < len; i++) {
+            words += (norm[i] == ' ');
+        }
+    }
+    const char *p = text;
+    for (int w = 0; w < words; w++) {
+        while (*p && !(isalnum((unsigned char)*p) || ((unsigned char)*p & 0x80))) {
+            p++;
+        }
+        while (*p && (isalnum((unsigned char)*p) || ((unsigned char)*p & 0x80))) {
+            p++;
+        }
+    }
+    while (*p && !(isalnum((unsigned char)*p) || ((unsigned char)*p & 0x80))) {
+        p++;
+    }
+    strlcpy(out, p, size);
+    size_t n = strlen(out);
+    while (n > 0 && (isspace((unsigned char)out[n - 1]) || strchr(".!?,;", out[n - 1]))) {
+        out[--n] = '\0';
+    }
+    if (out[0] && !((unsigned char)out[0] & 0x80)) {
+        out[0] = toupper((unsigned char)out[0]);
+    }
+}
+
+static voice_cmd_t ask_confirmation(asked_t confirm, const char *format, const char *value, char **reply)
+{
+    s_asked = confirm;
+    s_asked_us = esp_timer_get_time();
+    char *text = NULL;
+    asprintf(&text, format, value);
+    *reply = text ? text : reply_dup("");
+    return VOICE_CMD_ANSWERED;
+}
+
+/* "Oui" saves the pending country or town, anything else cancels */
+static voice_cmd_t confirm_place(asked_t confirm, const char *norm, char **reply)
+{
+    const app_lang_t *lang = app_lang_get();
+    bool yes = false;
+    for (const char *const *word = s_yes; *word && !yes; word++) {
+        yes = has_word(norm, *word);
+    }
+    if (yes && has_word(norm, "non")) {
+        yes = false;    // "oui ... non": not a clear yes
+    }
+    if (!yes) {
+        *reply = reply_dup(lang->place_cancelled);
+        return VOICE_CMD_ANSWERED;
+    }
+    bool country = (confirm == CONFIRM_COUNTRY);
+    if (settings_save_str(country ? "Country" : "City", s_pending) != ESP_OK) {
+        *reply = reply_dup(lang->place_cancelled);
+        return VOICE_CMD_ANSWERED;
+    }
+    ESP_LOGI(TAG, "%s saved: %s", country ? "country" : "city", s_pending);
+    assistant_set_location(country ? s_pending : NULL, country ? NULL : s_pending);
+    *reply = reply_dup(lang->place_saved);
+    return VOICE_CMD_ANSWERED;
+}
 
 void voice_cmd_reply_spoken(void)
 {
@@ -299,6 +472,26 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     if (recent && asked == ASKED_MODEL) {
         return choose_model(norm, reply);
     }
+    if (recent && asked == ASKED_COUNTRY) {
+        int i = find_country(norm);
+        if (i < 0) {
+            *reply = reply_dup(app_lang_get()->country_unknown);
+            return VOICE_CMD_ANSWERED;
+        }
+        strlcpy(s_pending, s_countries[i].code, sizeof(s_pending));
+        return ask_confirmation(CONFIRM_COUNTRY, app_lang_get()->country_confirm, country_name(i), reply);
+    }
+    if (recent && asked == ASKED_CITY) {
+        answer_text(text, norm, s_pending, sizeof(s_pending));
+        if (!s_pending[0]) {
+            *reply = reply_dup(app_lang_get()->place_cancelled);
+            return VOICE_CMD_ANSWERED;
+        }
+        return ask_confirmation(CONFIRM_CITY, app_lang_get()->city_confirm, s_pending, reply);
+    }
+    if (recent && (asked == CONFIRM_COUNTRY || asked == CONFIRM_CITY)) {
+        return confirm_place(asked, norm, reply);
+    }
 
     size_t len = 0;
     if (starts_with(norm, s_change_lang, NULL)) {
@@ -319,6 +512,18 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         s_asked = ASKED_MODEL;
         s_asked_us = esp_timer_get_time();
         *reply = model_list();
+        return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, s_change_country, NULL)) {
+        s_asked = ASKED_COUNTRY;
+        s_asked_us = esp_timer_get_time();
+        *reply = reply_dup(app_lang_get()->country_ask);
+        return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, s_change_city, NULL)) {
+        s_asked = ASKED_CITY;
+        s_asked_us = esp_timer_get_time();
+        *reply = reply_dup(app_lang_get()->city_ask);
         return VOICE_CMD_ANSWERED;
     }
     // Shortcuts: only when the rest is just a language name or a model number ("parle plus fort" is not one)

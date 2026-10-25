@@ -60,6 +60,9 @@ static claude_tool_runner_t s_tool_runner = NULL;
 static const char *s_thinking = NULL;
 /* Web search: 1 the model supports it, 0 not, -1 not known yet (read by the prewarm) */
 static int s_web_search = -1;
+/* user_location of the web search ("BE", "Evere"), empty if unknown */
+static char s_country[4];
+static char s_city[48];
 /* Web searches started during the current answer (shown by an icon) */
 static volatile int s_web_search_calls = 0;
 /* Conversation history: user messages and assistant contents built from the stream */
@@ -120,6 +123,7 @@ esp_err_t claude_client_init(const char *api_key, const char *model, const char 
     replace_str(&s_system, system_prompt);
     replace_str(&s_effort, effort);
     claude_client_reset();
+    s_web_search = -1;      // capability of the new model, read by the next prewarm
     /*
      * Haiku accepts "disabled". Sonnet rejects it but only thinks between tool calls with "between_tools"
      * (no tools are offered). Opus cannot turn thinking off: the parameter is left out.
@@ -231,6 +235,16 @@ static char *build_request(void)
         cJSON_AddStringToObject(web, "type", "web_search_20250305");
         cJSON_AddStringToObject(web, "name", "web_search");
         cJSON_AddNumberToObject(web, "max_uses", WEB_SEARCH_MAX_USES);
+        if (s_country[0] || s_city[0]) {
+            cJSON *where = cJSON_AddObjectToObject(web, "user_location");
+            cJSON_AddStringToObject(where, "type", "approximate");
+            if (s_country[0]) {
+                cJSON_AddStringToObject(where, "country", s_country);
+            }
+            if (s_city[0]) {
+                cJSON_AddStringToObject(where, "city", s_city);
+            }
+        }
         cJSON_AddItemToArray(tools, web);
     }
     if (cJSON_GetArraySize(tools) > 0) {
@@ -719,6 +733,12 @@ static void drop_web_search_blocks(int from)
             }
         }
     }
+}
+
+void claude_client_set_location(const char *country, const char *city)
+{
+    strlcpy(s_country, country ? country : "", sizeof(s_country));
+    strlcpy(s_city, city ? city : "", sizeof(s_city));
 }
 
 int claude_client_web_searches(void)

@@ -61,6 +61,9 @@ typedef char *(*claude_tool_runner_t)(const char *name, const cJSON *input, bool
 /** Offer tools: definitions (JSON array, kept by the caller) and the function running them */
 void claude_client_set_tools(const cJSON *definitions, claude_tool_runner_t runner);
 
+/** Web searches started during the current (or last) answer */
+int claude_client_web_searches(void);
+
 /** Replace the system prompt (copied) */
 void claude_client_set_system(const char *system_prompt);
 

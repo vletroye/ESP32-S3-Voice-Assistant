@@ -72,6 +72,9 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
 /** Replace the instructions (e.g. after a note was remembered); the conversation is kept */
 void llm_set_system_prompt(const char *system_prompt);
 
+/** Web searches made for the current (or last) answer */
+int llm_web_searches(void);
+
 /** Provider of the configured model */
 llm_provider_t llm_provider(void);
 

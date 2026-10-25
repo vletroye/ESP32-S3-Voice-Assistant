@@ -53,6 +53,8 @@ static claude_tool_runner_t s_tool_runner = NULL;
 static const char *s_thinking = NULL;
 /* Web search: 1 the model supports it, 0 not, -1 not known yet (read by the prewarm) */
 static int s_web_search = -1;
+/* Web searches started during the current answer (shown by an icon) */
+static volatile int s_web_search_calls = 0;
 /* Conversation history: user messages and assistant contents built from the stream */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */
@@ -258,6 +260,9 @@ static void on_block_start(stream_t *st, const cJSON *block)
         strlcpy(st->tool_id, cJSON_IsString(id) ? id->valuestring : "", sizeof(st->tool_id));
         strlcpy(st->tool_name, cJSON_IsString(name) ? name->valuestring : "", sizeof(st->tool_name));
         ESP_LOGI(TAG, "server tool: %s", st->tool_name);
+        if (strcmp(st->tool_name, "web_search") == 0) {
+            s_web_search_calls++;
+        }
         /* The search runs now: what was said so far ("Je regarde.") is spoken meanwhile */
         if (st->on_text) {
             st->on_text(NULL, st->ctx);
@@ -707,6 +712,11 @@ static void drop_web_search_blocks(int from)
     }
 }
 
+int claude_client_web_searches(void)
+{
+    return s_web_search_calls;
+}
+
 static void add_message(const char *role, cJSON *content)
 {
     cJSON *msg = cJSON_CreateObject();
@@ -726,6 +736,7 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
 
     /* Messages added by this exchange are removed again if it fails */
     int start_count = cJSON_GetArraySize(s_messages);
+    s_web_search_calls = 0;
     add_message("user", cJSON_CreateString(text));
     llm_buf_t answer = {0};
     llm_error_t error = LLM_OK;

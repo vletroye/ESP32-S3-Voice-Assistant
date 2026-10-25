@@ -25,6 +25,15 @@ typedef enum {
     UI_CTRL_LABEL_REPLY_CONTENT,
 } ui_ctrl_label_t;
 
+/* Icon at the left of the answer: the model's provider, or the web when it searched */
+typedef enum {
+    UI_CTRL_LOGO_CLAUDE,
+    UI_CTRL_LOGO_OPENAI,
+    UI_CTRL_LOGO_WEB,
+} ui_ctrl_logo_t;
+
+void ui_ctrl_reply_set_logo(ui_ctrl_logo_t logo);
+
 void ui_ctrl_init(void);
 
 void ui_ctrl_show_panel(ui_ctrl_panel_t panel, uint16_t timeout);

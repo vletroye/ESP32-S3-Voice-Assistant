@@ -187,6 +187,11 @@ void llm_set_system_prompt(const char *system_prompt)
     xSemaphoreGive(s_lock);
 }
 
+int llm_web_searches(void)
+{
+    return (s_ready && s_provider == LLM_PROVIDER_CLAUDE) ? claude_client_web_searches() : 0;
+}
+
 llm_provider_t llm_provider(void)
 {
     return s_provider;

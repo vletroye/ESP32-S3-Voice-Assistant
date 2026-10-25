@@ -104,6 +104,9 @@ static void on_llm_text(const char *delta, void *ctx)
         // this waiting sentence off the screen, which keeps only the answer
         sentence_splitter_finish(&s_splitter);
         sentence_splitter_init(&s_splitter, on_sentence, NULL);
+        if (llm_web_searches() > 0) {
+            ui_ctrl_reply_set_logo(UI_CTRL_LOGO_WEB);
+        }
         if (v->text && v->len > v->part_start) {
             v->len = v->part_start;
             v->text[v->len] = '\0';
@@ -352,6 +355,7 @@ void assistant_listen_end(void)
 
     t_start = esp_timer_get_time();
     tools_reset_requests();
+    ui_ctrl_reply_set_logo(llm_provider() == LLM_PROVIDER_OPENAI ? UI_CTRL_LOGO_OPENAI : UI_CTRL_LOGO_CLAUDE);
     char *question = with_current_time(text);
     llm_error_t llm_err = llm_stream(question ? question : text, on_llm_text, &view, &response);
     free(question);

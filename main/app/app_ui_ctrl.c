@@ -25,6 +25,8 @@
 #include "ui_helpers.h"
 #include "ui.h"
 
+LV_IMG_DECLARE(ui_img_reply_claude);
+LV_IMG_DECLARE(ui_img_reply_web);
 LV_FONT_DECLARE(ui_font_Latin14);
 LV_FONT_DECLARE(ui_font_Latin16);
 LV_FONT_DECLARE(ui_font_Latin20);
@@ -601,6 +603,16 @@ void ui_sleep_show_animation(void)
     lv_anim_set_get_value_cb(&PropertyAnimation_1, &anim_callback_get_opacity );
     lv_anim_start(&PropertyAnimation_1);
 
+    bsp_display_unlock();
+}
+
+void ui_ctrl_reply_set_logo(ui_ctrl_logo_t logo)
+{
+    const void *src = logo == UI_CTRL_LOGO_WEB ? (const void *)&ui_img_reply_web :
+                      logo == UI_CTRL_LOGO_CLAUDE ? (const void *)&ui_img_reply_claude :
+                      (const void *)&ui_img_reply_chatgpt_logo_png;
+    bsp_display_lock(0);
+    lv_img_set_src(ui_ImageReplyLogo, src);
     bsp_display_unlock();
 }
 

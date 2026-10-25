@@ -15,7 +15,8 @@ which has been largely rewritten.
 - Local wake word **"Bonjour ESP"** (or "Hi ESP"), or touch the screen while asleep.
 - **Live transcription** while you speak (streamed to the API, so the question is ready as soon as you stop;
   it is shown above the answer).
-- Answer **streamed** by the chosen model and shown as it arrives, prefixed with the model id
+- Answer **streamed** by the chosen model and shown as it arrives, with an icon of the provider (Claude or
+  OpenAI, or a globe when the web was searched) and prefixed with the model id
   (`[claude-haiku-5-5] …`).
 - **Model chosen on the device**: Claude Haiku 5.5, Sonnet 5.5, Opus 5.5 (Anthropic) or GPT-6 Luna,
   GPT-6.1 Sol, GPT-6 Astra (OpenAI).

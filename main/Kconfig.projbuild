@@ -29,7 +29,7 @@ menu "Example Configuration"
 
     config ASSISTANT_END_OF_SPEECH_MS
         int "End of speech silence (ms)"
-        default 700
+        default 900
         range 300 3000
         help
             Silence after which the question is considered finished. Lower answers faster but may

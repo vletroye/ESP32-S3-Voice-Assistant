@@ -13,7 +13,8 @@ which has been largely rewritten.
 ## Features
 
 - Local wake word **"Bonjour ESP"** (or "Hi ESP"), or touch the screen while asleep.
-- **Live transcription** while you speak (the text is shown on screen as you talk).
+- **Live transcription** while you speak (streamed to the API, so the question is ready as soon as you stop;
+  it is shown above the answer).
 - Answer **streamed** by the chosen model and shown as it arrives, prefixed with the model id
   (`[claude-haiku-5-5] …`).
 - **Model chosen on the device**: Claude Haiku 5.5, Sonnet 5.5, Opus 5.5 (Anthropic) or GPT-6 Luna,
@@ -207,7 +208,7 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 
 ## Usage
 
-1. Say "**Bonjour ESP**" (beep), then ask your question. The text is shown while you speak.
+1. Say "**Bonjour ESP**" (beep), then ask your question ("J'écoute …" is shown while you speak).
 2. After 0.9 s of silence the question is sent; the answer is shown and spoken.
 3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP".
 4. Without speech, it goes back to sleep (no API call is made for silence).

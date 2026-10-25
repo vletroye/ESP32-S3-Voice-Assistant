@@ -209,17 +209,6 @@ void assistant_reply_stop(void)
     tts_stream_cancel();
 }
 
-/* Partial transcript while the user speaks (WebSocket task): refresh the screen at most every 200 ms */
-static void on_partial_transcript(const char *text)
-{
-    static int64_t last_us = 0;
-    int64_t now = esp_timer_get_time();
-    if (now - last_us >= REPLY_UI_REFRESH_US) {
-        last_us = now;
-        ui_ctrl_label_show_text(UI_CTRL_LABEL_LISTEN_SPEAK, text);
-    }
-}
-
 /* Show and speak a message as the reply (used for errors) */
 static void speak_message(const char *message)
 {
@@ -234,7 +223,8 @@ static void speak_message(const char *message)
 /* Start of a listening session (wake word, touch or follow-up). Called from app_audio.c */
 void assistant_listen_start(void)
 {
-    stt_stream_start(on_partial_transcript);
+    // The transcript is not shown while the user speaks: the question appears above the answer
+    stt_stream_start(NULL);
 }
 
 /* Open the chat connection while the user speaks (speech uses a permanent WebSocket). Called from app_audio.c */
@@ -284,7 +274,6 @@ void assistant_listen_end(void)
 
     // UI listen success
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_QUESTION, text);
-    ui_ctrl_label_show_text(UI_CTRL_LABEL_LISTEN_SPEAK, text);
 
     // The answer is streamed and shown as it arrives, prefixed with the model name (not spoken)
     reply_view_t view = {0};

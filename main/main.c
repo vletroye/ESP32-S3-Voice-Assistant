@@ -59,8 +59,6 @@ static int64_t s_reply_t0 = 0;
 static bool homey_loaded = false;
 /* From the start of an answer until it has been spoken or interrupted (no flash write meanwhile) */
 static volatile bool s_reply_active = false;
-/* "Ouvre les paramètres": once "OK" has been spoken, the Settings screen instead of the follow-up listening */
-static volatile bool s_open_settings_after_reply = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -209,13 +207,6 @@ static void on_reply_audio(tts_event_t event)
     ESP_LOGI(TAG, "[timing] reply spoken, %lld ms after the transcription", elapsed_ms(s_reply_t0));
     s_reply_active = false;
     voice_cmd_reply_spoken();
-    if (s_open_settings_after_reply) {
-        s_open_settings_after_reply = false;
-        if (!record_flag) {
-            ui_ctrl_open_settings();
-        }
-        return;
-    }
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();
     if (record_flag) {
@@ -432,8 +423,12 @@ void assistant_listen_end(void)
     // answered and applied here, without restarting
     char *cmd_reply = NULL;
     voice_cmd_t voice_cmd = voice_cmd_handle(text, &cmd_reply);
+    if (voice_cmd == VOICE_CMD_OPEN_SETTINGS) {
+        // Shown at once, without a spoken reply (nor follow-up listening)
+        ui_ctrl_open_settings();
+        goto err;
+    }
     if (voice_cmd != VOICE_CMD_NONE) {
-        s_open_settings_after_reply = (voice_cmd == VOICE_CMD_OPEN_SETTINGS);
         speak_message(cmd_reply ? cmd_reply : "");
         free(cmd_reply);
         goto err;

@@ -341,7 +341,7 @@ déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / "Dites un num�
 
 | French | English | Effect |
 | --- | --- | --- |
-| ouvre les paramètres · montre les paramètres · affiche les paramètres · ouvre les réglages · montre les réglages · affiche les réglages · va dans les paramètres · va dans les réglages | open the settings · show the settings · open settings · show settings · display the settings · go to the settings | "OK.", then the Settings screen is shown (no follow-up listening) |
+| ouvre les paramètres · montre les paramètres · affiche les paramètres · ouvre les réglages · montre les réglages · affiche les réglages · va dans les paramètres · va dans les réglages | open the settings · show the settings · open settings · show settings · display the settings · go to the settings | The Settings screen is shown at once, without a spoken reply (no follow-up listening) |
 
 ### Country and town
 

@@ -521,8 +521,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         return VOICE_CMD_ANSWERED;
     }
     if (starts_with(norm, s_open_settings, NULL)) {
-        *reply = reply_dup(app_lang_get()->settings_opened);
-        return VOICE_CMD_OPEN_SETTINGS;
+        return VOICE_CMD_OPEN_SETTINGS;     // shown at once, nothing spoken
     }
     if (starts_with(norm, s_change_country, NULL)) {
         s_asked = ASKED_COUNTRY;

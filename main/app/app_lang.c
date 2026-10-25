@@ -71,7 +71,6 @@ static const app_lang_t s_languages[] = {
         .city_confirm = "Confirmes-tu que tu veux changer ta ville en %s ?",
         .country_unknown = "Je ne connais pas ce pays. Redis-moi « change mon pays » pour réessayer.",
         .place_saved = "C'est enregistré.",
-        .settings_opened = "OK.",
         .place_cancelled = "D'accord, je ne change rien.",
         .location_line = "Lieu de l'utilisateur : %s (le code à deux lettres est celui du pays). Quand il demande "
                          "l'actualité, la météo ou une information locale sans préciser de lieu, il s'agit de ce "
@@ -170,7 +169,6 @@ static const app_lang_t s_languages[] = {
         .city_confirm = "Do you confirm that you want to change your city to %s?",
         .country_unknown = "I don't know this country. Say \"change my country\" again to retry.",
         .place_saved = "Saved.",
-        .settings_opened = "OK.",
         .place_cancelled = "All right, nothing changed.",
         .location_line = "User's location: %s (the two-letter code is the country's). When the user asks for the "
                          "news, the weather or local information without naming a place, it is about this place and "

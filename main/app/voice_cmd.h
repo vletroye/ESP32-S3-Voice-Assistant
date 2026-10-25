@@ -20,12 +20,12 @@ extern "C" {
 typedef enum {
     VOICE_CMD_NONE,         /* not a settings command: ask the model */
     VOICE_CMD_ANSWERED,     /* question asked, setting changed, or nothing to change */
-    VOICE_CMD_OPEN_SETTINGS,    /* "ouvre les paramètres": once "OK" is spoken, show the Settings screen */
+    VOICE_CMD_OPEN_SETTINGS,    /* "ouvre les paramètres": show the Settings screen at once (no reply) */
 } voice_cmd_t;
 
 /**
  * @param text  Transcript of the question
- * @param reply Sentence to speak (allocated, to be freed) when the result is not VOICE_CMD_NONE
+ * @param reply Sentence to speak (allocated, to be freed) for VOICE_CMD_ANSWERED
  */
 voice_cmd_t voice_cmd_handle(const char *text, char **reply);
 

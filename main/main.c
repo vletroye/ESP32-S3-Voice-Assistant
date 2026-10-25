@@ -46,8 +46,13 @@ static sys_param_t *sys_param = NULL;
 static sentence_splitter_t s_splitter;
 /* End of transcription, to measure the time to the first spoken audio */
 static int64_t s_reply_t0 = 0;
-/* A reply has been spoken: the conversation is saved by the main task (flash writes pause the audio) */
-static volatile bool s_history_save_pending = false;
+/*
+ * Flash writes pause the tasks running from flash (microphone feed included): the conversation is saved once
+ * nothing has been heard or played for this long, i.e. after the follow-up listening, not during it
+ */
+#define SAVE_AFTER_SILENCE_MS           1000
+/* From the start of an answer until it has been spoken or interrupted (no flash write meanwhile) */
+static volatile bool s_reply_active = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -194,9 +199,9 @@ static void on_reply_audio(tts_event_t event)
 
     // TTS_EVENT_DONE: the whole reply has been spoken
     ESP_LOGI(TAG, "[timing] reply spoken, %lld ms after the transcription", elapsed_ms(s_reply_t0));
+    s_reply_active = false;
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();
-    s_history_save_pending = true;
     if (record_flag) {
         // Reply interrupted by a new listening session (wake word or touch)
         return;
@@ -216,6 +221,14 @@ static void on_reply_audio(tts_event_t event)
 void assistant_reply_stop(void)
 {
     tts_stream_cancel();
+    s_reply_active = false;
+}
+
+/* Start a spoken answer (its sentences follow with tts_stream_say) */
+static void reply_begin(void)
+{
+    s_reply_active = true;
+    tts_stream_begin(on_reply_audio);
 }
 
 /* Show and speak a message as the reply (errors, memory commands), sentence by sentence */
@@ -224,7 +237,7 @@ static void speak_message(const char *message)
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_CONTENT, message);
     ui_ctrl_show_panel(UI_CTRL_PANEL_REPLY, 0);
     s_reply_t0 = esp_timer_get_time();
-    tts_stream_begin(on_reply_audio);
+    reply_begin();
     sentence_splitter_init(&s_splitter, on_sentence, NULL);
     sentence_splitter_feed(&s_splitter, message);
     sentence_splitter_finish(&s_splitter);
@@ -350,7 +363,7 @@ void assistant_listen_end(void)
 
     // Each sentence is spoken as soon as the model has written it
     s_reply_t0 = esp_timer_get_time();
-    tts_stream_begin(on_reply_audio);
+    reply_begin();
     sentence_splitter_init(&s_splitter, on_sentence, NULL);
 
     t_start = esp_timer_get_time();
@@ -366,7 +379,7 @@ void assistant_listen_end(void)
     } else {
         // The error is shown and spoken as if it were the answer (replacing any partial text)
         sentence_splitter_discard(&s_splitter);
-        tts_stream_begin(on_reply_audio);
+        reply_begin();
         const char *message = app_lang_get()->llm_errors[llm_provider()][llm_err];
         tts_stream_say(message);
         free(response);
@@ -471,9 +484,10 @@ void app_main()
     for (int seconds = 0; ; seconds++) {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
-        // Conversation saved after each spoken reply (this task's stack is in internal RAM, as flash writes need)
-        if (s_history_save_pending) {
-            s_history_save_pending = false;
+        // Conversation and volume saved once the assistant is back to sleep (sleep panel shown, no answer in
+        // progress, not listening, nothing played for a while): never during an exchange, follow-up included.
+        // The saves do nothing when unchanged. This task's stack is in internal RAM, as flash writes need.
+        if (ui_ctrl_is_asleep() && !s_reply_active && !record_flag && tts_stream_is_silent(SAVE_AFTER_SILENCE_MS)) {
             llm_history_save();
             app_volume_save();
         }

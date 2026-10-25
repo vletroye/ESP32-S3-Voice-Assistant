@@ -38,6 +38,9 @@ void ui_ctrl_init(void);
 
 void ui_ctrl_show_panel(ui_ctrl_panel_t panel, uint16_t timeout);
 
+/** The sleep panel is shown (the assistant is idle) */
+bool ui_ctrl_is_asleep(void);
+
 void ui_ctrl_label_show_text(ui_ctrl_label_t label, const char *text);
 
 void ui_sleep_show_animation(void);

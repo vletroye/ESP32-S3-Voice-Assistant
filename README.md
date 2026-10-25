@@ -26,7 +26,7 @@ which has been largely rewritten.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
 - **Conversation memory**: the last 10 exchanges are kept across sleep and restarts (saved to flash in
-  `/spiffs/history.json` after each answer), so you can ask later "what were we talking about?".
+  `/spiffs/history.json` once the assistant is back to sleep, never during an exchange), so you can ask later "what were we talking about?".
   Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
 - **Tools** (Claude models), called by Claude when the question needs them:

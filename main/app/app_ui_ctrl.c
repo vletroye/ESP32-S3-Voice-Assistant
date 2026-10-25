@@ -27,6 +27,11 @@ LV_FONT_DECLARE(ui_font_Latin20);
 #define WIFI_CHECK_TIMER_INTERVAL_S     (1)
 #define REPLY_SCROLL_TIMER_INTERVAL_MS  (1000)
 #define REPLY_SCROLL_SPEED              (1)
+/* Text under the robot (listening / thinking): lines shown, bottom position (from the screen bottom) */
+#define LISTEN_TEXT_LINES               (2)
+#define LISTEN_TEXT_BOTTOM_Y            (-8)
+/* The robot is raised to leave room for these lines */
+#define ROBOT_RAISE_PX                  (20)
 
 static char *TAG = "ui_ctrl";
 
@@ -238,7 +243,15 @@ static void ui_ctrl_localize(void)
      * transcript grows (the generated label scrolls horizontally on a single line)
      */
     lv_label_set_long_mode(ui_LabelListenSpeak, LV_LABEL_LONG_WRAP);
-    lv_obj_set_height(ui_LabelListenSpeak, lv_font_get_line_height(&ui_font_Latin20));
+    lv_obj_set_height(ui_LabelListenSpeak, LISTEN_TEXT_LINES * lv_font_get_line_height(&ui_font_Latin20));
+    lv_obj_set_y(ui_LabelListenSpeak, LISTEN_TEXT_BOTTOM_Y);
+    // The robot (asleep, listening, thinking) and its shadow move up to make room for the text lines
+    lv_obj_set_y(ui_ImageSleepBody, lv_obj_get_y(ui_ImageSleepBody) - ROBOT_RAISE_PX);
+    lv_obj_set_y(ui_ContainerBigZ, lv_obj_get_y(ui_ContainerBigZ) - ROBOT_RAISE_PX);
+    lv_obj_set_y(ui_ContainerSmallZ, lv_obj_get_y(ui_ContainerSmallZ) - ROBOT_RAISE_PX);
+    lv_obj_set_y(ui_ImageListenBackGlow, lv_obj_get_y(ui_ImageListenBackGlow) - ROBOT_RAISE_PX);
+    lv_obj_set_y(ui_ImageGetBackGlow, lv_obj_get_y(ui_ImageGetBackGlow) - ROBOT_RAISE_PX);
+    lv_obj_set_y(ui_ImageBodyShadow, lv_obj_get_y(ui_ImageBodyShadow) - ROBOT_RAISE_PX);
     lv_obj_set_scroll_dir(ui_LabelListenSpeak, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(ui_LabelListenSpeak, LV_SCROLLBAR_MODE_OFF);
     lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_CLICKABLE);

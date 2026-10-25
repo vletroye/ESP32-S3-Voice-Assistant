@@ -38,6 +38,10 @@ which has been largely rewritten.
   - **weather** ("Quel temps fera-t-il demain à Namur ?"), from Open-Meteo, free and without key;
   - **volume** ("Parle plus fort", "Mets le volume à 50"), applied at once if nothing is playing (else after
     the answer), kept across restarts; the assistant then goes back to sleep;
+  - **home automation** with a **Homey Pro** ("Allume la lumière du salon", "Active l'ambiance soirée",
+    "Qui est à la maison ?"), through the MCP server of the "MCP AI Bridge" app on the local network: a
+    selection of 16 of its tools (devices, zones, moods, flows, presence, live energy), nothing that deletes,
+    installs or reconfigures;
   - **web search** for current information ("Quelles sont les dernières nouvelles en Belgique ?"), run by
     Anthropic, about $0.01 per search, 3 searches at most per question, enabled when the model supports it.
 
@@ -166,6 +170,7 @@ Main modules of the assistant (`main/app/`):
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
 | `voice_cmd.c` | Settings by voice: language, model, country and town ("change la langue", "utilise le modèle 3", "change ma ville") |
+| `homey_mcp.c` | MCP client for a Homey Pro (local network, JSON answers): tool list at start-up, selected tools offered to Claude |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, answer scrolling, answer icon, double tap, translations, Settings screen |
@@ -229,6 +234,8 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Voice` | Voice of the answers (also set from the Settings screen) | `marin`, `cedar`, `coral`… |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
+| `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.0.171:52199/mcp` |
+| `Homey_key` | Its API key (shown in the app's settings) | |
 | `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
@@ -366,6 +373,7 @@ No fixed wording: Claude decides when to use a tool.
 | Weather | "Quel temps fait-il à Namur ?", "Va-t-il pleuvoir demain ?" (your town if it is in `PERSONA.TXT`) |
 | Volume | "Parle plus fort", "Baisse le son", "Mets le volume à 50" (then back to sleep) |
 | Web search | "Quelles sont les dernières nouvelles ?", "Cherche sur internet …" |
+| Homey | "Allume la lumière du salon", "Éteins tout au rez-de-chaussée", "Active l'ambiance cinéma", "Lance le flow Bonne nuit", "Qui est à la maison ?", "Combien je consomme en ce moment ?" |
 | Date and time | "Quel jour sommes-nous ?", "Dans combien de jours est Noël ?" (no tool: the date comes with each question) |
 
 ### Gestures
@@ -407,6 +415,11 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   results go back as `tool_result` blocks and stay in the history. To add a tool, declare it in `tools.c`
   (JSON definition + a case in `tools_run()`). GPT models get no tools yet (OpenAI's function calling with
   `store: false` and reasoning models needs more work).
+- **Homey**: with `Homey_url` set, the main task opens an MCP session (`initialize`, then
+  `notifications/initialized`) once the Wi-Fi is up, reads `tools/list` (~190 tools, ~180 KB, parsed in
+  PSRAM) and keeps 16 of them (`s_selected` in `homey_mcp.c`, ~2,900 tokens of definitions instead of ~50,000).
+  Calls go through `tools/call` on the local network; results are cut at 4,000 characters; an expired session
+  is reopened. Retried every minute while the Homey cannot be reached.
 - **Web search**: the server tool `web_search_20250305` is added to the request when the model's description
   (read by the prewarm, `GET /v1/models/{model}`) says it is supported. Its results (encrypted page contents)
   are dropped from the history once the answer is complete, so that they are not sent again with every later
@@ -415,7 +428,8 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 ## Roadmap
 
-- More tools: timers and alarms, home automation…
+- More tools: timers and alarms…
+- Spoken confirmation before sensitive Homey actions (locks, alarm).
 - Tools for the GPT models.
 - Cost of each exchange (transcription, model, voice) shown on screen.
 - NVS encryption to protect the API keys.

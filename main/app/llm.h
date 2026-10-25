@@ -10,6 +10,7 @@
 
 #include <stddef.h>
 #include "esp_err.h"
+#include "cJSON.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,6 +76,9 @@ void llm_set_system_prompt(const char *system_prompt);
 
 /** Web searches made for the current (or last) answer */
 int llm_web_searches(void);
+
+/** Tool definitions offered to Claude from now on (kept by the caller), swapped between two answers */
+void llm_set_tools(const cJSON *definitions);
 
 /** Where the user lives (2-letter country code, town): localizes the web search (Claude) */
 void llm_set_location(const char *country, const char *city);

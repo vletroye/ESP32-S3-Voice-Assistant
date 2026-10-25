@@ -194,6 +194,17 @@ void llm_set_system_prompt(const char *system_prompt)
     xSemaphoreGive(s_lock);
 }
 
+void llm_set_tools(const cJSON *definitions)
+{
+    if (s_lock) {
+        xSemaphoreTake(s_lock, portMAX_DELAY);
+    }
+    claude_client_set_tools(definitions, tools_run);
+    if (s_lock) {
+        xSemaphoreGive(s_lock);
+    }
+}
+
 void llm_set_location(const char *country, const char *city)
 {
     claude_client_set_location(country, city);

@@ -20,6 +20,8 @@
 #define VOICE_SIZE 24
 #define COUNTRY_SIZE 4
 #define CITY_SIZE 48
+#define HOMEY_URL_SIZE 96
+#define HOMEY_KEY_SIZE 96
 
 typedef struct {
     char ssid[SSID_SIZE];             /* SSID of target AP. */
@@ -34,6 +36,8 @@ typedef struct {
     char voice[VOICE_SIZE];           /* OpenAI voice reading the answers (marin, cedar...). */
     char country[COUNTRY_SIZE];       /* Where the user lives: ISO 3166-1 alpha-2 code ("BE"), "" if unknown. */
     char city[CITY_SIZE];             /* Where the user lives: town ("Evere"), "" if unknown. */
+    char homey_url[HOMEY_URL_SIZE];   /* MCP server of a Homey Pro on the local network, "" if none. */
+    char homey_key[HOMEY_KEY_SIZE];   /* Its API key. */
     int volume;                       /* Speaker volume 0..100, changed by voice ("parle plus fort"). */
     char *persona;                    /* Context always given to the assistant (allocated), NULL if none. */
     char *memory;                     /* Notes it was asked to remember at start-up (allocated), NULL if none. */

@@ -32,6 +32,7 @@
 #include "app_volume.h"
 #include "tools.h"
 #include "weather.h"
+#include "homey_mcp.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -54,6 +55,8 @@ static int64_t s_reply_t0 = 0;
  * nothing has been heard or played for this long, i.e. after the follow-up listening, not during it
  */
 #define SAVE_AFTER_SILENCE_MS           1000
+/* Homey's tools were added */
+static bool homey_loaded = false;
 /* From the start of an answer until it has been spoken or interrupted (no flash write meanwhile) */
 static volatile bool s_reply_active = false;
 
@@ -576,6 +579,18 @@ void app_main()
     for (int seconds = 0; ; seconds++) {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
+        // Homey's tools, read once the Wi-Fi is up (again every minute while the server cannot be reached)
+        static int homey_retry_s = 0;
+        if (sys_param->homey_url[0] && !homey_loaded && --homey_retry_s <= 0 &&
+                wifi_connected_already() == WIFI_STATUS_CONNECTED_OK) {
+            cJSON *homey_tools = homey_mcp_load_tools(sys_param->homey_url, sys_param->homey_key);
+            if (homey_tools) {
+                tools_add(homey_tools);
+                homey_loaded = true;
+            } else {
+                homey_retry_s = 60;
+            }
+        }
         // Language or model changed from the Settings screen
         if (s_language_requested) {
             s_language_requested = false;

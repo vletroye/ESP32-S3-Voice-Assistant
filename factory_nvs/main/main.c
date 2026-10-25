@@ -199,6 +199,9 @@ void app_main(void)
         // Where the user lives: 2-letter country code (BE, FR...) and town, for the web search and the model
         nvs_init_str_if_missing("Country", "");
         nvs_init_str_if_missing("City", "");
+        // Home automation: MCP server of a Homey Pro (e.g. http://192.168.0.10:52199/mcp) and its API key
+        nvs_init_str_if_missing("Homey_url", "");
+        nvs_init_str_if_missing("Homey_key", "");
     }
     nvs_close(my_handle);
 

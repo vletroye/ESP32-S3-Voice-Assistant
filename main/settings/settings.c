@@ -202,6 +202,20 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.city[0] = '\0';
     }
 
+    // Home automation (optional): MCP server of a Homey Pro and its API key
+    len = sizeof(g_sys_param.homey_url);
+    if (nvs_get_str(my_handle, "Homey_url", g_sys_param.homey_url, &len) != ESP_OK) {
+        g_sys_param.homey_url[0] = '\0';
+    }
+    len = sizeof(g_sys_param.homey_key);
+    if (nvs_get_str(my_handle, "Homey_key", g_sys_param.homey_key, &len) != ESP_OK) {
+        g_sys_param.homey_key[0] = '\0';
+    }
+    str_trim(g_sys_param.homey_url);
+    str_trim(g_sys_param.homey_key);
+    ESP_LOGI(TAG, "Homey: %s, key: (%d chars)", g_sys_param.homey_url[0] ? g_sys_param.homey_url : "-",
+             (int)strlen(g_sys_param.homey_key));
+
     // Voice of the answers (optional)
     len = sizeof(g_sys_param.voice);
     if (nvs_get_str(my_handle, "Voice", g_sys_param.voice, &len) != ESP_OK || len <= 1) {

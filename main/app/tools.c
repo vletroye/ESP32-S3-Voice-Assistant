@@ -11,6 +11,8 @@
 #include "app_lang.h"
 #include "app_volume.h"
 #include "weather.h"
+#include "homey_mcp.h"
+#include "llm.h"
 #include "tools.h"
 
 static const char *TAG = "tools";
@@ -38,6 +40,8 @@ static const char s_definitions_json[] =
     "]";
 
 static cJSON *s_definitions = NULL;
+/* The device's tools followed by the added ones (Homey), once there are some */
+static cJSON *s_all = NULL;
 /* Set by a tool whose answer ends the exchange (no follow-up listening) */
 static volatile bool s_sleep_after_reply = false;
 
@@ -51,7 +55,7 @@ bool tools_sleep_after_reply(void)
     return s_sleep_after_reply;
 }
 
-const cJSON *tools_definitions(void)
+static const cJSON *own_definitions(void)
 {
     if (!s_definitions) {
         s_definitions = cJSON_Parse(s_definitions_json);
@@ -60,6 +64,26 @@ const cJSON *tools_definitions(void)
         }
     }
     return s_definitions;
+}
+
+const cJSON *tools_definitions(void)
+{
+    return s_all ? s_all : own_definitions();
+}
+
+void tools_add(cJSON *extra)
+{
+    cJSON *all = cJSON_Duplicate(own_definitions(), true);
+    cJSON *item;
+    while ((item = cJSON_DetachItemFromArray(extra, 0)) != NULL) {
+        cJSON_AddItemToArray(all, item);
+    }
+    cJSON_Delete(extra);
+    // Swapped while no answer is being generated; the previous list can then be freed
+    llm_set_tools(all);
+    cJSON_Delete(s_all);
+    s_all = all;
+    ESP_LOGI(TAG, "%d tools offered", cJSON_GetArraySize(all));
 }
 
 static char *run_set_volume(const cJSON *input, bool *is_error)
@@ -101,6 +125,8 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
                              cJSON_IsNumber(days) ? days->valueint : 1, app_lang_get()->code, is_error);
     } else if (strcmp(name, "set_volume") == 0) {
         result = run_set_volume(input, is_error);
+    } else if (homey_mcp_has_tool(name)) {
+        result = homey_mcp_call(name, input, is_error);
     } else {
         ESP_LOGW(TAG, "Unknown tool %s", name);
         return NULL;

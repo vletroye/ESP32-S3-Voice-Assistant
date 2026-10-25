@@ -19,6 +19,13 @@ extern "C" {
 const cJSON *tools_definitions(void);
 
 /**
+ * @brief Add tools of another source (Homey) to the device's own ones; the model gets the new list.
+ *
+ * @param extra Definitions (JSON array), taken over
+ */
+void tools_add(cJSON *extra);
+
+/**
  * @brief Run a tool call.
  *
  * @return Result for the model (allocated, to be freed), NULL if the tool is unknown

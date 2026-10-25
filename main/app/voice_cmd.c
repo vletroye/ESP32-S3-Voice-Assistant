@@ -20,7 +20,10 @@
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
-/* After a question ("Quelle langue ?", "Quel modèle ?"), the answer is expected within this delay */
+/*
+ * After a question ("Quelle langue ?", "Quel modèle ?"), the answer is expected within this delay, counted from
+ * the end of the question (the list of models takes 10 to 15 s to read)
+ */
 #define CMD_ANSWER_TIMEOUT_US   (30 * 1000 * 1000LL)
 
 static const char *TAG = "voice_cmd";
@@ -271,6 +274,13 @@ static voice_cmd_t choose_model(const char *norm, char **reply)
 }
 
 /* ---------- dispatch ---------- */
+
+void voice_cmd_reply_spoken(void)
+{
+    if (s_asked != ASKED_NOTHING) {
+        s_asked_us = esp_timer_get_time();
+    }
+}
 
 voice_cmd_t voice_cmd_handle(const char *text, char **reply)
 {

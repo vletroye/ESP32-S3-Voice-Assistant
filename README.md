@@ -311,10 +311,10 @@ a new conversation (each model keeps its own history).
 | Action | French | English |
 | --- | --- | --- |
 | Change the language (asks "Quelle langue voulez-vous ? Français ou anglais ?") | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
-| Answer to that question (within 30 s) | français · anglais · "en anglais s'il te plaît"… | French · English |
+| Answer to that question (within 30 s after it) | français · anglais · "en anglais s'il te plaît"… | French · English |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
 | Change the model (reads the numbered list, then asks which one) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
-| Answer to that question (within 30 s) | its number ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna"…) | its number ("three", "3", "third") or its name |
+| Answer to that question (within 30 s after the list) | its number ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna"…) | its number ("three", "3", "third") or its name |
 | Change the model directly | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
 
 A direct phrase must contain only the language or the number, possibly followed by "s'il te plaît", "please"

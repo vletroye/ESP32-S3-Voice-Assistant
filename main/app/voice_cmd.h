@@ -27,6 +27,9 @@ typedef enum {
  */
 voice_cmd_t voice_cmd_handle(const char *text, char **reply);
 
+/** A reply has been spoken: the delay to answer a question starts now (called when the question ends) */
+void voice_cmd_reply_spoken(void);
+
 #ifdef __cplusplus
 }
 #endif

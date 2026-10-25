@@ -10,11 +10,12 @@
 
 #define SSID_SIZE 32
 #define PASSWORD_SIZE 64
-#define KEY_SIZE 165
+/* API keys: OpenAI keys are 164 characters today, Anthropic ones ~110; keep room for longer ones */
+#define KEY_SIZE 256
 #define URL_SIZE 64
 #define LANG_SIZE 8
 #define MODEL_SIZE 48
-#define CLAUDE_KEY_SIZE 160
+#define CLAUDE_KEY_SIZE 256
 
 typedef struct {
     char ssid[SSID_SIZE];             /* SSID of target AP. */

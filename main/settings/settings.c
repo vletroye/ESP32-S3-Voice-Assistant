@@ -83,6 +83,9 @@ esp_err_t settings_read_parameter_from_nvs(void)
     // Read key
     len = sizeof(g_sys_param.key);
     ret = nvs_get_str(my_handle, "ChatGPT_key", g_sys_param.key, &len);
+    if (ret == ESP_ERR_NVS_INVALID_LENGTH) {
+        ESP_LOGE(TAG, "OpenAI key longer than %u characters", (unsigned)sizeof(g_sys_param.key) - 1);
+    }
     if (ret != ESP_OK || len == 0) {
         ESP_LOGI(TAG, "No OpenAI key found");
         goto err;
@@ -111,7 +114,11 @@ esp_err_t settings_read_parameter_from_nvs(void)
         strlcpy(g_sys_param.claude_model, CONFIG_ASSISTANT_CLAUDE_MODEL, sizeof(g_sys_param.claude_model));
     }
     len = sizeof(g_sys_param.claude_key);
-    if (nvs_get_str(my_handle, "Claude_key", g_sys_param.claude_key, &len) != ESP_OK) {
+    ret = nvs_get_str(my_handle, "Claude_key", g_sys_param.claude_key, &len);
+    if (ret == ESP_ERR_NVS_INVALID_LENGTH) {
+        ESP_LOGE(TAG, "Claude key longer than %u characters", (unsigned)sizeof(g_sys_param.claude_key) - 1);
+    }
+    if (ret != ESP_OK) {
         g_sys_param.claude_key[0] = '\0';
     }
 

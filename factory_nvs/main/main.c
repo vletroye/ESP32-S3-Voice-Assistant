@@ -20,7 +20,7 @@
 #define NVS_MODIFIED_BIT          BIT0
 #define SSID_SIZE 32
 #define PASSWORD_SIZE 64
-#define KEY_SIZE 165
+#define KEY_SIZE 256
 #define URL_SIZE 64
 #define LANG_SIZE 8
 

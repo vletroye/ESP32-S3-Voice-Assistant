@@ -57,7 +57,6 @@ static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT      BIT0
 #define WIFI_FAIL_BIT           BIT1
 
-#define portTICK_RATE_MS        10
 
 static const char *TAG = "wifi station";
 static int s_retry_num = 0;
@@ -181,13 +180,13 @@ static void wifi_reconnect_sta(void)
     sys_param_t *sys_param = settings_get_parameter();
     memcpy(wifi_config.sta.ssid, sys_param->ssid, sizeof(wifi_config.sta.ssid));
     memcpy(wifi_config.sta.password, sys_param->password, sizeof(wifi_config.sta.password));
-    //ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
+    wifi_config.sta.threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD;
 
     if (bits & WIFI_CONNECTED_BIT) {
         s_reconnect = false;
         xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         ESP_ERROR_CHECK( esp_wifi_disconnect() );
-        xEventGroupWaitBits(s_wifi_event_group, WIFI_FAIL_BIT, 0, 1, portTICK_RATE_MS);
+        xEventGroupWaitBits(s_wifi_event_group, WIFI_FAIL_BIT, 0, 1, pdMS_TO_TICKS(1000));
     }
 
     s_reconnect = true;
@@ -198,7 +197,7 @@ static void wifi_reconnect_sta(void)
 
     ESP_LOGI(TAG, "wifi_reconnect_sta finished.%s", wifi_config.sta.ssid);
 
-    xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, 0, 1, 5000 / portTICK_RATE_MS);
+    xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, 0, 1, pdMS_TO_TICKS(5000));
 }
 
 static void wifi_init_sta(void)
@@ -235,6 +234,8 @@ static void wifi_init_sta(void)
     sys_param_t *sys_param = settings_get_parameter();
     memcpy(wifi_config.sta.ssid, sys_param->ssid, sizeof(wifi_config.sta.ssid));
     memcpy(wifi_config.sta.password, sys_param->password, sizeof(wifi_config.sta.password));
+    /* Weakest security accepted: an open or weaker network with the same name is refused */
+    wifi_config.sta.threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD;
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start() );
@@ -248,7 +249,8 @@ static void network_task(void *args)
     wifi_init_sta();
 
     while (1) {
-        if (pdPASS == xQueueReceive(wifi_event_queue, &net_event, portTICK_RATE_MS / 5)) {
+        /* Block until an event arrives (the task has nothing else to do) */
+        if (pdPASS == xQueueReceive(wifi_event_queue, &net_event, portMAX_DELAY)) {
             switch (net_event) {
             case NET_EVENT_RECONNECT:
                 ESP_LOGI(TAG, "NET_EVENT_RECONNECT");

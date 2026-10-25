@@ -26,6 +26,12 @@ extern "C" {
  */
 char *weather_get(const char *location, int days, const char *lang, bool *is_error);
 
+/** Read the places already looked up (/spiffs/places.json), once at start-up */
+void weather_places_load(void);
+
+/** Save the places if one was added (call when idle, from a task with an internal RAM stack) */
+void weather_places_save(void);
+
 #ifdef __cplusplus
 }
 #endif

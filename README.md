@@ -158,7 +158,7 @@ Main modules of the assistant (`main/app/`):
 | `tts_stream.c` | Speech synthesis (OpenAI Realtime), voice change at run time, resampling and I2S playback |
 | `app_lang.c` | UI texts, model and voice instructions, error messages (fr / en) |
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
-| `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast) |
+| `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |

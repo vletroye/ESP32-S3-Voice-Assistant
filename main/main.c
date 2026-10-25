@@ -29,6 +29,7 @@
 #include "app_memory.h"
 #include "app_volume.h"
 #include "tools.h"
+#include "weather.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -471,6 +472,7 @@ void app_main()
 
     // The Persona (name, who made it, who it talks to...) and the remembered notes complete the base instructions
     app_memory_init(sys_param->memory);
+    weather_places_load();
     char *system_prompt = build_system_prompt();
     llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,
              system_prompt ? system_prompt : app_lang_get()->system_prompt);
@@ -490,6 +492,7 @@ void app_main()
         if (ui_ctrl_is_asleep() && !s_reply_active && !record_flag && tts_stream_is_silent(SAVE_AFTER_SILENCE_MS)) {
             llm_history_save();
             app_volume_save();
+            weather_places_save();
         }
         if (seconds % 30) {
             continue;

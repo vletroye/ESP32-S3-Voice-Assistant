@@ -182,6 +182,7 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
 | `Language` | Assistant language | `fr` or `en` |
+| `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
 starts with this version. Spaces and line breaks pasted by mistake around the values are ignored. Keys are
@@ -199,6 +200,7 @@ stored in plain text in the device's NVS and never appear in the logs (only thei
 | `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
 | `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Speech synthesis model |
 | `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice |
+| `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |
 | `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |
 | `CONFIG_VOLUME_LEVEL` | `90` | Speaker volume |

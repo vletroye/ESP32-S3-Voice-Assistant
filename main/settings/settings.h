@@ -25,6 +25,7 @@ typedef struct {
     char lang[LANG_SIZE];             /* Assistant language (ISO-639-1). */
     char claude_key[CLAUDE_KEY_SIZE]; /* Anthropic key, empty if not configured. */
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude or GPT). */
+    int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
 } sys_param_t;
 
 esp_err_t settings_factory_reset(void);

@@ -20,6 +20,14 @@ menu "Example Configuration"
         default "https://api.openai.com/v1/"
         help
             Base URL for OpenAI API
+    config ASSISTANT_REPLY_SCROLL_CPS
+        int "Answer scrolling speed (characters per second)"
+        default 16
+        range 5 60
+        help
+            The answer scrolls on screen following the speech, read at this many characters per second.
+            Overridden by the "Scroll_speed" key of CONFIG.INI.
+
     config ASSISTANT_LANGUAGE
         string "Default assistant language"
         default "fr"

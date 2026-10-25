@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -128,6 +129,19 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.claude_key[0] = '\0';
     }
 
+    // Read the scrolling speed of the answer (optional)
+    char speed[8] = {0};
+    len = sizeof(speed);
+    g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
+    if (nvs_get_str(my_handle, "Scroll_speed", speed, &len) == ESP_OK && atoi(speed) > 0) {
+        g_sys_param.scroll_cps = atoi(speed);
+    }
+    if (g_sys_param.scroll_cps < 5 || g_sys_param.scroll_cps > 60) {
+        ESP_LOGW(TAG, "Scroll_speed %d out of range (5..60), using %d", g_sys_param.scroll_cps,
+                 CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
+        g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
+    }
+
     nvs_close(my_handle);
 
     // SSID and password may legitimately contain spaces: only the other values are trimmed
@@ -141,7 +155,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
-    ESP_LOGI(TAG, "language:%s", g_sys_param.lang);
+    ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s", g_sys_param.lang, g_sys_param.scroll_cps);
     ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars)", g_sys_param.chat_model,
              (int)strlen(g_sys_param.claude_key));
     return ESP_OK;

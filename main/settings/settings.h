@@ -30,6 +30,7 @@ typedef struct {
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
     char voice[VOICE_SIZE];           /* OpenAI voice reading the answers (marin, cedar...). */
+    int volume;                       /* Speaker volume 0..100, changed by voice ("parle plus fort"). */
     char *persona;                    /* Context always given to the assistant (allocated), NULL if none. */
     char *memory;                     /* Notes it was asked to remember at start-up (allocated), NULL if none. */
 } sys_param_t;

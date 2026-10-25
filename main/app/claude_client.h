@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include "esp_err.h"
 #include "cJSON.h"
 #include "llm.h"
@@ -46,6 +47,19 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
  * Called while the user speaks, so that the question does not pay for the TLS handshake.
  */
 void claude_client_prewarm(void);
+
+/**
+ * @brief Runs a tool called by Claude.
+ *
+ * @param name     Tool name
+ * @param input    Arguments (JSON object)
+ * @param is_error Set to true when the result describes an error
+ * @return Result given back to Claude (allocated, freed by the caller), NULL if the tool is unknown
+ */
+typedef char *(*claude_tool_runner_t)(const char *name, const cJSON *input, bool *is_error);
+
+/** Offer tools: definitions (JSON array, kept by the caller) and the function running them */
+void claude_client_set_tools(const cJSON *definitions, claude_tool_runner_t runner);
 
 /** Replace the system prompt (copied) */
 void claude_client_set_system(const char *system_prompt);

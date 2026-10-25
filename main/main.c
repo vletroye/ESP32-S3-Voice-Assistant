@@ -27,6 +27,7 @@
 #include "app_lang.h"
 #include "llm.h"
 #include "app_memory.h"
+#include "app_volume.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -174,6 +175,8 @@ static void on_reply_audio(tts_event_t event)
 
     // TTS_EVENT_DONE: the whole reply has been spoken
     ESP_LOGI(TAG, "[timing] reply spoken, %lld ms after the transcription", elapsed_ms(s_reply_t0));
+    // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
+    app_volume_apply_pending();
     s_history_save_pending = true;
     if (record_flag) {
         // Reply interrupted by a new listening session (wake word or touch)
@@ -418,7 +421,7 @@ void app_main()
      * makes crackles
      */
     bsp_codec_mute_set(false);
-    bsp_codec_volume_set(CONFIG_VOLUME_LEVEL, NULL);
+    app_volume_init(sys_param->volume);
 
     ESP_LOGI(TAG, "Display LVGL demo");
     bsp_display_backlight_on();
@@ -447,6 +450,7 @@ void app_main()
         if (s_history_save_pending) {
             s_history_save_pending = false;
             llm_history_save();
+            app_volume_save();
         }
         if (seconds % 30) {
             continue;

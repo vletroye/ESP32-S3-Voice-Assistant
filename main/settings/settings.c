@@ -172,6 +172,15 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
     }
 
+    // Speaker volume (optional, saved when changed by voice)
+    char volume[8] = {0};
+    len = sizeof(volume);
+    g_sys_param.volume = CONFIG_VOLUME_LEVEL;
+    if (nvs_get_str(my_handle, "Volume", volume, &len) == ESP_OK && volume[0]) {
+        int level = atoi(volume);
+        g_sys_param.volume = level < 0 ? 0 : (level > 100 ? 100 : level);
+    }
+
     // Voice of the answers (optional)
     len = sizeof(g_sys_param.voice);
     if (nvs_get_str(my_handle, "Voice", g_sys_param.voice, &len) != ESP_OK || len <= 1) {
@@ -210,6 +219,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
+    ESP_LOGI(TAG, "volume:%d", g_sys_param.volume);
     ESP_LOGI(TAG, "voice:%s, persona: %d chars, memory: %d chars", g_sys_param.voice,
              g_sys_param.persona ? (int)strlen(g_sys_param.persona) : 0,
              g_sys_param.memory ? (int)strlen(g_sys_param.memory) : 0);

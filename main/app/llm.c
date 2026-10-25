@@ -16,6 +16,7 @@
 #include "llm.h"
 #include "claude_client.h"
 #include "openai_chat.h"
+#include "tools.h"
 
 static const char *TAG = "llm";
 
@@ -158,6 +159,8 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
         ret = ESP_ERR_INVALID_ARG;
     } else {
         ret = claude_client_init(claude_key, model, system_prompt, effort_of(model));
+        // Tools (weather, volume...): offered to Claude only for now
+        claude_client_set_tools(tools_definitions(), tools_run);
     }
     s_ready = (ret == ESP_OK);
     strlcpy(s_model, model, sizeof(s_model));

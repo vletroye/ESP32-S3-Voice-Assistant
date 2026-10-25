@@ -25,8 +25,10 @@
 #define CLAUDE_MAX_TOKENS       2048
 #define CLAUDE_TIMEOUT_MS       30000
 #define CLAUDE_READ_CHUNK       512
-/* History kept for follow-up questions: the last 10 exchanges (user + assistant messages) */
+/* History kept for follow-up questions: about the last 10 exchanges (user + assistant messages) */
 #define CLAUDE_HISTORY_MAX_MSGS 20
+/* Tool calls answered per question, before giving up */
+#define CLAUDE_MAX_TOOL_ROUNDS  3
 
 static const char *TAG = "claude";
 
@@ -34,6 +36,9 @@ static char *s_api_key = NULL;
 static char *s_model = NULL;
 static char *s_system = NULL;
 static char *s_effort = NULL;
+/* Tool definitions (owned by the llm layer) and the function running a tool call */
+static const cJSON *s_tools = NULL;
+static claude_tool_runner_t s_tool_runner = NULL;
 /* thinking.type sent with each request, NULL to leave the parameter out */
 static const char *s_thinking = NULL;
 /* Conversation history: user messages and assistant contents built from the stream */
@@ -184,6 +189,9 @@ static char *build_request(void)
      */
     cJSON *cache_control = cJSON_AddObjectToObject(req, "cache_control");
     cJSON_AddStringToObject(cache_control, "type", "ephemeral");
+    if (s_tools && cJSON_GetArraySize(s_tools) > 0) {
+        cJSON_AddItemReferenceToObject(req, "tools", (cJSON *)s_tools);
+    }
     /* Referenced, not copied: the history stays owned by s_messages */
     cJSON_AddItemReferenceToObject(req, "messages", s_messages);
     char *body = cJSON_PrintUnformatted(req);
@@ -417,10 +425,23 @@ void claude_client_prewarm(void)
     ESP_LOGI(TAG, "prewarm: HTTP %d in %lld ms", status, (esp_timer_get_time() - t0) / 1000);
 }
 
-/* Keep the history short; older exchanges are dropped in user/assistant pairs */
+/* A user message holding tool results (cannot start the history: its tool calls would be missing) */
+static bool is_tool_result_message(const cJSON *msg)
+{
+    const cJSON *content = cJSON_GetObjectItem(msg, "content");
+    const cJSON *first = cJSON_IsArray(content) ? cJSON_GetArrayItem(content, 0) : NULL;
+    const cJSON *type = cJSON_GetObjectItem(first, "type");
+    return cJSON_IsString(type) && strcmp(type->valuestring, "tool_result") == 0;
+}
+
+/*
+ * Keep the history short; older messages are dropped in user/assistant pairs, and the history always starts
+ * with a question (not with the results of tools called in a dropped exchange)
+ */
 static void trim_history(void)
 {
-    while (cJSON_GetArraySize(s_messages) > CLAUDE_HISTORY_MAX_MSGS) {
+    while (cJSON_GetArraySize(s_messages) > CLAUDE_HISTORY_MAX_MSGS ||
+            (cJSON_GetArraySize(s_messages) > 0 && is_tool_result_message(cJSON_GetArrayItem(s_messages, 0)))) {
         cJSON_DeleteItemFromArray(s_messages, 0);
         cJSON_DeleteItemFromArray(s_messages, 0);
     }
@@ -439,59 +460,61 @@ void claude_client_set_history(cJSON *messages)
 }
 
 /*
- * Tools are not offered yet, so Claude should never stop with "tool_use". The tool calls are
- * logged here; this is where they will be executed once tools are added.
+ * Tools: definitions sent with each request and the function running them (set by the llm layer).
+ * Claude stops with "tool_use"; the results go back in a user message and the answer goes on.
  */
-static void handle_tool_use(const cJSON *content)
+void claude_client_set_tools(const cJSON *definitions, claude_tool_runner_t runner)
 {
+    s_tools = definitions;
+    s_tool_runner = runner;
+}
+
+/* User message with one tool_result per tool_use block of the assistant content */
+static cJSON *run_tools(const cJSON *content)
+{
+    cJSON *results = cJSON_CreateArray();
     const cJSON *block;
     cJSON_ArrayForEach(block, content) {
         const cJSON *type = cJSON_GetObjectItem(block, "type");
-        if (cJSON_IsString(type) && strcmp(type->valuestring, "tool_use") == 0) {
-            char *input = cJSON_PrintUnformatted(cJSON_GetObjectItem(block, "input"));
-            ESP_LOGW(TAG, "Tool call not supported yet: %s(%s)",
-                     cJSON_GetObjectItem(block, "name")->valuestring, input ? input : "");
-            free(input);
+        if (!cJSON_IsString(type) || strcmp(type->valuestring, "tool_use") != 0) {
+            continue;
         }
+        const cJSON *id = cJSON_GetObjectItem(block, "id");
+        const cJSON *name = cJSON_GetObjectItem(block, "name");
+        bool is_error = false;
+        char *output = s_tool_runner ? s_tool_runner(cJSON_IsString(name) ? name->valuestring : "",
+                                                     cJSON_GetObjectItem(block, "input"), &is_error) : NULL;
+        cJSON *result = cJSON_CreateObject();
+        cJSON_AddStringToObject(result, "type", "tool_result");
+        cJSON_AddStringToObject(result, "tool_use_id", cJSON_IsString(id) ? id->valuestring : "");
+        cJSON_AddStringToObject(result, "content", output ? output : "{\"error\":\"tool unavailable\"}");
+        if (is_error || !output) {
+            cJSON_AddBoolToObject(result, "is_error", true);
+        }
+        cJSON_AddItemToArray(results, result);
+        free(output);
     }
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "role", "user");
+    cJSON_AddItemToObject(msg, "content", results);
+    return msg;
 }
 
-llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
+/* One request on the current history, its answer streamed into st */
+static void stream_once(stream_t *st)
 {
-    if (full_text) {
-        *full_text = NULL;
-    }
-    if (!s_api_key || !s_messages) {
-        return LLM_ERR_NO_KEY;
-    }
-
-    stream_t st = {
-        .on_text = on_text,
-        .ctx = ctx,
-        .sse = { .on_event = sse_dispatch },
-        .content = cJSON_CreateArray(),
-        .error = LLM_OK,
-        .start_us = esp_timer_get_time(),
-    };
+    char *body = build_request();
     int status = 0;
-    char *body = NULL;
-    st.sse.ctx = &st;
-
-    /* Append the question; removed again if the exchange fails */
-    cJSON *user_msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(user_msg, "role", "user");
-    cJSON_AddStringToObject(user_msg, "content", text);
-    cJSON_AddItemToArray(s_messages, user_msg);
-
-    body = build_request();
     if (!body) {
-        st.error = LLM_ERR_OTHER;
-        goto end;
+        st->error = LLM_ERR_OTHER;
+        return;
     }
     if (send_request(body, &status) != ESP_OK) {
-        st.error = LLM_ERR_NETWORK;
-        goto end;
+        free(body);
+        st->error = LLM_ERR_NETWORK;
+        return;
     }
+    free(body);
 
     char chunk[CLAUDE_READ_CHUNK];
     int n;
@@ -503,85 +526,127 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
         }
         cJSON *json = err_body.len ? cJSON_Parse(err_body.p) : NULL;
         if (json) {
-            st.error = error_from_json(status, json);
+            st->error = error_from_json(status, json);
             cJSON_Delete(json);
         } else {
             ESP_LOGE(TAG, "HTTP %d: %.300s", status, err_body.len ? err_body.p : "(empty)");
-            st.error = classify_error(status, NULL, NULL);
+            st->error = classify_error(status, NULL, NULL);
         }
         llm_buf_free(&err_body);
         drop_client();
-        goto end;
+        return;
     }
 
-    while (!st.done && (n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
-        llm_sse_feed(&st.sse, chunk, n);
+    while (!st->done && (n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
+        llm_sse_feed(&st->sse, chunk, n);
     }
-    if (st.error == LLM_OK && !st.done) {
+    if (st->error == LLM_OK && !st->done) {
         ESP_LOGE(TAG, "Stream ended before message_stop");
-        st.error = LLM_ERR_NETWORK;
+        st->error = LLM_ERR_NETWORK;
     }
-    if (st.error == LLM_OK) {
+    if (st->error == LLM_OK) {
         /* Read the end of the chunked body so that the connection can be reused for the next question */
         while (esp_http_client_read(s_client, chunk, sizeof(chunk)) > 0) {
         }
     }
-    if (st.error != LLM_OK || !esp_http_client_is_complete_data_received(s_client)) {
+    if (st->error != LLM_OK || !esp_http_client_is_complete_data_received(s_client)) {
         /* The connection is not in a reusable state */
         drop_client();
     }
 
-    if (st.error == LLM_OK) {
-        if (strcmp(st.stop_reason, "refusal") == 0) {
-            ESP_LOGW(TAG, "Request declined (stop_reason: refusal)");
-            st.error = LLM_ERR_REFUSAL;
-        } else if (strcmp(st.stop_reason, "tool_use") == 0) {
-            handle_tool_use(st.content);
-            /* Not stored: the history would need a tool_result for this turn */
-            if (st.text.len == 0) {
-                st.error = LLM_ERR_OTHER;
-            } else {
-                cJSON_DeleteItemFromArray(s_messages, cJSON_GetArraySize(s_messages) - 1);
-                user_msg = NULL;
-            }
-        } else if (strcmp(st.stop_reason, "max_tokens") == 0) {
-            ESP_LOGW(TAG, "Answer truncated (max_tokens)");
-        }
-        if (st.error == LLM_OK && st.text.len == 0) {
-            ESP_LOGE(TAG, "No text in answer (stop_reason: %s)", st.stop_reason);
-            st.error = LLM_ERR_OTHER;
-        }
-    }
-
     int64_t now = esp_timer_get_time();
     ESP_LOGI(TAG, "first text after %lld ms, total %lld ms, stop: %s, tokens in %d (cache read %d, write %d), out %d",
-             st.first_text_us ? (st.first_text_us - st.start_us) / 1000 : -1LL, (now - st.start_us) / 1000,
-             st.stop_reason[0] ? st.stop_reason : "-", st.input_tokens, st.cache_read_tokens,
-             st.cache_write_tokens, st.output_tokens);
+             st->first_text_us ? (st->first_text_us - st->start_us) / 1000 : -1LL, (now - st->start_us) / 1000,
+             st->stop_reason[0] ? st->stop_reason : "-", st->input_tokens, st->cache_read_tokens,
+             st->cache_write_tokens, st->output_tokens);
+}
 
-end:
-    if (st.error == LLM_OK) {
-        if (user_msg) {
-            cJSON *assistant_msg = cJSON_CreateObject();
-            cJSON_AddStringToObject(assistant_msg, "role", "assistant");
-            cJSON_AddItemToObject(assistant_msg, "content", st.content);
-            st.content = NULL;
-            cJSON_AddItemToArray(s_messages, assistant_msg);
-            trim_history();
-        }
-        if (full_text) {
-            *full_text = st.text.p;
-            st.text.p = NULL;
-        }
-    } else if (user_msg) {
-        /* Drop the unanswered question so that the history keeps alternating user/assistant */
-        cJSON_DeleteItemFromArray(s_messages, cJSON_GetArraySize(s_messages) - 1);
+static void add_message(const char *role, cJSON *content)
+{
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "role", role);
+    cJSON_AddItemToObject(msg, "content", content);
+    cJSON_AddItemToArray(s_messages, msg);
+}
+
+llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
+{
+    if (full_text) {
+        *full_text = NULL;
     }
-    cJSON_Delete(st.content);
-    llm_sse_free(&st.sse);
-    llm_buf_free(&st.block);
-    llm_buf_free(&st.signature);
-    llm_buf_free(&st.text);
-    free(body);
-    return st.error;
+    if (!s_api_key || !s_messages) {
+        return LLM_ERR_NO_KEY;
+    }
+
+    /* Messages added by this exchange are removed again if it fails */
+    int start_count = cJSON_GetArraySize(s_messages);
+    add_message("user", cJSON_CreateString(text));
+    llm_buf_t answer = {0};
+    llm_error_t error = LLM_OK;
+
+    for (int round = 0; ; round++) {
+        stream_t st = {
+            .on_text = on_text,
+            .ctx = ctx,
+            .sse = { .on_event = sse_dispatch },
+            .content = cJSON_CreateArray(),
+            .error = LLM_OK,
+            .start_us = esp_timer_get_time(),
+        };
+        st.sse.ctx = &st;
+        stream_once(&st);
+        error = st.error;
+        if (st.text.len) {
+            llm_buf_append(&answer, st.text.p, st.text.len);
+        }
+        bool tool_use = (error == LLM_OK && strcmp(st.stop_reason, "tool_use") == 0);
+        if (error == LLM_OK) {
+            if (strcmp(st.stop_reason, "refusal") == 0) {
+                ESP_LOGW(TAG, "Request declined (stop_reason: refusal)");
+                error = LLM_ERR_REFUSAL;
+            } else if (strcmp(st.stop_reason, "max_tokens") == 0) {
+                ESP_LOGW(TAG, "Answer truncated (max_tokens)");
+            }
+        }
+        if (error == LLM_OK) {
+            add_message("assistant", st.content);
+            st.content = NULL;
+        }
+        cJSON_Delete(st.content);
+        llm_sse_free(&st.sse);
+        llm_buf_free(&st.block);
+        llm_buf_free(&st.signature);
+        llm_buf_free(&st.text);
+
+        if (error != LLM_OK || !tool_use) {
+            break;
+        }
+        if (round >= CLAUDE_MAX_TOOL_ROUNDS || !s_tool_runner) {
+            ESP_LOGE(TAG, "Tool call not answered (round %d)", round + 1);
+            error = LLM_ERR_OTHER;
+            break;
+        }
+        /* Run the tools of the last assistant message; their results start the next round */
+        cJSON *last = cJSON_GetArrayItem(s_messages, cJSON_GetArraySize(s_messages) - 1);
+        cJSON_AddItemToArray(s_messages, run_tools(cJSON_GetObjectItem(last, "content")));
+    }
+
+    if (error == LLM_OK && answer.len == 0) {
+        ESP_LOGE(TAG, "No text in answer");
+        error = LLM_ERR_OTHER;
+    }
+    if (error == LLM_OK) {
+        trim_history();
+        if (full_text) {
+            *full_text = answer.p;
+            answer.p = NULL;
+        }
+    } else {
+        /* Drop the unanswered exchange so that the history keeps alternating user/assistant */
+        while (cJSON_GetArraySize(s_messages) > start_count) {
+            cJSON_DeleteItemFromArray(s_messages, cJSON_GetArraySize(s_messages) - 1);
+        }
+    }
+    llm_buf_free(&answer);
+    return error;
 }

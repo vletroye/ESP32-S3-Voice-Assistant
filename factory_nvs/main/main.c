@@ -56,6 +56,8 @@ static void ui_localize(const char *lang)
                       "5. Redémarrez l'appareil.");
     lv_obj_set_style_text_font(ui_LabelSetupBtn, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_label_set_text(ui_LabelSetupBtn, "Redémarrer");
+    // The generated button (72 px) is sized for "Restart"
+    lv_obj_set_width(ui_ButtonSetup, 120);
     bsp_display_unlock();
 }
 

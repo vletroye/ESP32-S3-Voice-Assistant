@@ -4,11 +4,16 @@
  * SPDX-License-Identifier: CC0-1.0
  */
 
+#include <string.h>
+#include <strings.h>
 #include "esp_log.h"
+#include "esp_system.h"
 
 #include "app_ui_ctrl.h"
 #include "app_wifi.h"
 #include "app_lang.h"
+#include "llm.h"
+#include "settings.h"
 #include "bsp/esp-bsp.h"
 
 #include "ui_helpers.h"
@@ -44,6 +49,141 @@ static void label_localize(lv_obj_t *label, const char *text, const lv_font_t *f
     lv_label_set_text(label, text);
 }
 
+/* ---------- Settings screen: language and model, saved to NVS then the device restarts ---------- */
+
+#define SETTINGS_RESTART_DELAY_MS       1000
+#define SETTINGS_OPTIONS_SIZE           256
+
+/* Languages offered, in the order of the dropdown */
+static const char *const s_settings_languages[] = { "fr", "en" };
+
+static void settings_restart_timer_cb(lv_timer_t *timer)
+{
+    esp_restart();
+}
+
+/* Show the confirmation over the screen, then restart so that the new setting is used everywhere */
+static void settings_saved(void)
+{
+    lv_obj_t *overlay = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(overlay, lv_pct(100), lv_pct(100));
+    lv_obj_center(overlay);
+    lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(overlay, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(overlay, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(overlay, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(overlay, LV_OPA_80, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_t *label = lv_label_create(overlay);
+    lv_label_set_text(label, app_lang_get()->settings_saved);
+    lv_obj_set_style_text_font(label, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_center(label);
+
+    lv_timer_create(settings_restart_timer_cb, SETTINGS_RESTART_DELAY_MS, NULL);
+}
+
+static void settings_language_changed_cb(lv_event_t *e)
+{
+    uint16_t selected = lv_dropdown_get_selected(lv_event_get_target(e));
+    if (selected < sizeof(s_settings_languages) / sizeof(s_settings_languages[0]) &&
+            settings_save_str("Language", s_settings_languages[selected]) == ESP_OK) {
+        settings_saved();
+    }
+}
+
+static void settings_model_changed_cb(lv_event_t *e)
+{
+    uint16_t selected = lv_dropdown_get_selected(lv_event_get_target(e));
+    // The entry after the listed models is a model set in CONFIG.INI: already the current one
+    if (selected < llm_model_count && settings_save_str("Chat_model", llm_models[selected].id) == ESP_OK) {
+        settings_saved();
+    }
+}
+
+static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uint16_t selected,
+                                    lv_event_cb_t changed_cb)
+{
+    lv_dropdown_set_options(dropdown, options);
+    lv_dropdown_set_selected(dropdown, selected);
+    // Accented names: Latin font for the field and its list (the arrow keeps the default font and its symbol)
+    lv_obj_set_style_text_font(dropdown, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(lv_dropdown_get_list(dropdown), &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_event_cb(dropdown, changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+/* A row of the Settings panel: label on the left, dropdown on the right (same look as the generated row) */
+static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width)
+{
+    lv_obj_t *row = lv_obj_create(ui_PanelSettings);
+    lv_obj_set_width(row, lv_pct(100));
+    lv_obj_set_height(row, lv_pct(19));
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(row, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(row, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(row, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_left(row, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(row, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(row, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(row, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_t *label = lv_label_create(row);
+    lv_label_set_text(label, text);
+    lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_t *dropdown = lv_dropdown_create(row);
+    lv_obj_set_width(dropdown, dropdown_width);
+    lv_obj_set_height(dropdown, lv_pct(100));
+    lv_obj_set_style_text_align(dropdown, LV_TEXT_ALIGN_CENTER, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    return dropdown;
+}
+
+static void settings_screen_setup(void)
+{
+    const app_lang_t *lang = app_lang_get();
+    const sys_param_t *param = settings_get_parameter();
+    char options[SETTINGS_OPTIONS_SIZE];
+
+    lv_obj_set_style_pad_row(ui_PanelSettings, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    // The generated "Region" row (unused) becomes the language row
+    label_localize(ui_LabelSettingsRegion, lang->settings_language, &ui_font_Latin16);
+    lv_obj_set_flex_align(ui_PanelSettingsRegion, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(ui_PanelSettingsRegion, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_left(ui_PanelSettingsRegion, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_width(ui_DropdownSettingsRegion, lv_pct(40));
+    uint16_t lang_selected = 1;   // English UI for other languages
+    for (uint16_t i = 0; i < sizeof(s_settings_languages) / sizeof(s_settings_languages[0]); i++) {
+        if (strcasecmp(param->lang, s_settings_languages[i]) == 0) {
+            lang_selected = i;
+        }
+    }
+    settings_dropdown_setup(ui_DropdownSettingsRegion, "Français\nEnglish", lang_selected,
+                            settings_language_changed_cb);
+
+    // Model row: the listed models, plus the current one if it was set in CONFIG.INI and is not listed
+    lv_obj_t *model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
+    options[0] = '\0';
+    uint16_t model_selected = llm_model_count;
+    for (size_t i = 0; i < llm_model_count; i++) {
+        strlcat(options, i ? "\n" : "", sizeof(options));
+        strlcat(options, llm_models[i].label, sizeof(options));
+        if (strcmp(param->chat_model, llm_models[i].id) == 0) {
+            model_selected = i;
+        }
+    }
+    if (model_selected == llm_model_count) {
+        strlcat(options, "\n", sizeof(options));
+        strlcat(options, param->chat_model, sizeof(options));
+    }
+    settings_dropdown_setup(model_dropdown, options, model_selected, settings_model_changed_cb);
+}
+
 /* Override the texts of the SquareLine-generated screens without editing the generated files */
 static void ui_ctrl_localize(void)
 {
@@ -58,7 +198,7 @@ static void ui_ctrl_localize(void)
     label_localize(ui_LabelSetupStepTile, lang->steps_title, &ui_font_Latin20);
     label_localize(ui_LabelSetupStepContent, lang->steps_content, &ui_font_Latin14);
     label_localize(ui_LabelSettingsTile, lang->settings_title, &ui_font_Latin20);
-    label_localize(ui_LabelSettingsRegion, lang->settings_region, &ui_font_Latin16);
+    settings_screen_setup();
     label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);
     label_localize(ui_LabelResetContent, lang->reset_content, &ui_font_Latin14);
     label_localize(ui_LabelWifiResetTitle, lang->reset_title, &ui_font_Latin20);

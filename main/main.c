@@ -24,7 +24,7 @@
 #include "app_wifi.h"
 #include "settings.h"
 #include "app_lang.h"
-#include "claude_client.h"
+#include "llm.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -38,8 +38,6 @@ extern bool record_flag;
 
 static char *TAG = "app_main";
 static sys_param_t *sys_param = NULL;
-/* Claude is initialized at the first question, if a Claude key is configured */
-static bool s_claude_ready = false;
 /* Sentences of the answer being streamed, sent to speech synthesis as soon as complete */
 static sentence_splitter_t s_splitter;
 /* End of transcription, to measure the time to the first spoken audio */
@@ -48,12 +46,10 @@ static int64_t s_reply_t0 = 0;
 /* Forget the conversation history. Called when a new conversation starts (wake word or touch). */
 void openai_conversation_reset(void)
 {
-    if (s_claude_ready) {
-        claude_client_reset();
-    }
+    llm_reset();
 }
 
-/* Answer text shown on screen while Claude streams it */
+/* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
 
 typedef struct {
@@ -97,7 +93,7 @@ static void reply_view_refresh(reply_view_t *v)
 }
 
 /* Streaming callback: refresh the screen at most every REPLY_UI_REFRESH_US */
-static void on_claude_text(const char *delta, void *ctx)
+static void on_llm_text(const char *delta, void *ctx)
 {
     reply_view_t *v = (reply_view_t *)ctx;
     sentence_splitter_feed(&s_splitter, delta);
@@ -209,14 +205,12 @@ void assistant_listen_start(void)
     stt_stream_start(on_partial_transcript);
 }
 
-/* Open the Claude connection while the user speaks (speech uses a permanent WebSocket). Called from app_audio.c */
+/* Open the chat connection while the user speaks (speech uses a permanent WebSocket). Called from app_audio.c */
 void assistant_prewarm(void)
 {
     /* The transcription connection is the most urgent: let its TLS handshake finish first */
     stt_stream_wait_connected(3000);
-    if (s_claude_ready) {
-        claude_client_prewarm();
-    }
+    llm_prewarm();
 }
 
 /* Nobody spoke: drop the transcription session. Called from app_audio.c */
@@ -252,38 +246,38 @@ void assistant_listen_end(void)
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_QUESTION, text);
     ui_ctrl_label_show_text(UI_CTRL_LABEL_LISTEN_SPEAK, text);
 
-    // Claude: the answer is streamed and shown as it arrives, prefixed with the model name (not spoken)
+    // The answer is streamed and shown as it arrives, prefixed with the model name (not spoken)
     reply_view_t view = {0};
     reply_view_append(&view, "[");
-    reply_view_append(&view, sys_param->claude_model);
+    reply_view_append(&view, sys_param->chat_model);
     reply_view_append(&view, "] ");
     size_t prefix_len = view.len;
 
-    // Each sentence is spoken as soon as Claude has written it
+    // Each sentence is spoken as soon as the model has written it
     s_reply_t0 = esp_timer_get_time();
     tts_stream_begin(on_reply_audio);
     sentence_splitter_init(&s_splitter, on_sentence, NULL);
 
     t_start = esp_timer_get_time();
-    claude_error_t claude_err = s_claude_ready ? claude_client_stream(text, on_claude_text, &view, &response)
-                                : CLAUDE_ERR_NO_KEY;
-    ESP_LOGI(TAG, "[timing] chat (Claude, streamed): %lld ms", elapsed_ms(t_start));
+    llm_error_t llm_err = llm_stream(text, on_llm_text, &view, &response);
+    ESP_LOGI(TAG, "[timing] chat (%s, streamed): %lld ms", llm_provider_name(llm_provider()), elapsed_ms(t_start));
 
-    if (claude_err == CLAUDE_OK) {
+    if (llm_err == LLM_OK) {
         sentence_splitter_finish(&s_splitter);
     } else {
         // The error is shown and spoken as if it were the answer (replacing any partial text)
         sentence_splitter_discard(&s_splitter);
         tts_stream_begin(on_reply_audio);
-        tts_stream_say(app_lang_get()->claude_errors[claude_err]);
+        const char *message = app_lang_get()->llm_errors[llm_provider()][llm_err];
+        tts_stream_say(message);
         free(response);
-        response = strdup(app_lang_get()->claude_errors[claude_err]);
+        response = strdup(message);
         if (view.text) {
             view.text[prefix_len] = '\0';
             view.len = prefix_len;
         }
         reply_view_append(&view, response ? response : "");
-        ESP_LOGW(TAG, "Claude error %d: speaking \"%s\"", claude_err, response ? response : "");
+        ESP_LOGW(TAG, "Chat error %d: speaking \"%s\"", llm_err, response ? response : "");
     }
     reply_view_refresh(&view);
     free(view.text);
@@ -363,13 +357,8 @@ void app_main()
     ESP_LOGI(TAG, "speech recognition start");
     app_sr_start(false);
 
-    if (sys_param->claude_key[0] == '\0') {
-        ESP_LOGW(TAG, "No Claude_key configured");
-    } else {
-        s_claude_ready = (ESP_OK == claude_client_init(sys_param->claude_key, sys_param->claude_model,
-                                                       app_lang_get()->system_prompt,
-                                                       CONFIG_ASSISTANT_CLAUDE_EFFORT));
-    }
+    llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,
+             app_lang_get()->system_prompt);
     ESP_ERROR_CHECK(stt_stream_init());
     stt_stream_configure(sys_param->key, CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
     ESP_ERROR_CHECK(tts_stream_init());

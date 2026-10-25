@@ -24,9 +24,16 @@ typedef struct {
     char url[URL_SIZE];               /* OpenAI Base url. */
     char lang[LANG_SIZE];             /* Assistant language (ISO-639-1). */
     char claude_key[CLAUDE_KEY_SIZE]; /* Anthropic key, empty if not configured. */
-    char claude_model[MODEL_SIZE];    /* Claude model. */
+    char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude or GPT). */
 } sys_param_t;
 
 esp_err_t settings_factory_reset(void);
 esp_err_t settings_read_parameter_from_nvs(void);
 sys_param_t *settings_get_parameter(void);
+
+/**
+ * @brief Store a configuration value (same keys as CONFIG.INI, e.g. "Language", "Chat_model").
+ *
+ * Read again at the next start: the caller restarts the device.
+ */
+esp_err_t settings_save_str(const char *key, const char *value);

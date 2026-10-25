@@ -16,12 +16,13 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "claude_client.h"
+#include "llm_sse.h"
 
 #define CLAUDE_URL              "https://api.anthropic.com/v1/messages"
 #define CLAUDE_PREWARM_URL      "https://api.anthropic.com/v1/models?limit=1"
 #define CLAUDE_API_VERSION      "2023-06-01"
-/* Spoken answers are short and thinking is disabled: 1024 tokens is a generous ceiling */
-#define CLAUDE_MAX_TOKENS       1024
+/* Spoken answers are short; the ceiling leaves room for Opus' thinking, which cannot be disabled */
+#define CLAUDE_MAX_TOKENS       2048
 #define CLAUDE_TIMEOUT_MS       30000
 #define CLAUDE_READ_CHUNK       512
 /* History kept for follow-up questions: the last 4 exchanges (user + assistant messages) */
@@ -33,71 +34,32 @@ static char *s_api_key = NULL;
 static char *s_model = NULL;
 static char *s_system = NULL;
 static char *s_effort = NULL;
+/* thinking.type sent with each request, NULL to leave the parameter out */
+static const char *s_thinking = NULL;
 /* Conversation history: user messages and assistant contents built from the stream */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */
 static esp_http_client_handle_t s_client = NULL;
-
-/* ---------- growable string buffer ---------- */
-
-typedef struct {
-    char *p;
-    size_t len;
-    size_t cap;
-} buf_t;
-
-static bool buf_append(buf_t *b, const char *s, size_t n)
-{
-    if (b->len + n + 1 > b->cap) {
-        size_t cap = b->cap ? b->cap : 256;
-        while (cap < b->len + n + 1) {
-            cap *= 2;
-        }
-        char *p = realloc(b->p, cap);
-        if (!p) {
-            return false;
-        }
-        b->p = p;
-        b->cap = cap;
-    }
-    memcpy(b->p + b->len, s, n);
-    b->len += n;
-    b->p[b->len] = '\0';
-    return true;
-}
-
-static void buf_clear(buf_t *b)
-{
-    b->len = 0;
-    if (b->p) {
-        b->p[0] = '\0';
-    }
-}
-
-static void buf_free(buf_t *b)
-{
-    free(b->p);
-    memset(b, 0, sizeof(*b));
-}
 
 /* ---------- stream state ---------- */
 
 typedef enum {
     BLOCK_NONE,
     BLOCK_TEXT,
+    BLOCK_THINKING,
     BLOCK_TOOL_USE,
     BLOCK_OTHER,
 } block_type_t;
 
 typedef struct {
-    claude_text_cb_t on_text;
+    llm_text_cb_t on_text;
     void *ctx;
 
-    buf_t line;                 /* SSE line being assembled */
-    buf_t data;                 /* data: payload of the current event */
+    llm_sse_t sse;
 
-    buf_t text;                 /* whole answer text */
-    buf_t block;                /* current content block (text or tool input JSON) */
+    llm_buf_t text;                 /* whole answer text */
+    llm_buf_t block;                /* current content block (text, thinking or tool input JSON) */
+    llm_buf_t signature;            /* signature of the current thinking block */
     block_type_t block_type;
     char tool_id[64];
     char tool_name[64];
@@ -105,7 +67,7 @@ typedef struct {
 
     char stop_reason[24];
     bool done;                  /* message_stop received */
-    claude_error_t error;
+    llm_error_t error;
 
     int64_t start_us;
     int64_t first_text_us;
@@ -129,7 +91,19 @@ esp_err_t claude_client_init(const char *api_key, const char *model, const char 
     replace_str(&s_system, system_prompt);
     replace_str(&s_effort, effort);
     claude_client_reset();
-    ESP_LOGI(TAG, "model: %s, effort: %s, thinking: disabled, streaming", s_model, s_effort ? s_effort : "(default)");
+    /*
+     * Haiku accepts "disabled". Sonnet rejects it but only thinks between tool calls with "between_tools"
+     * (no tools are offered). Opus cannot turn thinking off: the parameter is left out.
+     */
+    if (strstr(s_model, "haiku")) {
+        s_thinking = "disabled";
+    } else if (strstr(s_model, "sonnet")) {
+        s_thinking = "between_tools";
+    } else {
+        s_thinking = NULL;
+    }
+    ESP_LOGI(TAG, "model: %s, effort: %s, thinking: %s, streaming", s_model, s_effort ? s_effort : "(default)",
+             s_thinking ? s_thinking : "(model default)");
 
     // A key pasted in CONFIG.INI may carry spaces or line endings, which break the HTTP header
     size_t key_len = strlen(s_api_key);
@@ -153,24 +127,24 @@ void claude_client_reset(void)
 }
 
 /* Map an API error to the error kinds shown to the user */
-static claude_error_t classify_error(int status, const char *type, const char *message)
+static llm_error_t classify_error(int status, const char *type, const char *message)
 {
     if (status == 401 || status == 403 || (type && (strcmp(type, "authentication_error") == 0 ||
                                                      strcmp(type, "permission_error") == 0))) {
-        return CLAUDE_ERR_AUTH;
+        return LLM_ERR_AUTH;
     }
     if ((type && strcmp(type, "billing_error") == 0) || (message && strstr(message, "credit balance"))) {
-        return CLAUDE_ERR_CREDIT;
+        return LLM_ERR_CREDIT;
     }
     if (status == 429 || status >= 500 || (type && (strcmp(type, "overloaded_error") == 0 ||
                                                      strcmp(type, "rate_limit_error") == 0 ||
                                                      strcmp(type, "api_error") == 0))) {
-        return CLAUDE_ERR_BUSY;
+        return LLM_ERR_BUSY;
     }
-    return CLAUDE_ERR_OTHER;
+    return LLM_ERR_OTHER;
 }
 
-static claude_error_t error_from_json(int status, const cJSON *json)
+static llm_error_t error_from_json(int status, const cJSON *json)
 {
     const cJSON *api_error = cJSON_GetObjectItem(json, "error");
     const cJSON *type = cJSON_GetObjectItem(api_error, "type");
@@ -187,9 +161,11 @@ static char *build_request(void)
     cJSON_AddStringToObject(req, "model", s_model);
     cJSON_AddNumberToObject(req, "max_tokens", CLAUDE_MAX_TOKENS);
     cJSON_AddBoolToObject(req, "stream", true);
-    /* Thinking off: lowest latency to the first spoken word */
-    cJSON *thinking = cJSON_AddObjectToObject(req, "thinking");
-    cJSON_AddStringToObject(thinking, "type", "disabled");
+    /* Thinking off when the model allows it: lowest latency to the first spoken word */
+    if (s_thinking) {
+        cJSON *thinking = cJSON_AddObjectToObject(req, "thinking");
+        cJSON_AddStringToObject(thinking, "type", s_thinking);
+    }
     if (s_effort) {
         cJSON *output_config = cJSON_AddObjectToObject(req, "output_config");
         cJSON_AddStringToObject(output_config, "effort", s_effort);
@@ -215,13 +191,19 @@ static char *build_request(void)
 static void on_block_start(stream_t *st, const cJSON *block)
 {
     const cJSON *type = cJSON_GetObjectItem(block, "type");
-    buf_clear(&st->block);
+    llm_buf_clear(&st->block);
+    llm_buf_clear(&st->signature);
     st->block_type = BLOCK_OTHER;
     if (!cJSON_IsString(type)) {
         return;
     }
     if (strcmp(type->valuestring, "text") == 0) {
         st->block_type = BLOCK_TEXT;
+    } else if (strcmp(type->valuestring, "thinking") == 0) {
+        st->block_type = BLOCK_THINKING;
+    } else if (strcmp(type->valuestring, "redacted_thinking") == 0) {
+        /* Complete in the start event; sent back unchanged with the history */
+        cJSON_AddItemToArray(st->content, cJSON_Duplicate(block, true));
     } else if (strcmp(type->valuestring, "tool_use") == 0) {
         st->block_type = BLOCK_TOOL_USE;
         const cJSON *id = cJSON_GetObjectItem(block, "id");
@@ -241,8 +223,8 @@ static void on_block_delta(stream_t *st, const cJSON *delta)
         const cJSON *text = cJSON_GetObjectItem(delta, "text");
         if (cJSON_IsString(text) && text->valuestring[0]) {
             size_t n = strlen(text->valuestring);
-            buf_append(&st->block, text->valuestring, n);
-            buf_append(&st->text, text->valuestring, n);
+            llm_buf_append(&st->block, text->valuestring, n);
+            llm_buf_append(&st->text, text->valuestring, n);
             if (!st->first_text_us) {
                 st->first_text_us = esp_timer_get_time();
             }
@@ -250,10 +232,20 @@ static void on_block_delta(stream_t *st, const cJSON *delta)
                 st->on_text(text->valuestring, st->ctx);
             }
         }
+    } else if (strcmp(type->valuestring, "thinking_delta") == 0) {
+        const cJSON *thinking = cJSON_GetObjectItem(delta, "thinking");
+        if (cJSON_IsString(thinking)) {
+            llm_buf_append(&st->block, thinking->valuestring, strlen(thinking->valuestring));
+        }
+    } else if (strcmp(type->valuestring, "signature_delta") == 0) {
+        const cJSON *signature = cJSON_GetObjectItem(delta, "signature");
+        if (cJSON_IsString(signature)) {
+            llm_buf_append(&st->signature, signature->valuestring, strlen(signature->valuestring));
+        }
     } else if (strcmp(type->valuestring, "input_json_delta") == 0) {
         const cJSON *partial = cJSON_GetObjectItem(delta, "partial_json");
         if (cJSON_IsString(partial)) {
-            buf_append(&st->block, partial->valuestring, strlen(partial->valuestring));
+            llm_buf_append(&st->block, partial->valuestring, strlen(partial->valuestring));
         }
     }
 }
@@ -265,6 +257,13 @@ static void on_block_stop(stream_t *st)
         cJSON_AddStringToObject(block, "type", "text");
         cJSON_AddStringToObject(block, "text", st->block.p);
         cJSON_AddItemToArray(st->content, block);
+    } else if (st->block_type == BLOCK_THINKING) {
+        /* Sent back verbatim with the history (the API checks the signature) */
+        cJSON *block = cJSON_CreateObject();
+        cJSON_AddStringToObject(block, "type", "thinking");
+        cJSON_AddStringToObject(block, "thinking", st->block.len ? st->block.p : "");
+        cJSON_AddStringToObject(block, "signature", st->signature.len ? st->signature.p : "");
+        cJSON_AddItemToArray(st->content, block);
     } else if (st->block_type == BLOCK_TOOL_USE) {
         cJSON *input = cJSON_Parse(st->block.len ? st->block.p : "{}");
         cJSON *block = cJSON_CreateObject();
@@ -275,17 +274,15 @@ static void on_block_stop(stream_t *st)
         cJSON_AddItemToArray(st->content, block);
     }
     st->block_type = BLOCK_NONE;
-    buf_clear(&st->block);
+    llm_buf_clear(&st->block);
 }
 
-static void sse_dispatch(stream_t *st)
+static void sse_dispatch(const char *data, void *ctx)
 {
-    if (st->data.len == 0) {
-        return;
-    }
-    cJSON *json = cJSON_Parse(st->data.p);
+    stream_t *st = (stream_t *)ctx;
+    cJSON *json = cJSON_Parse(data);
     if (!json) {
-        ESP_LOGW(TAG, "Unparsable event: %.120s", st->data.p);
+        ESP_LOGW(TAG, "Unparsable event: %.120s", data);
         return;
     }
     const cJSON *type = cJSON_GetObjectItem(json, "type");
@@ -327,35 +324,6 @@ static void sse_dispatch(stream_t *st)
     }
     /* "ping" and unknown event types are ignored */
     cJSON_Delete(json);
-}
-
-/* Feed raw bytes of the event stream: lines "event: ..." / "data: ...", events end with a blank line */
-static void sse_feed(stream_t *st, const char *bytes, int len)
-{
-    for (int i = 0; i < len; i++) {
-        char c = bytes[i];
-        if (c != '\n') {
-            if (c != '\r') {
-                buf_append(&st->line, &c, 1);
-            }
-            continue;
-        }
-        if (st->line.len == 0) {
-            sse_dispatch(st);
-            buf_clear(&st->data);
-        } else if (strncmp(st->line.p, "data:", 5) == 0) {
-            const char *payload = st->line.p + 5;
-            if (*payload == ' ') {
-                payload++;
-            }
-            if (st->data.len) {
-                buf_append(&st->data, "\n", 1);
-            }
-            buf_append(&st->data, payload, strlen(payload));
-        }
-        /* "event:" lines are redundant with the JSON "type" field; ":" comments are ignored */
-        buf_clear(&st->line);
-    }
 }
 
 /* ---------- HTTP ---------- */
@@ -471,24 +439,26 @@ static void handle_tool_use(const cJSON *content)
     }
 }
 
-claude_error_t claude_client_stream(const char *text, claude_text_cb_t on_text, void *ctx, char **full_text)
+llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
 {
     if (full_text) {
         *full_text = NULL;
     }
     if (!s_api_key || !s_messages) {
-        return CLAUDE_ERR_NO_KEY;
+        return LLM_ERR_NO_KEY;
     }
 
     stream_t st = {
         .on_text = on_text,
         .ctx = ctx,
+        .sse = { .on_event = sse_dispatch },
         .content = cJSON_CreateArray(),
-        .error = CLAUDE_OK,
+        .error = LLM_OK,
         .start_us = esp_timer_get_time(),
     };
     int status = 0;
     char *body = NULL;
+    st.sse.ctx = &st;
 
     /* Append the question; removed again if the exchange fails */
     cJSON *user_msg = cJSON_CreateObject();
@@ -498,11 +468,11 @@ claude_error_t claude_client_stream(const char *text, claude_text_cb_t on_text, 
 
     body = build_request();
     if (!body) {
-        st.error = CLAUDE_ERR_OTHER;
+        st.error = LLM_ERR_OTHER;
         goto end;
     }
     if (send_request(body, &status) != ESP_OK) {
-        st.error = CLAUDE_ERR_NETWORK;
+        st.error = LLM_ERR_NETWORK;
         goto end;
     }
 
@@ -510,9 +480,9 @@ claude_error_t claude_client_stream(const char *text, claude_text_cb_t on_text, 
     int n;
     if (status != 200) {
         /* Errors before streaming are a plain JSON body */
-        buf_t err_body = {0};
+        llm_buf_t err_body = {0};
         while ((n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
-            buf_append(&err_body, chunk, n);
+            llm_buf_append(&err_body, chunk, n);
         }
         cJSON *json = err_body.len ? cJSON_Parse(err_body.p) : NULL;
         if (json) {
@@ -522,37 +492,37 @@ claude_error_t claude_client_stream(const char *text, claude_text_cb_t on_text, 
             ESP_LOGE(TAG, "HTTP %d: %.300s", status, err_body.len ? err_body.p : "(empty)");
             st.error = classify_error(status, NULL, NULL);
         }
-        buf_free(&err_body);
+        llm_buf_free(&err_body);
         drop_client();
         goto end;
     }
 
     while (!st.done && (n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
-        sse_feed(&st, chunk, n);
+        llm_sse_feed(&st.sse, chunk, n);
     }
-    if (st.error == CLAUDE_OK && !st.done) {
+    if (st.error == LLM_OK && !st.done) {
         ESP_LOGE(TAG, "Stream ended before message_stop");
-        st.error = CLAUDE_ERR_NETWORK;
+        st.error = LLM_ERR_NETWORK;
     }
-    if (st.error == CLAUDE_OK) {
+    if (st.error == LLM_OK) {
         /* Read the end of the chunked body so that the connection can be reused for the next question */
         while (esp_http_client_read(s_client, chunk, sizeof(chunk)) > 0) {
         }
     }
-    if (st.error != CLAUDE_OK || !esp_http_client_is_complete_data_received(s_client)) {
+    if (st.error != LLM_OK || !esp_http_client_is_complete_data_received(s_client)) {
         /* The connection is not in a reusable state */
         drop_client();
     }
 
-    if (st.error == CLAUDE_OK) {
+    if (st.error == LLM_OK) {
         if (strcmp(st.stop_reason, "refusal") == 0) {
             ESP_LOGW(TAG, "Request declined (stop_reason: refusal)");
-            st.error = CLAUDE_ERR_REFUSAL;
+            st.error = LLM_ERR_REFUSAL;
         } else if (strcmp(st.stop_reason, "tool_use") == 0) {
             handle_tool_use(st.content);
             /* Not stored: the history would need a tool_result for this turn */
             if (st.text.len == 0) {
-                st.error = CLAUDE_ERR_OTHER;
+                st.error = LLM_ERR_OTHER;
             } else {
                 cJSON_DeleteItemFromArray(s_messages, cJSON_GetArraySize(s_messages) - 1);
                 user_msg = NULL;
@@ -560,9 +530,9 @@ claude_error_t claude_client_stream(const char *text, claude_text_cb_t on_text, 
         } else if (strcmp(st.stop_reason, "max_tokens") == 0) {
             ESP_LOGW(TAG, "Answer truncated (max_tokens)");
         }
-        if (st.error == CLAUDE_OK && st.text.len == 0) {
+        if (st.error == LLM_OK && st.text.len == 0) {
             ESP_LOGE(TAG, "No text in answer (stop_reason: %s)", st.stop_reason);
-            st.error = CLAUDE_ERR_OTHER;
+            st.error = LLM_ERR_OTHER;
         }
     }
 
@@ -573,7 +543,7 @@ claude_error_t claude_client_stream(const char *text, claude_text_cb_t on_text, 
              st.cache_write_tokens, st.output_tokens);
 
 end:
-    if (st.error == CLAUDE_OK) {
+    if (st.error == LLM_OK) {
         if (user_msg) {
             cJSON *assistant_msg = cJSON_CreateObject();
             cJSON_AddStringToObject(assistant_msg, "role", "assistant");
@@ -591,10 +561,10 @@ end:
         cJSON_DeleteItemFromArray(s_messages, cJSON_GetArraySize(s_messages) - 1);
     }
     cJSON_Delete(st.content);
-    buf_free(&st.line);
-    buf_free(&st.data);
-    buf_free(&st.block);
-    buf_free(&st.text);
+    llm_sse_free(&st.sse);
+    llm_buf_free(&st.block);
+    llm_buf_free(&st.signature);
+    llm_buf_free(&st.text);
     free(body);
     return st.error;
 }

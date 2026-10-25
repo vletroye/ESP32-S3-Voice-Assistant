@@ -56,6 +56,7 @@ typedef struct {
     const char *place_saved;
     const char *place_cancelled;
     const char *location_line;      /* in the instructions, %s: "Evere, BE" */
+    const char *settings_opened;    /* "ouvre les paramètres" */
     /* Day abbreviations of the clock under the sleeping robot, Sunday first */
     const char *weekdays[7];
     /* Current date and time given with each question: %s day, %d day of month, %s month, %d year, %02d:%02d */

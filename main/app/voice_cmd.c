@@ -48,6 +48,12 @@ static const char *const s_model_shortcut[] = {
     "modèle numéro", "modèle", "modele", "use model", "use the model", "switch to model", "model number",
     "model", NULL
 };
+static const char *const s_open_settings[] = {
+    "ouvre les paramètres", "montre les paramètres", "affiche les paramètres", "ouvre les réglages",
+    "montre les réglages", "affiche les réglages", "va dans les paramètres",
+    "va dans les réglages", "open the settings", "show the settings", "open settings", "show settings",
+    "display the settings", "go to the settings", NULL
+};
 static const char *const s_change_country[] = {
     "change mon pays", "changer mon pays", "change de pays", "changer de pays", "change le pays",
     "change my country", "change the country", NULL
@@ -513,6 +519,10 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         s_asked_us = esp_timer_get_time();
         *reply = model_list();
         return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, s_open_settings, NULL)) {
+        *reply = reply_dup(app_lang_get()->settings_opened);
+        return VOICE_CMD_OPEN_SETTINGS;
     }
     if (starts_with(norm, s_change_country, NULL)) {
         s_asked = ASKED_COUNTRY;

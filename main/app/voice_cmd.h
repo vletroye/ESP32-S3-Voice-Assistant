@@ -6,7 +6,8 @@
  * Settings changed by voice, answered on the device:
  * - language: "change la langue" (the assistant asks which one), or directly "parle anglais", "speak French";
  * - model: "change de modèle" (the assistant lists the numbered models), or directly "utilise le modèle 3";
- * - country and town: "change mon pays", "change ma ville" (asked, then confirmed before saving).
+ * - country and town: "change mon pays", "change ma ville" (asked, then confirmed before saving);
+ * - "ouvre les paramètres", "open the settings": the Settings screen.
  * The new setting is saved and applied at once, without restarting.
  */
 
@@ -19,6 +20,7 @@ extern "C" {
 typedef enum {
     VOICE_CMD_NONE,         /* not a settings command: ask the model */
     VOICE_CMD_ANSWERED,     /* question asked, setting changed, or nothing to change */
+    VOICE_CMD_OPEN_SETTINGS,    /* "ouvre les paramètres": once "OK" is spoken, show the Settings screen */
 } voice_cmd_t;
 
 /**

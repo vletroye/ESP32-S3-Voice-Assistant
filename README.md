@@ -337,6 +337,12 @@ or "maintenant": "parle-moi de l'Angleterre en anglais" or "parle plus fort" rem
 I will now speak English.", spoken in the new language), "Je parle déjà français." / "J'utilise
 déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / "Dites un numéro de 1 à 6.".
 
+### Settings screen
+
+| French | English | Effect |
+| --- | --- | --- |
+| ouvre les paramètres · montre les paramètres · affiche les paramètres · ouvre les réglages · montre les réglages · affiche les réglages · va dans les paramètres · va dans les réglages | open the settings · show the settings · open settings · show settings · display the settings · go to the settings | "OK.", then the Settings screen is shown (no follow-up listening) |
+
 ### Country and town
 
 Asked, then confirmed before saving ("Confirmes-tu que tu veux changer ton pays en Belgique ?"): "oui", "yes",

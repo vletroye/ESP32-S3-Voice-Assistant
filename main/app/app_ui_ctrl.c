@@ -385,6 +385,15 @@ void ui_ctrl_settings_sync(void)
     bsp_display_unlock();
 }
 
+void ui_ctrl_open_settings(void)
+{
+    // The panels behind are back to sleep, as when the Settings screen is left with its back arrow
+    ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
+    bsp_display_lock(0);
+    lv_event_send(ui_ImageListenSettings, LV_EVENT_CLICKED, NULL);
+    bsp_display_unlock();
+}
+
 void ui_ctrl_apply_language(void)
 {
     bsp_display_lock(0);

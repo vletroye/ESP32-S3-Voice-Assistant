@@ -38,6 +38,9 @@ void ui_ctrl_reply_set_logo(ui_ctrl_logo_t logo);
 /** Texts of the screens and day names of the clock in the current language (after a change at run time) */
 void ui_ctrl_apply_language(void);
 
+/** Leave the listening / answer panels (sleep) and show the Settings screen */
+void ui_ctrl_open_settings(void);
+
 /** Settings screen selections (language, model) set back to the stored settings */
 void ui_ctrl_settings_sync(void);
 

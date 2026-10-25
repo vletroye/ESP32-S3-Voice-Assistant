@@ -4,7 +4,6 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include "freertos/FreeRTOS.h"
@@ -71,53 +70,6 @@ static void nvs_init_str_if_missing(const char *key, const char *default_value)
     ESP_ERROR_CHECK(nvs_set_str(my_handle, key, default_value));
     ESP_ERROR_CHECK(nvs_commit(my_handle));
     ESP_LOGI(TAG, "no %s, give a init value to nvs", key);
-}
-
-/*
- * CONFIG.INI is built from every key as "key = value\r\n" in a CONFIG_UF2_INI_FILE_SIZE buffer that tinyuf2
- * does not bound-check: shorten the Persona (the only long free text) so that everything fits.
- */
-static void ini_fit_persona(void)
-{
-    size_t total = 1;   // final NUL
-    nvs_iterator_t it = NULL;
-    esp_err_t err = nvs_entry_find("nvs", "configuration", NVS_TYPE_STR, &it);
-    while (err == ESP_OK) {
-        nvs_entry_info_t info;
-        nvs_entry_info(it, &info);
-        size_t len = 0;
-        if (nvs_get_str(my_handle, info.key, NULL, &len) == ESP_OK) {
-            total += strlen(info.key) + 3 + (len - 1) + 2;
-        }
-        err = nvs_entry_next(&it);
-    }
-    nvs_release_iterator(it);
-    if (total <= CONFIG_UF2_INI_FILE_SIZE) {
-        ESP_LOGI(TAG, "CONFIG.INI: %u of %d bytes", (unsigned)total, CONFIG_UF2_INI_FILE_SIZE);
-        return;
-    }
-
-    size_t len = 0;
-    if (nvs_get_str(my_handle, "Persona", NULL, &len) != ESP_OK || len <= 1) {
-        ESP_LOGE(TAG, "CONFIG.INI too large (%u bytes) and no Persona to shorten", (unsigned)total);
-        return;
-    }
-    char *persona = malloc(len);
-    if (!persona || nvs_get_str(my_handle, "Persona", persona, &len) != ESP_OK) {
-        free(persona);
-        return;
-    }
-    size_t excess = total - CONFIG_UF2_INI_FILE_SIZE;
-    size_t keep = (len - 1 > excess) ? len - 1 - excess : 0;
-    while (keep > 0 && ((unsigned char)persona[keep] & 0xC0) == 0x80) {
-        keep--;     // do not cut a UTF-8 character
-    }
-    persona[keep] = '\0';
-    ESP_ERROR_CHECK(nvs_set_str(my_handle, "Persona", persona));
-    ESP_ERROR_CHECK(nvs_commit(my_handle));
-    ESP_LOGW(TAG, "Persona shortened to %u bytes to fit in CONFIG.INI (%d bytes)", (unsigned)keep,
-             CONFIG_UF2_INI_FILE_SIZE);
-    free(persona);
 }
 
 static void uf2_nvs_modified_cb()
@@ -239,9 +191,9 @@ void app_main(void)
         nvs_init_str_if_missing("Scroll_mode", "line");
         // Voice of the answers (same default as the assistant's ASSISTANT_TTS_VOICE)
         nvs_init_str_if_missing("Voice", "marin");
-        // Who the assistant is and who it talks to, added to its instructions (one line, free text)
+        // Who the assistant is and who it talks to, added to its instructions: edited in PERSONA.TXT
+        // (components/esp_tinyuf2, a copy of the tinyuf2 component extended for it), not in CONFIG.INI
         nvs_init_str_if_missing("Persona", "");
-        ini_fit_persona();
     }
     nvs_close(my_handle);
 

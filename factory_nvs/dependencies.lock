@@ -20,7 +20,7 @@ dependencies:
       require: private
       version: '>=4.1'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     version: 0.5.3
   espressif/esp-box:
@@ -207,33 +207,6 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 1.4.0
-  espressif/esp_tinyuf2:
-    component_hash: d50172a0b9138cdddd9191832e748fc123731e9b20007a7bf4478f5a997b9619
-    dependencies:
-    - name: espressif/cmake_utilities
-      registry_url: https://components.espressif.com
-      require: private
-      version: '*'
-    - name: espressif/tinyusb
-      registry_url: https://components.espressif.com
-      require: private
-      version: ^0.19.0~3
-    - name: idf
-      require: private
-      version: '>=5.0'
-    - name: leeebo/esp-inih
-      registry_url: https://components.espressif.com
-      require: private
-      version: 0.*
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    targets:
-    - esp32s2
-    - esp32s3
-    - esp32p4
-    - esp32s31
-    version: 1.2.0
   espressif/icm42670:
     component_hash: 3327870e7a125e7278f318297726138278f0cda2898f2461c01af0423d4afcda
     dependencies:
@@ -251,7 +224,7 @@ dependencies:
       require: private
       version: '>=5.0'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     targets:
     - esp32s2
@@ -271,7 +244,7 @@ dependencies:
       require: private
       version: '>=4.4'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     version: 0.0.2
   lvgl/lvgl:
@@ -283,14 +256,16 @@ dependencies:
     version: 8.4.0
 direct_dependencies:
 - espressif/button
+- espressif/cmake_utilities
 - espressif/esp-box
 - espressif/esp-box-3
 - espressif/esp-box-lite
 - espressif/esp_codec_dev
 - espressif/esp_lcd_touch_gt911
 - espressif/esp_lcd_touch_tt21100
-- espressif/esp_tinyuf2
+- espressif/tinyusb
 - idf
-manifest_hash: 566c13a61aa56018d6d11a9459b7295aff6d3afc5689d7bee6950e2b328bf3f7
+- leeebo/esp-inih
+manifest_hash: 2492e7eb8c92543a27bc9e31d63f8bab96c6733d273a55ce33002db40fec6340
 target: esp32s3
 version: 2.0.0

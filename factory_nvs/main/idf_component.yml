@@ -1,7 +1,6 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  espressif/esp_tinyuf2:
-    version: ">=0.2.2"
+  # esp_tinyuf2 is in components/ (copy of espressif/esp_tinyuf2 1.2.0 extended with PERSONA.TXT)
   # espressif/esp-box: "~2.2.0"
   ## Required IDF version
   idf:

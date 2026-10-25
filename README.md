@@ -115,7 +115,7 @@ Two firmwares live side by side in flash:
 | Folder | Partition | Role |
 | --- | --- | --- |
 | `main/` (root project) | `factory` (6 MB) | The voice assistant |
-| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI` |
+| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI` and `PERSONA.TXT` (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `PERSONA.TXT`, files that can grow when edited, and a bound-checked `CONFIG.INI`) |
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
 | `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep) |
 
@@ -190,15 +190,19 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
 | `Language` | Assistant language | `fr` or `en` |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
-| `Persona` | Context always given to the assistant: its name, who made it, who you are… (one line, free text, ~1,500 characters at most) | `Tu t'appelles Jarvis. Tu es un assistant vocal créé par …` |
 | `Voice` | Voice of the answers (also set from the Settings screen) | `marin`, `cedar`, `coral`… |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 
-`Persona` is added to the assistant's base instructions for every question (Claude and GPT alike) and is kept
-across conversations, "Au revoir" included. Write it on **one line** (CONFIG.INI values cannot span several
-lines). The whole CONFIG.INI is limited to 2,048 bytes by the USB configuration component, of which the other
-keys use about 500: if the Persona is longer than what remains, the configuration mode shortens it when it
-starts (logged on the serial port).
+The drive also holds **`PERSONA.TXT`**: free text always given to the assistant with every question
+(Claude and GPT alike), kept across conversations, "Au revoir" included. For example:
+
+```text
+Tu t'appelles Jarvis. Tu es un assistant vocal créé par Valéry Letroye, sur base d'un ESP32-S3-BOX-3.
+Valéry habite à ...
+```
+
+Several lines are allowed, up to about 3,900 characters; lines starting with `#` are ignored (an empty file
+shows a short help in such lines). The text is stored in the NVS key `Persona` and read at start-up.
 
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
 starts with this version. Spaces and line breaks pasted by mistake around the values are ignored. Keys are

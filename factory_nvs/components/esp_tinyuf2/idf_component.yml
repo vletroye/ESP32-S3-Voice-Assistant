@@ -1,0 +1,21 @@
+dependencies:
+  cmake_utilities: '*'
+  espressif/tinyusb:
+    version: ^0.19.0~3
+  idf: '>=5.0'
+  leeebo/esp-inih: 0.*
+description: Enhanced TinyUF2 for ESP32Sx, support OTA update and NVS operate through
+  USB MSC
+documentation: https://docs.espressif.com/projects/esp-iot-solution/en/latest/usb/usb_device/esp_tinyuf2.html
+issues: https://github.com/espressif/esp-iot-solution/issues
+repository: git://github.com/espressif/esp-iot-solution.git
+repository_info:
+  commit_sha: 1608d9c922c992986c285fd753ef15ecbbad3cde
+  path: components/usb/esp_tinyuf2
+targets:
+- esp32s2
+- esp32s3
+- esp32p4
+- esp32s31
+url: https://github.com/espressif/esp-iot-solution
+version: 1.2.0

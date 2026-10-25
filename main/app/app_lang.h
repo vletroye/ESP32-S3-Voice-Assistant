@@ -35,6 +35,18 @@ typedef struct {
     const char *memory_cleared;
     const char *memory_empty;
     const char *memory_list_intro;
+    /* Language changed by voice ("change la langue") */
+    const char *lang_ask;
+    const char *lang_already;
+    const char *lang_unknown;
+    const char *lang_switched;      /* spoken in the new language, before the restart */
+    /* Model changed by voice ("change de modèle"): the list of numbered models, then the choice */
+    const char *model_ask_intro;
+    const char *model_current;      /* after the current model in the list */
+    const char *model_ask_question;
+    const char *model_already;      /* %s: model name */
+    const char *model_unknown;      /* %d: number of models */
+    const char *model_switched;     /* %s: model name, before the restart */
     /* Day abbreviations of the clock under the sleeping robot, Sunday first */
     const char *weekdays[7];
     /* Current date and time given with each question: %s day, %d day of month, %s month, %d year, %02d:%02d */
@@ -68,6 +80,9 @@ typedef struct {
 void app_lang_set(const char *code);
 
 const app_lang_t *app_lang_get(void);
+
+/** Texts of a supported language (e.g. to confirm a change in the new language), NULL if not supported */
+const app_lang_t *app_lang_find(const char *code);
 
 #ifdef __cplusplus
 }

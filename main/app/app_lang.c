@@ -55,6 +55,16 @@ static const app_lang_t s_languages[] = {
         .memory_cleared = "J'ai tout oublié.",
         .memory_empty = "Je n'ai rien mémorisé pour l'instant.",
         .memory_list_intro = "Voici ce que vous m'avez demandé de retenir. ",
+        .lang_ask = "Quelle langue voulez-vous ? Français ou anglais ?",
+        .lang_already = "Je parle déjà français.",
+        .lang_unknown = "Je ne connais pas cette langue. Je parle français et anglais.",
+        .lang_switched = "Très bien, je parle maintenant français. Je redémarre.",
+        .model_ask_intro = "Voici les modèles disponibles.",
+        .model_current = ", celui que j'utilise",
+        .model_ask_question = "Lequel voulez-vous ? Dites son numéro.",
+        .model_already = "J'utilise déjà %s.",
+        .model_unknown = "Je n'ai pas compris. Dites un numéro de 1 à %d.",
+        .model_switched = "Très bien, j'utilise maintenant %s. Je redémarre.",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -132,6 +142,16 @@ static const app_lang_t s_languages[] = {
         .memory_cleared = "I have forgotten everything.",
         .memory_empty = "I have not memorized anything yet.",
         .memory_list_intro = "Here is what you asked me to remember. ",
+        .lang_ask = "Which language do you want? French or English?",
+        .lang_already = "I already speak English.",
+        .lang_unknown = "I don't know this language. I speak French and English.",
+        .lang_switched = "Very well, I will now speak English. Restarting.",
+        .model_ask_intro = "Here are the available models.",
+        .model_current = ", the one I use",
+        .model_ask_question = "Which one do you want? Say its number.",
+        .model_already = "I already use %s.",
+        .model_unknown = "I didn't understand. Say a number from 1 to %d.",
+        .model_switched = "Very well, I now use %s. Restarting.",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -191,6 +211,16 @@ void app_lang_set(const char *code)
                              "because your answer will be read aloud.";
     s_current = &s_custom;
     ESP_LOGW(TAG, "No UI texts for language '%s', using English UI", s_custom_code);
+}
+
+const app_lang_t *app_lang_find(const char *code)
+{
+    for (size_t i = 0; i < sizeof(s_languages) / sizeof(s_languages[0]); i++) {
+        if (strcasecmp(code, s_languages[i].code) == 0) {
+            return &s_languages[i];
+        }
+    }
+    return NULL;
 }
 
 const app_lang_t *app_lang_get(void)

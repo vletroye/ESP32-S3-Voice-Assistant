@@ -27,6 +27,7 @@
 #include "app_lang.h"
 #include "llm.h"
 #include "app_memory.h"
+#include "voice_cmd.h"
 #include "app_volume.h"
 #include "tools.h"
 #include "weather.h"
@@ -54,6 +55,8 @@ static int64_t s_reply_t0 = 0;
 #define SAVE_AFTER_SILENCE_MS           1000
 /* From the start of an answer until it has been spoken or interrupted (no flash write meanwhile) */
 static volatile bool s_reply_active = false;
+/* The language or the model was changed by voice: restart once the confirmation has been spoken */
+static volatile bool s_restart_after_reply = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -203,6 +206,9 @@ static void on_reply_audio(tts_event_t event)
     s_reply_active = false;
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();
+    if (s_restart_after_reply) {
+        return;     // the main task restarts the device (new language)
+    }
     if (record_flag) {
         // Reply interrupted by a new listening session (wake word or touch)
         return;
@@ -338,6 +344,17 @@ void assistant_listen_end(void)
 
     // UI listen success
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_QUESTION, text);
+
+    // "Change la langue" / "change de modèle" (then the answer), "parle anglais", "utilise le modèle 3":
+    // answered here, then restart
+    char *cmd_reply = NULL;
+    voice_cmd_t voice_cmd = voice_cmd_handle(text, &cmd_reply);
+    if (voice_cmd != VOICE_CMD_NONE) {
+        s_restart_after_reply = (voice_cmd == VOICE_CMD_RESTART);
+        speak_message(cmd_reply ? cmd_reply : "");
+        free(cmd_reply);
+        goto err;
+    }
 
     // "Souviens-toi que ...", "oublie que ...", "oublie tout", "dis-moi ce que tu as mémorisé": answered here
     char *memory_reply = NULL;
@@ -491,6 +508,14 @@ void app_main()
         // Conversation and volume saved once the assistant is back to sleep (sleep panel shown, no answer in
         // progress, not listening, nothing played for a while): never during an exchange, follow-up included.
         // The saves do nothing when unchanged. This task's stack is in internal RAM, as flash writes need.
+        // New language chosen by voice: once its confirmation has been spoken, save and restart
+        if (s_restart_after_reply && !s_reply_active && tts_stream_is_silent(300)) {
+            llm_history_save();
+            app_volume_save();
+            weather_places_save();
+            ESP_LOGI(TAG, "Restarting with the new settings");
+            esp_restart();
+        }
         if (ui_ctrl_is_asleep() && !s_reply_active && !record_flag && tts_stream_is_silent(SAVE_AFTER_SILENCE_MS)) {
             llm_history_save();
             app_volume_save();

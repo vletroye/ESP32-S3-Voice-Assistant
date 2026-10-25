@@ -280,7 +280,10 @@ static void settings_screen_setup(void)
     uint16_t model_selected = llm_model_count;
     for (size_t i = 0; i < llm_model_count; i++) {
         strlcat(options, i ? "\n" : "", sizeof(options));
-        strlcat(options, llm_models[i].label, sizeof(options));
+        // Numbered as in the voice command "utilise le modèle 3"
+        char numbered[56];
+        snprintf(numbered, sizeof(numbered), "%u. %s", (unsigned)(i + 1), llm_models[i].label);
+        strlcat(options, numbered, sizeof(options));
         if (strcmp(param->chat_model, llm_models[i].id) == 0) {
             model_selected = i;
         }

@@ -16,11 +16,12 @@ which has been largely rewritten.
 - **Live transcription** while you speak (streamed to the API, so the question is ready as soon as you stop;
   it is shown above the answer).
 - Answer **streamed** by the chosen model and shown as it arrives, with an icon of the provider (Claude or
-  OpenAI, a globe when the web was searched, a chip when the device answered by itself: memory commands,
-  errors) and prefixed with the model id
+  OpenAI, a globe when the web was searched, a chip when the device answered by itself: memory,
+  language and model commands, errors) and prefixed with the model id
   (`[claude-haiku-5-5] …`).
 - **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
-  (Anthropic) or GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI); French or English; 10 OpenAI voices.
+  (Anthropic) or GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI); French or English; 10 OpenAI voices. The
+  language and the model can also be changed **by voice** ("Change la langue", "Utilise le modèle 3").
 - **Persona**: a free text (name, who made it, who you are…) given to the assistant with every question,
   edited in `PERSONA.TXT` from the PC.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
@@ -161,6 +162,7 @@ Main modules of the assistant (`main/app/`):
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
+| `voice_cmd.c` | Language and model changed by voice ("change la langue", "utilise le modèle 3") |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, answer scrolling, answer icon, double tap, translations, Settings screen |
@@ -198,7 +200,8 @@ idf.py -p COMx flash monitor
 Tap the gear icon on the home screen:
 
 - **Langue / Language**: Français or English (interface, transcription, answers and voice).
-- **Modèle / Model**: the model answering the questions (see the table above).
+- **Modèle / Model**: the model answering the questions (see the table above), numbered as in the voice
+  command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra.
 - **Voix / Voice**: the OpenAI voice reading the answers: Marin, Cedar (both recommended by OpenAI), Alloy,
   Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
   session reconnects (~2 s) and the new voice introduces itself.
@@ -298,6 +301,27 @@ in English (`main/app/app_lang.c`).
 | bonne nuit · bonne nuit ESP | bye · bye bye · bye ESP |
 | à demain · à plus · ciao | good night |
 | bonne soirée · bonne journée · bonne après-midi | |
+
+### Language and model
+
+Accepted in French and in English whatever the language (`main/app/voice_cmd.c`). Answered on the device; the
+new setting is saved, then the device restarts once the confirmation has been spoken. Changing the model starts
+a new conversation (each model keeps its own history).
+
+| Action | French | English |
+| --- | --- | --- |
+| Change the language (asks "Quelle langue voulez-vous ? Français ou anglais ?") | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
+| Answer to that question (within 30 s) | français · anglais · "en anglais s'il te plaît"… | French · English |
+| Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
+| Change the model (reads the numbered list, then asks which one) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
+| Answer to that question (within 30 s) | its number ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna"…) | its number ("three", "3", "third") or its name |
+| Change the model directly | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
+
+A direct phrase must contain only the language or the number, possibly followed by "s'il te plaît", "please"
+or "maintenant": "parle-moi de l'Angleterre en anglais" or "parle plus fort" remain normal questions. "Un" and
+"une" mean model 1 only when said alone (elsewhere they are articles). Answers: the confirmation ("Very well,
+I will now speak English. Restarting.", spoken in the new language), "Je parle déjà français." / "J'utilise
+déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / "Dites un numéro de 1 à 6.".
 
 ### Long-term memory
 

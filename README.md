@@ -270,10 +270,61 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
    (not after a volume change, which sends it back to sleep).
 4. To interrupt an answer, say "Bonjour ESP" again or **double-tap** the screen: it stops and listens.
 5. Without speech, it goes back to sleep (no API call is made for silence).
-6. Saying just "**Au revoir**" (or "Bonne nuit"; "Goodbye", "Bye", "Good night" in English) sends it back to
-   sleep at once, without an answer and without listening again, and clears the saved conversation: the next
-   one starts afresh. Otherwise the conversation goes on after sleep or a restart.
-   The phrases are listed in `main/app/app_lang.c`.
+6. Saying just "**Au revoir**" (or another closing phrase, see below) sends it back to sleep at once, without
+   an answer and without listening again, and clears the saved conversation: the next one starts afresh.
+   Otherwise the conversation goes on after sleep or a restart.
+
+## Voice commands
+
+Phrases recognised by the device itself. Punctuation and case are ignored ("Au revoir !" works), and hyphens
+and apostrophes count as spaces ("souviens-toi" = "souviens toi").
+
+### Wake words (detected locally, without Internet)
+
+| Phrase | Effect |
+| --- | --- |
+| "Bonjour ESP" | Wakes the assistant up (beep, then listening); during an answer, interrupts it and listens |
+| "Hi ESP" | Same (English pronunciation) |
+
+### Closing phrases: back to sleep, conversation cleared
+
+Recognised only when said **alone**. The French list is used when the assistant is in French, the English one
+in English (`main/app/app_lang.c`).
+
+| French | English |
+| --- | --- |
+| au revoir · au revoir ESP | goodbye · good bye · goodbye ESP |
+| bonne nuit · bonne nuit ESP | bye · bye bye · bye ESP |
+| à demain · à plus · ciao | good night |
+| bonne soirée · bonne journée · bonne après-midi | |
+
+### Long-term memory
+
+Accepted in French and in English whatever the language (`main/app/app_memory.c`). "Remember" phrases are
+followed by what to remember; the other ones are said alone. Answered on the device, without calling the model.
+
+| Action | French | English | Answer |
+| --- | --- | --- | --- |
+| Remember | souviens-toi que … · souviens-toi bien que … · rappelle-toi que … · retiens que … · retiens bien que … · n'oublie pas que … · note que … · mémorise que … | remember that … · please remember that … · don't forget that … · note that … · memorize that … | "C'est noté." / "Noted." |
+| Forget a note | oublie que … · oublie le fait que … | forget that … | "C'est oublié." (the note sharing most words is removed) |
+| Forget everything | oublie tout · efface ta mémoire · efface toute ta mémoire | forget everything | "J'ai tout oublié." |
+| List the notes | dis-moi tout ce que tu as mémorisé · dis-moi ce que tu as mémorisé · qu'est-ce que tu as mémorisé · qu'as-tu mémorisé · dis-moi tout ce que tu as retenu · dis-moi ce que tu as retenu · qu'est-ce que tu as retenu | tell me everything you remember · what do you remember · what have you memorized | The notes, read out |
+
+### Free phrases understood by Claude (tools)
+
+No fixed wording: Claude decides when to use a tool.
+
+| Tool | Examples |
+| --- | --- |
+| Weather | "Quel temps fait-il à Namur ?", "Va-t-il pleuvoir demain ?" (your town if it is in `PERSONA.TXT`) |
+| Volume | "Parle plus fort", "Baisse le son", "Mets le volume à 50" (then back to sleep) |
+| Web search | "Quelles sont les dernières nouvelles ?", "Cherche sur internet …" |
+| Date and time | "Quel jour sommes-nous ?", "Dans combien de jours est Noël ?" (no tool: the date comes with each question) |
+
+### Gestures
+
+- Touch the screen while asleep: wakes the assistant up, like "Bonjour ESP".
+- Double-tap during an answer: interrupts it and listens.
 
 ## System sounds
 

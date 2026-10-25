@@ -61,15 +61,51 @@ static update_complete_cb_t _complete_cb = NULL;
 static esp_partition_t const* _part_ota = NULL;
 char *_ini_file = NULL;
 char *_ini_file_dummy = NULL;
-char *_persona_file = NULL;
-char *_persona_file_dummy = NULL;
 
-/* Shown in an empty PERSONA.TXT; lines starting with '#' are not saved */
-static const char s_persona_help[] =
-    "# Decrivez ici l'assistant et vous-meme (nom, createur, qui vous etes...).\r\n"
-    "# Ce texte est donne a l'assistant avec chaque question. Plusieurs lignes possibles.\r\n"
-    "# Describe the assistant and yourself here; this text is given to it with every question.\r\n"
-    "# Lines starting with # are ignored.\r\n";
+/* [Voice assistant] PERSONA.TXT and MEMORY.TXT; the help is shown in an empty file ('#' lines are not saved) */
+typedef struct {
+    const char *key;        /* NVS key */
+    const char *help;
+    char *content;
+    char *dummy;
+} text_file_t;
+
+static text_file_t s_text_files[UF2_TEXT_COUNT] = {
+    [UF2_TEXT_PERSONA] = {
+        .key = "Persona",
+        .help = "# Decrivez ici l'assistant et vous-meme (nom, createur, qui vous etes...).\r\n"
+                "# Ce texte est donne a l'assistant avec chaque question. Plusieurs lignes possibles.\r\n"
+                "# Describe the assistant and yourself here; this text is given to it with every question.\r\n"
+                "# Lines starting with # are ignored.\r\n",
+    },
+    [UF2_TEXT_MEMORY] = {
+        .key = "Memory",
+        .help = "# Ce que vous avez demande a l'assistant de retenir (\"souviens-toi que ...\").\r\n"
+                "# Une note par ligne ; vous pouvez en corriger ou en supprimer.\r\n"
+                "# What you asked the assistant to remember (\"remember that ...\"), one note per line.\r\n"
+                "# Lines starting with # are ignored.\r\n",
+    },
+};
+
+char *board_flash_text_content(int text)
+{
+    return s_text_files[text].content;
+}
+
+char *board_flash_text_dummy(int text)
+{
+    return s_text_files[text].dummy;
+}
+
+static text_file_t *text_file_of_key(const char *key)
+{
+    for (int i = 0; i < UF2_TEXT_COUNT; i++) {
+        if (strcmp(key, s_text_files[i].key) == 0) {
+            return &s_text_files[i];
+        }
+    }
+    return NULL;
+}
 static nvs_modified_cb_t _modified_cb = NULL;
 static char _part_name[16] = "";
 static char _namespace_name[16] = "";
@@ -238,11 +274,11 @@ static void ini_gen_from_nvs(const char *part, const char *name)
         nvs_entry_info(it, &info);
         if ((result = nvs_get_str(nvs, info.key, NULL, &len)) == ESP_OK) {
             char *str = (char *)malloc(len);
-            if ((result = nvs_get_str(nvs, info.key, str, &len)) == ESP_OK &&
-                    strcmp(info.key, CFG_UF2_PERSONA_NVS_KEY) == 0) {
-                // [Voice assistant] the Persona goes to PERSONA.TXT, not to CONFIG.INI
-                if (str[0] && _persona_file) {
-                    strlcpy(_persona_file, str, CFG_UF2_PERSONA_FILE_SIZE);
+            text_file_t *text_file = text_file_of_key(info.key);
+            if ((result = nvs_get_str(nvs, info.key, str, &len)) == ESP_OK && text_file) {
+                // [Voice assistant] Persona and Memory go to their own files, not to CONFIG.INI
+                if (str[0] && text_file->content) {
+                    strlcpy(text_file->content, str, CFG_UF2_TEXT_FILE_SIZE);
                 }
             } else if (result == ESP_OK) {
 #ifdef CONFIG_UF2_INI_NVS_VALUE_HIDDEN
@@ -266,33 +302,37 @@ static void ini_gen_from_nvs(const char *part, const char *name)
     } while (it != NULL);
 #endif
     strcpy(_ini_file_dummy, _ini_file);
-    if (_persona_file) {
-        if (_persona_file[0] == '\0') {
-            strlcpy(_persona_file, s_persona_help, CFG_UF2_PERSONA_FILE_SIZE);
+    for (int i = 0; i < UF2_TEXT_COUNT; i++) {
+        text_file_t *t = &s_text_files[i];
+        if (t->content) {
+            if (t->content[0] == '\0') {
+                strlcpy(t->content, t->help, CFG_UF2_TEXT_FILE_SIZE);
+            }
+            memcpy(t->dummy, t->content, CFG_UF2_TEXT_FILE_SIZE);
         }
-        memcpy(_persona_file_dummy, _persona_file, CFG_UF2_PERSONA_FILE_SIZE);
     }
     nvs_close(nvs);
     nvs_release_iterator(it);
 }
 
-void board_flash_persona_update(void)
+void board_flash_text_update(int index)
 {
+    text_file_t *t = &s_text_files[index];
     // The written text ends at the first NUL (the end of the last sector is zero-filled)
-    _persona_file_dummy[CFG_UF2_PERSONA_FILE_SIZE - 1] = '\0';
-    memcpy(_persona_file, _persona_file_dummy, CFG_UF2_PERSONA_FILE_SIZE);
+    t->dummy[CFG_UF2_TEXT_FILE_SIZE - 1] = '\0';
+    memcpy(t->content, t->dummy, CFG_UF2_TEXT_FILE_SIZE);
 
     // Saved without the '#' lines, without trailing spaces, within the NVS string limit
-    char *text = (char *)calloc(1, CFG_UF2_PERSONA_FILE_SIZE);
+    char *text = (char *)calloc(1, CFG_UF2_TEXT_FILE_SIZE);
     if (text == NULL) {
         return;
     }
     size_t n = 0;
-    const char *line = _persona_file_dummy;
+    const char *line = t->dummy;
     while (*line) {
         const char *end = strchr(line, '\n');
         size_t line_len = end ? (size_t)(end - line + 1) : strlen(line);
-        if (line[0] != '#' && n + line_len < CFG_UF2_PERSONA_FILE_SIZE) {
+        if (line[0] != '#' && n + line_len < CFG_UF2_TEXT_FILE_SIZE) {
             memcpy(text + n, line, line_len);
             n += line_len;
         }
@@ -301,8 +341,8 @@ void board_flash_persona_update(void)
     while (n > 0 && (unsigned char)text[n - 1] <= ' ') {
         n--;
     }
-    if (n > CFG_UF2_PERSONA_MAX_LEN) {
-        n = CFG_UF2_PERSONA_MAX_LEN;
+    if (n > CFG_UF2_TEXT_MAX_LEN) {
+        n = CFG_UF2_TEXT_MAX_LEN;
         while (n > 0 && ((unsigned char)text[n] & 0xC0) == 0x80) {
             n--;    // do not cut a UTF-8 character
         }
@@ -311,13 +351,12 @@ void board_flash_persona_update(void)
 
     nvs_handle_t nvs = 0;
     if (nvs_open_from_partition(_part_name, _namespace_name, NVS_READWRITE, &nvs) == ESP_OK) {
-        char *old = (char *)calloc(1, CFG_UF2_PERSONA_FILE_SIZE);
-        size_t old_len = CFG_UF2_PERSONA_FILE_SIZE;
-        bool changed = !old || nvs_get_str(nvs, CFG_UF2_PERSONA_NVS_KEY, old, &old_len) != ESP_OK ||
-                       strcmp(old, text) != 0;
+        char *old = (char *)calloc(1, CFG_UF2_TEXT_FILE_SIZE);
+        size_t old_len = CFG_UF2_TEXT_FILE_SIZE;
+        bool changed = !old || nvs_get_str(nvs, t->key, old, &old_len) != ESP_OK || strcmp(old, text) != 0;
         free(old);
-        if (changed && nvs_set_str(nvs, CFG_UF2_PERSONA_NVS_KEY, text) == ESP_OK && nvs_commit(nvs) == ESP_OK) {
-            ESP_LOGI(TAG, "Persona saved (%u bytes)", (unsigned)n);
+        if (changed && nvs_set_str(nvs, t->key, text) == ESP_OK && nvs_commit(nvs) == ESP_OK) {
+            ESP_LOGI(TAG, "%s saved (%u bytes)", t->key, (unsigned)n);
             if (_modified_cb) {
                 _modified_cb();
             }
@@ -361,8 +400,10 @@ void board_flash_nvs_init(const char *part_name, const char *namespace_name, nvs
         //TODO: free when support deinit
         _ini_file = (char *)calloc(1, CFG_UF2_INI_FILE_SIZE);
         _ini_file_dummy = (char *)calloc(1, CFG_UF2_INI_FILE_SIZE);
-        _persona_file = (char *)calloc(1, CFG_UF2_PERSONA_FILE_SIZE);
-        _persona_file_dummy = (char *)calloc(1, CFG_UF2_PERSONA_FILE_SIZE);
+        for (int i = 0; i < UF2_TEXT_COUNT; i++) {
+            s_text_files[i].content = (char *)calloc(1, CFG_UF2_TEXT_FILE_SIZE);
+            s_text_files[i].dummy = (char *)calloc(1, CFG_UF2_TEXT_FILE_SIZE);
+        }
     }
     ini_gen_from_nvs(part_name, namespace_name);
 }

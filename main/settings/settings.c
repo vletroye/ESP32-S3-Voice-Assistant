@@ -56,6 +56,34 @@ static void str_trim(char *s)
     }
 }
 
+/* A free text (may contain accents, so only spaces and line endings are trimmed), NULL if absent or empty */
+static char *read_text(nvs_handle_t handle, const char *key)
+{
+    size_t len = 0;
+    if (nvs_get_str(handle, key, NULL, &len) != ESP_OK || len <= 1) {
+        return NULL;
+    }
+    char *p = malloc(len);
+    if (!p || nvs_get_str(handle, key, p, &len) != ESP_OK) {
+        free(p);
+        return NULL;
+    }
+    size_t n = strlen(p);
+    while (n > 0 && (unsigned char)p[n - 1] <= ' ') {
+        p[--n] = '\0';
+    }
+    size_t start = 0;
+    while (start < n && (unsigned char)p[start] <= ' ') {
+        start++;
+    }
+    memmove(p, p + start, n - start + 1);
+    if (p[0] == '\0') {
+        free(p);
+        return NULL;
+    }
+    return p;
+}
+
 esp_err_t settings_read_parameter_from_nvs(void)
 {
     esp_err_t ret = nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READONLY, &my_handle);
@@ -154,29 +182,11 @@ esp_err_t settings_read_parameter_from_nvs(void)
         *p = tolower((unsigned char)*p);
     }
 
-    // Persona (optional): free text, may contain accents, so only spaces and line endings are trimmed
+    // Persona and Memory (optional): free texts, edited in PERSONA.TXT and MEMORY.TXT
     free(g_sys_param.persona);
-    g_sys_param.persona = NULL;
-    len = 0;
-    if (nvs_get_str(my_handle, "Persona", NULL, &len) == ESP_OK && len > 1) {
-        g_sys_param.persona = malloc(len);
-        if (g_sys_param.persona && nvs_get_str(my_handle, "Persona", g_sys_param.persona, &len) == ESP_OK) {
-            char *p = g_sys_param.persona;
-            size_t n = strlen(p);
-            while (n > 0 && (unsigned char)p[n - 1] <= ' ') {
-                p[--n] = '\0';
-            }
-            size_t start = 0;
-            while (start < n && (unsigned char)p[start] <= ' ') {
-                start++;
-            }
-            memmove(p, p + start, n - start + 1);
-        }
-        if (g_sys_param.persona && g_sys_param.persona[0] == '\0') {
-            free(g_sys_param.persona);
-            g_sys_param.persona = NULL;
-        }
-    }
+    g_sys_param.persona = read_text(my_handle, "Persona");
+    free(g_sys_param.memory);
+    g_sys_param.memory = read_text(my_handle, "Memory");
 
     // Scrolling mode of the answer (optional): "line" (default) or "smooth"
     char mode[12] = {0};
@@ -200,8 +210,9 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
-    ESP_LOGI(TAG, "voice:%s, persona: %d chars", g_sys_param.voice,
-             g_sys_param.persona ? (int)strlen(g_sys_param.persona) : 0);
+    ESP_LOGI(TAG, "voice:%s, persona: %d chars, memory: %d chars", g_sys_param.voice,
+             g_sys_param.persona ? (int)strlen(g_sys_param.persona) : 0,
+             g_sys_param.memory ? (int)strlen(g_sys_param.memory) : 0);
     ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s, %s", g_sys_param.lang, g_sys_param.scroll_cps,
              g_sys_param.scroll_smooth ? "smooth" : "line by line");
     ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars)", g_sys_param.chat_model,

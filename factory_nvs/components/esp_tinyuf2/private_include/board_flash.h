@@ -78,14 +78,19 @@ extern char *_ini_file;
 extern char *_ini_file_dummy;
 
 /*
- * [Voice assistant] PERSONA.TXT: free text (several lines) stored in the NVS key "Persona" instead of
- * CONFIG.INI, whose lines and size are too short for it. NVS strings are limited to 4000 bytes.
+ * [Voice assistant] Text files edited from the PC and stored in NVS strings instead of CONFIG.INI, whose lines
+ * and size are too short for them: PERSONA.TXT (NVS key "Persona") and MEMORY.TXT ("Memory"). Several lines;
+ * lines starting with '#' are not saved. NVS strings are limited to 4000 bytes.
  */
-#define CFG_UF2_PERSONA_FILE_SIZE    4096
-#define CFG_UF2_PERSONA_MAX_LEN      3999
-#define CFG_UF2_PERSONA_NVS_KEY      "Persona"
-extern char *_persona_file;
-extern char *_persona_file_dummy;
+#define CFG_UF2_TEXT_FILE_SIZE       4096
+#define CFG_UF2_TEXT_MAX_LEN         3999
+#define UF2_TEXT_PERSONA             0
+#define UF2_TEXT_MEMORY              1
+#define UF2_TEXT_COUNT               2
+
+/* File content served to the PC, and the buffer receiving what the PC writes (CFG_UF2_TEXT_FILE_SIZE bytes) */
+char *board_flash_text_content(int text);
+char *board_flash_text_dummy(int text);
 
 //--------------------------------------------------------------------+
 // Basic API
@@ -112,8 +117,8 @@ void board_flash_nvs_deinit(void);
 // Update DFU RAM to NVS
 void board_flash_nvs_update(const char *ini_str);
 
-/* [Voice assistant] PERSONA.TXT was written: save it (from _persona_file_dummy) to NVS */
-void board_flash_persona_update(void);
+/* [Voice assistant] a text file was written: save it (from its dummy buffer) to NVS */
+void board_flash_text_update(int text);
 
 // Get size of flash
 uint32_t board_flash_size(void);

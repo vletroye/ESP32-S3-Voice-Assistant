@@ -171,6 +171,7 @@ static FileContent_t info[] = {
     {.name = "INDEX   HTM", .content = indexFile, .size = sizeof(indexFile) - 1},
     {.name = "CONFIG  INI", .content = NULL, .size = 0  },
     {.name = "PERSONA TXT", .content = NULL, .size = 0  },
+    {.name = "MEMORY  TXT", .content = NULL, .size = 0  },
 #ifdef TINYUF2_FAVICON_HEADER
     {.name = "AUTORUN INF", .content = autorunFile, .size = sizeof(autorunFile) - 1},
     {.name = "FAVICON ICO", .content = favicon_data, .size = favicon_len            },
@@ -183,7 +184,8 @@ enum {
     NUM_FILES = sizeof(info) / sizeof(info[0]),
     FID_UF2 = NUM_FILES - 1,
     FID_INI = 2,
-    FID_PERSONA = 3,
+    FID_PERSONA = 3,    // FID_PERSONA + UF2_TEXT_xxx: the text files
+    FID_MEMORY = 4,
     NUM_DIRENTRIES = NUM_FILES + 1 // including volume label as first root directory entry
 };
 
@@ -296,10 +298,13 @@ void uf2_init(void)
         info[FID_INI].size = strlen(_ini_file);
         info[FID_INI].reserved = CFG_UF2_INI_FILE_SIZE;
     }
-    if (_persona_file) {
-        info[FID_PERSONA].content = _persona_file;
-        info[FID_PERSONA].size = strlen(_persona_file);
-        info[FID_PERSONA].reserved = CFG_UF2_PERSONA_FILE_SIZE;
+    for (int i = 0; i < UF2_TEXT_COUNT; i++) {
+        char *content = board_flash_text_content(i);
+        if (content) {
+            info[FID_PERSONA + i].content = content;
+            info[FID_PERSONA + i].size = strlen(content);
+            info[FID_PERSONA + i].reserved = CFG_UF2_TEXT_FILE_SIZE;
+        }
     }
     init_starting_clusters();
 }
@@ -501,13 +506,14 @@ int uf2_write_block(uint32_t block_no, uint8_t *data, WriteState *state)
 #endif
             uint32_t fileRelativeSector = sectionRelativeSector - (info[fid].cluster_start - 2) * BPB_SECTORS_PER_CLUSTER;
 
-            if (fid == FID_INI || fid == FID_PERSONA) {
+            if (fid == FID_INI || (fid >= FID_PERSONA && fid <= FID_MEMORY)) {
                 // [Voice assistant] each written sector is copied at its offset in the file buffer, which
                 // is then parsed whole (the original code overflowed _ini_file for the 2nd sector and later)
                 bool ini = (fid == FID_INI);
-                size_t capacity = ini ? CFG_UF2_INI_FILE_SIZE : CFG_UF2_PERSONA_FILE_SIZE;
-                char *dummy = ini ? _ini_file_dummy : _persona_file_dummy;
-                char *content = ini ? _ini_file : _persona_file;
+                int text = fid - FID_PERSONA;
+                size_t capacity = ini ? CFG_UF2_INI_FILE_SIZE : CFG_UF2_TEXT_FILE_SIZE;
+                char *dummy = ini ? _ini_file_dummy : board_flash_text_dummy(text);
+                char *content = ini ? _ini_file : board_flash_text_content(text);
                 size_t fileContentStartOffset = fileRelativeSector * BPB_SECTOR_SIZE;
 
                 if (dummy && fileContentStartOffset < capacity - 1) {
@@ -522,7 +528,7 @@ int uf2_write_block(uint32_t block_no, uint8_t *data, WriteState *state)
                             memcpy(_ini_file, _ini_file_dummy, capacity);
                             board_flash_nvs_update(_ini_file_dummy);
                         } else {
-                            board_flash_persona_update();
+                            board_flash_text_update(text);
                         }
                         info[fid].size = strlen(content);
                     }

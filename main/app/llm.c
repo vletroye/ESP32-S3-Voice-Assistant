@@ -170,6 +170,20 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
     return ret;
 }
 
+void llm_set_system_prompt(const char *system_prompt)
+{
+    if (!s_ready) {
+        return;
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    if (s_provider == LLM_PROVIDER_OPENAI) {
+        openai_chat_set_instructions(system_prompt);
+    } else {
+        claude_client_set_system(system_prompt);
+    }
+    xSemaphoreGive(s_lock);
+}
+
 llm_provider_t llm_provider(void)
 {
     return s_provider;

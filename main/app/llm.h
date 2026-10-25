@@ -68,6 +68,9 @@ const char *llm_provider_name(llm_provider_t provider);
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
                    const char *system_prompt);
 
+/** Replace the instructions (e.g. after a note was remembered); the conversation is kept */
+void llm_set_system_prompt(const char *system_prompt);
+
 /** Provider of the configured model */
 llm_provider_t llm_provider(void);
 

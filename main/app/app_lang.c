@@ -40,6 +40,15 @@ static const app_lang_t s_languages[] = {
         .stt_error = "Je n'ai pas réussi à comprendre la question. Pouvez-vous répéter ?",
         .goodbyes = s_goodbyes_fr,
         .weekdays = { "DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM" },
+        .memory_header = "Notes que l'utilisateur t'a demandé de retenir (« je » y désigne l'utilisateur, "
+                         "la date entre parenthèses est celle de la note) :",
+        .memory_saved = "C'est noté.",
+        .memory_full = "Ma mémoire est pleine. Supprimez des notes dans le fichier MEMORY.TXT.",
+        .memory_forgotten = "C'est oublié.",
+        .memory_not_found = "Je n'ai rien trouvé de tel dans ma mémoire.",
+        .memory_cleared = "J'ai tout oublié.",
+        .memory_empty = "Je n'ai rien mémorisé pour l'instant.",
+        .memory_list_intro = "Voici ce que vous m'avez demandé de retenir. ",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {
@@ -102,6 +111,15 @@ static const app_lang_t s_languages[] = {
         .stt_error = "I couldn't make out the question. Could you repeat it?",
         .goodbyes = s_goodbyes_en,
         .weekdays = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" },
+        .memory_header = "Notes the user asked you to remember (\"I\" means the user, the date in brackets is "
+                         "the date of the note):",
+        .memory_saved = "Noted.",
+        .memory_full = "My memory is full. Please remove notes in the MEMORY.TXT file.",
+        .memory_forgotten = "Forgotten.",
+        .memory_not_found = "I found nothing like that in my memory.",
+        .memory_cleared = "I have forgotten everything.",
+        .memory_empty = "I have not memorized anything yet.",
+        .memory_list_intro = "Here is what you asked me to remember. ",
         /* Spoken as the answer when the chat model fails */
         .llm_errors = {
             [LLM_PROVIDER_CLAUDE] = {

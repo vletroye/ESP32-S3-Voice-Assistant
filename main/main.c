@@ -25,6 +25,7 @@
 #include "settings.h"
 #include "app_lang.h"
 #include "llm.h"
+#include "app_memory.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -146,23 +147,8 @@ static bool transcription_is_goodbye(const char *text)
     if (goodbyes == NULL) {
         return false;
     }
-    // Lowercase letters and digits, every other character becomes one space
     char norm[48];
-    size_t n = 0;
-    for (const char *p = text; *p && n < sizeof(norm) - 1; p++) {
-        unsigned char c = (unsigned char)*p;
-        if (isalnum(c) || (c & 0x80)) {
-            // UTF-8 Latin-1 capitals (C3 80..C3 9E, e.g. "À") to lowercase, like ASCII
-            bool latin1_upper = n > 0 && (unsigned char)norm[n - 1] == 0xC3 && c >= 0x80 && c <= 0x9E && c != 0x97;
-            norm[n++] = latin1_upper ? c + 0x20 : tolower(c);
-        } else if (n > 0 && norm[n - 1] != ' ') {
-            norm[n++] = ' ';
-        }
-    }
-    while (n > 0 && norm[n - 1] == ' ') {
-        n--;
-    }
-    norm[n] = '\0';
+    app_text_normalize(text, norm, sizeof(norm));
     for (; *goodbyes; goodbyes++) {
         if (strcmp(norm, *goodbyes) == 0) {
             return true;
@@ -206,15 +192,33 @@ void assistant_reply_stop(void)
     tts_stream_cancel();
 }
 
-/* Show and speak a message as the reply (used for errors) */
+/* Show and speak a message as the reply (errors, memory commands), sentence by sentence */
 static void speak_message(const char *message)
 {
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_CONTENT, message);
     ui_ctrl_show_panel(UI_CTRL_PANEL_REPLY, 0);
     s_reply_t0 = esp_timer_get_time();
     tts_stream_begin(on_reply_audio);
-    tts_stream_say(message);
+    sentence_splitter_init(&s_splitter, on_sentence, NULL);
+    sentence_splitter_feed(&s_splitter, message);
+    sentence_splitter_finish(&s_splitter);
     tts_stream_end();
+}
+
+/*
+ * Instructions given to the model: the base ones, the Persona of PERSONA.TXT and the notes the user asked
+ * to remember (MEMORY.TXT). Allocated, to be freed.
+ */
+static char *build_system_prompt(void)
+{
+    const app_lang_t *lang = app_lang_get();
+    const char *notes = app_memory_notes();
+    const char *persona = sys_param->persona ? sys_param->persona : "";
+    char *prompt = NULL;
+    asprintf(&prompt, "%s%s%s%s%s%s%s", lang->system_prompt,
+             persona[0] ? "\n\n" : "", persona,
+             notes[0] ? "\n\n" : "", notes[0] ? lang->memory_header : "", notes[0] ? "\n" : "", notes);
+    return prompt;
 }
 
 /* Start of a listening session (wake word, touch or follow-up). Called from app_audio.c */
@@ -271,6 +275,22 @@ void assistant_listen_end(void)
 
     // UI listen success
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_QUESTION, text);
+
+    // "Souviens-toi que ...", "oublie que ...", "oublie tout", "dis-moi ce que tu as mémorisé": answered here
+    char *memory_reply = NULL;
+    memory_cmd_t memory_cmd = app_memory_handle(text, &memory_reply);
+    if (memory_cmd != MEMORY_CMD_NONE) {
+        if (memory_cmd == MEMORY_CMD_CHANGED) {
+            char *prompt = build_system_prompt();
+            if (prompt) {
+                llm_set_system_prompt(prompt);
+                free(prompt);
+            }
+        }
+        speak_message(memory_reply ? memory_reply : "");
+        free(memory_reply);
+        goto err;
+    }
 
     // The answer is streamed and shown as it arrives, prefixed with the model name (not spoken)
     reply_view_t view = {0};
@@ -383,11 +403,9 @@ void app_main()
     ESP_LOGI(TAG, "speech recognition start");
     app_sr_start(false);
 
-    // The Persona of CONFIG.INI (name, who made it, who it talks to...) completes the base instructions
-    char *system_prompt = NULL;
-    if (sys_param->persona) {
-        asprintf(&system_prompt, "%s\n\n%s", app_lang_get()->system_prompt, sys_param->persona);
-    }
+    // The Persona (name, who made it, who it talks to...) and the remembered notes complete the base instructions
+    app_memory_init(sys_param->memory);
+    char *system_prompt = build_system_prompt();
     llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,
              system_prompt ? system_prompt : app_lang_get()->system_prompt);
     free(system_prompt);

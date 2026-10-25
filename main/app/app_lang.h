@@ -26,6 +26,15 @@ typedef struct {
     const char *stt_error;          /* Spoken when the question could not be transcribed */
     /* Whole sentences that end the conversation (lowercase, without punctuation), NULL-terminated */
     const char *const *goodbyes;
+    /* Long-term memory ("souviens-toi que ...") */
+    const char *memory_header;      /* Introduces the notes in the instructions */
+    const char *memory_saved;
+    const char *memory_full;
+    const char *memory_forgotten;
+    const char *memory_not_found;
+    const char *memory_cleared;
+    const char *memory_empty;
+    const char *memory_list_intro;
     /* Day abbreviations of the clock under the sleeping robot, Sunday first */
     const char *weekdays[7];
 

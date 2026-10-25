@@ -194,6 +194,8 @@ void app_main(void)
         // Who the assistant is and who it talks to, added to its instructions: edited in PERSONA.TXT
         // (components/esp_tinyuf2, a copy of the tinyuf2 component extended for it), not in CONFIG.INI
         nvs_init_str_if_missing("Persona", "");
+        // Notes the assistant was asked to remember ("souviens-toi que ..."): edited in MEMORY.TXT
+        nvs_init_str_if_missing("Memory", "");
     }
     nvs_close(my_handle);
 

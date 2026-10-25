@@ -26,6 +26,10 @@ which has been largely rewritten.
   `/spiffs/history.json` after each answer), so you can ask later "what were we talking about?".
   Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
+- **Long-term memory**: "Souviens-toi que …" / "Retiens que …" (English: "Remember that …") stores a note,
+  "Oublie que …" removes the closest one, "Oublie tout" clears them, "Dis-moi tout ce que tu as mémorisé"
+  reads them out. These are answered on the device (no model call); the notes are given to the model with
+  every question and can be edited in `MEMORY.TXT`.
 - Saying "Bonjour ESP" during an answer, or **double-tapping the screen**, **interrupts** it and listens again.
 - **Clock** under the sleeping robot: `HH:MM` in glowing seven-segment digits and the date (`DIM 25/10/26`),
   synchronized over the Internet (NTP).
@@ -115,7 +119,7 @@ Two firmwares live side by side in flash:
 | Folder | Partition | Role |
 | --- | --- | --- |
 | `main/` (root project) | `factory` (6 MB) | The voice assistant |
-| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI` and `PERSONA.TXT` (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `PERSONA.TXT`, files that can grow when edited, and a bound-checked `CONFIG.INI`) |
+| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `PERSONA.TXT` and `MEMORY.TXT` (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `PERSONA.TXT` and `MEMORY.TXT`, files that can grow when edited, and a bound-checked `CONFIG.INI`) |
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
 | `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep) |
 
@@ -133,6 +137,7 @@ Main modules of the assistant (`main/app/`):
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
 | `tts_stream.c` | Speech synthesis (OpenAI Realtime), resampling and I2S playback |
 | `app_lang.c` | UI texts, model and voice instructions, error messages (fr / en) |
+| `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Clock of the sleep screen (SNTP time, seven-segment digits drawn by a single LVGL object) |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, live text, translations, Settings screen |
 | `main.c` | Listen → transcribe → answer → speak pipeline |
@@ -201,7 +206,8 @@ Tu t'appelles Jarvis. Tu es un assistant vocal créé par Valéry Letroye, sur b
 Valéry habite à ...
 ```
 
-Several lines are allowed, up to about 3,900 characters; lines starting with `#` are ignored (an empty file
+`MEMORY.TXT` holds the notes of the long-term memory, one per line (`- note (25/10/26)`): you can correct or
+delete them there. Both files follow the same rules: several lines are allowed, up to about 3,900 characters; lines starting with `#` are ignored (an empty file
 shows a short help in such lines). The text is stored in the NVS key `Persona` and read at start-up.
 
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first

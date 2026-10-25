@@ -47,6 +47,9 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
  */
 void claude_client_prewarm(void);
 
+/** Replace the system prompt (copied) */
+void claude_client_set_system(const char *system_prompt);
+
 /**
  * @brief Forget the conversation history.
  */

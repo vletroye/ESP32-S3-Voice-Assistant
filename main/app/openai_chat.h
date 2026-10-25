@@ -39,6 +39,9 @@ void openai_chat_prewarm(void);
 /** Forget the conversation history */
 void openai_chat_reset(void);
 
+/** Replace the instructions (copied) */
+void openai_chat_set_instructions(const char *instructions);
+
 /** Conversation history (JSON array of messages, owned by the client), to save it */
 const cJSON *openai_chat_history(void);
 

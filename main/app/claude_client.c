@@ -120,6 +120,11 @@ esp_err_t claude_client_init(const char *api_key, const char *model, const char 
     return ESP_OK;
 }
 
+void claude_client_set_system(const char *system_prompt)
+{
+    replace_str(&s_system, system_prompt);
+}
+
 void claude_client_reset(void)
 {
     cJSON_Delete(s_messages);

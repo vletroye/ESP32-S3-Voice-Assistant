@@ -83,6 +83,11 @@ esp_err_t openai_chat_init(const char *base_url, const char *api_key, const char
     return ESP_OK;
 }
 
+void openai_chat_set_instructions(const char *instructions)
+{
+    replace_str(&s_instructions, instructions);
+}
+
 void openai_chat_reset(void)
 {
     cJSON_Delete(s_messages);

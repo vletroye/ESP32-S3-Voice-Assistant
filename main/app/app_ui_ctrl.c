@@ -54,6 +54,15 @@ static void label_localize(lv_obj_t *label, const char *text, const lv_font_t *f
     lv_label_set_text(label, text);
 }
 
+/*
+ * Move a robot part up. The y set by the generated code is read from the style: lv_obj_get_y() gives the
+ * position on screen, which is not computed yet when the screens have just been created.
+ */
+static void robot_raise(lv_obj_t *obj)
+{
+    lv_obj_set_y(obj, lv_obj_get_style_y(obj, LV_PART_MAIN) - ROBOT_RAISE_PX);
+}
+
 /* Text under "Listening": show its last line, scrolling up smoothly when the text grows */
 static void listen_label_set_text(const char *text)
 {
@@ -246,12 +255,12 @@ static void ui_ctrl_localize(void)
     lv_obj_set_height(ui_LabelListenSpeak, LISTEN_TEXT_LINES * lv_font_get_line_height(&ui_font_Latin20));
     lv_obj_set_y(ui_LabelListenSpeak, LISTEN_TEXT_BOTTOM_Y);
     // The robot (asleep, listening, thinking) and its shadow move up to make room for the text lines
-    lv_obj_set_y(ui_ImageSleepBody, lv_obj_get_y(ui_ImageSleepBody) - ROBOT_RAISE_PX);
-    lv_obj_set_y(ui_ContainerBigZ, lv_obj_get_y(ui_ContainerBigZ) - ROBOT_RAISE_PX);
-    lv_obj_set_y(ui_ContainerSmallZ, lv_obj_get_y(ui_ContainerSmallZ) - ROBOT_RAISE_PX);
-    lv_obj_set_y(ui_ImageListenBackGlow, lv_obj_get_y(ui_ImageListenBackGlow) - ROBOT_RAISE_PX);
-    lv_obj_set_y(ui_ImageGetBackGlow, lv_obj_get_y(ui_ImageGetBackGlow) - ROBOT_RAISE_PX);
-    lv_obj_set_y(ui_ImageBodyShadow, lv_obj_get_y(ui_ImageBodyShadow) - ROBOT_RAISE_PX);
+    robot_raise(ui_ImageSleepBody);
+    robot_raise(ui_ContainerBigZ);
+    robot_raise(ui_ContainerSmallZ);
+    robot_raise(ui_ImageListenBackGlow);
+    robot_raise(ui_ImageGetBackGlow);
+    robot_raise(ui_ImageBodyShadow);
     lv_obj_set_scroll_dir(ui_LabelListenSpeak, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(ui_LabelListenSpeak, LV_SCROLLBAR_MODE_OFF);
     lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_CLICKABLE);

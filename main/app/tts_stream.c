@@ -3,51 +3,65 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Sentence-by-sentence speech synthesis with OpenAI /v1/audio/speech (raw PCM, chunked transfer).
+ * Sentence-by-sentence speech synthesis with the OpenAI Realtime API (gpt-realtime-2.1-mini).
  *
- *   tts_stream_say() -> sentence queue -> [tts task] HTTP stream, 24 kHz -> 16 kHz
- *                    -> audio stream buffer (PSRAM) -> [playback task] I2S (16 kHz stereo)
+ *   tts_stream_say() -> sentence queue -> [tts task] response.create (one out-of-band response per
+ *   sentence) -> response.output_audio.delta, 24 kHz -> 16 kHz -> audio stream buffer (PSRAM)
+ *   -> [playback task] I2S (16 kHz stereo)
  *
- * The I2S bus stays at 16 kHz, shared with the microphones, so that listening is never interrupted.
+ * The WebSocket stays open (reconnected after any error). The I2S bus stays at 16 kHz, shared with
+ * the microphones, so that listening is never interrupted.
  */
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/event_groups.h"
 #include "freertos/stream_buffer.h"
 #include "freertos/idf_additions.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
-#include "esp_http_client.h"
 #include "esp_crt_bundle.h"
+#include "esp_websocket_client.h"
+#include "mbedtls/base64.h"
 #include "cJSON.h"
 #include "bsp_board.h"
+#include "app_wifi.h"
 #include "tts_stream.h"
 
-#define TTS_SAMPLE_RATE_IN      24000   /* OpenAI "pcm": 24 kHz, 16-bit signed, mono, little-endian */
+#define TTS_SAMPLE_RATE_IN      24000   /* audio/pcm: 24 kHz, 16-bit signed, mono, little-endian */
 #define TTS_AUDIO_BUFFER_BYTES  (256 * 1024)    /* 8 s of 16 kHz mono audio, in PSRAM */
 #define TTS_SENTENCE_QUEUE_LEN  16
-#define TTS_HTTP_TIMEOUT_MS     15000
-#define TTS_READ_CHUNK          1536    /* multiple of 6 bytes: 3 input samples -> 2 output samples */
+#define TTS_RESPONSE_TIMEOUT_MS 30000
+#define TTS_CONNECT_WAIT_MS     5000
+#define TTS_RECONNECT_MS        2000
+#define TTS_RECREATE_AFTER_MS   30000
+#define TTS_WS_TASK_STACK       6144    /* internal RAM, runs the TLS handshake */
+#define TTS_WS_BUFFER_SIZE      8192    /* PSRAM */
 #define PLAYBACK_FRAMES         256
 
 #define RESAMPLER_TAPS          15
+
+/* Event group bits */
+#define EV_CONNECTED            BIT0
+#define EV_RESPONSE_DONE        BIT1
 
 static const char *TAG = "tts";
 
 typedef struct {
     char *text;             /* NULL marks the end of the reply */
     uint32_t generation;
-    bool prewarm;           /* open the connection only */
 } sentence_item_t;
 
 static QueueHandle_t s_sentences = NULL;
 static StreamBufferHandle_t s_audio = NULL;
+static EventGroupHandle_t s_events = NULL;
 
 /* Incremented for each new reply and on cancel: work tagged with an older value is dropped */
 static volatile uint32_t s_generation = 0;
@@ -57,13 +71,11 @@ static volatile uint32_t s_synth_done_generation = 0;
 static volatile bool s_flush = false;
 static tts_event_cb_t s_event_cb = NULL;
 
-static char *s_url = NULL;
-static char *s_prewarm_url = NULL;
-static char *s_auth = NULL;
+static char *s_uri = NULL;
+static char *s_auth_header = NULL;
 static char *s_model = NULL;
 static char *s_voice = NULL;
 static char *s_instructions = NULL;
-static esp_http_client_handle_t s_client = NULL;
 
 /* ---------- 24 kHz -> 16 kHz resampler ---------- */
 
@@ -146,7 +158,25 @@ static size_t resample(resampler_t *r, const uint8_t *bytes, size_t len, int16_t
     return n_out;
 }
 
-/* ---------- synthesis ---------- */
+/* ---------- synthesis (Realtime WebSocket) ---------- */
+
+/* Audio of the sentence being spoken, filled by the WebSocket task */
+static resampler_t s_resampler;
+static volatile uint32_t s_response_generation = 0;    /* generation of the response in progress */
+static volatile bool s_response_active = false;
+static int64_t s_request_us = 0;
+static int64_t s_first_audio_us = 0;
+static size_t s_audio_bytes = 0;
+static char s_response_status[24];
+
+/* Received frame being assembled and decoding buffers (PSRAM) */
+static char *s_rx = NULL;
+static size_t s_rx_len = 0;
+static size_t s_rx_cap = 0;
+static uint8_t *s_pcm = NULL;
+static size_t s_pcm_cap = 0;
+static int16_t *s_resampled = NULL;
+static size_t s_resampled_cap = 0;
 
 static void replace_str(char **dst, const char *src)
 {
@@ -154,68 +184,38 @@ static void replace_str(char **dst, const char *src)
     *dst = (src && src[0]) ? strdup(src) : NULL;
 }
 
+static bool grow(void **buf, size_t *cap, size_t needed)
+{
+    if (needed <= *cap) {
+        return true;
+    }
+    void *p = heap_caps_realloc(*buf, needed, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!p) {
+        return false;
+    }
+    *buf = p;
+    *cap = needed;
+    return true;
+}
+
 void tts_stream_configure(const char *base_url, const char *api_key, const char *model, const char *voice,
                           const char *instructions)
 {
-    char *url = NULL;
-    char *prewarm_url = NULL;
+    /* "https://api.openai.com/v1/" -> "wss://api.openai.com/v1/realtime?model=..." */
+    const char *host_path = strstr(base_url, "://");
+    host_path = host_path ? host_path + 3 : base_url;
+    char *uri = NULL;
     char *auth = NULL;
-    asprintf(&url, "%saudio/speech", base_url);
-    asprintf(&prewarm_url, "%smodels/%s", base_url, model);
-    asprintf(&auth, "Bearer %s", api_key);
-    free(s_url);
-    free(s_prewarm_url);
-    free(s_auth);
-    s_url = url;
-    s_prewarm_url = prewarm_url;
-    s_auth = auth;
+    asprintf(&uri, "wss://%srealtime?model=%s", host_path, model);
+    asprintf(&auth, "Authorization: Bearer %s\r\n", api_key);
+    free(s_uri);
+    free(s_auth_header);
+    s_uri = uri;
+    s_auth_header = auth;
     replace_str(&s_model, model);
     replace_str(&s_voice, voice);
     replace_str(&s_instructions, instructions);
     ESP_LOGI(TAG, "model: %s, voice: %s", s_model ? s_model : "-", s_voice ? s_voice : "-");
-}
-
-static void drop_client(void)
-{
-    if (s_client) {
-        esp_http_client_close(s_client);
-        esp_http_client_cleanup(s_client);
-        s_client = NULL;
-    }
-}
-
-static esp_http_client_handle_t get_client(void)
-{
-    if (!s_client) {
-        esp_http_client_config_t config = {
-            .url = s_url,
-            .method = HTTP_METHOD_POST,
-            .timeout_ms = TTS_HTTP_TIMEOUT_MS,
-            .crt_bundle_attach = esp_crt_bundle_attach,
-            .keep_alive_enable = true,
-        };
-        s_client = esp_http_client_init(&config);
-        if (s_client) {
-            esp_http_client_set_header(s_client, "Content-Type", "application/json");
-            esp_http_client_set_header(s_client, "Authorization", s_auth);
-        }
-    }
-    return s_client;
-}
-
-static char *build_request(const char *text)
-{
-    cJSON *req = cJSON_CreateObject();
-    cJSON_AddStringToObject(req, "model", s_model);
-    cJSON_AddStringToObject(req, "voice", s_voice);
-    cJSON_AddStringToObject(req, "input", text);
-    cJSON_AddStringToObject(req, "response_format", "pcm");
-    if (s_instructions) {
-        cJSON_AddStringToObject(req, "instructions", s_instructions);
-    }
-    char *body = cJSON_PrintUnformatted(req);
-    cJSON_Delete(req);
-    return body;
 }
 
 /* Send audio to the playback buffer, giving up if the reply was cancelled meanwhile */
@@ -234,119 +234,289 @@ static bool push_audio(const int16_t *samples, size_t count, uint32_t generation
     return true;
 }
 
-static void synthesize(const char *text, uint32_t generation)
+static void on_audio_delta(const char *b64)
 {
-    if (!s_url || !s_model || !s_voice) {
-        ESP_LOGE(TAG, "Not configured");
+    uint32_t generation = s_response_generation;
+    if (!s_response_active || generation != s_generation) {
         return;
     }
-    char *body = build_request(text);
-    if (!body) {
+    size_t b64_len = strlen(b64);
+    size_t pcm_len = 0;
+    if (!grow((void **)&s_pcm, &s_pcm_cap, b64_len / 4 * 3 + 4) ||
+            mbedtls_base64_decode(s_pcm, s_pcm_cap, &pcm_len, (const unsigned char *)b64, b64_len) != 0) {
+        ESP_LOGE(TAG, "Bad audio delta");
         return;
     }
-    int64_t t0 = esp_timer_get_time();
-    int64_t t_first = 0;
-    size_t len = strlen(body);
-    int status = 0;
-    esp_http_client_handle_t client = NULL;
+    if (!s_first_audio_us) {
+        s_first_audio_us = esp_timer_get_time();
+    }
+    s_audio_bytes += pcm_len;
+    if (!grow((void **)&s_resampled, &s_resampled_cap, (pcm_len / 3 + 2) * sizeof(int16_t))) {
+        return;
+    }
+    size_t count = resample(&s_resampler, s_pcm, pcm_len, s_resampled);
+    push_audio(s_resampled, count, generation);
+}
 
-    /* A kept-alive connection may have been closed by the server: retry once on a new one */
-    for (int attempt = 0; attempt < 2 && !client; attempt++) {
-        client = get_client();
-        if (client && esp_http_client_open(client, len) == ESP_OK &&
-                esp_http_client_write(client, body, len) == (int)len &&
-                esp_http_client_fetch_headers(client) >= 0) {
-            status = esp_http_client_get_status_code(client);
-        } else {
-            drop_client();
-            client = NULL;
+static void handle_message(const char *text)
+{
+    /* Audio deltas are frequent and large: find the field without parsing the whole JSON */
+    if (strstr(text, "\"response.output_audio.delta\"")) {
+        const char *d = strstr(text, "\"delta\"");
+        d = d ? strchr(d + 7, '"') : NULL;
+        if (d) {
+            char *end = strchr(d + 1, '"');
+            if (end) {
+                *end = '\0';
+                on_audio_delta(d + 1);
+            }
         }
+        return;
     }
-    free(body);
+    cJSON *json = cJSON_Parse(text);
+    if (!json) {
+        return;
+    }
+    const cJSON *type = cJSON_GetObjectItem(json, "type");
+    const char *t = cJSON_IsString(type) ? type->valuestring : "";
+    if (strcmp(t, "response.done") == 0) {
+        const cJSON *status = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "status");
+        strlcpy(s_response_status, cJSON_IsString(status) ? status->valuestring : "?", sizeof(s_response_status));
+        s_response_active = false;
+        xEventGroupSetBits(s_events, EV_RESPONSE_DONE);
+    } else if (strcmp(t, "error") == 0) {
+        const cJSON *error = cJSON_GetObjectItem(json, "error");
+        const cJSON *code = cJSON_GetObjectItem(error, "code");
+        const cJSON *message = cJSON_GetObjectItem(error, "message");
+        ESP_LOGE(TAG, "error: %s: %s", cJSON_IsString(code) ? code->valuestring : "-",
+                 cJSON_IsString(message) ? message->valuestring : "-");
+        if (s_response_active) {
+            strlcpy(s_response_status, "error", sizeof(s_response_status));
+            s_response_active = false;
+            xEventGroupSetBits(s_events, EV_RESPONSE_DONE);
+        }
+    } else if (strcmp(t, "session.created") == 0 || strcmp(t, "session.updated") == 0) {
+        ESP_LOGI(TAG, "%s", t);
+    }
+    cJSON_Delete(json);
+}
+
+static void ws_event_handler(void *arg, esp_event_base_t base, int32_t event_id, void *event_data)
+{
+    esp_websocket_event_data_t *data = (esp_websocket_event_data_t *)event_data;
+    switch (event_id) {
+    case WEBSOCKET_EVENT_CONNECTED:
+        s_rx_len = 0;
+        xEventGroupSetBits(s_events, EV_CONNECTED);
+        break;
+    case WEBSOCKET_EVENT_DATA:
+        /* Text frames; a large message arrives in several events (payload_offset / payload_len) */
+        if (data->op_code != 0x01 && data->op_code != 0x00) {
+            break;
+        }
+        if (data->payload_offset == 0) {
+            s_rx_len = 0;
+        }
+        if (grow((void **)&s_rx, &s_rx_cap, s_rx_len + data->data_len + 1)) {
+            memcpy(s_rx + s_rx_len, data->data_ptr, data->data_len);
+            s_rx_len += data->data_len;
+            s_rx[s_rx_len] = '\0';
+        }
+        if (data->payload_offset + data->data_len >= data->payload_len && s_rx_len) {
+            handle_message(s_rx);
+            s_rx_len = 0;
+        }
+        break;
+    case WEBSOCKET_EVENT_ERROR:
+        ESP_LOGW(TAG, "WebSocket error (handshake status %d)", data->error_handle.esp_ws_handshake_status_code);
+        xEventGroupClearBits(s_events, EV_CONNECTED);
+        break;
+    case WEBSOCKET_EVENT_DISCONNECTED:
+    case WEBSOCKET_EVENT_CLOSED:
+        xEventGroupClearBits(s_events, EV_CONNECTED);
+        if (s_response_active) {
+            strlcpy(s_response_status, "disconnected", sizeof(s_response_status));
+            s_response_active = false;
+            xEventGroupSetBits(s_events, EV_RESPONSE_DONE);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static esp_websocket_client_handle_t create_client(void)
+{
+    esp_websocket_client_config_t config = {
+        .uri = s_uri,
+        .headers = s_auth_header,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .task_stack = TTS_WS_TASK_STACK,
+        .task_prio = 5,
+        .buffer_size = TTS_WS_BUFFER_SIZE,
+        .disable_auto_reconnect = false,
+        .enable_close_reconnect = true,
+        .reconnect_timeout_ms = TTS_RECONNECT_MS,
+        .network_timeout_ms = 10000,
+    };
+    esp_websocket_client_handle_t client = esp_websocket_client_init(&config);
     if (!client) {
-        ESP_LOGE(TAG, "Request failed");
+        ESP_LOGE(TAG, "Failed to create WebSocket client");
+        return NULL;
+    }
+    esp_websocket_register_events(client, WEBSOCKET_EVENT_ANY, ws_event_handler, NULL);
+    if (esp_websocket_client_start(client) != ESP_OK) {
+        esp_websocket_client_destroy(client);
+        return NULL;
+    }
+    return client;
+}
+
+static bool send_json(esp_websocket_client_handle_t client, const char *text)
+{
+    int len = strlen(text);
+    return esp_websocket_client_send_text(client, text, len, pdMS_TO_TICKS(5000)) == len;
+}
+
+static bool send_cjson(esp_websocket_client_handle_t client, cJSON *msg)
+{
+    char *text = cJSON_PrintUnformatted(msg);
+    cJSON_Delete(msg);
+    bool ok = text && send_json(client, text);
+    free(text);
+    return ok;
+}
+
+/* Audio only, verbatim reading instructions, voice and PCM 24 kHz output; no input audio */
+static bool send_session_update(esp_websocket_client_handle_t client)
+{
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "type", "session.update");
+    cJSON *session = cJSON_AddObjectToObject(msg, "session");
+    cJSON_AddStringToObject(session, "type", "realtime");
+    cJSON_AddStringToObject(session, "model", s_model);
+    cJSON_AddItemToObject(session, "output_modalities", cJSON_CreateStringArray((const char *[]) {"audio"}, 1));
+    if (s_instructions) {
+        cJSON_AddStringToObject(session, "instructions", s_instructions);
+    }
+    cJSON *audio = cJSON_AddObjectToObject(session, "audio");
+    cJSON_AddNullToObject(cJSON_AddObjectToObject(audio, "input"), "turn_detection");
+    cJSON *output = cJSON_AddObjectToObject(audio, "output");
+    cJSON *format = cJSON_AddObjectToObject(output, "format");
+    cJSON_AddStringToObject(format, "type", "audio/pcm");
+    cJSON_AddNumberToObject(format, "rate", TTS_SAMPLE_RATE_IN);
+    cJSON_AddStringToObject(output, "voice", s_voice);
+    return send_cjson(client, msg);
+}
+
+/*
+ * One out-of-band response per sentence (conversation "none": nothing accumulates on the server).
+ * The text to read is a separate input message, not part of the instructions.
+ */
+static bool send_response_create(esp_websocket_client_handle_t client, const char *text)
+{
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "type", "response.create");
+    cJSON *response = cJSON_AddObjectToObject(msg, "response");
+    cJSON_AddStringToObject(response, "conversation", "none");
+    cJSON_AddItemToObject(response, "output_modalities", cJSON_CreateStringArray((const char *[]) {"audio"}, 1));
+    if (s_instructions) {
+        cJSON_AddStringToObject(response, "instructions", s_instructions);
+    }
+    cJSON *input = cJSON_AddArrayToObject(response, "input");
+    cJSON *item = cJSON_CreateObject();
+    cJSON_AddStringToObject(item, "type", "message");
+    cJSON_AddStringToObject(item, "role", "user");
+    cJSON *content = cJSON_AddArrayToObject(item, "content");
+    cJSON *part = cJSON_CreateObject();
+    cJSON_AddStringToObject(part, "type", "input_text");
+    cJSON_AddStringToObject(part, "text", text);
+    cJSON_AddItemToArray(content, part);
+    cJSON_AddItemToArray(input, item);
+    return send_cjson(client, msg);
+}
+
+static void synthesize(esp_websocket_client_handle_t client, const char *text, uint32_t generation)
+{
+    if (!(xEventGroupWaitBits(s_events, EV_CONNECTED, pdFALSE, pdFALSE, pdMS_TO_TICKS(TTS_CONNECT_WAIT_MS)) &
+            EV_CONNECTED)) {
+        ESP_LOGE(TAG, "Not connected: sentence dropped");
+        return;
+    }
+    s_resampler = (resampler_t) {0};
+    s_first_audio_us = 0;
+    s_audio_bytes = 0;
+    s_response_generation = generation;
+    s_response_active = true;
+    xEventGroupClearBits(s_events, EV_RESPONSE_DONE);
+    s_request_us = esp_timer_get_time();
+    if (!send_response_create(client, text)) {
+        s_response_active = false;
+        ESP_LOGE(TAG, "Request not sent");
         return;
     }
 
-    static uint8_t chunk[TTS_READ_CHUNK];
-    static int16_t samples[TTS_READ_CHUNK / 3 + 2];
-    int n;
-    if (status != 200) {
-        n = esp_http_client_read(client, (char *)chunk, sizeof(chunk) - 1);
-        chunk[n > 0 ? n : 0] = '\0';
-        ESP_LOGE(TAG, "HTTP %d: %.300s", status, (char *)chunk);
-        drop_client();
-        return;
-    }
-
-    resampler_t resampler = {0};
-    size_t total = 0;
-    bool cancelled = false;
-    while ((n = esp_http_client_read(client, (char *)chunk, sizeof(chunk))) > 0) {
-        if (!t_first) {
-            t_first = esp_timer_get_time();
+    /* Wait for the end of the response; cancel it if the reply is cancelled */
+    bool cancel_sent = false;
+    while (!(xEventGroupWaitBits(s_events, EV_RESPONSE_DONE, pdFALSE, pdFALSE, pdMS_TO_TICKS(50)) & EV_RESPONSE_DONE)) {
+        if (generation != s_generation && !cancel_sent) {
+            send_json(client, "{\"type\":\"response.cancel\"}");
+            cancel_sent = true;
         }
-        total += n;
-        size_t count = resample(&resampler, chunk, n, samples);
-        if (!push_audio(samples, count, generation)) {
-            cancelled = true;
+        if (esp_timer_get_time() - s_request_us > TTS_RESPONSE_TIMEOUT_MS * 1000LL) {
+            ESP_LOGE(TAG, "Response timeout");
+            s_response_active = false;
             break;
         }
     }
-    if (cancelled || n < 0 || !esp_http_client_is_complete_data_received(client)) {
-        drop_client();
-    }
-    ESP_LOGI(TAG, "\"%.40s%s\": first audio %lld ms, total %lld ms, %u bytes%s", text, strlen(text) > 40 ? "..." : "",
-             t_first ? (t_first - t0) / 1000 : -1LL, (esp_timer_get_time() - t0) / 1000, (unsigned)total,
-             cancelled ? " (cancelled)" : "");
-}
-
-/* Open the TLS connection in advance with a free, tiny request (the model description) */
-static void prewarm_connection(void)
-{
-    if (!s_url || !s_prewarm_url) {
-        return;
-    }
-    int64_t t0 = esp_timer_get_time();
-    esp_http_client_handle_t client = get_client();
-    if (!client) {
-        return;
-    }
-    esp_http_client_set_url(client, s_prewarm_url);
-    esp_http_client_set_method(client, HTTP_METHOD_GET);
-    int status = -1;
-    if (esp_http_client_open(client, 0) == ESP_OK && esp_http_client_fetch_headers(client) >= 0) {
-        status = esp_http_client_get_status_code(client);
-        /*
-         * Read the body to its end: esp_http_client_flush_response() can leave a small body that came
-         * with the headers in the connection, where it would be read as the start of the next response
-         */
-        char discard[256];
-        while (esp_http_client_read(client, discard, sizeof(discard)) > 0) {
-        }
-    }
-    if (status == 200 && esp_http_client_is_complete_data_received(client)) {
-        esp_http_client_set_url(client, s_url);
-        esp_http_client_set_method(client, HTTP_METHOD_POST);
-    } else {
-        drop_client();
-    }
-    ESP_LOGI(TAG, "prewarm: HTTP %d in %lld ms", status, (esp_timer_get_time() - t0) / 1000);
+    ESP_LOGI(TAG, "\"%.40s%s\": first audio %lld ms, total %lld ms, %u bytes, %s", text, strlen(text) > 40 ? "..." : "",
+             s_first_audio_us ? (s_first_audio_us - s_request_us) / 1000 : -1LL,
+             (esp_timer_get_time() - s_request_us) / 1000, (unsigned)s_audio_bytes, s_response_status);
 }
 
 static void tts_task(void *arg)
 {
-    sentence_item_t item;
+    /* Nothing to do before the network is up */
+    while (WIFI_STATUS_CONNECTED_OK != wifi_connected_already()) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    esp_websocket_client_handle_t client = create_client();
+    bool session_ready = false;
+    int64_t down_since = esp_timer_get_time();
+
     for (;;) {
-        if (xQueueReceive(s_sentences, &item, portMAX_DELAY) != pdTRUE) {
+        /* Connection supervision: (re)send the session configuration after each connection */
+        bool connected = client && esp_websocket_client_is_connected(client) &&
+                         (xEventGroupGetBits(s_events) & EV_CONNECTED);
+        if (connected && !session_ready) {
+            if (send_session_update(client)) {
+                session_ready = true;
+                ESP_LOGI(TAG, "connected in %lld ms", (esp_timer_get_time() - down_since) / 1000);
+            }
+        } else if (!connected && session_ready) {
+            session_ready = false;
+            down_since = esp_timer_get_time();
+            ESP_LOGW(TAG, "connection lost, reconnecting");
+        }
+        if (!connected && esp_timer_get_time() - down_since > TTS_RECREATE_AFTER_MS * 1000LL) {
+            ESP_LOGW(TAG, "still disconnected, recreating the WebSocket client");
+            if (client) {
+                esp_websocket_client_stop(client);
+                esp_websocket_client_destroy(client);
+                xEventGroupClearBits(s_events, EV_CONNECTED);
+            }
+            client = (WIFI_STATUS_CONNECTED_OK == wifi_connected_already()) ? create_client() : NULL;
+            down_since = esp_timer_get_time();
+        }
+
+        sentence_item_t item;
+        if (xQueueReceive(s_sentences, &item, pdMS_TO_TICKS(200)) != pdTRUE) {
             continue;
         }
-        if (item.prewarm) {
-            prewarm_connection();
-        } else if (item.generation == s_generation) {
-            if (item.text) {
-                synthesize(item.text, item.generation);
-            } else {
+        if (item.generation == s_generation) {
+            if (item.text && client) {
+                synthesize(client, item.text, item.generation);
+            } else if (!item.text) {
                 s_synth_done_generation = item.generation;
             }
         }
@@ -441,7 +611,8 @@ esp_err_t tts_stream_init(void)
     resampler_design();
     s_sentences = xQueueCreate(TTS_SENTENCE_QUEUE_LEN, sizeof(sentence_item_t));
     s_audio = xStreamBufferCreateWithCaps(TTS_AUDIO_BUFFER_BYTES, sizeof(int16_t), MALLOC_CAP_SPIRAM);
-    ESP_RETURN_ON_FALSE(s_sentences && s_audio, ESP_ERR_NO_MEM, TAG, "Failed to create queues");
+    s_events = xEventGroupCreate();
+    ESP_RETURN_ON_FALSE(s_sentences && s_audio && s_events, ESP_ERR_NO_MEM, TAG, "Failed to create queues");
 
     /* Stacks in PSRAM: internal RAM is too fragmented for 8 KB blocks once Wi-Fi and the AFE run */
     BaseType_t ok = xTaskCreatePinnedToCoreWithCaps(tts_task, "tts", 8 * 1024, NULL, 4, NULL, 0, MALLOC_CAP_SPIRAM);
@@ -489,14 +660,6 @@ void tts_stream_end(void)
         .generation = s_generation,
     };
     xQueueSend(s_sentences, &item, portMAX_DELAY);
-}
-
-void tts_stream_prewarm(void)
-{
-    sentence_item_t item = {
-        .prewarm = true,
-    };
-    xQueueSend(s_sentences, &item, 0);
 }
 
 void tts_stream_cancel(void)

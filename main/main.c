@@ -209,12 +209,11 @@ void assistant_listen_start(void)
     stt_stream_start(on_partial_transcript);
 }
 
-/* Open the Claude and speech connections while the user speaks. Called from app_audio.c (SR handler task) */
+/* Open the Claude connection while the user speaks (speech uses a permanent WebSocket). Called from app_audio.c */
 void assistant_prewarm(void)
 {
     /* The transcription connection is the most urgent: let its TLS handshake finish first */
     stt_stream_wait_connected(3000);
-    tts_stream_prewarm();
     if (s_claude_ready) {
         claude_client_prewarm();
     }

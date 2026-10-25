@@ -27,13 +27,13 @@ typedef void (*tts_event_cb_t)(tts_event_t event);
 esp_err_t tts_stream_init(void);
 
 /**
- * @brief Set the OpenAI speech parameters. The strings are copied.
+ * @brief Set the OpenAI Realtime speech parameters. The strings are copied.
  *
- * @param base_url     OpenAI base URL ending with '/', e.g. "https://api.openai.com/v1/"
+ * @param base_url     OpenAI base URL ending with '/', e.g. "https://api.openai.com/v1/" (wss:// is derived)
  * @param api_key      OpenAI key
- * @param model        e.g. "gpt-4o-mini-tts"
+ * @param model        e.g. "gpt-realtime-2.1-mini"
  * @param voice        e.g. "marin"
- * @param instructions Speaking style (language, tone), may be NULL
+ * @param instructions Reading instructions (read verbatim, language, tone), may be NULL
  */
 void tts_stream_configure(const char *base_url, const char *api_key, const char *model, const char *voice,
                           const char *instructions);
@@ -52,11 +52,6 @@ void tts_stream_say(const char *sentence);
  * @brief No more sentences for the current reply: TTS_EVENT_DONE follows once everything is played.
  */
 void tts_stream_end(void);
-
-/**
- * @brief Open the HTTPS connection in advance (asynchronous), while the user speaks.
- */
-void tts_stream_prewarm(void);
 
 /**
  * @brief Stop the current reply now (queued sentences and buffered audio are dropped).

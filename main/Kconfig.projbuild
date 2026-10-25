@@ -37,9 +37,9 @@ menu "Example Configuration"
 
     config ASSISTANT_TTS_MODEL
         string "Speech synthesis model"
-        default "gpt-4o-mini-tts"
+        default "gpt-realtime-2.1-mini"
         help
-            OpenAI /v1/audio/speech model. gpt-4o-mini-tts is announced to shut down on 2027-01-06.
+            OpenAI Realtime model reading the answer aloud (WebSocket, one response per sentence).
 
     config ASSISTANT_TTS_VOICE
         string "Speech synthesis voice"

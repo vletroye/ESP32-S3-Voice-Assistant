@@ -47,8 +47,12 @@ static bool reply_content_get = false;
 static uint16_t content_height = 0;
 /* Start of the spoken answer, to follow the reading position */
 static int64_t reply_audio_start_us = 0;
+/* Text the scrolling animation was computed for (restarted when it grows) */
+static size_t s_scroll_chars = 0;
+static lv_coord_t s_scroll_height = 0;
 
 static void reply_content_scroll_timer_handler();
+static void reply_scroll_stop(void);
 static void wifi_check_timer_handler(lv_timer_t *timer);
 
 static void label_localize(lv_obj_t *label, const char *text, const lv_font_t *font)
@@ -349,6 +353,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         reply_audio_start = false;
         reply_audio_end = false;
         lv_timer_pause(scroll_timer_handle);
+        reply_scroll_stop();
         break;
     case UI_CTRL_PANEL_GET:
         show_panel = ui_PanelGet;
@@ -358,6 +363,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_HIDDEN);
         listen_label_set_text(app_lang_get()->thinking);
         // The next answer starts at the top
+        reply_scroll_stop();
         lv_obj_scroll_to_y(ui_ContainerReplyContent, 0, LV_ANIM_OFF);
         break;
     case UI_CTRL_PANEL_REPLY:
@@ -542,39 +548,75 @@ void ui_ctrl_reply_set_audio_end_flag(bool result)
     reply_audio_end = result;
 }
 
+static void reply_scroll_anim_cb(void *var, int32_t v)
+{
+    lv_obj_scroll_to_y((lv_obj_t *)var, v, LV_ANIM_OFF);
+}
+
+static void reply_scroll_stop(void)
+{
+    lv_anim_del(ui_ContainerReplyContent, reply_scroll_anim_cb);
+    s_scroll_chars = 0;
+}
+
+/*
+ * Follow the speech: the reading position is estimated from the time since the first audio and the reading
+ * speed (characters per second, "Scroll_speed" in CONFIG.INI). The text scrolls with one linear animation
+ * (smooth, at the display refresh rate), restarted from where it is when the text grows.
+ */
+static void reply_scroll_follow(lv_coord_t visible, lv_coord_t max_offset)
+{
+    size_t chars = 0;
+    for (const char *p = lv_label_get_text(ui_LabelReplyContent); *p; p++) {
+        chars += ((*p & 0xC0) != 0x80);     // UTF-8: count characters, not bytes
+    }
+    if (chars == 0 || max_offset <= 0 || (chars == s_scroll_chars && content_height == s_scroll_height)) {
+        return;
+    }
+    s_scroll_chars = chars;
+    s_scroll_height = content_height;
+
+    // Speed in pixels per second, and the time (since the first audio) when the text reaches each offset
+    float px_per_s = (float)content_height * settings_get_parameter()->scroll_cps / chars;
+    float elapsed_s = (esp_timer_get_time() - reply_audio_start_us) / 1000000.0f;
+    lv_coord_t offset = lv_obj_get_scroll_y(ui_ContainerReplyContent);
+    lv_coord_t lead = visible / REPLY_SCROLL_LEAD_DIV;
+    float start_s = (offset + lead) / px_per_s;
+    float end_s = (max_offset + lead) / px_per_s;
+    if (offset >= max_offset || end_s <= elapsed_s) {
+        lv_anim_del(ui_ContainerReplyContent, reply_scroll_anim_cb);
+        lv_obj_scroll_to_y(ui_ContainerReplyContent, max_offset, LV_ANIM_OFF);
+        return;
+    }
+    float delay_s = start_s > elapsed_s ? start_s - elapsed_s : 0;
+    uint32_t duration_ms = (uint32_t)((end_s - elapsed_s - delay_s) * 1000);
+
+    lv_anim_del(ui_ContainerReplyContent, reply_scroll_anim_cb);
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, ui_ContainerReplyContent);
+    lv_anim_set_exec_cb(&a, reply_scroll_anim_cb);
+    lv_anim_set_values(&a, offset, max_offset);
+    lv_anim_set_time(&a, duration_ms > 0 ? duration_ms : 1);
+    lv_anim_set_delay(&a, (uint32_t)(delay_s * 1000));
+    lv_anim_set_path_cb(&a, lv_anim_path_linear);
+    lv_anim_start(&a);
+}
+
 static void reply_content_scroll_timer_handler()
 {
     if (reply_content_get && reply_audio_start) {
         lv_coord_t visible = lv_obj_get_height(ui_ContainerReplyContent);
         lv_coord_t max_offset = content_height > visible ? content_height - visible : 0;
-        lv_coord_t offset = lv_obj_get_scroll_y(ui_ContainerReplyContent);
+        reply_scroll_follow(visible, max_offset);
 
-        /*
-         * Follow the speech: the part of the text already read is estimated from the time since the first
-         * audio and the reading speed (characters per second, "Scroll_speed" in CONFIG.INI)
-         */
-        size_t chars = 0;
-        for (const char *p = lv_label_get_text(ui_LabelReplyContent); *p; p++) {
-            chars += ((*p & 0xC0) != 0x80);     // UTF-8: count characters, not bytes
-        }
-        int64_t read_chars = (esp_timer_get_time() - reply_audio_start_us) *
-                             settings_get_parameter()->scroll_cps / 1000000;
-        if (chars > 0 && max_offset > 0) {
-            int64_t read = read_chars < (int64_t)chars ? read_chars : (int64_t)chars;
-            lv_coord_t reading_y = (lv_coord_t)(content_height * read / (int64_t)chars);
-            lv_coord_t target = reading_y - visible / REPLY_SCROLL_LEAD_DIV;
-            target = target < 0 ? 0 : (target > max_offset ? max_offset : target);
-            if (target > offset) {
-                lv_obj_scroll_to_y(ui_ContainerReplyContent, target, LV_ANIM_OFF);
-                offset = target;
-            }
-        }
-        if (offset >= max_offset && reply_audio_end) {
+        if (lv_obj_get_scroll_y(ui_ContainerReplyContent) >= max_offset && reply_audio_end) {
             ESP_LOGI(TAG, "reply scroll timer stop");
             reply_content_get = false;
             reply_audio_start = false;
             reply_audio_end = false;
             lv_timer_pause(scroll_timer_handle);
+            reply_scroll_stop();
             ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 1000);
         }
     }

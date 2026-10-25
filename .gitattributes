@@ -1,0 +1,7 @@
+# Keep LF line endings in the working copy (ESP-IDF sources and generated files use LF)
+* text=auto eol=lf
+
+*.wav binary
+*.png binary
+*.otf binary
+*.bin binary

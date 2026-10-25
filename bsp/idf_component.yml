@@ -1,0 +1,31 @@
+## IDF Component Manager Manifest File
+dependencies:
+
+  esp_codec_dev:
+    public: true
+    version: "1.1.0"
+
+  espressif/button:
+    version: "^3.5.0"
+
+  # esp-box-3 1.1.x uses the legacy I2C driver; touch drivers >= 1.2 set scl_speed_hz,
+  # which IDF 5.3 rejects with the legacy driver (ESP_ERR_INVALID_ARG -> boot loop)
+  espressif/esp_lcd_touch_gt911:
+    version: "~1.1.0"
+    require: "no"
+
+  espressif/esp_lcd_touch_tt21100:
+    version: "~1.1.0"
+    require: "no"
+
+  espressif/esp-box:
+    version: "3.0.*"
+    require: "no"
+
+  espressif/esp-box-lite:
+    version: "2.0.*"
+    require: "no"
+
+  espressif/esp-box-3:
+    version: "1.1.*"
+    require: "no"

@@ -1,0 +1,95 @@
+menu "Example Configuration"
+
+    config ASSISTANT_LANGUAGE
+        string "Default assistant language"
+        default "fr"
+        help
+            ISO-639-1 code (fr, en, ...) used for speech transcription, the assistant's
+            answers and the on-screen texts. Overridden by the "Language" key of the
+            device configuration (CONFIG.INI) when present.
+
+    config ASSISTANT_CLAUDE_MODEL
+        string "Default Claude model"
+        default "claude-haiku-5-5"
+        help
+            Claude model id. Overridden by the "Claude_model" key of CONFIG.INI.
+
+    config ASSISTANT_CLAUDE_EFFORT
+        string "Claude effort"
+        default "low"
+        help
+            output_config.effort sent to Claude ("low", "medium", "high"...). Lower is faster.
+            Empty to use the model default.
+
+    config ASSISTANT_STT_MODEL
+        string "Speech-to-text model"
+        default "gpt-live-transcribe"
+        help
+            OpenAI Realtime transcription model (streaming, transcription-only session).
+
+    config ASSISTANT_END_OF_SPEECH_MS
+        int "End of speech silence (ms)"
+        default 700
+        range 300 3000
+        help
+            Silence after which the question is considered finished. Lower answers faster but may
+            cut the user during a pause.
+
+    config ASSISTANT_TTS_MODEL
+        string "Speech synthesis model"
+        default "gpt-4o-mini-tts"
+        help
+            OpenAI /v1/audio/speech model. gpt-4o-mini-tts is announced to shut down on 2027-01-06.
+
+    config ASSISTANT_TTS_VOICE
+        string "Speech synthesis voice"
+        default "marin"
+        help
+            OpenAI voice, e.g. marin, cedar, coral, nova.
+
+    config ASSISTANT_FOLLOWUP_WINDOW_MS
+        int "Follow-up listening window (ms)"
+        default 4000
+        range 0 30000
+        help
+            After a spoken reply, keep listening this long without wake word so that the
+            conversation can continue. If nobody speaks, the device goes back to sleep.
+            0 disables follow-up listening.
+
+    config VOLUME_LEVEL
+        int "volume level"
+        default "90"
+        range 1 100
+        help
+            speaker volume
+    config ESP_MAXIMUM_RETRY
+        int "Maximum retry"
+        default 5
+        help
+            Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
+
+    choice ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD
+        prompt "WiFi Scan auth mode threshold"
+        default ESP_WIFI_AUTH_OPEN
+        help
+            The weakest authmode to accept in the scan mode.
+
+        config ESP_WIFI_AUTH_OPEN
+            bool "OPEN"
+        config ESP_WIFI_AUTH_WEP
+            bool "WEP"
+        config ESP_WIFI_AUTH_WPA_PSK
+            bool "WPA PSK"
+        config ESP_WIFI_AUTH_WPA2_PSK
+            bool "WPA2 PSK"
+        config ESP_WIFI_AUTH_WPA_WPA2_PSK
+            bool "WPA/WPA2 PSK"
+        config ESP_WIFI_AUTH_WPA3_PSK
+            bool "WPA3 PSK"
+        config ESP_WIFI_AUTH_WPA2_WPA3_PSK
+            bool "WPA2/WPA3 PSK"
+        config ESP_WIFI_AUTH_WAPI_PSK
+            bool "WAPI PSK"
+    endchoice
+
+endmenu

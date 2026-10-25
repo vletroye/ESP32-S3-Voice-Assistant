@@ -55,14 +55,31 @@ transcription and voice) and opened while the user is still speaking.
 
 ### Available models
 
-| Model | Provider | Settings used | Notes |
-| --- | --- | --- | --- |
-| `claude-haiku-5-5` (default) | Anthropic | thinking `disabled`, effort `low` | Fastest Claude |
-| `claude-sonnet-5-5` | Anthropic | thinking `between_tools`, effort `low` | No tools are offered, so it does not think |
-| `claude-opus-5-5` | Anthropic | thinking left to the model, effort `low` | Thinking cannot be disabled: slower first word; thinking blocks are kept in the history |
-| `gpt-6-luna` | OpenAI | reasoning effort `none` | Cheapest and fastest GPT |
-| `gpt-6.1-sol` | OpenAI | reasoning effort `low` | |
-| `gpt-6-astra` | OpenAI | reasoning effort `low` | Most capable, most expensive |
+| Model | Provider | Price in / out (per 1M tokens) | ≈ cost per 1,000 questions | Speed | Reasoning | Settings used |
+| --- | --- | --- | --- | --- | --- | --- |
+| `claude-haiku-5-5` (default) | Anthropic | $0.10 / $0.50 | $0.15 | ★★★ fastest | none | thinking `disabled`, effort `low` |
+| `gpt-6-luna` | OpenAI | $0.10 / $0.50 | $0.15 | ★★★ fastest | none | reasoning effort `none` |
+| `claude-sonnet-5-5` | Anthropic | $2 / $10 | $3 | ★★☆ | none (thinks only between tool calls, and no tools are offered) | thinking `between_tools`, effort `low` |
+| `gpt-6.1-sol` | OpenAI | $2 / $10 | $3 + reasoning | ★★☆ | light (always some reasoning) | reasoning effort `low` |
+| `claude-opus-5-5` | Anthropic | $4 / $20 | $6 + thinking | ★☆☆ | adaptive (cannot be disabled; thinks when the question needs it) | thinking left to the model, effort `low` |
+| `gpt-6-astra` | OpenAI | $10 / $50 | $15 + reasoning | ★☆☆ slowest | light, on the most capable OpenAI model | reasoning effort `low` |
+
+How to read this table:
+
+- **Cheapest → most expensive**: Haiku 5.5 = GPT-6 Luna < Sonnet 5.5 = GPT-6.1 Sol < Opus 5.5 < GPT-6 Astra.
+- **Fastest → slowest** (time to the first spoken word): Haiku 5.5 and GPT-6 Luna (no reasoning), then Sonnet 5.5
+  and GPT-6.1 Sol, then Opus 5.5 and GPT-6 Astra (larger models that reason before answering). Only Haiku 5.5 has
+  been measured on the device (see the latencies below); the other ratings are expected, not measured.
+- **Deepest reasoning**: Opus 5.5 and GPT-6 Astra are the most capable models and the only ones that really
+  think before answering; GPT-6.1 Sol reasons a little; Haiku 5.5, GPT-6 Luna and Sonnet 5.5 answer directly.
+  For short spoken answers, the fast models are usually enough; the larger ones help with tricky questions
+  (logic, calculations, nuanced explanations).
+- **Cost per 1,000 questions** assumes about 1,000 input tokens (instructions + a few exchanges of history) and
+  100 output tokens per question. Reasoning/thinking tokens are billed as output on top of that, so Sol, Opus and
+  Astra cost more than shown, depending on the question. Transcription and voice (OpenAI) are billed separately
+  and do not depend on the chosen model. Prices as of October 2026; check the providers' pricing pages.
+- The effort is kept `low` on every model to favour a fast spoken answer. Raising it (in `llm_models[]`) makes
+  Opus, Sol and Astra think more, and makes them slower and more expensive.
 
 The list lives in `main/app/llm.c` (`llm_models[]`). Any other model id can be set in `CONFIG.INI`
 (`claude-…` → Anthropic, `gpt-…` → OpenAI); it then shows up as an extra entry in the Settings list.

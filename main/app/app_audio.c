@@ -5,6 +5,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 #include "freertos/FreeRTOS.h"
@@ -26,6 +27,8 @@
 #include "app_ui_ctrl.h"
 #include "app_wifi.h"
 #include "stt_stream.h"
+#include "tts_stream.h"
+#include "esp_heap_caps.h"
 
 static const char *TAG = "app_audio";
 
@@ -83,6 +86,7 @@ void audio_record_init()
 #endif
 
     /* Spoken replies are played by tts_stream, the short system sounds by audio_play_task() */
+    audio_play_preload("/spiffs/echo_en_wake.wav");
 }
 
 void audio_record_save(int16_t *audio_buffer, int audio_chunksize)
@@ -167,24 +171,35 @@ err:
     return ret;
 }
 
+/* A sound being spoken must have left the speaker before a system sound starts (two writers would mix) */
+#define SOUND_WAIT_SILENCE_MS   50
+#define SOUND_WAIT_MAX_MS       300
+
+/* System sound loaded once in PSRAM as 16 kHz stereo samples: played in one write, without file reads */
+typedef struct {
+    char path[48];
+    int16_t *stereo;
+    size_t bytes;
+} sound_t;
+
+static sound_t s_sound;
+
 /*
- * Play a short system sound (WAV, PCM 16-bit, 16 kHz, mono or stereo). Only the "data" chunk is played
+ * Load a short system sound (WAV, PCM 16-bit, 16 kHz, mono or stereo). Only the "data" chunk is kept
  * (metadata chunks such as LIST or C2PA are skipped). Other sample rates are refused: the I2S bus is
  * shared with the microphones and must stay at 16 kHz.
  */
-esp_err_t audio_play_task(void *filepath)
+static esp_err_t sound_load(const char *filepath, sound_t *sound)
 {
     esp_err_t ret = ESP_OK;
     uint8_t *in = NULL;
-    int16_t *stereo = NULL;
-    const size_t chunk_samples = 512;
 
     FILE *fp = fopen(filepath, "rb");
-    ESP_GOTO_ON_FALSE(NULL != fp, ESP_FAIL, EXIT, TAG, "Failed to open %s", (const char *)filepath);
+    ESP_GOTO_ON_FALSE(NULL != fp, ESP_FAIL, EXIT, TAG, "Failed to open %s", filepath);
 
     uint8_t riff[12];
     ESP_GOTO_ON_FALSE(fread(riff, 1, sizeof(riff), fp) == sizeof(riff) && memcmp(riff, "RIFF", 4) == 0 &&
-                      memcmp(riff + 8, "WAVE", 4) == 0, ESP_FAIL, EXIT, TAG, "%s: not a WAV file", (const char *)filepath);
+                      memcmp(riff + 8, "WAVE", 4) == 0, ESP_FAIL, EXIT, TAG, "%s: not a WAV file", filepath);
 
     /* Walk the chunks: "fmt " gives the format, "data" the samples */
     uint16_t format = 0, channels = 0, bits = 0;
@@ -193,7 +208,7 @@ esp_err_t audio_play_task(void *filepath)
     for (;;) {
         uint8_t chunk[8];
         ESP_GOTO_ON_FALSE(fread(chunk, 1, sizeof(chunk), fp) == sizeof(chunk), ESP_FAIL, EXIT, TAG,
-                          "%s: no data chunk", (const char *)filepath);
+                          "%s: no data chunk", filepath);
         uint32_t size = chunk[4] | (chunk[5] << 8) | (chunk[6] << 16) | ((uint32_t)chunk[7] << 24);
         if (memcmp(chunk, "fmt ", 4) == 0 && size >= 16) {
             uint8_t f[16];
@@ -210,42 +225,58 @@ esp_err_t audio_play_task(void *filepath)
         }
         fseek(fp, size + (size & 1), SEEK_CUR);
     }
-    ESP_LOGI(TAG, "%s: %" PRIu32 " Hz, %u ch, %u bits, %" PRIu32 " ms", (const char *)filepath, rate, channels, bits,
-             (rate && channels && bits) ? data_size * 1000 / (rate * channels * (bits / 8)) : 0);
     ESP_GOTO_ON_FALSE(has_fmt && format == 1 && bits == 16 && rate == 16000 && (channels == 1 || channels == 2),
-                      ESP_ERR_NOT_SUPPORTED, EXIT, TAG, "%s: only 16 kHz 16-bit PCM WAV files are supported",
-                      (const char *)filepath);
+                      ESP_ERR_NOT_SUPPORTED, EXIT, TAG, "%s: only 16 kHz 16-bit PCM WAV files are supported", filepath);
 
-    in = malloc(chunk_samples * channels * sizeof(int16_t));
-    stereo = malloc(chunk_samples * 2 * sizeof(int16_t));
-    ESP_GOTO_ON_FALSE(in && stereo, ESP_ERR_NO_MEM, EXIT, TAG, "Out of memory");
-
-    /* No codec register write here: done once at boot (writing while sound plays out makes crackles) */
-    size_t left = data_size;
-    while (left > 0) {
-        size_t want = chunk_samples * channels * sizeof(int16_t);
-        size_t len = fread(in, 1, left < want ? left : want, fp);
-        if (len < channels * sizeof(int16_t)) {
-            break;
-        }
-        left -= len;
-        size_t frames = len / (channels * sizeof(int16_t));
-        const int16_t *samples = (const int16_t *)in;
-        for (size_t i = 0; i < frames; i++) {
-            stereo[2 * i] = samples[i * channels];
-            stereo[2 * i + 1] = samples[i * channels + (channels - 1)];
-        }
-        size_t written = 0;
-        bsp_i2s_write(stereo, frames * 2 * sizeof(int16_t), &written, portMAX_DELAY);
+    size_t frames = data_size / (channels * sizeof(int16_t));
+    in = heap_caps_malloc(data_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    sound->stereo = heap_caps_malloc(frames * 2 * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    ESP_GOTO_ON_FALSE(in && sound->stereo, ESP_ERR_NO_MEM, EXIT, TAG, "Out of memory");
+    frames = fread(in, 1, data_size, fp) / (channels * sizeof(int16_t));
+    const int16_t *samples = (const int16_t *)in;
+    for (size_t i = 0; i < frames; i++) {
+        sound->stereo[2 * i] = samples[i * channels];
+        sound->stereo[2 * i + 1] = samples[i * channels + (channels - 1)];
     }
+    sound->bytes = frames * 2 * sizeof(int16_t);
+    strlcpy(sound->path, filepath, sizeof(sound->path));
+    ESP_LOGI(TAG, "%s: %u ms loaded", filepath, (unsigned)(frames * 1000 / 16000));
 
 EXIT:
     if (fp) {
         fclose(fp);
     }
     free(in);
-    free(stereo);
+    if (ret != ESP_OK) {
+        free(sound->stereo);
+        sound->stereo = NULL;
+        sound->bytes = 0;
+    }
     return ret;
+}
+
+esp_err_t audio_play_preload(const char *filepath)
+{
+    if (s_sound.stereo && strcmp(s_sound.path, filepath) == 0) {
+        return ESP_OK;
+    }
+    free(s_sound.stereo);
+    memset(&s_sound, 0, sizeof(s_sound));
+    return sound_load(filepath, &s_sound);
+}
+
+/* Play a short system sound from memory (loaded by audio_play_preload(), or here at the first call) */
+esp_err_t audio_play_task(void *filepath)
+{
+    ESP_RETURN_ON_ERROR(audio_play_preload((const char *)filepath), TAG, "Cannot play %s", (const char *)filepath);
+    /* No codec register write here: done once at boot (writing while sound plays out makes crackles) */
+    int64_t t0 = esp_timer_get_time();
+    while (!tts_stream_is_silent(SOUND_WAIT_SILENCE_MS) && esp_timer_get_time() - t0 < SOUND_WAIT_MAX_MS * 1000LL) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    size_t written = 0;
+    bsp_i2s_write(s_sound.stereo, s_sound.bytes, &written, portMAX_DELAY);
+    return ESP_OK;
 }
 
 void sr_handler_task(void *pvParam)

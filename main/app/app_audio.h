@@ -42,6 +42,10 @@ void sr_handler_task(void *pvParam);
  */
 extern uint8_t *audio_rx_buffer;
 
+/** Load a system sound (16 kHz 16-bit PCM WAV) into PSRAM, so that playing it reads no file */
+esp_err_t audio_play_preload(const char *filepath);
+
+/** Play a system sound, once the spoken reply (if any) has left the speaker */
 esp_err_t audio_play_task(void *filepath);
 
 void audio_record_init();

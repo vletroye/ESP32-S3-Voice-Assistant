@@ -35,7 +35,8 @@ typedef enum {
 /**
  * @brief Called from the streaming loop each time the model produces text.
  *
- * @param delta New text (NUL-terminated, only valid during the call)
+ * @param delta New text (NUL-terminated, only valid during the call), or NULL when the model pauses for a
+ *              tool (what was said so far can be spoken meanwhile)
  * @param ctx   User context given to the stream function
  */
 typedef void (*llm_text_cb_t)(const char *delta, void *ctx);

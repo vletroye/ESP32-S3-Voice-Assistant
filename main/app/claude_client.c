@@ -6,6 +6,7 @@
  * Claude client: Anthropic Messages API with server-sent events (stream: true).
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
@@ -19,7 +20,16 @@
 #include "llm_sse.h"
 
 #define CLAUDE_URL              "https://api.anthropic.com/v1/messages"
-#define CLAUDE_PREWARM_URL      "https://api.anthropic.com/v1/models?limit=1"
+/* Prewarm: the model's description, which also tells whether it can search the web */
+#define CLAUDE_MODELS_URL       "https://api.anthropic.com/v1/models/"
+#define CLAUDE_MODEL_INFO_MAX   (16 * 1024)
+/* Web search (server tool run by Anthropic): searches per question, $10 per 1000 */
+#define WEB_SEARCH_MAX_USES     3
+/* Added to the instructions when web search is offered */
+#define WEB_SEARCH_HINT         "You can search the web for current information (news, results, schedules, " \
+                                "prices, opening hours...). Before searching, say a very short sentence in the " \
+                                "user's language, such as \"Je regarde.\". Never read out web addresses, " \
+                                "citations or source names unless asked."
 #define CLAUDE_API_VERSION      "2023-06-01"
 /* Spoken answers are short; the ceiling leaves room for Opus' thinking, which cannot be disabled */
 #define CLAUDE_MAX_TOKENS       2048
@@ -41,6 +51,8 @@ static const cJSON *s_tools = NULL;
 static claude_tool_runner_t s_tool_runner = NULL;
 /* thinking.type sent with each request, NULL to leave the parameter out */
 static const char *s_thinking = NULL;
+/* Web search: 1 the model supports it, 0 not, -1 not known yet (read by the prewarm) */
+static int s_web_search = -1;
 /* Conversation history: user messages and assistant contents built from the stream */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */
@@ -53,6 +65,7 @@ typedef enum {
     BLOCK_TEXT,
     BLOCK_THINKING,
     BLOCK_TOOL_USE,
+    BLOCK_SERVER_TOOL_USE,
     BLOCK_OTHER,
 } block_type_t;
 
@@ -68,6 +81,8 @@ typedef struct {
     block_type_t block_type;
     char tool_id[64];
     char tool_name[64];
+    cJSON *citations;           /* citations of the current text block (web search) */
+    int web_searches;
     cJSON *content;             /* assistant content blocks, stored in the history */
 
     char stop_reason[24];
@@ -181,7 +196,14 @@ static char *build_request(void)
         cJSON_AddStringToObject(output_config, "effort", s_effort);
     }
     if (s_system) {
-        cJSON_AddStringToObject(req, "system", s_system);
+        if (s_web_search == 1) {
+            char *system = NULL;
+            asprintf(&system, "%s\n\n%s", s_system, WEB_SEARCH_HINT);
+            cJSON_AddStringToObject(req, "system", system ? system : s_system);
+            free(system);
+        } else {
+            cJSON_AddStringToObject(req, "system", s_system);
+        }
     }
     /*
      * Automatic prompt caching: the breakpoint moves to the last cacheable block. The system prompt
@@ -189,8 +211,23 @@ static char *build_request(void)
      */
     cJSON *cache_control = cJSON_AddObjectToObject(req, "cache_control");
     cJSON_AddStringToObject(cache_control, "type", "ephemeral");
-    if (s_tools && cJSON_GetArraySize(s_tools) > 0) {
-        cJSON_AddItemReferenceToObject(req, "tools", (cJSON *)s_tools);
+    /* The device's tools (referenced, owned by the llm layer), then web search when the model has it */
+    cJSON *tools = cJSON_CreateArray();
+    const cJSON *tool;
+    cJSON_ArrayForEach(tool, s_tools) {
+        cJSON_AddItemReferenceToArray(tools, (cJSON *)tool);
+    }
+    if (s_web_search == 1) {
+        cJSON *web = cJSON_CreateObject();
+        cJSON_AddStringToObject(web, "type", "web_search_20250305");
+        cJSON_AddStringToObject(web, "name", "web_search");
+        cJSON_AddNumberToObject(web, "max_uses", WEB_SEARCH_MAX_USES);
+        cJSON_AddItemToArray(tools, web);
+    }
+    if (cJSON_GetArraySize(tools) > 0) {
+        cJSON_AddItemToObject(req, "tools", tools);
+    } else {
+        cJSON_Delete(tools);
     }
     /* Referenced, not copied: the history stays owned by s_messages */
     cJSON_AddItemReferenceToObject(req, "messages", s_messages);
@@ -206,12 +243,28 @@ static void on_block_start(stream_t *st, const cJSON *block)
     const cJSON *type = cJSON_GetObjectItem(block, "type");
     llm_buf_clear(&st->block);
     llm_buf_clear(&st->signature);
+    cJSON_Delete(st->citations);
+    st->citations = NULL;
     st->block_type = BLOCK_OTHER;
     if (!cJSON_IsString(type)) {
         return;
     }
     if (strcmp(type->valuestring, "text") == 0) {
         st->block_type = BLOCK_TEXT;
+    } else if (strcmp(type->valuestring, "server_tool_use") == 0) {
+        st->block_type = BLOCK_SERVER_TOOL_USE;
+        const cJSON *id = cJSON_GetObjectItem(block, "id");
+        const cJSON *name = cJSON_GetObjectItem(block, "name");
+        strlcpy(st->tool_id, cJSON_IsString(id) ? id->valuestring : "", sizeof(st->tool_id));
+        strlcpy(st->tool_name, cJSON_IsString(name) ? name->valuestring : "", sizeof(st->tool_name));
+        ESP_LOGI(TAG, "server tool: %s", st->tool_name);
+        /* The search runs now: what was said so far ("Je regarde.") is spoken meanwhile */
+        if (st->on_text) {
+            st->on_text(NULL, st->ctx);
+        }
+    } else if (strcmp(type->valuestring, "web_search_tool_result") == 0) {
+        /* Complete in the start event (results with their encrypted content) */
+        cJSON_AddItemToArray(st->content, cJSON_Duplicate(block, true));
     } else if (strcmp(type->valuestring, "thinking") == 0) {
         st->block_type = BLOCK_THINKING;
     } else if (strcmp(type->valuestring, "redacted_thinking") == 0) {
@@ -255,6 +308,14 @@ static void on_block_delta(stream_t *st, const cJSON *delta)
         if (cJSON_IsString(signature)) {
             llm_buf_append(&st->signature, signature->valuestring, strlen(signature->valuestring));
         }
+    } else if (strcmp(type->valuestring, "citations_delta") == 0) {
+        const cJSON *citation = cJSON_GetObjectItem(delta, "citation");
+        if (citation) {
+            if (!st->citations) {
+                st->citations = cJSON_CreateArray();
+            }
+            cJSON_AddItemToArray(st->citations, cJSON_Duplicate(citation, true));
+        }
     } else if (strcmp(type->valuestring, "input_json_delta") == 0) {
         const cJSON *partial = cJSON_GetObjectItem(delta, "partial_json");
         if (cJSON_IsString(partial)) {
@@ -269,6 +330,10 @@ static void on_block_stop(stream_t *st)
         cJSON *block = cJSON_CreateObject();
         cJSON_AddStringToObject(block, "type", "text");
         cJSON_AddStringToObject(block, "text", st->block.p);
+        if (st->citations) {
+            cJSON_AddItemToObject(block, "citations", st->citations);
+            st->citations = NULL;
+        }
         cJSON_AddItemToArray(st->content, block);
     } else if (st->block_type == BLOCK_THINKING) {
         /* Sent back verbatim with the history (the API checks the signature) */
@@ -277,10 +342,10 @@ static void on_block_stop(stream_t *st)
         cJSON_AddStringToObject(block, "thinking", st->block.len ? st->block.p : "");
         cJSON_AddStringToObject(block, "signature", st->signature.len ? st->signature.p : "");
         cJSON_AddItemToArray(st->content, block);
-    } else if (st->block_type == BLOCK_TOOL_USE) {
+    } else if (st->block_type == BLOCK_TOOL_USE || st->block_type == BLOCK_SERVER_TOOL_USE) {
         cJSON *input = cJSON_Parse(st->block.len ? st->block.p : "{}");
         cJSON *block = cJSON_CreateObject();
-        cJSON_AddStringToObject(block, "type", "tool_use");
+        cJSON_AddStringToObject(block, "type", st->block_type == BLOCK_TOOL_USE ? "tool_use" : "server_tool_use");
         cJSON_AddStringToObject(block, "id", st->tool_id);
         cJSON_AddStringToObject(block, "name", st->tool_name);
         cJSON_AddItemToObject(block, "input", input ? input : cJSON_CreateObject());
@@ -324,9 +389,15 @@ static void sse_dispatch(const char *data, void *ctx)
         if (cJSON_IsString(stop)) {
             strlcpy(st->stop_reason, stop->valuestring, sizeof(st->stop_reason));
         }
-        const cJSON *out = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "usage"), "output_tokens");
+        const cJSON *usage = cJSON_GetObjectItem(json, "usage");
+        const cJSON *out = cJSON_GetObjectItem(usage, "output_tokens");
         if (cJSON_IsNumber(out)) {
             st->output_tokens = out->valueint;
+        }
+        const cJSON *searches = cJSON_GetObjectItem(cJSON_GetObjectItem(usage, "server_tool_use"),
+                                                    "web_search_requests");
+        if (cJSON_IsNumber(searches)) {
+            st->web_searches = searches->valueint;
         }
     } else if (strcmp(t, "message_stop") == 0) {
         st->done = true;
@@ -402,8 +473,13 @@ void claude_client_prewarm(void)
     if (!client) {
         return;
     }
-    /* A free request with a tiny answer (one model): it opens the TLS connection, kept alive for the question */
-    esp_http_client_set_url(client, CLAUDE_PREWARM_URL);
+    /*
+     * A free request with a small answer (the model's description): it opens the TLS connection, kept alive
+     * for the question, and tells whether the model can search the web
+     */
+    char url[128];
+    snprintf(url, sizeof(url), CLAUDE_MODELS_URL "%s", s_model);
+    esp_http_client_set_url(client, url);
     esp_http_client_set_method(client, HTTP_METHOD_GET);
     int status = -1;
     if (esp_http_client_open(client, 0) == ESP_OK && esp_http_client_fetch_headers(client) >= 0) {
@@ -412,9 +488,24 @@ void claude_client_prewarm(void)
          * Read the body to its end: esp_http_client_flush_response() can leave a small body that came
          * with the headers in the connection, where it would be read as the start of the next response
          */
-        char discard[256];
-        while (esp_http_client_read(client, discard, sizeof(discard)) > 0) {
+        llm_buf_t body = {0};
+        char chunk[256];
+        int n;
+        while ((n = esp_http_client_read(client, chunk, sizeof(chunk))) > 0) {
+            if (body.len < CLAUDE_MODEL_INFO_MAX) {
+                llm_buf_append(&body, chunk, n);
+            }
         }
+        cJSON *info = (status == 200 && body.len) ? cJSON_Parse(body.p) : NULL;
+        if (info && s_web_search < 0) {
+            const cJSON *supported = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(
+                                         cJSON_GetObjectItem(info, "capabilities"), "server_tools"), "web_search"),
+                                     "supported");
+            s_web_search = cJSON_IsTrue(supported) ? 1 : 0;
+            ESP_LOGI(TAG, "web search: %s", s_web_search ? "available" : "not supported by this model");
+        }
+        cJSON_Delete(info);
+        llm_buf_free(&body);
     }
     if (status == 200 && esp_http_client_is_complete_data_received(client)) {
         esp_http_client_set_url(client, CLAUDE_URL);
@@ -561,6 +652,61 @@ static void stream_once(stream_t *st)
              st->cache_write_tokens, st->output_tokens);
 }
 
+/* An exchange whose assistant messages hold thinking blocks must be kept verbatim (the API checks them) */
+static bool exchange_has_thinking(int from)
+{
+    for (int i = from; i < cJSON_GetArraySize(s_messages); i++) {
+        const cJSON *block;
+        cJSON_ArrayForEach(block, cJSON_GetObjectItem(cJSON_GetArrayItem(s_messages, i), "content")) {
+            const cJSON *type = cJSON_GetObjectItem(block, "type");
+            if (cJSON_IsString(type) && strstr(type->valuestring, "thinking")) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/*
+ * Web search results are large (encrypted page contents): kept, they would be sent again with every later
+ * question. Once the answer is complete, the search blocks and the citations are dropped from the history,
+ * which keeps the spoken answer.
+ */
+static void drop_web_search_blocks(int from)
+{
+    if (exchange_has_thinking(from)) {
+        return;
+    }
+    for (int i = from; i < cJSON_GetArraySize(s_messages); i++) {
+        cJSON *msg = cJSON_GetArrayItem(s_messages, i);
+        cJSON *content = cJSON_GetObjectItem(msg, "content");
+        const cJSON *role = cJSON_GetObjectItem(msg, "role");
+        if (!cJSON_IsArray(content) || !cJSON_IsString(role) || strcmp(role->valuestring, "assistant") != 0) {
+            continue;
+        }
+        int kept = 0;
+        const cJSON *block;
+        cJSON_ArrayForEach(block, content) {
+            const cJSON *type = cJSON_GetObjectItem(block, "type");
+            kept += !(cJSON_IsString(type) && (strcmp(type->valuestring, "server_tool_use") == 0 ||
+                                               strcmp(type->valuestring, "web_search_tool_result") == 0));
+        }
+        if (kept == 0) {
+            continue;   /* an assistant message cannot be empty */
+        }
+        for (int j = cJSON_GetArraySize(content) - 1; j >= 0; j--) {
+            cJSON *b = cJSON_GetArrayItem(content, j);
+            const cJSON *type = cJSON_GetObjectItem(b, "type");
+            if (cJSON_IsString(type) && (strcmp(type->valuestring, "server_tool_use") == 0 ||
+                                         strcmp(type->valuestring, "web_search_tool_result") == 0)) {
+                cJSON_DeleteItemFromArray(content, j);
+            } else {
+                cJSON_DeleteItemFromObject(b, "citations");
+            }
+        }
+    }
+}
+
 static void add_message(const char *role, cJSON *content)
 {
     cJSON *msg = cJSON_CreateObject();
@@ -583,6 +729,8 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
     add_message("user", cJSON_CreateString(text));
     llm_buf_t answer = {0};
     llm_error_t error = LLM_OK;
+    /* After pause_turn, the next answer continues the same assistant message */
+    bool extend_last = false;
 
     for (int round = 0; ; round++) {
         stream_t st = {
@@ -600,6 +748,10 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
             llm_buf_append(&answer, st.text.p, st.text.len);
         }
         bool tool_use = (error == LLM_OK && strcmp(st.stop_reason, "tool_use") == 0);
+        bool paused = (error == LLM_OK && strcmp(st.stop_reason, "pause_turn") == 0);
+        if (st.web_searches) {
+            ESP_LOGI(TAG, "%d web search(es)", st.web_searches);
+        }
         if (error == LLM_OK) {
             if (strcmp(st.stop_reason, "refusal") == 0) {
                 ESP_LOGW(TAG, "Request declined (stop_reason: refusal)");
@@ -609,24 +761,43 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
             }
         }
         if (error == LLM_OK) {
-            add_message("assistant", st.content);
-            st.content = NULL;
+            cJSON *last = extend_last ? cJSON_GetArrayItem(s_messages, cJSON_GetArraySize(s_messages) - 1) : NULL;
+            cJSON *last_content = cJSON_GetObjectItem(last, "content");
+            if (cJSON_IsArray(last_content)) {
+                cJSON *block;
+                while ((block = cJSON_DetachItemFromArray(st.content, 0)) != NULL) {
+                    cJSON_AddItemToArray(last_content, block);
+                }
+            } else {
+                add_message("assistant", st.content);
+                st.content = NULL;
+            }
         }
         cJSON_Delete(st.content);
+        cJSON_Delete(st.citations);
         llm_sse_free(&st.sse);
         llm_buf_free(&st.block);
         llm_buf_free(&st.signature);
         llm_buf_free(&st.text);
 
-        if (error != LLM_OK || !tool_use) {
+        if (error != LLM_OK || (!tool_use && !paused)) {
             break;
         }
+        extend_last = paused;
         if (round >= CLAUDE_MAX_TOOL_ROUNDS || !s_tool_runner) {
             ESP_LOGE(TAG, "Tool call not answered (round %d)", round + 1);
             error = LLM_ERR_OTHER;
             break;
         }
+        if (paused) {
+            /* A long server-side search: the paused message is sent back as is, the API resumes it */
+            ESP_LOGI(TAG, "pause_turn: resuming");
+            continue;
+        }
         /* Run the tools of the last assistant message; their results start the next round */
+        if (on_text) {
+            on_text(NULL, ctx);     /* speak what was said before the tool call while it runs */
+        }
         cJSON *last = cJSON_GetArrayItem(s_messages, cJSON_GetArraySize(s_messages) - 1);
         cJSON_AddItemToArray(s_messages, run_tools(cJSON_GetObjectItem(last, "content")));
     }
@@ -636,6 +807,7 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
         error = LLM_ERR_OTHER;
     }
     if (error == LLM_OK) {
+        drop_web_search_blocks(start_count);
         trim_history();
         if (full_text) {
             *full_text = answer.p;

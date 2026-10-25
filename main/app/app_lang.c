@@ -13,7 +13,7 @@
 static const char *TAG = "app_lang";
 
 /* Said alone, they send the assistant back to sleep without an answer */
-static const char *const s_goodbyes_fr[] = { "au revoir", "au revoir esp", "bonne nuit", "bonne nuit esp", "à demain", "à plus", "ciao", NULL };
+static const char *const s_goodbyes_fr[] = { "au revoir", "au revoir esp", "bonne nuit", "bonne nuit esp", "à demain", "à plus", "ciao", "bonne soirée", "bonne journée", "bonne après-midi", NULL };
 static const char *const s_goodbyes_en[] = { "goodbye", "good bye", "bye", "bye bye", "goodbye esp", "bye esp",
                                              "good night", NULL };
 

@@ -28,7 +28,10 @@ which has been largely rewritten.
   `idf.py flash` erases it (the `storage` partition is rewritten).
 - **Tools** (Claude models): **weather** ("Quel temps fera-t-il demain à Namur ?", from Open-Meteo, free and
   without key) and **volume** ("Parle plus fort", "Mets le volume à 50"; applied at once if nothing is playing, else after the answer; the assistant then goes back to sleep; kept
-  across restarts). Claude decides when to call them; a tool adds about 1 to 4 s to the answer.
+  across restarts), and **web search** for current information ("Quelles sont les dernières nouvelles en
+  Belgique ?"; run by Anthropic, about $0.01 per search, 3 searches at most per question, enabled when the
+  model supports it). Claude decides when to call them; a tool adds about 1 to 4 s to the answer, and a
+  short "Je regarde." is spoken while it runs.
 - **Knows the date and time**: each question is sent with the current date and time ("[Nous sommes le dimanche
   25 octobre 2026, il est 20 h 07.]"), so "what day is it?" or "how many days until Christmas?" work.
 - **Long-term memory**: "Souviens-toi que …" / "Retiens que …" (English: "Remember that …") stores a note,
@@ -284,11 +287,15 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   results go back as `tool_result` blocks and stay in the history. To add a tool, declare it in `tools.c`
   (JSON definition + a case in `tools_run()`). GPT models get no tools yet (OpenAI's function calling with
   `store: false` and reasoning models needs more work).
+- **Web search**: the server tool `web_search_20250305` is added to the request when the model's description
+  (read by the prewarm, `GET /v1/models/{model}`) says it is supported. Its results (encrypted page contents)
+  are dropped from the history once the answer is complete, so that they are not sent again with every later
+  question; exchanges with thinking blocks (Opus) are kept verbatim. `pause_turn` is resumed.
 
 ## Roadmap
 
 - Echo cancellation and voice barge-in (if the BOX-3 provides a reference channel).
-- More tools: timers and alarms, web search, home automation…
+- More tools: timers and alarms, home automation…
 - NVS encryption to protect the API keys.
 
 ## Credits and licenses

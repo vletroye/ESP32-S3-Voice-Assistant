@@ -93,9 +93,17 @@ static void reply_view_refresh(reply_view_t *v)
 }
 
 /* Streaming callback: refresh the screen at most every REPLY_UI_REFRESH_US */
+static void on_sentence(const char *sentence, void *ctx);
+
 static void on_llm_text(const char *delta, void *ctx)
 {
     reply_view_t *v = (reply_view_t *)ctx;
+    if (delta == NULL) {
+        // A tool runs (web search...): speak what was written so far, even a short "Je regarde."
+        sentence_splitter_finish(&s_splitter);
+        sentence_splitter_init(&s_splitter, on_sentence, NULL);
+        return;
+    }
     sentence_splitter_feed(&s_splitter, delta);
     reply_view_append(v, delta);
     if (!v->shown || esp_timer_get_time() - v->last_refresh_us >= REPLY_UI_REFRESH_US) {

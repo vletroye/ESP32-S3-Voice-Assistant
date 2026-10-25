@@ -1,198 +1,234 @@
-# Assistant vocal ESP32-S3-BOX-3 (Claude)
+# ESP32-S3-BOX-3 Voice Assistant (Claude / GPT)
 
-Assistant vocal en français qui tourne entièrement sur un **ESP32-S3-BOX-3**, sans serveur intermédiaire :
-on le réveille en disant « **Bonjour ESP** », on pose sa question, et **Claude** répond à voix haute.
-Tout est en streaming (transcription, réponse, synthèse vocale) : la réponse commence à être prononcée
-environ **2,5 s** après la fin de la question.
+A voice assistant that runs entirely on an **ESP32-S3-BOX-3**, with no intermediate server: wake it up by
+saying "**Bonjour ESP**", ask your question, and **Claude** (or **GPT**) answers out loud.
+Everything is streamed (transcription, answer, speech synthesis): the answer starts playing about
+**2.5 s** after the end of the question.
 
-Le projet est parti de la démo Espressif [`chatgpt_demo`](https://github.com/espressif/esp-box) (ESP-IDF),
-largement réécrite.
+French is the default language; English is available from the Settings screen.
 
-## Fonctionnalités
+The project started from Espressif's [`chatgpt_demo`](https://github.com/espressif/esp-box) (ESP-IDF),
+which has been largely rewritten.
 
-- Mot de réveil local **« Bonjour ESP »** (ou « Hi ESP »), ou toucher de l'écran en veille.
-- **Transcription en continu** pendant que l'on parle (texte affiché en direct à l'écran).
-- Réponse de **Claude** en streaming, affichée au fil de l'eau avec le nom du modèle (`[claude-haiku-5-5] …`).
-- **Synthèse vocale phrase par phrase** : la première phrase est prononcée pendant que Claude écrit la suite.
-- **Relance sans mot de réveil** : après une réponse, l'assistant écoute encore 4 s pour une question de suivi
-  (avec l'historique des derniers échanges).
-- Dire « Bonjour ESP » pendant une réponse l'**interrompt**.
-- Les erreurs (crédit Claude épuisé, clé refusée, réseau…) sont **affichées et prononcées**.
-- Interface et voix en français (anglais disponible), configurables sans recompiler.
+## Features
+
+- Local wake word **"Bonjour ESP"** (or "Hi ESP"), or touch the screen while asleep.
+- **Live transcription** while you speak (the text is shown on screen as you talk).
+- Answer **streamed** by the chosen model and shown as it arrives, prefixed with the model id
+  (`[claude-haiku-5-5] …`).
+- **Model chosen on the device**: Claude Haiku 5.5, Sonnet 5.5, Opus 5.5 (Anthropic) or GPT-6 Luna,
+  GPT-6.1 Sol, GPT-6 Astra (OpenAI).
+- **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
+- **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
+  (with the history of the last exchanges).
+- Saying "Bonjour ESP" during an answer **interrupts** it.
+- Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
+- French or English interface and voice, switchable from the Settings screen.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    MIC[Micros ES7210<br/>16 kHz] --> AFE[ESP-SR AFE<br/>séparation de sources, VAD]
-    AFE --> WN[WakeNet<br/>« Bonjour ESP »]
-    AFE -->|audio 16→24 kHz| STT[OpenAI Realtime<br/>gpt-live-transcribe<br/>WebSocket permanent]
-    STT -->|transcription| CL[Claude Messages API<br/>claude-haiku-5-5<br/>SSE streaming]
-    CL -->|texte| SPL[Découpage<br/>en phrases]
-    SPL --> TTS[OpenAI Realtime<br/>gpt-realtime-2.1-mini<br/>WebSocket permanent]
-    TTS -->|PCM 24→16 kHz| BUF[Tampon audio<br/>PSRAM]
-    BUF --> SPK[I2S / ES8311<br/>haut-parleur]
+    MIC[ES7210 mics<br/>16 kHz] --> AFE[ESP-SR AFE<br/>source separation, VAD]
+    AFE --> WN[WakeNet<br/>Bonjour ESP]
+    AFE -->|audio 16→24 kHz| STT[OpenAI Realtime<br/>gpt-live-transcribe<br/>permanent WebSocket]
+    STT -->|transcript| LLM[Claude Messages API<br/>or OpenAI Responses API<br/>SSE streaming]
+    LLM -->|text| SPL[Sentence<br/>splitter]
+    SPL --> TTS[OpenAI Realtime<br/>gpt-realtime-2.1-mini<br/>permanent WebSocket]
+    TTS -->|PCM 24→16 kHz| BUF[Audio buffer<br/>PSRAM]
+    BUF --> SPK[I2S / ES8311<br/>speaker]
 ```
 
-| Étape | Service | Détail |
+| Stage | Service | Details |
 | --- | --- | --- |
-| Réveil | local (ESP-SR 2.5.5) | WakeNet9 « Bonjour ESP » + « Hi ESP », AFE 2 micros |
-| Fin de parole | local | VAD d'ESP-SR, 0,9 s de silence |
-| Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket ouvert en permanence, sortie de l'AFE envoyée en continu |
-| Réponse | Anthropic Messages API, `claude-haiku-5-5` | `stream: true`, réflexion désactivée, effort `low`, historique de 4 échanges |
-| Synthèse vocale | OpenAI Realtime, `gpt-realtime-2.1-mini`, voix `marin` | WebSocket permanent, une réponse par phrase, lecture mot pour mot |
-| Lecture | local | Rééchantillonnage 24 → 16 kHz, I2S fixe à 16 kHz (partagé avec les micros) |
+| Wake word | local (ESP-SR 2.5.5) | WakeNet9 "Bonjour ESP" + "Hi ESP", 2-mic AFE |
+| End of speech | local | ESP-SR VAD, 0.9 s of silence |
+| Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output streamed continuously |
+| Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 4 exchanges of history |
+| Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 4 exchanges of history |
+| Speech synthesis | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice `marin` | Permanent WebSocket, one response per sentence, read verbatim |
+| Playback | local | 24 → 16 kHz resampling, I2S fixed at 16 kHz (shared with the mics) |
 
-Les étapes se chevauchent : des tâches FreeRTOS reliées par des files (texte de Claude → phrases →
-synthèse → tampon audio → I2S). Les connexions TLS sont réutilisées (keep-alive pour Claude, WebSockets
-permanents pour la transcription et la voix) et ouvertes pendant que l'utilisateur parle.
+The stages overlap: FreeRTOS tasks are chained through queues (model text → sentences → synthesis →
+audio buffer → I2S). TLS connections are reused (keep-alive for the chat API, permanent WebSockets for
+transcription and voice) and opened while the user is still speaking.
 
-### Latences typiques (mesurées)
+### Available models
 
-| Étape | Durée |
+| Model | Provider | Settings used | Notes |
+| --- | --- | --- | --- |
+| `claude-haiku-5-5` (default) | Anthropic | thinking `disabled`, effort `low` | Fastest Claude |
+| `claude-sonnet-5-5` | Anthropic | thinking `between_tools`, effort `low` | No tools are offered, so it does not think |
+| `claude-opus-5-5` | Anthropic | thinking left to the model, effort `low` | Thinking cannot be disabled: slower first word; thinking blocks are kept in the history |
+| `gpt-6-luna` | OpenAI | reasoning effort `none` | Cheapest and fastest GPT |
+| `gpt-6.1-sol` | OpenAI | reasoning effort `low` | |
+| `gpt-6-astra` | OpenAI | reasoning effort `low` | Most capable, most expensive |
+
+The list lives in `main/app/llm.c` (`llm_models[]`). Any other model id can be set in `CONFIG.INI`
+(`claude-…` → Anthropic, `gpt-…` → OpenAI); it then shows up as an extra entry in the Settings list.
+
+### Typical latencies (measured with Claude Haiku 5.5)
+
+| Stage | Duration |
 | --- | --- |
-| Fin de parole détectée | 0,9 s de silence |
-| Fin de parole → transcription finale | 0,6 à 0,8 s |
-| Premier mot de Claude | 0,7 à 1,6 s |
-| Transcription → premier son | 1,4 à 2,8 s |
+| End of speech detected | 0.9 s of silence |
+| End of speech → final transcript | 0.6 to 0.8 s |
+| First word from the model | 0.7 to 1.6 s |
+| Transcript → first sound | 1.4 to 2.8 s |
 
-## Matériel et logiciels
+## Hardware and software
 
-- **ESP32-S3-BOX-3** (16 Mo de flash, 16 Mo de PSRAM octale).
-- **ESP-IDF v5.3.6** (testé avec cette version ; les versions 6.x ne sont pas compatibles en l'état).
-- Une **clé API OpenAI** (transcription et voix) et une **clé API Anthropic** avec du crédit
-  (console.anthropic.com → API Keys ; le crédit API est distinct d'un abonnement Claude.ai).
+- **ESP32-S3-BOX-3** (16 MB flash, 16 MB octal PSRAM).
+- **ESP-IDF v5.3.6** (tested with this version; 6.x versions are not compatible as is).
+- An **OpenAI API key** (transcription and voice, and GPT answers) and, for Claude, an **Anthropic API key**
+  with credit (console.anthropic.com → API Keys). API credit is separate from a Claude.ai subscription
+  and from Claude usage credits.
 
-## Organisation du dépôt
+## Repository layout
 
-Deux firmwares cohabitent sur la flash :
+Two firmwares live side by side in flash:
 
-| Dossier | Partition | Rôle |
+| Folder | Partition | Role |
 | --- | --- | --- |
-| `main/` (projet racine) | `factory` (6 Mo) | L'assistant vocal |
-| `factory_nvs/` | `ota_0` (2 Mo) | Mode configuration : la BOX apparaît comme une clé USB contenant `CONFIG.INI` |
-| `bsp/` | — | Composant carte (codec audio, boutons), utilisé par les deux projets |
-| `spiffs/` | `storage` | Sons système (`echo_en_wake.wav`, bip de réveil) |
+| `main/` (root project) | `factory` (6 MB) | The voice assistant |
+| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI` |
+| `bsp/` | — | Board component (audio codec, buttons), used by both projects |
+| `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep) |
 
-Modules principaux de l'assistant (`main/app/`) :
+Main modules of the assistant (`main/app/`):
 
-| Fichier | Rôle |
+| File | Role |
 | --- | --- |
-| `app_sr.c` | ESP-SR : AFE, mot de réveil, détection de parole et de fin de parole |
-| `app_audio.c` | Gestion des sessions d'écoute, sons système |
-| `stt_stream.c` | Transcription en continu (OpenAI Realtime, WebSocket permanent) |
-| `claude_client.c` | Client Claude en streaming SSE, historique, gestion de `stop_reason` (prêt pour `tool_use`) |
-| `sentence_splitter.c` | Découpage du texte en phrases (règles pour le français) |
-| `tts_stream.c` | Synthèse vocale (OpenAI Realtime), rééchantillonnage et lecture I2S |
-| `app_lang.c` | Textes de l'interface, consignes de Claude et de la voix, messages d'erreur (fr / en) |
-| `app_ui_ctrl.c` | Interface LVGL (SquareLine) : panneaux, texte en direct, traductions |
-| `main.c` | Enchaînement écoute → transcription → Claude → voix |
+| `app_sr.c` | ESP-SR: AFE, wake word, speech and end-of-speech detection |
+| `app_audio.c` | Listening sessions, system sounds |
+| `stt_stream.c` | Live transcription (OpenAI Realtime, permanent WebSocket) |
+| `llm.c` | Model list and dispatch to the provider of the chosen model |
+| `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, `stop_reason` handling (ready for `tool_use`) |
+| `openai_chat.c` | GPT client (Responses API, SSE streaming), history |
+| `llm_sse.c` | Server-sent events parser shared by both clients |
+| `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
+| `tts_stream.c` | Speech synthesis (OpenAI Realtime), resampling and I2S playback |
+| `app_lang.c` | UI texts, model and voice instructions, error messages (fr / en) |
+| `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, live text, translations, Settings screen |
+| `main.c` | Listen → transcribe → answer → speak pipeline |
 
-## Compilation et flash
+## Build and flash
 
-Dans un terminal ESP-IDF v5.3.6 :
+In an ESP-IDF v5.3.6 terminal:
 
 ```bash
-# 1. Le mode configuration d'abord (son binaire est intégré au flash du projet principal)
+# 1. The configuration mode first (its binary is included in the main project's flash)
 cd factory_nvs
 idf.py set-target esp32s3
 idf.py build
 
-# 2. L'assistant
+# 2. The assistant
 cd ..
 idf.py set-target esp32s3
 idf.py build
 idf.py -p COMx flash monitor
 ```
 
-- `idf.py flash` écrit tout : bootloader, assistant, mode configuration, sons (`spiffs/`) et modèles ESP-SR.
-- `idf.py app-flash` ne réécrit que l'assistant (plus rapide) : **les sons ne sont pas mis à jour**.
-- Les composants externes (`managed_components/`) sont téléchargés automatiquement au premier build ;
-  leurs versions sont figées dans `dependencies.lock`.
+- `idf.py flash` writes everything: bootloader, assistant, configuration mode, sounds (`spiffs/`) and
+  ESP-SR models.
+- `idf.py app-flash` only rewrites the assistant (faster): **the sounds are not updated**.
+- External components (`managed_components/`) are downloaded automatically on the first build; their
+  versions are pinned in `dependencies.lock`.
+- After changing a `Kconfig` file, run `idf.py reconfigure`.
 
 ## Configuration
 
-### Sur l'appareil : `CONFIG.INI`
+### On the device: Settings screen
 
-Au premier démarrage (ou via **Réglages → Réinitialisation → OK**), la BOX passe en mode configuration et
-apparaît sur le PC comme une clé USB « ESP-BOX ». Modifier `CONFIG.INI`, enregistrer, puis appuyer sur
-**Redémarrer** :
+Tap the gear icon on the home screen:
 
-| Clé | Rôle | Exemple |
+- **Langue / Language**: Français or English (interface, transcription, answers and voice).
+- **Modèle / Model**: the model answering the questions (see the table above).
+
+A change is saved to the device's NVS right away, then the device restarts to apply it.
+The reset icon (top right) switches to the configuration mode described below.
+
+### On the device: `CONFIG.INI`
+
+On first boot (or via **Settings → Reset → OK**), the BOX enters configuration mode and shows up on the
+PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Restart**:
+
+| Key | Role | Example |
 | --- | --- | --- |
 | `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
-| `ChatGPT_key` | Clé OpenAI (transcription et voix) | `sk-proj-…` |
-| `Base_url` | URL de l'API OpenAI | `https://api.openai.com/v1/` |
-| `Claude_key` | Clé Anthropic | `sk-ant-…` |
-| `Claude_model` | Modèle Claude | `claude-haiku-5-5` |
-| `Language` | Langue de l'assistant | `fr` ou `en` |
+| `ChatGPT_key` | OpenAI key (transcription, voice, GPT answers) | `sk-proj-…` |
+| `Base_url` | OpenAI API URL | `https://api.openai.com/v1/` |
+| `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
+| `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
+| `Language` | Assistant language | `fr` or `en` |
 
-Les espaces et retours à la ligne collés par erreur autour des valeurs sont ignorés. Les clés sont stockées
-en clair dans la NVS de l'appareil et n'apparaissent jamais dans les logs (seule leur longueur est affichée).
+`Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
+starts with this version. Spaces and line breaks pasted by mistake around the values are ignored. Keys are
+stored in plain text in the device's NVS and never appear in the logs (only their length is shown).
 
-### À la compilation : `sdkconfig.defaults` / `idf.py menuconfig`
+### At build time: `sdkconfig.defaults` / `idf.py menuconfig`
 
-Section « Example Configuration » :
+"Example Configuration" menu:
 
-| Option | Défaut | Rôle |
+| Option | Default | Role |
 | --- | --- | --- |
-| `CONFIG_ASSISTANT_LANGUAGE` | `fr` | Langue si `Language` absent de `CONFIG.INI` |
-| `CONFIG_ASSISTANT_CLAUDE_MODEL` | `claude-haiku-5-5` | Modèle Claude par défaut |
-| `CONFIG_ASSISTANT_CLAUDE_EFFORT` | `low` | Effort de Claude (plus bas = plus rapide) |
-| `CONFIG_ASSISTANT_STT_MODEL` | `gpt-live-transcribe` | Modèle de transcription |
-| `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence qui marque la fin de la question |
-| `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Modèle de synthèse vocale |
-| `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voix |
-| `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Durée d'écoute après une réponse (0 = désactivé) |
-| `CONFIG_VOLUME_LEVEL` | `90` | Volume du haut-parleur |
+| `CONFIG_ASSISTANT_LANGUAGE` | `fr` | Language when `Language` is not set |
+| `CONFIG_ASSISTANT_CHAT_MODEL` | `claude-haiku-5-5` | Model when `Chat_model` is not set |
+| `CONFIG_ASSISTANT_STT_MODEL` | `gpt-live-transcribe` | Transcription model |
+| `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
+| `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Speech synthesis model |
+| `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice |
+| `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |
+| `CONFIG_VOLUME_LEVEL` | `90` | Speaker volume |
 
-Le fichier `sdkconfig` existant a priorité sur `sdkconfig.defaults` : pour changer une valeur, passer par
-`idf.py menuconfig` (ou supprimer `sdkconfig` avant de recompiler).
+An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to change a value, use
+`idf.py menuconfig` (or delete `sdkconfig` before rebuilding).
 
-## Utilisation
+## Usage
 
-1. Dire « **Bonjour ESP** » (bip), puis poser la question. Le texte s'affiche pendant que l'on parle.
-2. Après 0,9 s de silence, la question part ; la réponse s'affiche et est prononcée.
-3. Après la réponse, l'assistant écoute encore 4 s : on peut enchaîner sans redire « Bonjour ESP ».
-4. Sans parole, il retourne en veille (aucun appel aux API n'est fait pour du silence).
+1. Say "**Bonjour ESP**" (beep), then ask your question. The text is shown while you speak.
+2. After 0.9 s of silence the question is sent; the answer is shown and spoken.
+3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP".
+4. Without speech, it goes back to sleep (no API call is made for silence).
 
-## Sons système
+## System sounds
 
-Les sons de `spiffs/` doivent être des **WAV PCM 16 bits à 16 kHz** (mono ou stéréo) : le bus I2S est partagé
-avec les micros et reste à 16 kHz, les autres fréquences sont refusées. Après modification, faire un flash
-complet (`idf.py flash`).
+The sounds in `spiffs/` must be **16-bit PCM WAV at 16 kHz** (mono or stereo): the I2S bus is shared with
+the microphones and stays at 16 kHz, other rates are rejected. After changing them, do a full flash
+(`idf.py flash`).
 
-## Logs et diagnostic
+## Logs and diagnostics
 
-Le moniteur série (`idf.py -p COMx monitor`) affiche notamment :
+The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 - `[timing] final transcript … ms after the end of speech`, `[timing] first audio … ms after the transcription`
 - `claude: first text after … ms, … tokens in … (cache read …), out …`
-- `tts: "…": first audio … ms` par phrase, `tts: reply played, N underrun(s)`
+- `openai_chat: first text after … ms, … tokens in … (cached …), out … (reasoning …)`
+- `tts: "…": first audio … ms` per sentence, `tts: reply played, N underrun(s)`
 - `stt: committed … ms of audio; at the end of speech … ms were still to send`
-- `[heap] internal free …` toutes les 30 s (la RAM interne est la ressource critique)
+- `[heap] internal free …` every 30 s (internal RAM is the critical resource)
 
-## Notes de conception
+## Design notes
 
-- **Mémoire** : la RAM interne (~30 Ko libres en fonctionnement) est réservée aux piles et au DMA ; les gros
-  tampons, les arbres JSON, les buffers TLS (mbedTLS) et les piles des tâches réseau sont en PSRAM.
-- **Pas d'annulation d'écho** : la détection de parole ignore le début de chaque écoute (bip, fin de réponse)
-  et filtre par volume ; les transcriptions vides ou typiques de Whisper sur du silence sont ignorées.
-- **Coûts** : la transcription est facturée à la durée d'audio envoyé (uniquement pendant l'écoute) ; les
-  connexions ouvertes en permanence ne sont pas facturées selon la documentation d'OpenAI.
-- **Outils Claude** : `claude_client.c` gère `stop_reason: tool_use` (journalisé, point d'extension
-  `handle_tool_use()`), mais aucun outil n'est encore déclaré.
+- **Memory**: internal RAM (~30 KB free while running) is reserved for stacks and DMA; large buffers,
+  JSON trees, TLS buffers (mbedTLS) and the network task stacks live in PSRAM.
+- **No echo cancellation**: speech detection ignores the start of each listening window (beep, end of the
+  answer) and filters by volume; empty transcripts and typical Whisper hallucinations on silence are ignored.
+- **Costs**: transcription is billed by the duration of audio sent (only while listening); according to
+  OpenAI's documentation, idle open connections are not billed. Answer costs depend on the chosen model
+  (Opus and Astra are the most expensive).
+- **Claude tools**: `claude_client.c` handles `stop_reason: tool_use` (logged, extension point
+  `handle_tool_use()`), but no tool is declared yet.
 
-## Pistes d'évolution
+## Roadmap
 
-- Annulation d'écho et interruption de l'assistant par la voix (si la BOX-3 fournit un canal de référence).
-- Outils pour Claude (heure, météo, domotique…).
-- Chiffrement de la NVS pour protéger les clés API.
-- Remplacer la liste « Région » (inutilisée) de l'écran Réglages par le choix de la langue.
+- Echo cancellation and voice barge-in (if the BOX-3 provides a reference channel).
+- Tools for the assistant (time, weather, home automation…).
+- NVS encryption to protect the API keys.
 
-## Crédits et licences
+## Credits and licenses
 
-- Basé sur l'exemple `chatgpt_demo` d'[esp-box](https://github.com/espressif/esp-box) (Espressif, CC0 /
-  Apache-2.0 selon les fichiers).
-- Police Montserrat (SIL Open Font License), fournie avec LVGL, pour les caractères accentués.
-- Composants Espressif (ESP-IDF, ESP-SR, esp-box-3, esp_websocket_client) sous leurs licences respectives.
+- Based on the `chatgpt_demo` example from [esp-box](https://github.com/espressif/esp-box) (Espressif,
+  CC0 / Apache-2.0 depending on the files).
+- Montserrat font (SIL Open Font License), shipped with LVGL, for accented characters.
+- Espressif components (ESP-IDF, ESP-SR, esp-box-3, esp_websocket_client) under their respective licenses.

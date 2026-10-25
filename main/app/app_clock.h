@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: CC0-1.0
  *
  * Clock shown under the sleeping robot: HH:MM in seven-segment digits and the date (DDD DD/MM/YY), with the
- * speaker volume at the bottom left (bar, icon, percentage).
+ * speaker volume at the bottom left (bar, icon, percentage) and the Wi-Fi signal at the bottom right.
  */
 
 #pragma once

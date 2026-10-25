@@ -38,7 +38,8 @@ which has been largely rewritten.
 - Saying "Bonjour ESP" during an answer, or **double-tapping the screen**, **interrupts** it and listens again.
 - **Clock** under the sleeping robot: `HH:MM` in glowing seven-segment digits and the date (`DIM 25/10/26`),
   synchronized over the Internet (NTP), and the speaker volume at the bottom left (bar, speaker icon,
-  percentage) in the same style.
+  percentage) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out when
+  disconnected), in the same style.
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
 - French or English interface and voice, switchable from the Settings screen.
 

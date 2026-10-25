@@ -12,6 +12,8 @@
 #include "esp_netif_sntp.h"
 #include "app_clock.h"
 #include "app_volume.h"
+#include "app_wifi.h"
+#include "esp_wifi.h"
 
 LV_FONT_DECLARE(ui_font_Latin16);
 
@@ -43,6 +45,21 @@ LV_FONT_DECLARE(ui_font_Latin16);
 #define VOLUME_BAR_BOTTOM_Y (-48)
 #define VOLUME_ICON_BOTTOM_Y (-24)
 
+/* Wi-Fi indicator, bottom right: dot and 3 arcs lit with the signal strength, crossed out when disconnected */
+#define WIFI_W              56
+#define WIFI_H              32
+#define WIFI_RIGHT_X        (-6)
+#define WIFI_BOTTOM_Y       (-28)   /* centred on the digits */
+#define WIFI_ARC_WIDTH      4
+#define WIFI_ARC_STEP       7       /* radius of the 1st arc, then 2nd, 3rd... */
+#define WIFI_DOT_RADIUS     3
+#define WIFI_GLOW_EXTRA     6       /* the glow of an arc is a wider, faint arc behind it */
+/* RSSI (dBm) needed for 3, 2 and 1 lit arcs */
+#define WIFI_RSSI_3         (-55)
+#define WIFI_RSSI_2         (-67)
+#define WIFI_RSSI_1         (-78)
+#define WIFI_DISCONNECTED   (-1)
+
 /* Valid once the year is past this one: the clock was synchronized */
 #define SYNCED_MIN_YEAR 2024
 
@@ -66,6 +83,8 @@ static lv_obj_t *s_volume_bar;
 static lv_obj_t *s_volume_icon;
 static lv_obj_t *s_volume_text;
 static int s_shown_volume = -1;
+static lv_obj_t *s_wifi;
+static int s_wifi_level = -2;   /* lit arcs 0..3, WIFI_DISCONNECTED, -2 not shown yet */
 
 void app_clock_sync_start(const char *tz)
 {
@@ -203,9 +222,80 @@ static void volume_refresh(void)
     lv_obj_invalidate(s_volume_bar);
 }
 
+/* Wi-Fi symbol: a dot and 3 arcs opening upwards (LVGL angles: 0 on the right, clockwise, 270 at the top) */
+static void wifi_event_cb(lv_event_t *e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) {
+        return;
+    }
+    lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
+    lv_area_t area;
+    lv_obj_get_coords(s_wifi, &area);
+    lv_point_t center = { area.x1 + WIFI_W / 2, area.y2 - WIFI_DOT_RADIUS - 1 };
+    bool connected = (s_wifi_level != WIFI_DISCONNECTED);
+
+    for (int i = 1; i <= 3; i++) {
+        bool lit = connected && i <= s_wifi_level;
+        lv_draw_arc_dsc_t arc;
+        lv_draw_arc_dsc_init(&arc);
+        arc.rounded = 1;
+        if (lit) {
+            arc.color = lv_color_hex(COLOR_GLOW);
+            arc.width = WIFI_ARC_WIDTH + WIFI_GLOW_EXTRA;
+            arc.opa = LV_OPA_30;
+            lv_draw_arc(draw_ctx, &arc, &center, i * WIFI_ARC_STEP + WIFI_GLOW_EXTRA / 2 + WIFI_ARC_WIDTH / 2,
+                        225, 315);
+        }
+        arc.color = lv_color_hex(lit ? COLOR_ON : COLOR_OFF);
+        arc.width = WIFI_ARC_WIDTH;
+        arc.opa = LV_OPA_COVER;
+        lv_draw_arc(draw_ctx, &arc, &center, i * WIFI_ARC_STEP + WIFI_ARC_WIDTH / 2, 225, 315);
+    }
+
+    lv_draw_rect_dsc_t dot;
+    lv_draw_rect_dsc_init(&dot);
+    dot.radius = LV_RADIUS_CIRCLE;
+    dot.bg_color = lv_color_hex(connected ? COLOR_ON : COLOR_OFF);
+    if (connected) {
+        dot.shadow_color = lv_color_hex(COLOR_GLOW);
+        dot.shadow_width = GLOW_WIDTH / 2;
+        dot.shadow_opa = LV_OPA_70;
+    }
+    lv_area_t dot_area = { center.x - WIFI_DOT_RADIUS, center.y - WIFI_DOT_RADIUS,
+                           center.x + WIFI_DOT_RADIUS, center.y + WIFI_DOT_RADIUS };
+    lv_draw_rect(draw_ctx, &dot, &dot_area);
+
+    if (!connected) {
+        // Crossed out, from the top left to the bottom right
+        lv_draw_line_dsc_t line;
+        lv_draw_line_dsc_init(&line);
+        line.color = lv_color_hex(COLOR_DATE);
+        line.width = 3;
+        line.round_start = 1;
+        line.round_end = 1;
+        lv_point_t p1 = { area.x1 + 10, area.y1 + 2 };
+        lv_point_t p2 = { area.x2 - 10, area.y2 - 1 };
+        lv_draw_line(draw_ctx, &line, &p1, &p2);
+    }
+}
+
+static void wifi_refresh(void)
+{
+    int level = WIFI_DISCONNECTED;
+    wifi_ap_record_t ap;
+    if (wifi_connected_already() == WIFI_STATUS_CONNECTED_OK && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        level = ap.rssi >= WIFI_RSSI_3 ? 3 : (ap.rssi >= WIFI_RSSI_2 ? 2 : (ap.rssi >= WIFI_RSSI_1 ? 1 : 0));
+    }
+    if (level != s_wifi_level) {
+        s_wifi_level = level;
+        lv_obj_invalidate(s_wifi);
+    }
+}
+
 static void clock_refresh(lv_timer_t *timer)
 {
     volume_refresh();
+    wifi_refresh();
 
     time_t now = time(NULL);
     struct tm t;
@@ -289,6 +379,14 @@ void app_clock_create(lv_obj_t *parent, const char *const weekdays[7])
     lv_obj_set_style_text_color(s_volume_text, lv_color_hex(COLOR_DATE), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(s_volume_text, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_align(s_volume_text, LV_ALIGN_BOTTOM_LEFT, VOLUME_COLUMN_X, DATE_BOTTOM_Y);
+
+    // Wi-Fi signal at the bottom right
+    s_wifi = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_wifi);
+    lv_obj_clear_flag(s_wifi, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(s_wifi, WIFI_W, WIFI_H);
+    lv_obj_align(s_wifi, LV_ALIGN_BOTTOM_RIGHT, WIFI_RIGHT_X, WIFI_BOTTOM_Y);
+    lv_obj_add_event_cb(s_wifi, wifi_event_cb, LV_EVENT_DRAW_MAIN, NULL);
 
     clock_refresh(NULL);
     lv_timer_create(clock_refresh, 1000, NULL);

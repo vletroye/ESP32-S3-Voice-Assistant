@@ -163,7 +163,7 @@ Tap the gear icon on the home screen:
 - **Modèle / Model**: the model answering the questions (see the table above).
 
 Change one or both, then press **Save** (bottom right, enabled once something changed): the choice is saved to the device's NVS and the device restarts to apply it.
-The reset icon (top right) switches to the configuration mode described below.
+The folder-and-gear icon (top right) switches to the configuration mode described below.
 
 ### On the device: `CONFIG.INI`
 

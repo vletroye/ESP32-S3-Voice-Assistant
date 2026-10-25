@@ -34,7 +34,8 @@ typedef struct {
     const char *settings_title;
     const char *settings_language;
     const char *settings_model;
-    const char *settings_saved;     /* Shown while the device restarts after a change */
+    const char *settings_save;      /* Save button, enabled once the language or the model is changed */
+    const char *settings_saved;     /* Shown while the device restarts after saving */
     const char *reset_title;
     const char *reset_content;
 } app_lang_t;

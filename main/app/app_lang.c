@@ -68,6 +68,7 @@ static const app_lang_t s_languages[] = {
         .settings_title = "Réglages",
         .settings_language = "Langue",
         .settings_model = "Modèle",
+        .settings_save = "Enregistrer",
         .settings_saved = "Enregistré.\nRedémarrage ...",
         .reset_title = "Réinitialisation",
         .reset_content = "1. Appuyez sur « OK » pour passer en mode configuration.\n"
@@ -114,6 +115,7 @@ static const app_lang_t s_languages[] = {
         .settings_title = "Settings",
         .settings_language = "Language",
         .settings_model = "Model",
+        .settings_save = "Save",
         .settings_saved = "Saved.\nRestarting ...",
     },
 };

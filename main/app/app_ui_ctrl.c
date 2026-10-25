@@ -49,7 +49,7 @@ static void label_localize(lv_obj_t *label, const char *text, const lv_font_t *f
     lv_label_set_text(label, text);
 }
 
-/* ---------- Settings screen: language and model, saved to NVS then the device restarts ---------- */
+/* ---------- Settings screen: language and model, saved to NVS with the Save button, then restart ---------- */
 
 #define SETTINGS_RESTART_DELAY_MS       1000
 #define SETTINGS_OPTIONS_SIZE           256
@@ -57,12 +57,18 @@ static void label_localize(lv_obj_t *label, const char *text, const lv_font_t *f
 /* Languages offered, in the order of the dropdown */
 static const char *const s_settings_languages[] = { "fr", "en" };
 
+static lv_obj_t *s_model_dropdown = NULL;
+static lv_obj_t *s_save_btn = NULL;
+/* Selections matching the stored settings */
+static uint16_t s_lang_stored = 0;
+static uint16_t s_model_stored = 0;
+
 static void settings_restart_timer_cb(lv_timer_t *timer)
 {
     esp_restart();
 }
 
-/* Show the confirmation over the screen, then restart so that the new setting is used everywhere */
+/* Show the confirmation over the screen, then restart so that the new settings are used everywhere */
 static void settings_saved(void)
 {
     lv_obj_t *overlay = lv_obj_create(lv_scr_act());
@@ -84,33 +90,43 @@ static void settings_saved(void)
     lv_timer_create(settings_restart_timer_cb, SETTINGS_RESTART_DELAY_MS, NULL);
 }
 
-static void settings_language_changed_cb(lv_event_t *e)
+/* Enable the Save button when the selection differs from the stored settings */
+static void settings_changed_cb(lv_event_t *e)
 {
-    uint16_t selected = lv_dropdown_get_selected(lv_event_get_target(e));
-    if (selected < sizeof(s_settings_languages) / sizeof(s_settings_languages[0]) &&
-            settings_save_str("Language", s_settings_languages[selected]) == ESP_OK) {
+    bool changed = lv_dropdown_get_selected(ui_DropdownSettingsRegion) != s_lang_stored ||
+                   lv_dropdown_get_selected(s_model_dropdown) != s_model_stored;
+    if (changed) {
+        lv_obj_clear_state(s_save_btn, LV_STATE_DISABLED);
+    } else {
+        lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+    }
+}
+
+static void settings_save_clicked_cb(lv_event_t *e)
+{
+    esp_err_t ret = ESP_OK;
+    uint16_t lang = lv_dropdown_get_selected(ui_DropdownSettingsRegion);
+    if (lang != s_lang_stored && lang < sizeof(s_settings_languages) / sizeof(s_settings_languages[0])) {
+        ret = settings_save_str("Language", s_settings_languages[lang]);
+    }
+    // The entry after the listed models is a model set in CONFIG.INI: already the stored one
+    uint16_t model = lv_dropdown_get_selected(s_model_dropdown);
+    if (ret == ESP_OK && model != s_model_stored && model < llm_model_count) {
+        ret = settings_save_str("Chat_model", llm_models[model].id);
+    }
+    if (ret == ESP_OK) {
         settings_saved();
     }
 }
 
-static void settings_model_changed_cb(lv_event_t *e)
-{
-    uint16_t selected = lv_dropdown_get_selected(lv_event_get_target(e));
-    // The entry after the listed models is a model set in CONFIG.INI: already the current one
-    if (selected < llm_model_count && settings_save_str("Chat_model", llm_models[selected].id) == ESP_OK) {
-        settings_saved();
-    }
-}
-
-static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uint16_t selected,
-                                    lv_event_cb_t changed_cb)
+static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uint16_t selected)
 {
     lv_dropdown_set_options(dropdown, options);
     lv_dropdown_set_selected(dropdown, selected);
     // Accented names: Latin font for the field and its list (the arrow keeps the default font and its symbol)
     lv_obj_set_style_text_font(dropdown, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(lv_dropdown_get_list(dropdown), &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_add_event_cb(dropdown, changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(dropdown, settings_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
 }
 
 /* A row of the Settings panel: label on the left, dropdown on the right (same look as the generated row) */
@@ -163,11 +179,11 @@ static void settings_screen_setup(void)
             lang_selected = i;
         }
     }
-    settings_dropdown_setup(ui_DropdownSettingsRegion, "Français\nEnglish", lang_selected,
-                            settings_language_changed_cb);
+    s_lang_stored = lang_selected;
+    settings_dropdown_setup(ui_DropdownSettingsRegion, "Français\nEnglish", lang_selected);
 
     // Model row: the listed models, plus the current one if it was set in CONFIG.INI and is not listed
-    lv_obj_t *model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
+    s_model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
     options[0] = '\0';
     uint16_t model_selected = llm_model_count;
     for (size_t i = 0; i < llm_model_count; i++) {
@@ -181,7 +197,19 @@ static void settings_screen_setup(void)
         strlcat(options, "\n", sizeof(options));
         strlcat(options, param->chat_model, sizeof(options));
     }
-    settings_dropdown_setup(model_dropdown, options, model_selected, settings_model_changed_cb);
+    s_model_stored = model_selected;
+    settings_dropdown_setup(s_model_dropdown, options, model_selected);
+
+    // Save button (bottom right), enabled once a selection differs from the stored settings
+    s_save_btn = lv_btn_create(ui_ScreenSettings);
+    lv_obj_align(s_save_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+    lv_obj_set_style_bg_color(s_save_btn, lv_color_hex(0x6E47BD), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+    lv_obj_add_event_cb(s_save_btn, settings_save_clicked_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *save_label = lv_label_create(s_save_btn);
+    lv_label_set_text(save_label, lang->settings_save);
+    lv_obj_set_style_text_font(save_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_center(save_label);
 }
 
 /* Override the texts of the SquareLine-generated screens without editing the generated files */

@@ -16,7 +16,8 @@ which has been largely rewritten.
 - **Live transcription** while you speak (streamed to the API, so the question is ready as soon as you stop;
   it is shown above the answer).
 - Answer **streamed** by the chosen model and shown as it arrives, with an icon of the provider (Claude or
-  OpenAI, or a globe when the web was searched) and prefixed with the model id
+  OpenAI, a globe when the web was searched, a chip when the device answered by itself: memory commands,
+  errors) and prefixed with the model id
   (`[claude-haiku-5-5] …`).
 - **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
   (Anthropic) or GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI); French or English; 10 OpenAI voices.
@@ -163,7 +164,7 @@ Main modules of the assistant (`main/app/`):
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, answer scrolling, answer icon, double tap, translations, Settings screen |
-| `images/` | Answer icons (Claude, web globe) |
+| `images/` | Answer icons (Claude, web globe, chip for local answers) |
 | `main.c` | Listen → transcribe → answer → speak pipeline |
 
 ## Build and flash

@@ -235,6 +235,7 @@ static void reply_begin(void)
 /* Show and speak a message as the reply (errors, memory commands), sentence by sentence */
 static void speak_message(const char *message)
 {
+    ui_ctrl_reply_set_logo(UI_CTRL_LOGO_LOCAL);
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_CONTENT, message);
     ui_ctrl_show_panel(UI_CTRL_PANEL_REPLY, 0);
     s_reply_t0 = esp_timer_get_time();
@@ -378,8 +379,9 @@ void assistant_listen_end(void)
     if (llm_err == LLM_OK) {
         sentence_splitter_finish(&s_splitter);
     } else {
-        // The error is shown and spoken as if it were the answer (replacing any partial text)
+        // The error is shown and spoken as if it were the answer (replacing any partial text), as a local answer
         sentence_splitter_discard(&s_splitter);
+        ui_ctrl_reply_set_logo(UI_CTRL_LOGO_LOCAL);
         reply_begin();
         const char *message = app_lang_get()->llm_errors[llm_provider()][llm_err];
         tts_stream_say(message);

@@ -30,6 +30,7 @@ typedef enum {
     UI_CTRL_LOGO_CLAUDE,
     UI_CTRL_LOGO_OPENAI,
     UI_CTRL_LOGO_WEB,
+    UI_CTRL_LOGO_LOCAL,     /* answered by the device without a model (memory commands, errors) */
 } ui_ctrl_logo_t;
 
 void ui_ctrl_reply_set_logo(ui_ctrl_logo_t logo);

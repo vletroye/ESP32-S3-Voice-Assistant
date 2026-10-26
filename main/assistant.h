@@ -46,6 +46,21 @@ void assistant_request_model(const char *model);
  */
 void assistant_request_restore(bool factory);
 
+/** Model test: show a text as the answer (not spoken), scrolled to its last line */
+void assistant_show(const char *text);
+
+/**
+ * @brief Model test: one spoken announcement made of several texts, queued as they come (the screen unchanged,
+ *        no listening afterwards): begin, then a text per result (returns at once, spoken after the previous
+ *        ones), then end, which returns once everything is spoken (or the test stopped).
+ */
+void assistant_announce_begin(void);
+void assistant_announce(const char *text);
+void assistant_announce_end(void);
+
+/** Model test finished: back to sleep */
+void assistant_test_done(void);
+
 #ifdef __cplusplus
 }
 #endif

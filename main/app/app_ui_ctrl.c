@@ -780,6 +780,19 @@ void ui_ctrl_reply_append_notice(const char *notice)
     bsp_display_unlock();
 }
 
+void ui_ctrl_reply_show_end(const char *text)
+{
+    bsp_display_lock(0);
+    // Not scrolled with the speech: the timer is stopped and the end of the text is shown
+    lv_timer_pause(scroll_timer_handle);
+    reply_content_get = false;
+    lv_label_set_text(ui_LabelReplyContent, text);
+    lv_obj_update_layout(ui_ContainerReplyContent);
+    lv_coord_t extra = lv_obj_get_self_height(ui_LabelReplyContent) - lv_obj_get_height(ui_ContainerReplyContent);
+    lv_obj_scroll_to_y(ui_ContainerReplyContent, extra > 0 ? extra : 0, LV_ANIM_OFF);
+    bsp_display_unlock();
+}
+
 void ui_ctrl_label_show_text(ui_ctrl_label_t label, const char *text)
 {
     bsp_display_lock(0);

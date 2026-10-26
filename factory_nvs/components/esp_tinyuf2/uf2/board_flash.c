@@ -133,6 +133,15 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "CONFIG  BKP", 12);
         PRINTF("%s shown as CONFIG.BKP", t->path);
     }
+    // Results of the model test ("teste les modèles"), when there are some
+    FILE *log = fopen(PHRASES_DIR "/log.txt", "r");
+    if (log) {
+        fclose(log);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/log.txt", sizeof(t->path));
+        memcpy(t->fat_name, "LOG     TXT", 12);
+        PRINTF("%s shown as LOG.TXT", t->path);
+    }
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && slot < UF2_TEXT_COUNT) {
         size_t len = strlen(e->d_name);
@@ -421,6 +430,7 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
 static const char *const s_ini_key_order[] = {
     "Base_url", "Chat_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Country",
     "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "OpenRouter_key",
+    "OpenRouter_free", "Free_models",
     "Screen_off_s", "End_speech_ms",
 };
 

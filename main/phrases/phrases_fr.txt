@@ -26,6 +26,11 @@ passe en
 passe à l
 réponds en
 
+[s_test_models]
+# Pose la même question à chaque modèle et mesure son temps de réponse (LOG.TXT, vitesse dans AGENTS.INI)
+test(e) (les|tes) mod(è|e)les
+(lance|fais) (le|un) test des mod(è|e)les
+
 [s_list_models]
 # Lit, par fournisseur, les noms courts des modèles d'AGENTS.INI (et les modèles gratuits d'OpenRouter)
 donne moi la liste (de tous (les|tes)|des|de tes) mod(è|e)les[ (disponibles|supportés)]

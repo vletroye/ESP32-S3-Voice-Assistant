@@ -42,6 +42,7 @@
 #include "tts_stream.h"
 #include "stt_stream.h"
 #include "cJSON.h"
+#include "model_test.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -70,6 +71,8 @@ static volatile bool s_config_requested = false;
 /* "Redémarre": restart once the reply has been spoken (set by the reply, done by the main task) */
 static volatile bool s_restart_after_reply = false;
 static volatile bool s_restart_requested = false;
+/* "Teste les modèles": the test starts once its announcement has been spoken */
+static volatile bool s_test_after_reply = false;
 /* The reply ended with a goodbye ("Au revoir !", "Bonne soirée."): sleep and a new conversation once spoken */
 static volatile bool s_reply_goodbye = false;
 static volatile bool s_reset_requested = false;
@@ -220,6 +223,11 @@ static void on_reply_audio(tts_event_t event)
         s_config_requested = true;      // the main task saves and restarts
         return;
     }
+    if (s_test_after_reply) {
+        s_test_after_reply = false;
+        model_test_start();             // run by the main task; no listening meanwhile
+        return;
+    }
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();
     if (record_flag) {
@@ -250,6 +258,49 @@ void assistant_reply_stop(void)
 {
     tts_stream_cancel();
     s_reply_active = false;
+    s_test_after_reply = false;
+    model_test_cancel();
+}
+
+void assistant_show(const char *text)
+{
+    ui_ctrl_reply_set_logo(UI_CTRL_LOGO_LOCAL);
+    ui_ctrl_reply_show_end(text);
+    ui_ctrl_show_panel(UI_CTRL_PANEL_REPLY, 0);
+}
+
+static volatile bool s_announced = false;
+
+static void on_announce_audio(tts_event_t event)
+{
+    if (event == TTS_EVENT_DONE) {
+        s_announced = true;
+    }
+}
+
+void assistant_announce_begin(void)
+{
+    s_announced = false;
+    tts_stream_begin(on_announce_audio);
+}
+
+void assistant_announce(const char *text)
+{
+    tts_stream_say(text);
+}
+
+void assistant_announce_end(void)
+{
+    tts_stream_end();
+    int64_t t0 = esp_timer_get_time();
+    while (!s_announced && !model_test_cancelled() && esp_timer_get_time() - t0 < 60 * 1000 * 1000LL) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+void assistant_test_done(void)
+{
+    ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
 }
 
 /* Start a spoken answer (its sentences follow with tts_stream_say) */
@@ -338,7 +389,7 @@ void assistant_request_restore(bool factory)
 
 /* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
 static const char *const s_user_files[] = {
-    "history.json", "history.tmp", "places.json", "or_free.json", "record.wav",
+    "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "log.txt",
 };
 
 /*
@@ -502,6 +553,7 @@ void assistant_listen_end(void)
     if (voice_cmd != VOICE_CMD_NONE && voice_cmd != VOICE_CMD_NEW_CONVERSATION_ASK) {
         s_config_after_reply = (voice_cmd == VOICE_CMD_EDIT_CONFIG);
         s_restart_after_reply = (voice_cmd == VOICE_CMD_RESTART);
+        s_test_after_reply = (voice_cmd == VOICE_CMD_TEST_MODELS);
         speak_message(cmd_reply ? cmd_reply : "");
         free(cmd_reply);
         goto err;
@@ -719,6 +771,8 @@ void app_main()
             }
             esp_restart();
         }
+        // "Teste les modèles": run here, on the main task's stack (several minutes, the loop waits meanwhile)
+        model_test_poll();
         if (s_reset_requested) {
             s_reset_requested = false;
             llm_reset();

@@ -162,6 +162,7 @@ static FileContent_t info[] = {
     {.name = "", .content = NULL, .size = 0  },
     {.name = "", .content = NULL, .size = 0  },
     {.name = "", .content = NULL, .size = 0  },
+    {.name = "", .content = NULL, .size = 0  },
 #ifdef TINYUF2_FAVICON_HEADER
     {.name = "AUTORUN INF", .content = autorunFile, .size = sizeof(autorunFile) - 1},
     {.name = "FAVICON ICO", .content = favicon_data, .size = favicon_len            },

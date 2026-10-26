@@ -419,6 +419,11 @@ llm_error_t openai_chat_stream(const char *text, llm_text_cb_t on_text, void *ct
              "(reasoning %d)", st.first_text_us ? (st.first_text_us - st.start_us) / 1000 : -1LL,
              (now - st.start_us) / 1000, st.status[0] ? st.status : "-", st.input_tokens, st.cached_tokens,
              st.output_tokens, st.reasoning_tokens);
+    // output_tokens counts the reasoning too
+    llm_last_stats = (llm_stats_t) {
+        st.first_text_us ? (int)((st.first_text_us - st.start_us) / 1000) : -1, (int)((now - st.start_us) / 1000),
+        st.output_tokens - st.reasoning_tokens, st.reasoning_tokens
+    };
 
 end:
     if (st.error == LLM_OK) {

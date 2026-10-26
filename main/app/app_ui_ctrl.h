@@ -72,6 +72,9 @@ void ui_ctrl_reply_set_audio_end_flag(bool result);
 /** Add a note on a line of its own after the answer shown */
 void ui_ctrl_reply_append_notice(const char *notice);
 
+/** Show a text as the answer, scrolled to its end (its last line visible), without following the speech */
+void ui_ctrl_reply_show_end(const char *text);
+
 void ui_ctrl_guide_jump(void);
 
 #ifdef __cplusplus

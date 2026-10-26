@@ -684,6 +684,11 @@ static void stream_once(stream_t *st)
              st->first_text_us ? (st->first_text_us - st->start_us) / 1000 : -1LL, (now - st->start_us) / 1000,
              st->stop_reason[0] ? st->stop_reason : "-", st->input_tokens, st->cache_read_tokens,
              st->cache_write_tokens, st->output_tokens);
+    // output_tokens counts the thinking too (not given apart)
+    llm_last_stats = (llm_stats_t) {
+        st->first_text_us ? (int)((st->first_text_us - st->start_us) / 1000) : -1, (int)((now - st->start_us) / 1000),
+        st->output_tokens, -1
+    };
 }
 
 /* An exchange whose assistant messages hold thinking blocks must be kept verbatim (the API checks them) */

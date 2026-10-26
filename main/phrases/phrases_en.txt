@@ -21,6 +21,11 @@ speak[ in]
 switch to
 answer in
 
+[s_test_models]
+# Asks every model the same question and measures its answer time (LOG.TXT, speed in AGENTS.INI)
+test (the|your) models
+run (the|a) model test
+
 [s_list_models]
 # Reads, by provider, the short names of the models of AGENTS.INI (and the free OpenRouter models)
 give me the list of [all ](the|your) models

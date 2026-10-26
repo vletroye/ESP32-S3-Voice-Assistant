@@ -130,11 +130,16 @@ How to read this table:
   in the `[openrouter]` section of `AGENTS.INI`.
 - **Free OpenRouter models**, read from its live list (`GET https://openrouter.ai/api/v1/models`, ~800 KB, read
   model by model) at most once a day, while the assistant sleeps: those whose `pricing.prompt` and
-  `pricing.completion` are `"0"`, text in and text only out, without code or moderation models; the **6 most
-  recent**, plus **Free (auto)** (`openrouter/free`: OpenRouter picks a free model for each question). They come
-  after the other OpenRouter models, shown as "… (free)"; the last list read is kept in `/spiffs/or_free.json`
-  (offered at start-up, and when OpenRouter cannot be reached: tried again an hour later). They still need
-  `OpenRouter_key`, and have usage limits (about 50 requests a day without bought credit).
+  `pricing.completion` are `"0"`, text in and text only out, without code or moderation models; the **most
+  recent** ones (`Free_models` in `CONFIG.INI`, 6 by default, 15 at most), plus **Free (auto)**
+  (`openrouter/free`: OpenRouter picks a free model for each question). They come after the other OpenRouter
+  models, shown as "… (free)". `OpenRouter_free = off` stops reading the list (only Free (auto) is offered).
+  Models listed in the **`[openrouter_free_exclude]`** section of `AGENTS.INI` (slow, poor answers…) are never
+  offered: the next most recent ones take their place. The 24 most recent free models of the last list read are
+  kept in `/spiffs/or_free.json` (offered at start-up, and when OpenRouter cannot be reached: tried again an hour
+  later), so that a change of `Free_models` or of the exclusions applies at the next start; when they are not
+  enough, the list is read again at the next opportunity. They still need `OpenRouter_key`, and have usage limits
+  (about 50 requests a day without bought credit).
 - **Gemini** prices are not listed here: check Google's pricing page (the free tier of Google AI Studio has
   usage limits; past them, Gemini answers "limite d'utilisation atteinte").
 - **Deepest reasoning**: Opus 5.5 and GPT-6 Astra are the most capable models and the only ones that really
@@ -155,8 +160,8 @@ The models are listed in **`AGENTS.INI`**, one section per provider (`[anthropic
 
 ```ini
 [anthropic]
-# model id        = shown name        | reasoning | spoken name | Claude thinking (optional)
-claude-haiku-5-5  = Claude Haiku 5.5  | low       | Haiku       | disabled
+# model id        = shown name        | reasoning | spoken name | speed | Claude thinking (optional)
+claude-haiku-5-5  = Claude Haiku 5.5  | low       | Haiku       | fast  | disabled
 claude-sonnet-5-5 = Claude Sonnet 5.5 | low       | Sonnet      | between_tools
 
 [openrouter]
@@ -166,6 +171,7 @@ deepseek/deepseek-v4.1-flash-1017 = DeepSeek V4.1 Flash | low | DeepSeek
 - **Model id**: the id of the provider's API. **Shown name**: in the Settings screen. **Reasoning**: the effort
   asked (Anthropic and OpenRouter `low|medium|high`, OpenAI `none|low|…`, Google `minimal|low|…`). **Spoken name**:
   read in the spoken list of models, and said to choose it.
+- **Speed** (optional): `fast`, `average` or `slow`, written by the [model test](#model-test-teste-les-modèles).
 - **Claude thinking** (optional, Anthropic only): `disabled`, `between_tools` or `default` (left to the model).
   Without it, it comes from the name: `disabled` for a Haiku, `between_tools` for a Sonnet, left to the model
   otherwise (Opus cannot turn thinking off).
@@ -175,9 +181,39 @@ deepseek/deepseek-v4.1-flash-1017 = DeepSeek V4.1 Flash | low | DeepSeek
 - The file given with the firmware (`main/agents/agents.ini`) is installed as `/spiffs/agents.ini` at the first
   start, or when it is emptied; it is read at start-up (at most 32 models). In configuration mode it appears on the
   drive as **`AGENTS.INI`**, editable with its comments (wait a few seconds after saving, then press **Restart**).
+- **`[openrouter_free_exclude]`**: free OpenRouter models never offered, one id per line (`vendor/model:free`, as
+  shown in `LOG.TXT` or the Settings list); an id ending with `*` excludes every model starting with it
+  (`nvidia/*`), and `openrouter/free` removes Free (auto). Added empty to the file of an older firmware.
 - A model id set in `Chat_model` but not in the file still works: its provider then comes from the id
   (`vendor/model` → OpenRouter, `gpt-…` → OpenAI, `gemini-…` → Google, otherwise Anthropic), and it shows up as an
   extra entry in the Settings list.
+
+### Model test ("teste les modèles")
+
+Say "**teste les modèles**" ("test the models"): the assistant announces how many models it tests, then asks
+each model of `AGENTS.INI`, then each free OpenRouter model, **the same question** ("Explique en exactement 5
+phrases comment se forme un arc-en-ciel.", `test_question` in `app_lang.c`), one after the other, **without the
+conversation nor tools** but with the same instructions. The model chosen and its conversation are not changed.
+
+- The screen lists the models one line each as they are tested, numbered: "02 Sonnet…" while it is tested, then
+  "02 Sonnet : 1,2 s" (or "non disponible" without key, credit or answer); the last line stays visible. The
+  answers are not spoken, only each result: "Résultat de Sonnet : 1,2 seconde." (queued: the next model is
+  tested meanwhile, the speech of a result using a little of the network while it is measured), then at the end "Le modèle le
+  plus rapide était Flash-Lite."; the list stays 15 s on screen, then the assistant sleeps. Saying "Bonjour ESP"
+  (or a double tap) stops the test after the model being tested.
+- The time measured is the **time to the first words** of the answer: what you hear, as the assistant speaks as
+  soon as the first sentence arrives. It hardly depends on the length of the answer. To compare the models anyway,
+  `LOG.TXT` also gives the time to the end of the answer, its tokens (and the reasoning tokens when the provider
+  gives them apart) and the tokens per second after the first words. Asking for exactly 5 sentences keeps the
+  answers of similar length (models do not count their tokens, and each one cuts text into tokens differently).
+- **`LOG.TXT`** (on SPIFFS, shown on the configuration drive): one line per model, sorted by mean time, with its
+  last time, its **mean over every test** (`n` tests) and the date; models not available keep their mean. The
+  data is kept in `/spiffs/model_times.json`; the factory reset erases both.
+- At the end, the **speed** of each model of `AGENTS.INI` is written after its spoken name: `fast` in the third of
+  the range (between the fastest and the slowest mean) nearest the fastest, `slow` in the third nearest the
+  slowest, `average` otherwise. A single very slow model widens the range and makes the others `fast`. The free
+  models are not in `AGENTS.INI` and do not count. Comments and other lines of the file are kept.
+- Each test costs one short answer of each paid model.
 
 ### Typical latencies (measured with Claude Haiku 5.5)
 
@@ -335,6 +371,8 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.x.y:52199/mcp` |
 | `Homey_key` | Its API key (shown in the app's settings) | |
 | `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models), empty for none | `sk-or-…` |
+| `OpenRouter_free` | `on`: the free OpenRouter models are read from its live list once a day; `off`: not read (only Free (auto)) | `on` |
+| `Free_models` | How many free OpenRouter models are offered (1 to 15), the most recent ones, besides Free (auto); see the exclusions of `AGENTS.INI` | `6` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
 
@@ -342,7 +380,9 @@ The drive also holds **`PERSONA.TXT`**: free text always given to the assistant 
 (Claude, GPT, Gemini and OpenRouter alike), kept across conversations, "Au revoir" included. For example:
 
 ```text
-You are an everyday copilot named ESP, running on an ESP32-S3-BX3. Be direct, efficient, and dynamic. Always get straight to the point, favoring short, clear answers that work well spoken aloud. Your tone is warm, natural, and relaxed—like a sharp colleague who solves problems without giving long speeches.
+You are ESP, an everyday copilot running on an ESP32-S3-BOX-3. Your personality is inspired by JARVIS from Iron Man: polished, loyal, and quietly witty. You speak with calm composure and a touch of British understatement, and your humor is dry and occasional, never forced. You never explain your own joke.
+When something is amusing, let the wit land in a single line and move on. Do not joke when the user is stressed, frustrated, or dealing with something serious. In those moments, be calm, precise, and focused on solving the problem.
+Your tone is warm, composed, and dependable, like a trusted assistant who anticipates needs and handles things without fuss.
 ```
 
 `AGENTS.INI` holds the models offered (see [AGENTS.INI](#agentsini-the-models-offered)); like the phrase files,
@@ -388,6 +428,8 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_OPENAI_URL` | `https://api.openai.com/v1/` | `Base_url` of a new `CONFIG.INI` |
 | `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
+| `CONFIG_ASSISTANT_OPENROUTER_FREE` | `on` | Free OpenRouter models read when `OpenRouter_free` is not set |
+| `CONFIG_ASSISTANT_FREE_MODELS` | `6` | Free OpenRouter models offered when `Free_models` is not set |
 | `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |
 | `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |
@@ -536,6 +578,7 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 | Change the language (asks "Quelle langue voulez-vous ? Français ou anglais ?") | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
 | Answer to that question (within 30 s after it) | français · anglais · "en anglais s'il te plaît"… | French · English |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
+| Test the models: same question to each one, time to the first words spoken after each, results in `LOG.TXT`, speed written to `AGENTS.INI` (see [Model test](#model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
 | List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
 | Change the model (asks the provider first: "Quel fournisseur voulez-vous : Anthropic, OpenAI, Google ou OpenRouter ?") | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
 | Answer to that question (within 30 s): the provider's models are then read, numbered from 1 ("Voici les modèles proposés par Google. 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router"), or directly a model name ("Sonnet") | the same |
@@ -658,9 +701,14 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   is still spoken (a stuck connection used to drop every following sentence). After a reply cut twice or more,
   or with lost sentences, the screen adds "(Connexion trop lente : la voix n'a pas pu être lue de façon
   fluide.)" under the answer.
-- **Memory**: internal RAM (~46 KB free while running) is reserved for stacks, DMA and the network; large
-  buffers, JSON trees, TLS buffers (mbedTLS), the network task stacks and the LVGL objects live in PSRAM
-  (LVGL's allocator is redirected by `main/lvgl_psram/lv_psram.h` and the top-level `CMakeLists.txt`).
+- **Memory**: internal RAM (~22 KB free while running, ~47 KB at start-up, largest block ~7.5 KB) is reserved
+  for stacks, DMA and the network: TLS needs some of it at each connection (`esp-aes: Failed to allocate memory`
+  when it runs out, and the speech connections then fail). Large buffers, JSON trees, TLS buffers (mbedTLS), the
+  network task stacks and the LVGL objects live in PSRAM (LVGL's allocator is redirected by
+  `main/lvgl_psram/lv_psram.h` and the top-level `CMakeLists.txt`). A plain `malloc()` of less than 1 KB goes to
+  internal RAM (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`): many small blocks kept while running, such as the
+  phrases of the voice commands (`phrases.c`), are allocated in PSRAM with `heap_caps_malloc()`. The model test
+  runs on the main task's stack (8 KB) rather than on a task of its own.
 - **No echo cancellation**: speech detection ignores the start of each listening window (beep, end of the
   answer) and filters by volume; empty transcripts and typical Whisper hallucinations on silence are ignored.
 - **Costs**: transcription is billed by the duration of audio sent (only while listening); according to

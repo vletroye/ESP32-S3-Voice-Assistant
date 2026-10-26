@@ -196,6 +196,11 @@ void app_main(void)
         nvs_init_str_if_missing("Gemini_key", "");
         // OpenRouter: its key (the models offered are in AGENTS.INI)
         nvs_init_str_if_missing("OpenRouter_key", "");
+        // Free OpenRouter models: read from its live list (on / off) and how many offered
+        nvs_init_str_if_missing("OpenRouter_free", CONFIG_ASSISTANT_OPENROUTER_FREE);
+        char free_models[8];
+        snprintf(free_models, sizeof(free_models), "%d", CONFIG_ASSISTANT_FREE_MODELS);
+        nvs_init_str_if_missing("Free_models", free_models);
         // Reading speed of the answer on screen, in characters per second
         char scroll_speed[8];
         snprintf(scroll_speed, sizeof(scroll_speed), "%d", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);

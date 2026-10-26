@@ -57,6 +57,20 @@ menu "Example Configuration"
             With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the
             assistant sleeps (0: never). Default of Screen_off_s in CONFIG.INI, which takes precedence.
 
+    config ASSISTANT_OPENROUTER_FREE
+        string "Free OpenRouter models read from its live list (on or off)"
+        default "on"
+        help
+            Default of OpenRouter_free in CONFIG.INI, which takes precedence.
+
+    config ASSISTANT_FREE_MODELS
+        int "Free OpenRouter models offered"
+        default 6
+        range 1 15
+        help
+            The most recent free models of OpenRouter's live list offered, besides "openrouter/free".
+            Default of Free_models in CONFIG.INI, which takes precedence.
+
     config ASSISTANT_SCROLL_MODE
         string "Answer scrolling mode (line or smooth)"
         default "line"

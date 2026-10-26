@@ -236,6 +236,21 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.end_speech_ms = CONFIG_ASSISTANT_END_OF_SPEECH_MS;
     }
 
+    // Free OpenRouter models: read from its live list or not, and how many offered
+    char value[8] = CONFIG_ASSISTANT_OPENROUTER_FREE;
+    len = sizeof(value);
+    if (nvs_get_str(my_handle, "OpenRouter_free", value, &len) != ESP_OK) {
+        strlcpy(value, CONFIG_ASSISTANT_OPENROUTER_FREE, sizeof(value));
+    }
+    str_trim(value);
+    g_sys_param.openrouter_free = strcasecmp(value, "off") != 0 && strcasecmp(value, "no") != 0 &&
+                                  strcmp(value, "0") != 0 && strcasecmp(value, "false") != 0;
+    len = sizeof(value);
+    g_sys_param.free_models = CONFIG_ASSISTANT_FREE_MODELS;
+    if (nvs_get_str(my_handle, "Free_models", value, &len) == ESP_OK && atoi(value) > 0) {
+        g_sys_param.free_models = atoi(value) > 15 ? 15 : atoi(value);
+    }
+
     // Screen off after this many seconds without presence (BOX-3-SENSOR radar), 0: never
     char screen_off[8] = {0};
     len = sizeof(screen_off);
@@ -393,6 +408,8 @@ static const struct {
     { "Voice", CONFIG_ASSISTANT_TTS_VOICE },
     { "Scroll_speed", STR(CONFIG_ASSISTANT_REPLY_SCROLL_CPS) },
     { "Scroll_mode", CONFIG_ASSISTANT_SCROLL_MODE },
+    { "OpenRouter_free", CONFIG_ASSISTANT_OPENROUTER_FREE },
+    { "Free_models", STR(CONFIG_ASSISTANT_FREE_MODELS) },
     { "Volume", STR(CONFIG_VOLUME_LEVEL) },
     { "Screen_off_s", STR(CONFIG_ASSISTANT_SCREEN_OFF_S) },
     { "End_speech_ms", STR(CONFIG_ASSISTANT_END_OF_SPEECH_MS) },

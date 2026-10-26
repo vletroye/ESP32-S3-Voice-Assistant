@@ -44,6 +44,18 @@ typedef struct {
     const char *models_next;        /* next providers: %s provider, %s its models */
     const char *models_free;        /* %s: the free OpenRouter models */
     const char *and_word;           /* before the last name of a list: " et " */
+    const char *test_question;      /* "teste les modèles": the question asked to every model */
+    const char *test_start;         /* %d: number of models */
+    const char *test_running;
+    const char *test_unavailable_short; /* on screen, after the model's name */
+    const char *test_result;        /* %s spoken name, %s time ("1,2 secondes") */
+    const char *test_unavailable;   /* %s spoken name */
+    const char *test_done;          /* %s fastest */
+    const char *test_none;
+    char decimal_mark;              /* ',' or '.' */
+    const char *second_one;         /* "seconde", below second_one_below_ms */
+    const char *seconds;
+    int second_one_below_ms;
     const char *provider_ask;       /* "change de modèle": which provider first */
     const char *provider_unknown;
     const char *model_ask_intro;    /* %s: provider ("Anthropic"), its numbered models follow */

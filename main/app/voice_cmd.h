@@ -35,6 +35,7 @@ typedef enum {
     VOICE_CMD_NEW_CONVERSATION_ASK, /* "j'ai une autre question : ..." clear the conversation, ask the model */
     VOICE_CMD_EDIT_CONFIG,  /* "édite la config" with a PC connected: speak the reply, then restart in config mode */
     VOICE_CMD_RESTART,      /* "redémarre": speak the reply, then restart */
+    VOICE_CMD_TEST_MODELS,  /* "teste les modèles": speak the reply, then test the models (model_test.c) */
 } voice_cmd_t;
 
 /**

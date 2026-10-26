@@ -22,6 +22,7 @@
 #include "tts_stream.h"
 #include "app_ui_ctrl.h"
 #include "driver/usb_serial_jtag.h"
+#include "model_test.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -43,6 +44,7 @@ static PHRASE_LIST(s_goodbyes);
 static PHRASE_LIST_ALL_LANGUAGES(s_change_lang);
 static PHRASE_LIST(s_lang_shortcut);
 static PHRASE_LIST(s_list_models);
+static PHRASE_LIST(s_test_models);
 static PHRASE_LIST(s_change_model);
 static PHRASE_LIST(s_model_shortcut);
 static PHRASE_LIST(s_change_voice);
@@ -797,7 +799,7 @@ bool voice_cmd_ends_with_goodbye(const char *sentence)
 void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
-        &s_goodbyes, &s_list_models, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
+        &s_goodbyes, &s_list_models, &s_test_models, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
         &s_new_conversation, &s_edit_config, &s_restart, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_courtesy, &s_one_alone,
     };
@@ -880,6 +882,16 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         s_asked_us = esp_timer_get_time();
         *reply = reply_dup(app_lang_get()->lang_ask);
         return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, phrases_of(&s_test_models), NULL)) {
+        if (model_test_running()) {
+            *reply = reply_dup(app_lang_get()->test_running);
+            return VOICE_CMD_ANSWERED;
+        }
+        char text[160];
+        snprintf(text, sizeof(text), app_lang_get()->test_start, (int)llm_model_count);
+        *reply = reply_dup(text);
+        return VOICE_CMD_TEST_MODELS;
     }
     if (starts_with(norm, phrases_of(&s_list_models), NULL)) {
         *reply = models_by_provider();

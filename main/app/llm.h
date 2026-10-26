@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include "esp_err.h"
 #include "cJSON.h"
@@ -55,11 +56,21 @@ typedef struct {
     const char *thinking;   /* Claude thinking.type ("disabled", "between_tools"), "default" to leave it out,
                                NULL to choose it from the model's name */
     llm_provider_t provider;
+    const char *speed;      /* "fast", "average" or "slow", from the last model test (model_test.c), NULL if none */
 } llm_model_t;
+
+/** Measures of the last answer, set by the client of its provider */
+typedef struct {
+    int first_ms;           /* until the first words of the answer, -1 if none */
+    int total_ms;           /* until the end of the answer */
+    int answer_tokens;      /* tokens of the answer, without the reasoning */
+    int reasoning_tokens;   /* reasoning tokens, -1 when not given apart */
+} llm_stats_t;
+extern llm_stats_t llm_last_stats;
 
 /* The models of AGENTS.INI (llm_load_models()), then the free OpenRouter ones (openrouter_free.c) */
 #define LLM_FILE_MODELS_MAX         32
-#define LLM_OPENROUTER_FREE_MAX     7
+#define LLM_OPENROUTER_FREE_MAX     16      /* Free_models (at most 15) and "openrouter/free" */
 extern llm_model_t llm_models[];
 extern size_t llm_model_count;
 
@@ -74,6 +85,28 @@ void llm_load_models(void);
  * @brief Replace the free OpenRouter models offered, put after the models of AGENTS.INI. The strings are copied.
  */
 void llm_set_openrouter_free_models(const llm_model_t *models, size_t count);
+
+/**
+ * Free OpenRouter model excluded by the [openrouter_free_exclude] section of AGENTS.INI: its id, or an id
+ * ending with '*' that it starts with ("nvidia/" followed by '*')
+ */
+bool llm_free_excluded(const char *id);
+
+/** Number of models of AGENTS.INI (the first ones of llm_models) */
+size_t llm_agents_count(void);
+
+/**
+ * @brief Write the speed of the models of AGENTS.INI into the file: speeds[i] for llm_models[i] (NULL: unchanged),
+ *        put after the spoken name. Comments and the other lines are kept.
+ */
+void llm_save_speeds(const char *const *speeds);
+
+/**
+ * @brief Model test: ask one question to a model without the conversation nor tools, with the same instructions.
+ *        The configured model and its conversation are kept. Blocking (until the end of the answer).
+ * @param stats Its measures (first_ms -1 when it did not answer)
+ */
+llm_error_t llm_probe(const llm_model_t *model, const char *question, llm_stats_t *stats);
 
 /**
  * Provider serving a model id: its section of AGENTS.INI; for a model not listed, "vendor/model" is OpenRouter,

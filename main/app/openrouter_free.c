@@ -6,7 +6,9 @@
  * Free models of OpenRouter, read from its live list (GET /api/v1/models, ~800 KB) at most once a day: those
  * whose prompt and completion prices are "0", answering text to text (no code or moderation model), the most
  * recent first, plus "openrouter/free" (OpenRouter picks a free model for each question). The list is kept on
- * SPIFFS, so that the models are offered at start-up and when OpenRouter cannot be reached.
+ * SPIFFS, so that the models are offered at start-up and when OpenRouter cannot be reached. OpenRouter_free (off:
+ * the list is not read) and Free_models (how many) of CONFIG.INI; [openrouter_free_exclude] of AGENTS.INI. More
+ * candidates than offered are kept, so that a change of these applies at the next start, without reading again.
  */
 
 #include <stdio.h>
@@ -19,6 +21,7 @@
 #include "esp_timer.h"
 #include "cJSON.h"
 #include "llm.h"
+#include "settings.h"
 #include "openrouter_free.h"
 
 #define FREE_MODELS_URL         "https://openrouter.ai/api/v1/models"
@@ -28,8 +31,10 @@
 #define FREE_READ_CHUNK         1024
 /* One model of the list, at most (the largest is ~4 KB) */
 #define FREE_OBJECT_MAX         (12 * 1024)
-/* The most recent free models offered, plus the automatic choice */
-#define FREE_MODELS_KEPT        (LLM_OPENROUTER_FREE_MAX - 1)
+/* The most recent free models kept from the list (candidates; Free_models of them offered, the excluded ones left
+ * out), plus the automatic choice */
+#define FREE_MODELS_KEPT        24
+#define FREE_CACHE_MAX          4096
 #define FREE_AUTO_ID            "openrouter/free"
 
 static const char *TAG = "openrouter_free";
@@ -165,21 +170,39 @@ static void reader_feed(reader_t *r, const char *data, size_t n)
     }
 }
 
-/* The models chosen, given to llm.c: the most recent free ones, then the automatic choice */
-static void apply(const char *const *ids, const char *const *names, int n)
+/* Free models offered, the automatic choice left out */
+static int offered_free(int count)
 {
+    return count - (llm_free_excluded(FREE_AUTO_ID) ? 0 : 1);
+}
+
+/* The models chosen, given to llm.c: the most recent free ones, then the automatic choice; false when there were
+ * not enough candidates for Free_models */
+static bool apply(const char *const *ids, const char *const *names, int n)
+{
+    const sys_param_t *param = settings_get_parameter();
+    int wanted = param->openrouter_free ? param->free_models : 0;
     llm_model_t models[LLM_OPENROUTER_FREE_MAX];
-    char labels[LLM_OPENROUTER_FREE_MAX][64];
+    static char labels[LLM_OPENROUTER_FREE_MAX][64];     // static: kept off the stack (main task)
     int count = 0;
-    for (int i = 0; i < n && count < LLM_OPENROUTER_FREE_MAX - 1; i++, count++) {
+    for (int i = 0; i < n && count < wanted && count < LLM_OPENROUTER_FREE_MAX - 1; i++) {
+        if (llm_free_excluded(ids[i])) {
+            ESP_LOGI(TAG, "excluded (AGENTS.INI): %s", ids[i]);
+            continue;
+        }
         snprintf(labels[count], sizeof(labels[count]), "%s (free)", names[i]);
         models[count] = (llm_model_t) { ids[i], labels[count], "low", names[i] };
+        count++;
     }
-    models[count++] = (llm_model_t) { FREE_AUTO_ID, "Free (auto)", "low", "Free" };
+    if (!llm_free_excluded(FREE_AUTO_ID)) {
+        models[count++] = (llm_model_t) { FREE_AUTO_ID, "Free (auto)", "low", "Free" };
+    }
+    bool enough = (n == 0 || offered_free(count) >= wanted);
     llm_set_openrouter_free_models(models, count);
     for (int i = 0; i < count; i++) {
         ESP_LOGI(TAG, "offered: %s (%s)", models[i].label, models[i].id);
     }
+    return enough;
 }
 
 static void save_cache(reader_t *r)
@@ -211,7 +234,7 @@ void openrouter_free_init(void)
         return;
     }
     // On the heap: called from app_main, whose stack is small
-    const size_t size = 1024;
+    const size_t size = FREE_CACHE_MAX;
     char *text = malloc(size);
     size_t n = text ? fread(text, 1, size - 1, f) : 0;
     fclose(f);
@@ -224,19 +247,24 @@ void openrouter_free_init(void)
     free(text);
     const cJSON *fetched = cJSON_GetObjectItem(root, "fetched");
     s_fetched = cJSON_IsNumber(fetched) ? (time_t)fetched->valuedouble : 0;
-    const char *ids[LLM_OPENROUTER_FREE_MAX];
-    const char *names[LLM_OPENROUTER_FREE_MAX];
+    const char *ids[FREE_MODELS_KEPT];
+    const char *names[FREE_MODELS_KEPT];
     int count = 0;
     const cJSON *m;
     cJSON_ArrayForEach(m, cJSON_GetObjectItem(root, "models")) {
         const cJSON *id = cJSON_GetObjectItem(m, "id");
         const cJSON *name = cJSON_GetObjectItem(m, "name");
-        if (cJSON_IsString(id) && cJSON_IsString(name) && count < LLM_OPENROUTER_FREE_MAX - 1) {
+        if (cJSON_IsString(id) && cJSON_IsString(name) && count < FREE_MODELS_KEPT) {
             ids[count] = id->valuestring;
             names[count++] = name->valuestring;
         }
     }
-    apply(ids, names, count);   // the strings are copied
+    // The strings are copied. Not enough candidates (more models wanted or excluded since): the list is read again
+    // at the next opportunity rather than the next day
+    if (!apply(ids, names, count)) {
+        ESP_LOGI(TAG, "Not enough models in the last list: read again soon");
+        s_fetched = 0;
+    }
     cJSON_Delete(root);
     ESP_LOGI(TAG, "%d free models from the last list", count);
 }
@@ -246,6 +274,9 @@ bool openrouter_free_refresh(void)
     time_t now = time(NULL);
     struct tm t;
     localtime_r(&now, &t);
+    if (!settings_get_parameter()->openrouter_free) {
+        return false;   // OpenRouter_free = off: the list is not read
+    }
     if (t.tm_year + 1900 < 2024 || (s_fetched && now - s_fetched < FREE_REFRESH_S)) {
         return false;   // clock not set yet, or read less than a day ago
     }

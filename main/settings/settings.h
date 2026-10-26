@@ -38,6 +38,7 @@ typedef struct {
     char openrouter_models[OPENROUTER_MODELS_SIZE]; /* "id[=Name], ..." offered, "" for the defaults. */
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude, GPT, Gemini or OpenRouter). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
+    int screen_off_s;                 /* Screen off after this long without presence (radar dock), 0: never. */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
     char voice[VOICE_SIZE];           /* OpenAI voice reading the answers (marin, cedar...). */
     char country[COUNTRY_SIZE];       /* Where the user lives: ISO 3166-1 alpha-2 code ("BE"), "" if unknown. */

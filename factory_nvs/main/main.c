@@ -194,6 +194,8 @@ void app_main(void)
         char scroll_speed[8];
         snprintf(scroll_speed, sizeof(scroll_speed), "%d", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
         nvs_init_str_if_missing("Scroll_speed", scroll_speed);
+        // Screen off after this many seconds without presence (radar of the BOX-3-SENSOR dock), 0: never
+        nvs_init_str_if_missing("Screen_off_s", "10");
         // How the answer scrolls: "line" (one line at a time) or "smooth" (continuous)
         nvs_init_str_if_missing("Scroll_mode", "line");
         // Voice of the answers (same default as the assistant's ASSISTANT_TTS_VOICE)

@@ -40,6 +40,12 @@ void ui_ctrl_reply_set_logo(ui_ctrl_logo_t logo);
 /** Texts of the screens and day names of the clock in the current language (after a change at run time) */
 void ui_ctrl_apply_language(void);
 
+/** The list of models changed (free OpenRouter models read): the Settings screen shows the new one */
+void ui_ctrl_models_changed(void);
+
+/** The assistant sleeps on its clock (not the Settings or welcome screen): the screen may go off */
+bool ui_ctrl_screen_can_sleep(void);
+
 /** Leave the listening / answer panels (sleep) and show the Settings screen */
 void ui_ctrl_open_settings(void);
 

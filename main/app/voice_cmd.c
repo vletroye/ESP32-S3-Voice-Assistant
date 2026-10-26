@@ -122,7 +122,7 @@ static const struct {
     { "en", { "anglais", "english", "inglish", "l anglais", "angle", NULL } },     /* "angle": heard for "anglais" */
 };
 
-/* Numbers 1..9 as said (digits, French and English words, ordinals); "un"/"une" are articles, see find_model() */
+/* Numbers 1..13 as said (digits, French and English words, ordinals); "un"/"une" are articles, see find_model() */
 static const char *const s_numbers[][7] = {
     { "1", "premier", "première", "one", "first", NULL, NULL },
     { "2", "deux", "deuxième", "second", "seconde", "two", NULL },
@@ -134,6 +134,9 @@ static const char *const s_numbers[][7] = {
     { "8", "huit", "huitième", "eight", "eighth", NULL, NULL },
     { "9", "neuf", "neuvième", "nine", "ninth", NULL, NULL },
     { "10", "dix", "dixième", "ten", "tenth", NULL, NULL },
+    { "11", "onze", "onzième", "eleven", "eleventh", NULL, NULL },
+    { "12", "douze", "douzième", "twelve", "twelfth", NULL, NULL },
+    { "13", "treize", "treizième", "thirteen", "thirteenth", NULL, NULL },
 };
 
 typedef enum {

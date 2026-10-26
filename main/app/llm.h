@@ -56,8 +56,16 @@ typedef struct {
 
 /* The fixed models of Anthropic, OpenAI and Google, then the OpenRouter ones (llm_set_openrouter_models()) */
 #define LLM_OPENROUTER_MAX_MODELS   6
+/* Free OpenRouter models read from its live list, after the others (openrouter_free.c) */
+#define LLM_OPENROUTER_FREE_MAX     7
 extern llm_model_t llm_models[];
 extern size_t llm_model_count;
+
+/**
+ * @brief Replace the free OpenRouter models offered, put after the other OpenRouter models. The strings are
+ *        copied.
+ */
+void llm_set_openrouter_free_models(const llm_model_t *models, size_t count);
 
 /**
  * @brief Replace the OpenRouter models offered (Settings screen, voice) by a list from CONFIG.INI.

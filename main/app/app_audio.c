@@ -21,6 +21,7 @@
 #include "esp_spiffs.h"
 #include "esp_vfs.h"
 #include "app_sr.h"
+#include "app_presence.h"
 #include "app_audio.h"
 #include "bsp_board.h"
 #include "bsp/esp-bsp.h"
@@ -338,6 +339,8 @@ void sr_handler_task(void *pvParam)
         }
 
         if (WAKENET_DETECTED == result.wakenet_mode) {
+            // Someone speaks to the assistant: the screen goes on if it was off
+            app_presence_activity();
             // A new question interrupts the reply being spoken
             assistant_reply_stop();
             audio_record_start();

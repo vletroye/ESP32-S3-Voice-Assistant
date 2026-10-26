@@ -62,6 +62,10 @@ which has been largely rewritten.
   outline of the full bar, filled from the bottom with the volume; speaker icon and percentage below it, all
   centred under the Settings icon) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out when
   disconnected), in the same style.
+- **Screen off when nobody is there** (with the ESP32-S3-BOX-3-SENSOR dock): its presence radar switches the
+  screen off after `Screen_off_s` seconds without presence (10 by default) while the assistant sleeps on its
+  clock, and on again when someone comes, at the wake word or at a touch. Only the backlight: the wake word keeps
+  being heard. With another dock, the screen stays on.
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
 - **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
 
@@ -124,6 +128,13 @@ How to read this table:
 - **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three
   default models were among the most used on OpenRouter in October 2026 (prices as shown there then); replace them
   with `OpenRouter_list` in `CONFIG.INI`.
+- **Free OpenRouter models**, read from its live list (`GET https://openrouter.ai/api/v1/models`, ~800 KB, read
+  model by model) at most once a day, while the assistant sleeps: those whose `pricing.prompt` and
+  `pricing.completion` are `"0"`, text in and text only out, without code or moderation models; the **6 most
+  recent**, plus **Free (auto)** (`openrouter/free`: OpenRouter picks a free model for each question). They come
+  after the other OpenRouter models, shown as "… (free)"; the last list read is kept in `/spiffs/or_free.json`
+  (offered at start-up, and when OpenRouter cannot be reached: tried again an hour later). They still need
+  `OpenRouter_key`, and have usage limits (about 50 requests a day without bought credit).
 - **Gemini** prices are not listed here: check Google's pricing page (the free tier of Google AI Studio has
   usage limits; past them, Gemini answers "limite d'utilisation atteinte").
 - **Deepest reasoning**: Opus 5.5 and GPT-6 Astra are the most capable models and the only ones that really
@@ -182,6 +193,8 @@ Main modules of the assistant (`main/app/`):
 | `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
 | `openai_chat.c` | GPT client (Responses API, SSE streaming), history |
 | `openrouter_chat.c` | OpenRouter client (Chat Completions, SSE streaming), history kept on the device |
+| `openrouter_free.c` | Free OpenRouter models from its live list (once a day, parsed model by model), kept on SPIFFS |
+| `app_presence.c` | Presence radar (AT581X) of the BOX-3-SENSOR dock: screen off after `Screen_off_s` without presence |
 | `gemini_chat.c` | Gemini client (`streamGenerateContent`, SSE streaming), history kept on the device |
 | `llm_sse.c` | Server-sent events parser shared by both clients |
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
@@ -233,7 +246,8 @@ Tap the gear icon on the home screen:
 - **Modèle / Model**: the model answering the questions (see the table above), numbered as in the voice
   command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra,
   7 Gemini 3.5 Flash-Lite, 8 Gemini 3.8 Flash, 9 Gemini 4 Argon, then the OpenRouter models from 10 (10 DeepSeek
-  V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default).
+  V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default), then the free ones (13 to 19 with the
+  defaults; numbers up to 13 can be said, the others are chosen by name).
 - **Voix / Voice**: the OpenAI voice reading the answers: Marin, Cedar (both recommended by OpenAI), Alloy,
   Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
   session reconnects (~2 s) and the new voice introduces itself.
@@ -265,6 +279,7 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `City` | Your town (also set by voice) | `Evere` |
 | `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
+| `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 
 The drive also holds **`PERSONA.TXT`**: free text always given to the assistant with every question
@@ -547,6 +562,13 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 ## Design notes
 
+- **Presence radar**: the AT581X of the BOX-3-SENSOR dock is on the dock's own I2C bus (GPIO 40/41, the port the
+  board does not use) and signals a presence on GPIO 21. `app_presence.c` probes it at start-up (nothing happens
+  without it), sets it up with Espressif's default configuration (`espressif/at581x` 1.0.0, the legacy I2C driver
+  used by the board support; 2.x uses the new driver, which cannot be mixed with it) and polls its output every
+  200 ms. Only the backlight is switched (`bsp_display_backlight_off/on`): unlike Espressif's factory demo, which
+  stops the codec and enters light sleep, the wake word keeps working. A touch is seen through LVGL's inactivity
+  time.
 - **No pop at start-up or restart**: the ES8311 driver switches the speaker amplifier (GPIO 46) on before the
   DAC starts, and the DAC output settling was heard as a crackle at each start-up. `bsp_codec_init()` holds the
   amplifier pin low (`gpio_hold_en`, the driver's writes are then ignored), plays 128 ms of silence, then switches

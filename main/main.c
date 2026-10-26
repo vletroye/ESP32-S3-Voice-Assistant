@@ -29,6 +29,8 @@
 #include "app_memory.h"
 #include "voice_cmd.h"
 #include "phrases.h"
+#include "openrouter_free.h"
+#include "app_presence.h"
 #include "assistant.h"
 #include "app_volume.h"
 #include "tools.h"
@@ -562,6 +564,8 @@ void app_main()
     llm_set_openrouter_models(sys_param->openrouter_models);
 
     bsp_spiffs_mount();
+    // The free OpenRouter models of the last list read (the live one is read once a day, below)
+    openrouter_free_init();
     bsp_i2c_init();
 
     bsp_display_cfg_t cfg = {
@@ -583,6 +587,8 @@ void app_main()
 
     ESP_LOGI(TAG, "Display LVGL demo");
     bsp_display_backlight_on();
+    // Screen off when nobody is there (radar of the BOX-3-SENSOR dock, if present)
+    app_presence_init(sys_param->screen_off_s);
     ui_ctrl_init();
     app_network_start();
 
@@ -651,6 +657,11 @@ void app_main()
         if (s_model_requested) {
             s_model_requested = false;
             assistant_set_model(s_requested_model);
+        }
+        // The free OpenRouter models, read again once a day while asleep (a few seconds, ~800 KB)
+        if (seconds % 60 == 30 && ui_ctrl_is_asleep() && !s_reply_active && !record_flag &&
+                wifi_connected_already() == WIFI_STATUS_CONNECTED_OK && openrouter_free_refresh()) {
+            ui_ctrl_models_changed();
         }
         // Conversation and volume saved once the assistant is back to sleep (sleep panel shown, no answer in
         // progress, not listening, nothing played for a while): never during an exchange, follow-up included.

@@ -29,7 +29,7 @@ static const char *TAG = "llm";
  * ones by default, else the list of CONFIG.INI (OpenRouter_list), with a low reasoning effort.
  */
 #define LLM_FIXED_MODELS    9
-llm_model_t llm_models[LLM_FIXED_MODELS + LLM_OPENROUTER_MAX_MODELS] = {
+llm_model_t llm_models[LLM_FIXED_MODELS + LLM_OPENROUTER_MAX_MODELS + LLM_OPENROUTER_FREE_MAX] = {
     { "claude-haiku-5-5",  "Claude Haiku 5.5",  "low",  "Haiku" },
     { "claude-sonnet-5-5", "Claude Sonnet 5.5", "low",  "Sonnet" },
     { "claude-opus-5-5",   "Claude Opus 5.5",   "low",  "Opus" },
@@ -44,6 +44,9 @@ llm_model_t llm_models[LLM_FIXED_MODELS + LLM_OPENROUTER_MAX_MODELS] = {
     { "minimax/minimax-m3.1-flash", "MiniMax M3.1 Flash", "low", "MiniMax" },
 };
 size_t llm_model_count = LLM_FIXED_MODELS + 3;
+/* OpenRouter models (defaults or CONFIG.INI), then the free ones */
+static size_t s_openrouter_count = 3;
+static size_t s_free_count = 0;
 
 /* "deepseek-v4.1-flash" -> "Deepseek V4.1 Flash" (allocated) */
 static char *name_from_id(const char *id)
@@ -114,9 +117,28 @@ void llm_set_openrouter_models(const char *list)
     }
     free(copy);
     if (count) {
-        llm_model_count = LLM_FIXED_MODELS + count;
+        s_openrouter_count = count;
+        llm_model_count = LLM_FIXED_MODELS + s_openrouter_count;
+        s_free_count = 0;
         ESP_LOGI(TAG, "%u OpenRouter model(s) from CONFIG.INI", (unsigned)count);
     }
+}
+
+void llm_set_openrouter_free_models(const llm_model_t *models, size_t count)
+{
+    // Copied after the other OpenRouter models; the strings of a former list are not freed: a task may still be
+    // reading them (a few hundred bytes a day)
+    size_t first = LLM_FIXED_MODELS + s_openrouter_count;
+    size_t n = 0;
+    for (size_t i = 0; i < count && n < LLM_OPENROUTER_FREE_MAX; i++) {
+        llm_models[first + n].id = strdup(models[i].id);
+        llm_models[first + n].label = strdup(models[i].label);
+        llm_models[first + n].effort = models[i].effort;
+        llm_models[first + n].spoken = strdup(models[i].spoken);
+        n++;
+    }
+    s_free_count = n;
+    llm_model_count = first + s_free_count;
 }
 
 /* Conversation history kept across sleep and restarts (SPIFFS "storage" partition) */

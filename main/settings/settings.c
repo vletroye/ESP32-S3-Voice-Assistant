@@ -226,6 +226,15 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
     }
 
+    // Screen off after this many seconds without presence (BOX-3-SENSOR radar), 0: never
+    char screen_off[8] = {0};
+    len = sizeof(screen_off);
+    g_sys_param.screen_off_s = 10;
+    if (nvs_get_str(my_handle, "Screen_off_s", screen_off, &len) == ESP_OK && screen_off[0]) {
+        int s = atoi(screen_off);
+        g_sys_param.screen_off_s = s < 0 ? 0 : s;
+    }
+
     // Speaker volume (optional, saved when changed by voice)
     char volume[8] = {0};
     len = sizeof(volume);

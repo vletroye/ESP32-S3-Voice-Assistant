@@ -22,7 +22,7 @@ static const app_lang_t s_languages[] = {
         .sorry = "Désolé, je n'ai pas compris.",
         .wifi_connecting = "Connexion au Wi-Fi\n",
         .wifi_failed = "Wi-Fi non connecté\n",
-        .system_prompt = "Tu es un assistant vocal qui parle français. Ta réponse est lue à voix haute "
+        .system_prompt = "Tu es un assistant vocal nommé ESP qui parle français. Ta réponse est lue à voix haute "
                          "par une synthèse vocale : réponds de façon courte et orale, en une à trois "
                          "phrases simples, comme dans une conversation. N'utilise jamais de Markdown, "
                          "de listes, de titres, d'émojis ni de symboles qui ne se prononcent pas. "
@@ -161,7 +161,7 @@ static const app_lang_t s_languages[] = {
         .sorry = "Sorry, I can't understand.",
         .wifi_connecting = "Connecting to Wi-Fi\n",
         .wifi_failed = "Not Connected to Wi-Fi\n",
-        .system_prompt = "You are a voice assistant. Your answer is read aloud by a speech synthesizer: "
+        .system_prompt = "You are a voice assistant named ESP. Your answer is read aloud by a speech synthesizer: "
                          "answer briefly and conversationally, in one to three simple sentences. Never use "
                          "Markdown, lists, headings, emojis or symbols that cannot be pronounced. If a "
                          "question calls for a long answer, give the essentials and offer to elaborate. Each user "

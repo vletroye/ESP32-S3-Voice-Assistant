@@ -119,7 +119,7 @@ static void listen_label_set_text(const char *text)
 /* ---------- Settings screen: language and model, saved to NVS with the Save button, then restart ---------- */
 
 #define SETTINGS_RESTART_DELAY_MS       1000
-#define SETTINGS_OPTIONS_SIZE           640     /* up to 15 models */
+#define SETTINGS_OPTIONS_SIZE           1024    /* up to 22 models */
 
 /* Languages offered, in the order of the dropdown */
 static const char *const s_settings_languages[] = { "fr", "en" };
@@ -238,6 +238,43 @@ static void settings_voice_changed_cb(lv_event_t *e)
     tts_stream_end();
 }
 
+/* The models, numbered as in the voice command "utilise le modèle 3"; returns the index of the current one */
+static uint16_t model_options(char *options, size_t size)
+{
+    const sys_param_t *param = settings_get_parameter();
+    options[0] = '\0';
+    uint16_t model_selected = llm_model_count;
+    for (size_t i = 0; i < llm_model_count; i++) {
+        strlcat(options, i ? "\n" : "", size);
+        char numbered[72];
+        snprintf(numbered, sizeof(numbered), "%u. %s", (unsigned)(i + 1), llm_models[i].label);
+        strlcat(options, numbered, size);
+        if (strcmp(param->chat_model, llm_models[i].id) == 0) {
+            model_selected = i;
+        }
+    }
+    // The current model if it was set in CONFIG.INI and is not listed
+    if (model_selected == llm_model_count) {
+        strlcat(options, "\n", size);
+        strlcat(options, param->chat_model, size);
+    }
+    return model_selected;
+}
+
+void ui_ctrl_models_changed(void)
+{
+    static char options[SETTINGS_OPTIONS_SIZE];
+    bsp_display_lock(0);
+    if (s_model_dropdown) {
+        uint16_t selected = model_options(options, sizeof(options));
+        lv_dropdown_set_options(s_model_dropdown, options);
+        lv_dropdown_set_selected(s_model_dropdown, selected);
+        s_model_stored = selected;
+        lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+    }
+    bsp_display_unlock();
+}
+
 /* A row of the Settings panel: label on the left, dropdown on the right (same look as the generated row) */
 static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width)
 {
@@ -294,22 +331,7 @@ static void settings_screen_setup(void)
     // Model row: the listed models, plus the current one if it was set in CONFIG.INI and is not listed
     s_model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
     s_model_row_label = lv_obj_get_child(lv_obj_get_parent(s_model_dropdown), 0);
-    options[0] = '\0';
-    uint16_t model_selected = llm_model_count;
-    for (size_t i = 0; i < llm_model_count; i++) {
-        strlcat(options, i ? "\n" : "", sizeof(options));
-        // Numbered as in the voice command "utilise le modèle 3"
-        char numbered[56];
-        snprintf(numbered, sizeof(numbered), "%u. %s", (unsigned)(i + 1), llm_models[i].label);
-        strlcat(options, numbered, sizeof(options));
-        if (strcmp(param->chat_model, llm_models[i].id) == 0) {
-            model_selected = i;
-        }
-    }
-    if (model_selected == llm_model_count) {
-        strlcat(options, "\n", sizeof(options));
-        strlcat(options, param->chat_model, sizeof(options));
-    }
+    uint16_t model_selected = model_options(options, sizeof(options));
     s_model_stored = model_selected;
     settings_dropdown_setup(s_model_dropdown, options, model_selected, settings_changed_cb);
 
@@ -608,6 +630,11 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
 bool ui_ctrl_is_asleep(void)
 {
     return current_panel == UI_CTRL_PANEL_SLEEP;
+}
+
+bool ui_ctrl_screen_can_sleep(void)
+{
+    return current_panel == UI_CTRL_PANEL_SLEEP && lv_scr_act() == ui_ScreenListen;
 }
 
 void ui_ctrl_show_panel(ui_ctrl_panel_t panel, uint16_t timeout)

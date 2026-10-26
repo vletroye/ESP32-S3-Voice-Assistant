@@ -190,6 +190,7 @@ Main modules of the assistant (`main/app/`):
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
+| `phrases.c` | Phrase patterns (`[optional]`, `(choice\|choice)`) expanded once into the phrase lists of the voice commands |
 | `voice_cmd.c` | Settings by voice: language, model (provider, then model), voice, country and town, configuration mode ("change la langue", "change de modèle", "prends la voix Cedar", "change ma ville", "édite la config") |
 | `homey_mcp.c` | MCP client for a Homey Pro (local network, JSON answers): tool list at start-up, selected tools offered to Claude |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
@@ -327,7 +328,41 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 ## Voice commands
 
 Phrases recognised by the device itself. Punctuation and case are ignored ("Au revoir !" works), and hyphens
-and apostrophes count as spaces ("souviens-toi" = "souviens toi").
+and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the phrases; in the
+source they are written as patterns (see [Writing voice phrases](#writing-voice-phrases-patterns)).
+
+### Writing voice phrases (patterns)
+
+The phrase lists of `voice_cmd.c` and `app_memory.c` are written as **patterns**, each standing for several
+phrases (`main/app/phrases.c`):
+
+| Syntax | Meaning | Example | Phrases |
+| --- | --- | --- | --- |
+| `[…]` | optional part | `change[r] la langue` | change la langue · changer la langue |
+| `(a\|b\|c)` | one of the choices | `change (la\|de\|ta) langue` | change la langue · change de langue · change ta langue |
+| `(a\|)` | a choice may be empty | `(le \|)modèle` | le modèle · modèle |
+| nested, combined | groups inside groups | `[[j ai ]une ]autre question` | j ai une autre question · une autre question · autre question |
+
+For example, `je veux (éditer|editer|modifier) (la|le|les fichier[s] de) config[uration]` stands for 24 phrases.
+Patterns are written in the normalized form the transcription is compared with: lowercase, accents kept,
+apostrophes and hyphens as spaces (`j ai`, `let s`), no punctuation. Spaces doubled or left at the ends by an
+empty part are removed. Add a variant where it is needed, e.g. both `éditer` and `editer` when the transcription
+writes either (`(é|e)diter` works too).
+
+A list is declared with `PHRASE_LIST(...)`:
+
+```c
+static phrase_list_t s_change_lang = PHRASE_LIST(
+    "change[r] (la|de|ta) langue", "change [the ]language", "switch [the ]language"
+);
+// used as: starts_with(norm, phrases_of(&s_change_lang), &len)
+```
+
+The phrases are made once at start-up (`voice_cmd_init()`, `app_memory_init()`; the log shows
+`phrases: 77 phrases from 6 patterns ("je veux …")`) and kept **longest first**, so that a phrase beginning
+another one never hides it ("parle" does not take "parle en anglais" from "parle en"). A pattern with unbalanced
+brackets, or standing for more than 256 phrases, is left out with an error in the log. Matching is the same as
+with plain lists (whole words, from the start of what is said) and costs nothing more at run time.
 
 ### Wake words (detected locally, without Internet)
 

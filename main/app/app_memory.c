@@ -12,6 +12,7 @@
 #include <time.h>
 #include "esp_log.h"
 #include "app_memory.h"
+#include "phrases.h"
 #include "app_lang.h"
 #include "settings.h"
 
@@ -23,24 +24,24 @@
 
 static const char *TAG = "memory";
 
-/* Phrases as normalized by app_text_normalize(); French and English are both accepted */
-static const char *const s_remember[] = {
-    "souviens toi que", "souviens toi bien que", "rappelle toi que", "retiens que", "retiens bien que",
-    "n oublie pas que", "note que", "mémorise que", "memorise que",
-    "remember that", "please remember that", "don t forget that", "note that", "memorize that", NULL
-};
-static const char *const s_forget[] = {
-    "oublie que", "oublie le fait que", "forget that", NULL
-};
-static const char *const s_forget_all[] = {
-    "oublie tout", "efface ta mémoire", "efface toute ta mémoire", "forget everything", NULL
-};
-static const char *const s_list[] = {
-    "dis moi tout ce que tu as mémorisé", "dis moi ce que tu as mémorisé", "qu est ce que tu as mémorisé",
-    "qu as tu mémorisé", "dis moi tout ce que tu as retenu", "dis moi ce que tu as retenu",
-    "qu est ce que tu as retenu", "tell me everything you remember", "what do you remember",
-    "what have you memorized", NULL
-};
+/*
+ * Phrases as normalized by app_text_normalize(), written as patterns (phrases.h: "[optional]",
+ * "(choice|choice)"); French and English are both accepted
+ */
+static phrase_list_t s_remember = PHRASE_LIST(
+    "souviens toi[ bien] que", "rappelle toi que", "retiens[ bien] que", "n oublie pas que", "note que",
+    "m(é|e)morise que", "[please ]remember that", "don t forget that", "note that", "memorize that"
+);
+static phrase_list_t s_forget = PHRASE_LIST(
+    "oublie[ le fait] que", "forget that"
+);
+static phrase_list_t s_forget_all = PHRASE_LIST(
+    "oublie tout", "efface[ toute] ta mémoire", "forget everything"
+);
+static phrase_list_t s_list = PHRASE_LIST(
+    "dis moi[ tout] ce que tu as (mémorisé|retenu)", "qu est ce que tu as (mémorisé|retenu)", "qu as tu mémorisé",
+    "tell me everything you remember", "what do you remember", "what have you memorized"
+);
 
 /* MEMORY.TXT as saved (comment lines included), and the notes alone, as given to the assistant */
 static char *s_file = NULL;
@@ -75,6 +76,11 @@ static void set_file(const char *file)
 
 void app_memory_init(const char *notes)
 {
+    // The phrases of the memory commands, made from their patterns now rather than at the first command
+    phrases_of(&s_remember);
+    phrases_of(&s_forget);
+    phrases_of(&s_forget_all);
+    phrases_of(&s_list);
     set_file(notes);
     ESP_LOGI(TAG, "%u bytes of notes (%u with the comments)", (unsigned)strlen(app_memory_notes()),
              (unsigned)(s_file ? strlen(s_file) : 0));
@@ -313,9 +319,9 @@ memory_cmd_t app_memory_handle(const char *text, char **reply)
 
     memory_cmd_t result = MEMORY_CMD_NONE;
     const char *phrase;
-    if (match(norm, s_list, true)) {
+    if (match(norm, phrases_of(&s_list), true)) {
         result = list(reply);
-    } else if (match(norm, s_forget_all, true)) {
+    } else if (match(norm, phrases_of(&s_forget_all), true)) {
         // The notes go, the comment lines stay
         char *comments = calloc(1, strlen(memory_file()) + 1);
         for (const char *line = memory_file(); comments && *line;) {
@@ -336,13 +342,13 @@ memory_cmd_t app_memory_handle(const char *text, char **reply)
             result = MEMORY_CMD_CHANGED;
         }
         free(comments);
-    } else if ((phrase = match(norm, s_remember, false)) != NULL) {
+    } else if ((phrase = match(norm, phrases_of(&s_remember), false)) != NULL) {
         char *fact = text_after_words(text, word_count(phrase));
         if (fact && fact[0]) {
             result = remember(fact, reply);
         }
         free(fact);
-    } else if ((phrase = match(norm, s_forget, false)) != NULL) {
+    } else if ((phrase = match(norm, phrases_of(&s_forget), false)) != NULL) {
         char *what = text_after_words(text, word_count(phrase));
         if (what && what[0]) {
             result = forget(what, reply);

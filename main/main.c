@@ -594,6 +594,7 @@ void app_main()
 
     // The Persona (name, who made it, who it talks to...) and the remembered notes complete the base instructions
     app_memory_init(sys_param->memory);
+    voice_cmd_init();
     weather_places_load();
     char *system_prompt = build_system_prompt();
     llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,

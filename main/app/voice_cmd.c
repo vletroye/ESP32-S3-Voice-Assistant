@@ -17,6 +17,7 @@
 #include "llm.h"
 #include "settings.h"
 #include "voice_cmd.h"
+#include "phrases.h"
 #include "assistant.h"
 #include "tts_stream.h"
 #include "app_ui_ctrl.h"
@@ -32,91 +33,67 @@
 
 static const char *TAG = "voice_cmd";
 
-/* Phrases as normalized by app_text_normalize(); French and English are both accepted */
-static const char *const s_change_lang[] = {
-    "change la langue", "changer la langue", "change de langue", "changer de langue", "change ta langue",
-    "change the language", "change language", "switch language", "switch the language", NULL
-};
-static const char *const s_lang_shortcut[] = {
-    "parle en", "parle", "parlons en", "parlons", "on parle", "passe en", "passe à l", "réponds en", "speak in",
-    "speak", "switch to", "answer in", NULL
-};
-static const char *const s_change_model[] = {
-    "change de modèle", "change le modèle", "changer de modèle", "changer le modèle", "change de modele",
-    "change le modele", "change ton modèle", "change the model", "change model", "switch model",
-    "switch the model", NULL
-};
-static const char *const s_model_shortcut[] = {
-    "utilise le modèle", "utilise le modele", "prends le modèle", "passe au modèle", "passe au modele",
-    "modèle numéro", "modèle", "modele", "use model", "use the model", "switch to model", "model number",
-    "model", NULL
-};
-static const char *const s_change_voice[] = {
-    "change de voix", "change la voix", "change ta voix", "changer de voix", "changer la voix", "changer ta voix",
-    "change ma voix", "une autre voix", "autre voix", "change the voice", "change voice", "change your voice",
-    "switch voice", "switch the voice", "another voice", NULL
-};
-static const char *const s_voice_shortcut[] = {
-    "utilise la voix", "prends la voix", "passe à la voix", "mets la voix", "choisis la voix", "voix numéro",
-    "la voix", "voix", "use the voice", "use voice", "switch to voice", "switch to the voice", "voice number",
-    "voice", NULL
-};
+/*
+ * Phrases as normalized by app_text_normalize(), written as patterns (phrases.h: "[optional]",
+ * "(choice|choice)"); French and English are both accepted
+ */
+static phrase_list_t s_change_lang = PHRASE_LIST(
+    "change[r] (la|de|ta) langue", "change [the ]language", "switch [the ]language"
+);
+static phrase_list_t s_lang_shortcut = PHRASE_LIST(
+    "parle[ en]", "parlons[ en]", "on parle", "passe en", "passe à l", "réponds en", "speak[ in]", "switch to",
+    "answer in"
+);
+static phrase_list_t s_change_model = PHRASE_LIST(
+    "change[r] (de|le|ton) mod(è|e)le", "change [the ]model", "switch [the ]model"
+);
+static phrase_list_t s_model_shortcut = PHRASE_LIST(
+    "(utilise|prends) le mod(è|e)le", "passe au mod(è|e)le", "mod(è|e)le[ numéro]", "use [the ]model",
+    "switch to model", "model[ number]"
+);
+static phrase_list_t s_change_voice = PHRASE_LIST(
+    "change[r] (de|la|ta|ma) voix", "[une ]autre voix", "change [(the|your) ]voice", "switch [the ]voice",
+    "another voice"
+);
+static phrase_list_t s_voice_shortcut = PHRASE_LIST(
+    "(utilise|prends|mets|choisis) la voix", "passe à la voix", "[la ]voix[ numéro]", "use [the ]voice",
+    "switch to [the ]voice", "voice[ number]"
+);
 /* A new conversation, as after "au revoir" (normalized: lowercase, apostrophes as spaces) */
-static const char *const s_new_conversation[] = {
-    "démarrons une nouvelle discussion", "démarrons une nouvelle conversation", "commençons une nouvelle discussion",
-    "commençons une nouvelle conversation", "démarre une nouvelle discussion", "démarre une nouvelle conversation",
-    "commence une nouvelle discussion", "commence une nouvelle conversation", "on démarre une nouvelle discussion",
-    "on commence une nouvelle discussion", "on recommence à zéro", "recommençons à zéro", "nouvelle discussion",
-    "nouvelle conversation", "j ai une autre question", "une autre question", "autre question",
-    "passons à autre chose", "on passe à autre chose", "parlons d autre chose", "changeons de sujet",
-    "on change de sujet", "changement de sujet", "let s start a new conversation", "start a new conversation",
-    "new conversation", "new chat", "i have another question", "another question", "let s move on",
-    "let s talk about something else", "let s change the subject", "change of subject", NULL
-};
+static phrase_list_t s_new_conversation = PHRASE_LIST(
+    "(démarrons|commençons|[on ](démarre|commence)) une nouvelle (discussion|conversation)",
+    "(on recommence|recommençons) à zéro", "nouvelle (discussion|conversation)", "[[j ai ]une ]autre question",
+    "(passons|on passe) à autre chose", "parlons d autre chose", "(changeons|on change) de sujet",
+    "changement de sujet", "[let s ]start a new conversation", "new (conversation|chat)",
+    "[i have ]another question", "let s move on", "let s talk about something else", "let s change the subject",
+    "change of subject"
+);
 /* Configuration files (normalized: "éditer" and "editer", "la config" and "le config" as often transcribed) */
-static const char *const s_edit_config[] = {
-    "je veux éditer la configuration", "je veux éditer la config", "je veux editer la configuration",
-    "je veux editer la config", "je veux éditer le config", "je veux éditer les fichiers de configuration",
-    "je veux éditer les fichiers de config", "je veux éditer les fichier de configuration",
-    "je veux éditer les fichier de config", "je veux editer les fichiers de configuration",
-    "je veux editer les fichiers de config", "je veux modifier la configuration", "je veux modifier la config",
-    "je veux modifier les fichiers de configuration", "je veux modifier les fichiers de config",
-    "édite la configuration", "édite la config", "édite le configuration", "édite le config",
-    "édite les fichiers de configuration", "édite les fichiers de config", "édite les fichier de configuration",
-    "édite les fichier de config", "edite la configuration", "edite la config", "edite le config",
-    "edite les fichiers de configuration", "edite les fichiers de config", "éditer la configuration",
-    "éditer la config", "éditer les fichiers de configuration", "éditer les fichiers de config",
-    "modifie la configuration", "modifie la config", "modifie les fichiers de configuration",
-    "modifie les fichiers de config", "ouvre les fichiers de configuration", "ouvre les fichiers de config",
-    "ouvre la configuration", "ouvre la config", "mode configuration", "passe en mode configuration",
-    "i want to edit the configuration", "i want to edit the config", "edit the configuration", "edit the config",
-    "edit the configuration files", "edit the config files", "open the configuration files",
-    "open the config files", "configuration mode", NULL
-};
-static const char *const s_open_settings[] = {
-    "ouvre les paramètres", "montre les paramètres", "affiche les paramètres", "ouvre les réglages",
-    "montre les réglages", "affiche les réglages", "va dans les paramètres",
-    "va dans les réglages", "open the settings", "show the settings", "open settings", "show settings",
-    "display the settings", "go to the settings", NULL
-};
-static const char *const s_change_country[] = {
-    "change mon pays", "changer mon pays", "change de pays", "changer de pays", "change le pays",
-    "change my country", "change the country", NULL
-};
-static const char *const s_change_city[] = {
-    "change ma ville", "changer ma ville", "change de ville", "changer de ville", "change la ville",
-    "change my city", "change the city", "change my town", NULL
-};
+static phrase_list_t s_edit_config = PHRASE_LIST(
+    "je veux (éditer|editer|modifier) (la|le|les fichier[s] de) config[uration]",
+    "(édite|edite|éditer|modifie|ouvre) (la|le|les fichier[s] de) config[uration]",
+    "[passe en ]mode configuration", "[i want to ]edit the config[uration][ files]",
+    "open the config[uration] files", "configuration mode"
+);
+static phrase_list_t s_open_settings = PHRASE_LIST(
+    "(ouvre|montre|affiche) les (paramètres|réglages)", "va dans les (paramètres|réglages)",
+    "(open|show)[ the] settings", "display the settings", "go to the settings"
+);
+static phrase_list_t s_change_country = PHRASE_LIST(
+    "change[r] (mon|de) pays", "change le pays", "change (my|the) country"
+);
+static phrase_list_t s_change_city = PHRASE_LIST(
+    "change[r] (ma|de) ville", "change la ville", "change (my|the) city", "change my town"
+);
 /* Words before the name in an answer ("j'habite à Evere"), skipped; articles are kept ("Le Havre") */
-static const char *const s_answer_prefix[] = {
-    "j habite à", "j habite en", "j habite au", "j habite aux", "j habite", "ma ville est", "mon pays est",
-    "c est", "en", "au", "aux", "à", "i live in", "my city is", "my country is", "it is", "it s", "in", NULL
-};
-static const char *const s_yes[] = {
-    "oui", "ouais", "yes", "yeah", "yep", "exact", "exactement", "je confirme", "confirme", "confirmé",
-    "c est ça", "c est bon", "d accord", "ok", "okay", "bien sûr", "absolument", "correct", "sure", "right",
-    "affirmatif", NULL
-};
+static phrase_list_t s_answer_prefix = PHRASE_LIST(
+    "j habite[ (à|en|au|aux)]", "(ma ville|mon pays) est", "c est", "en", "au", "aux", "à", "i live in",
+    "my (city|country) is", "it is", "it s", "in"
+);
+static phrase_list_t s_yes = PHRASE_LIST(
+    "oui", "ouais", "yes", "yeah", "yep", "exact[ement]", "[je ]confirme", "confirmé", "c est (ça|bon)",
+    "d accord", "ok[ay]", "bien sûr", "absolument", "correct", "sure", "right", "affirmatif"
+);
 
 /*
  * Countries known by voice: ISO 3166-1 alpha-2 code (the web search needs it), French and English names,
@@ -171,8 +148,9 @@ static const struct {
 };
 
 /* Words allowed after the answer of a shortcut ("parle anglais s'il te plaît", "modèle 3 please") */
-static const char *const s_courtesy[] = { "s il te plait", "s il te plaît", "s il vous plait", "s il vous plaît",
-                                          "maintenant", "please", "now", NULL };
+static phrase_list_t s_courtesy = PHRASE_LIST(
+    "s il (te|vous) pla(i|î)t", "maintenant", "please", "now"
+);
 
 /* Languages offered, with the names they may be called by (in both languages, transcription variants) */
 static const struct {
@@ -247,7 +225,7 @@ static bool is_only(const char *rest, const char *word)
     if (strncmp(rest, word, n) != 0) {
         return false;
     }
-    return rest[n] == '\0' || (rest[n] == ' ' && starts_with(rest + n + 1, s_courtesy, NULL));
+    return rest[n] == '\0' || (rest[n] == ' ' && starts_with(rest + n + 1, phrases_of(&s_courtesy), NULL));
 }
 
 static char *reply_dup(const char *text)
@@ -307,8 +285,9 @@ static voice_cmd_t choose_language(const char *norm, char **reply)
 /* ---------- model ---------- */
 
 /* "un" / "une" mean 1 only when said alone: elsewhere they are articles ("je veux un modèle rapide") */
-static const char *const s_one_alone[] = { "un", "une", "le un", "le une", "numéro un", "numero un", "le numéro un",
-                                           NULL };
+static phrase_list_t s_one_alone = PHRASE_LIST(
+    "[le ]un[e]", "[le ]num(é|e)ro un"
+);
 
 /* Providers as they may be said (normalized), by llm_provider_t; spoken as their company name */
 static const struct {
@@ -423,7 +402,7 @@ static int find_model(const char *norm, llm_provider_t provider)
         return named;
     }
     int number = 0;
-    for (const char *const *one = s_one_alone; *one && !number; one++) {
+    for (const char *const *one = phrases_of(&s_one_alone); *one && !number; one++) {
         if (strcmp(norm, *one) == 0) {
             number = 1;
         }
@@ -567,7 +546,7 @@ static int find_voice(const char *norm)
             }
         }
     }
-    for (const char *const *one = s_one_alone; *one; one++) {
+    for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
         if (strcmp(norm, *one) == 0) {
             return 1;
         }
@@ -693,7 +672,7 @@ static void answer_text(const char *text, const char *norm, char *out, size_t si
 {
     size_t len = 0;
     int words = 0;
-    if (starts_with(norm, s_answer_prefix, &len)) {
+    if (starts_with(norm, phrases_of(&s_answer_prefix), &len)) {
         words = 1;
         for (size_t i = 0; i < len; i++) {
             words += (norm[i] == ' ');
@@ -736,7 +715,7 @@ static voice_cmd_t confirm_place(asked_t confirm, const char *norm, char **reply
 {
     const app_lang_t *lang = app_lang_get();
     bool yes = false;
-    for (const char *const *word = s_yes; *word && !yes; word++) {
+    for (const char *const *word = phrases_of(&s_yes); *word && !yes; word++) {
         yes = has_word(norm, *word);
     }
     if (yes && has_word(norm, "non")) {
@@ -761,6 +740,18 @@ void voice_cmd_reply_spoken(void)
 {
     if (s_asked != ASKED_NOTHING) {
         s_asked_us = esp_timer_get_time();
+    }
+}
+
+void voice_cmd_init(void)
+{
+    phrase_list_t *lists[] = {
+        &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
+        &s_new_conversation, &s_edit_config, &s_open_settings, &s_change_country, &s_change_city,
+        &s_answer_prefix, &s_yes, &s_courtesy, &s_one_alone,
+    };
+    for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
+        phrases_of(lists[i]);
     }
 }
 
@@ -820,16 +811,16 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     }
 
     size_t len = 0;
-    if (starts_with(norm, s_new_conversation, &len)) {
+    if (starts_with(norm, phrases_of(&s_new_conversation), &len)) {
         // Alone (or with "s'il te plaît"): answered here; followed by a question: the model answers it
         const char *rest = norm + len + (norm[len] == ' ');
-        if (!*rest || starts_with(rest, s_courtesy, NULL)) {
+        if (!*rest || starts_with(rest, phrases_of(&s_courtesy), NULL)) {
             *reply = reply_dup(app_lang_get()->new_conversation);
             return VOICE_CMD_NEW_CONVERSATION;
         }
         return VOICE_CMD_NEW_CONVERSATION_ASK;
     }
-    if (starts_with(norm, s_change_lang, NULL)) {
+    if (starts_with(norm, phrases_of(&s_change_lang), NULL)) {
         // "Change la langue en anglais": the language may already be given
         if (find_language(norm)) {
             return choose_language(norm, reply);
@@ -839,7 +830,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         *reply = reply_dup(app_lang_get()->lang_ask);
         return VOICE_CMD_ANSWERED;
     }
-    if (starts_with(norm, s_change_model, &len)) {
+    if (starts_with(norm, phrases_of(&s_change_model), &len)) {
         // "Change de modèle pour Sonnet" / "pour le 3": the model may already be given (numbers over all
         // models), "change de modèle pour Google": its models are listed; else the provider is asked first
         if (find_model(norm + len, LLM_PROVIDER_COUNT)) {
@@ -848,7 +839,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         llm_provider_t provider = find_provider(norm + len);
         return provider == LLM_PROVIDER_COUNT ? ask_provider(reply) : ask_model(provider, reply);
     }
-    if (starts_with(norm, s_change_voice, &len)) {
+    if (starts_with(norm, phrases_of(&s_change_voice), &len)) {
         // "Change de voix pour Cedar": the voice may already be given
         if (find_voice(norm + len)) {
             return choose_voice(norm + len, reply);
@@ -858,7 +849,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         *reply = voice_list();
         return VOICE_CMD_ANSWERED;
     }
-    if (starts_with(norm, s_edit_config, NULL)) {
+    if (starts_with(norm, phrases_of(&s_edit_config), NULL)) {
         // The files appear as a USB drive on the PC: without a PC (SOF packets from a host), nothing to show them
         if (!usb_serial_jtag_is_connected()) {
             *reply = reply_dup(app_lang_get()->config_need_pc);
@@ -867,29 +858,29 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         *reply = reply_dup(app_lang_get()->config_opening);
         return VOICE_CMD_EDIT_CONFIG;
     }
-    if (starts_with(norm, s_open_settings, NULL)) {
+    if (starts_with(norm, phrases_of(&s_open_settings), NULL)) {
         return VOICE_CMD_OPEN_SETTINGS;     // shown at once, nothing spoken
     }
-    if (starts_with(norm, s_change_country, NULL)) {
+    if (starts_with(norm, phrases_of(&s_change_country), NULL)) {
         s_asked = ASKED_COUNTRY;
         s_asked_us = esp_timer_get_time();
         *reply = reply_dup(app_lang_get()->country_ask);
         return VOICE_CMD_ANSWERED;
     }
-    if (starts_with(norm, s_change_city, NULL)) {
+    if (starts_with(norm, phrases_of(&s_change_city), NULL)) {
         s_asked = ASKED_CITY;
         s_asked_us = esp_timer_get_time();
         *reply = reply_dup(app_lang_get()->city_ask);
         return VOICE_CMD_ANSWERED;
     }
     // Shortcuts: only when the rest is just a language name or a model number ("parle plus fort" is not one)
-    if (starts_with(norm, s_lang_shortcut, &len) && is_language_only(norm[len] ? norm + len + 1 : norm + len)) {
+    if (starts_with(norm, phrases_of(&s_lang_shortcut), &len) && is_language_only(norm[len] ? norm + len + 1 : norm + len)) {
         return choose_language(norm + len, reply);
     }
-    if (starts_with(norm, s_model_shortcut, &len) && is_model_only(norm[len] ? norm + len + 1 : norm + len)) {
+    if (starts_with(norm, phrases_of(&s_model_shortcut), &len) && is_model_only(norm[len] ? norm + len + 1 : norm + len)) {
         return choose_model(norm + len, LLM_PROVIDER_COUNT, reply);
     }
-    if (starts_with(norm, s_voice_shortcut, &len) && is_voice_only(norm[len] ? norm + len + 1 : norm + len)) {
+    if (starts_with(norm, phrases_of(&s_voice_shortcut), &len) && is_voice_only(norm[len] ? norm + len + 1 : norm + len)) {
         return choose_voice(norm + len, reply);
     }
     return VOICE_CMD_NONE;

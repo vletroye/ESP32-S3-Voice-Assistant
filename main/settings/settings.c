@@ -239,7 +239,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     // Screen off after this many seconds without presence (BOX-3-SENSOR radar), 0: never
     char screen_off[8] = {0};
     len = sizeof(screen_off);
-    g_sys_param.screen_off_s = 10;
+    g_sys_param.screen_off_s = CONFIG_ASSISTANT_SCREEN_OFF_S;
     if (nvs_get_str(my_handle, "Screen_off_s", screen_off, &len) == ESP_OK && screen_off[0]) {
         int s = atoi(screen_off);
         g_sys_param.screen_off_s = s < 0 ? 0 : s;
@@ -316,14 +316,14 @@ esp_err_t settings_read_parameter_from_nvs(void)
     free(g_sys_param.memory);
     g_sys_param.memory = read_text(my_handle, "Memory");
 
-    // Scrolling mode of the answer (optional): "line" (default) or "smooth"
+    // Scrolling mode of the answer (optional): "line" or "smooth"
     char mode[12] = {0};
     len = sizeof(mode);
-    g_sys_param.scroll_smooth = false;
-    if (nvs_get_str(my_handle, "Scroll_mode", mode, &len) == ESP_OK) {
-        str_trim(mode);
-        g_sys_param.scroll_smooth = (strcasecmp(mode, "smooth") == 0);
+    if (nvs_get_str(my_handle, "Scroll_mode", mode, &len) != ESP_OK) {
+        strlcpy(mode, CONFIG_ASSISTANT_SCROLL_MODE, sizeof(mode));
     }
+    str_trim(mode);
+    g_sys_param.scroll_smooth = (strcasecmp(mode, "smooth") == 0);
 
     nvs_close(my_handle);
 
@@ -380,19 +380,22 @@ static bool is_kept_key(const char *key)
     return false;
 }
 
-/* Values of the configuration mode's first start (factory_nvs); any other key's default is empty */
+/* Values of the configuration mode's first start (factory_nvs, same Kconfig values); any other key's is empty */
+#define STR_OF(x)   #x
+#define STR(x)      STR_OF(x)
 static const struct {
     const char *key;
     const char *value;
 } s_default_values[] = {
-    { "Base_url", "https://api.openai.com/v1/" },
+    { "Base_url", CONFIG_ASSISTANT_OPENAI_URL },
     { "Language", CONFIG_ASSISTANT_LANGUAGE },
     { "Chat_model", CONFIG_ASSISTANT_CHAT_MODEL },
-    { "Scroll_speed", "16" },
-    { "Screen_off_s", "10" },
-    { "End_speech_ms", "900" },
-    { "Scroll_mode", "line" },
-    { "Voice", "marin" },
+    { "Voice", CONFIG_ASSISTANT_TTS_VOICE },
+    { "Scroll_speed", STR(CONFIG_ASSISTANT_REPLY_SCROLL_CPS) },
+    { "Scroll_mode", CONFIG_ASSISTANT_SCROLL_MODE },
+    { "Volume", STR(CONFIG_VOLUME_LEVEL) },
+    { "Screen_off_s", STR(CONFIG_ASSISTANT_SCREEN_OFF_S) },
+    { "End_speech_ms", STR(CONFIG_ASSISTANT_END_OF_SPEECH_MS) },
 };
 
 static bool is_default_value(const char *key, const char *value)

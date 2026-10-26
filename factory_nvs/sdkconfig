@@ -551,11 +551,6 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Example Configuration
 #
-CONFIG_OPENAI_URL="https://api.openai.com/v1/"
-CONFIG_ASSISTANT_REPLY_SCROLL_CPS=16
-CONFIG_ASSISTANT_LANGUAGE="fr"
-CONFIG_ASSISTANT_CHAT_MODEL="claude-haiku-5-5"
-# end of Example Configuration
 
 #
 # HMI Board Config

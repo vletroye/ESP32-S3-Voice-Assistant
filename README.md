@@ -373,7 +373,9 @@ stored in plain text in the device's NVS and never appear in the logs (only thei
 
 ### At build time: `sdkconfig.defaults` / `idf.py menuconfig`
 
-"Example Configuration" menu:
+"Example Configuration" menu of the assistant (`main/Kconfig.projbuild`). These are the **only** default values:
+the configuration mode (`factory_nvs/`) writes the same ones to a new `CONFIG.INI`, its `CMakeLists.txt` reading
+them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, after a change):
 
 | Option | Default | Role |
 | --- | --- | --- |
@@ -383,6 +385,9 @@ stored in plain text in the device's NVS and never appear in the logs (only thei
 | `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
 | `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Speech synthesis model |
 | `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice when `Voice` is not set |
+| `CONFIG_ASSISTANT_OPENAI_URL` | `https://api.openai.com/v1/` | `Base_url` of a new `CONFIG.INI` |
+| `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
+| `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
 | `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |
 | `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |

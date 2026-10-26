@@ -1,27 +1,4 @@
 menu "Example Configuration"
 
-    config OPENAI_URL
-        string "Base URL"
-        default "https://api.openai.com/v1/"
-        help
-            Base URL for OpenAI API
-    config ASSISTANT_REPLY_SCROLL_CPS
-        int "Answer scrolling speed (characters per second)"
-        default 16
-        range 5 60
-        help
-            The answer scrolls on screen following the speech, read at this many characters per second.
-            Overridden by the "Scroll_speed" key of CONFIG.INI.
-
-    config ASSISTANT_LANGUAGE
-        string "Default assistant language"
-        default "fr"
-        help
-            ISO-639-1 code (fr, en, ...) written to the "Language" key when it does not exist yet.
-    config ASSISTANT_CHAT_MODEL
-        string "Default chat model"
-        default "claude-haiku-5-5"
-        help
-            Model (claude-..., gpt-... or gemini-...) written to the "Chat_model" key when it does not exist yet.
 
 endmenu

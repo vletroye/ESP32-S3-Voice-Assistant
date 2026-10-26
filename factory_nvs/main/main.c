@@ -145,7 +145,7 @@ void app_main(void)
         buf_len_long = sizeof(url);
         err = nvs_get_str(my_handle, "Base_url", url, &buf_len_long);
         if (err != ESP_OK || buf_len_long == 0) {
-            ESP_ERROR_CHECK(nvs_set_str(my_handle, "Base_url", CONFIG_OPENAI_URL));
+            ESP_ERROR_CHECK(nvs_set_str(my_handle, "Base_url", CONFIG_ASSISTANT_OPENAI_URL));
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "no base url, give a init value to key");
         } else {
@@ -201,13 +201,19 @@ void app_main(void)
         snprintf(scroll_speed, sizeof(scroll_speed), "%d", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
         nvs_init_str_if_missing("Scroll_speed", scroll_speed);
         // Screen off after this many seconds without presence (radar of the BOX-3-SENSOR dock), 0: never
-        nvs_init_str_if_missing("Screen_off_s", "10");
+        char number[8];
+        snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_SCREEN_OFF_S);
+        nvs_init_str_if_missing("Screen_off_s", number);
         // Silence after which the question is considered finished (same default as ASSISTANT_END_OF_SPEECH_MS)
-        nvs_init_str_if_missing("End_speech_ms", "900");
+        snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_END_OF_SPEECH_MS);
+        nvs_init_str_if_missing("End_speech_ms", number);
         // How the answer scrolls: "line" (one line at a time) or "smooth" (continuous)
-        nvs_init_str_if_missing("Scroll_mode", "line");
+        nvs_init_str_if_missing("Scroll_mode", CONFIG_ASSISTANT_SCROLL_MODE);
+        // Speaker volume (also changed by voice)
+        snprintf(number, sizeof(number), "%d", CONFIG_VOLUME_LEVEL);
+        nvs_init_str_if_missing("Volume", number);
         // Voice of the answers (same default as the assistant's ASSISTANT_TTS_VOICE)
-        nvs_init_str_if_missing("Voice", "marin");
+        nvs_init_str_if_missing("Voice", CONFIG_ASSISTANT_TTS_VOICE);
         // Who the assistant is and who it talks to, added to its instructions: edited in PERSONA.TXT
         // (components/esp_tinyuf2, a copy of the tinyuf2 component extended for it), not in CONFIG.INI
         nvs_init_str_if_missing("Persona", "");

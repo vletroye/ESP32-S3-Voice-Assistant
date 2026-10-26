@@ -43,6 +43,27 @@ menu "Example Configuration"
         help
             OpenAI Realtime model reading the answer aloud (WebSocket, one response per sentence).
 
+    config ASSISTANT_OPENAI_URL
+        string "OpenAI base URL"
+        default "https://api.openai.com/v1/"
+        help
+            Written to the "Base_url" key of CONFIG.INI when it does not exist yet.
+
+    config ASSISTANT_SCREEN_OFF_S
+        int "Screen off without presence (s)"
+        default 10
+        range 0 3600
+        help
+            With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the
+            assistant sleeps (0: never). Default of Screen_off_s in CONFIG.INI, which takes precedence.
+
+    config ASSISTANT_SCROLL_MODE
+        string "Answer scrolling mode (line or smooth)"
+        default "line"
+        help
+            "line" moves one whole line at a time, "smooth" scrolls continuously. Default of Scroll_mode in
+            CONFIG.INI, which takes precedence.
+
     config ASSISTANT_TTS_VOICE
         string "Speech synthesis voice"
         default "marin"
@@ -70,7 +91,7 @@ menu "Example Configuration"
         default "90"
         range 1 100
         help
-            speaker volume
+            Speaker volume. Default of Volume in CONFIG.INI, which takes precedence.
     config ESP_MAXIMUM_RETRY
         int "Maximum retry"
         default 5
@@ -102,3 +123,5 @@ menu "Example Configuration"
     endchoice
 
 endmenu
+# The configuration mode (factory_nvs/) writes these defaults to CONFIG.INI: its CMakeLists.txt reads the
+# CONFIG_ASSISTANT_* and CONFIG_VOLUME_LEVEL values of this project's sdkconfig (rebuild it after a change).

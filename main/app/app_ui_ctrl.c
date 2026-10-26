@@ -485,12 +485,18 @@ void ui_ctrl_init(void)
     bsp_display_unlock();
 }
 
-/* ---------- Welcome screen (steps): its button counts down, then closes it ---------- */
+/* ---------- Welcome and configuration screens: their button counts down, then is pressed ---------- */
 
 #define SETUP_COUNTDOWN_S   60
+#define RESET_COUNTDOWN_S   30
+#define COUNTDOWN_FMT       "OK (%d)"
+#define COUNTDOWN_BTN_WIDTH 96      /* the generated 72 px is sized for "OK" */
 
+/* One countdown at a time: the button of the screen shown */
 static lv_timer_t *s_setup_countdown = NULL;
 static int s_setup_seconds_left = 0;
+static lv_obj_t *s_countdown_btn = NULL;
+static lv_obj_t *s_countdown_label = NULL;
 
 static void setup_countdown_stop(void)
 {
@@ -500,7 +506,7 @@ static void setup_countdown_stop(void)
     }
 }
 
-/* The button closes the screen (tap, wake word or end of the countdown): the countdown stops */
+/* The button is pressed (tap, wake word or end of the countdown), or its screen left: the countdown stops */
 static void setup_button_clicked_cb(lv_event_t *e)
 {
     setup_countdown_stop();
@@ -509,29 +515,122 @@ static void setup_button_clicked_cb(lv_event_t *e)
 static void setup_countdown_cb(lv_timer_t *timer)
 {
     if (--s_setup_seconds_left > 0) {
-        lv_label_set_text_fmt(ui_LabelSetupBtn, "%d", s_setup_seconds_left);
+        lv_label_set_text_fmt(s_countdown_label, COUNTDOWN_FMT, s_setup_seconds_left);
         return;
     }
-    // As if the button had been tapped (the timer is deleted by the click callback)
-    lv_event_send(ui_ButtonSetup, LV_EVENT_CLICKED, NULL);
+    // As if the button had been tapped
+    setup_countdown_stop();
+    lv_event_send(s_countdown_btn, LV_EVENT_CLICKED, NULL);
+}
+
+static void countdown_start(lv_obj_t *btn, lv_obj_t *label, int seconds)
+{
+    setup_countdown_stop();
+    s_countdown_btn = btn;
+    s_countdown_label = label;
+    s_setup_seconds_left = seconds;
+    lv_label_set_text_fmt(label, COUNTDOWN_FMT, seconds);
+    s_setup_countdown = lv_timer_create(setup_countdown_cb, 1000, NULL);
 }
 
 /* Shown with the steps, once the Wi-Fi is connected */
 static void setup_countdown_start(void)
 {
-    s_setup_seconds_left = SETUP_COUNTDOWN_S;
-    lv_label_set_text_fmt(ui_LabelSetupBtn, "%d", s_setup_seconds_left);
-    setup_countdown_stop();
-    s_setup_countdown = lv_timer_create(setup_countdown_cb, 1000, NULL);
+    countdown_start(ui_ButtonSetup, ui_LabelSetupBtn, SETUP_COUNTDOWN_S);
 }
 
-/* The button at the bottom right, its "OK" replaced by the countdown */
+/* Configuration screens (from Settings, or from the Wi-Fi screen): the countdown starts when shown */
+static void reset_screen_loaded_cb(lv_event_t *e)
+{
+    if (lv_event_get_target(e) == ui_ScreenReset) {
+        countdown_start(ui_ButtonResetConfirm, ui_LabelSetupBtn2, RESET_COUNTDOWN_S);
+    } else {
+        countdown_start(ui_ButtonWifiResetConfirm, ui_LabelSetupBtn1, RESET_COUNTDOWN_S);
+    }
+}
+
+/* A button at the bottom right, its "OK" followed by the countdown: "OK (30)" */
+static void countdown_button_setup(lv_obj_t *btn, lv_obj_t *label, int seconds)
+{
+    lv_obj_set_align(btn, LV_ALIGN_BOTTOM_RIGHT);
+    lv_obj_set_pos(btn, -16, -16);
+    lv_obj_set_width(btn, COUNTDOWN_BTN_WIDTH);
+    lv_label_set_text_fmt(label, COUNTDOWN_FMT, seconds);
+    lv_obj_add_event_cb(btn, setup_button_clicked_cb, LV_EVENT_CLICKED, NULL);
+}
+
+/* ---------- Configuration screen (from Settings): soft reset and factory reset icons, bottom left ---------- */
+
+static lv_obj_t *s_restore_box = NULL;
+
+/* Confirmation: the first button resets, the other one closes */
+static void restore_box_cb(lv_event_t *e)
+{
+    lv_obj_t *box = lv_event_get_current_target(e);
+    bool factory = (bool)(intptr_t)lv_event_get_user_data(e);
+    bool confirmed = lv_msgbox_get_active_btn(box) == 0;
+    lv_msgbox_close(box);
+    s_restore_box = NULL;
+    if (confirmed) {
+        lv_label_set_text(ui_LabelSetupBtn2, app_lang_get()->restore_done);
+        assistant_request_restore(factory);
+    }
+}
+
+static void restore_clicked_cb(lv_event_t *e)
+{
+    if (s_restore_box) {
+        return;
+    }
+    // The countdown would switch to the configuration mode under the confirmation
+    setup_countdown_stop();
+    lv_label_set_text(ui_LabelSetupBtn2, "OK");
+    const app_lang_t *lang = app_lang_get();
+    bool factory = (bool)(intptr_t)lv_event_get_user_data(e);
+    static const char *btns[3];
+    btns[0] = factory ? lang->factory_yes : lang->soft_yes;
+    btns[1] = lang->restore_no;
+    btns[2] = "";
+    s_restore_box = lv_msgbox_create(NULL, factory ? lang->factory_title : lang->soft_title,
+                                     factory ? lang->factory_text : lang->soft_text, btns, false);
+    lv_obj_set_width(s_restore_box, 300);
+    lv_obj_set_style_text_font(lv_msgbox_get_title(s_restore_box), &ui_font_Latin16, LV_PART_MAIN);
+    lv_obj_set_style_text_font(lv_msgbox_get_text(s_restore_box), &ui_font_Latin14, LV_PART_MAIN);
+    lv_obj_set_style_text_font(lv_msgbox_get_btns(s_restore_box), &ui_font_Latin14, LV_PART_ITEMS);
+    // The buttons share the whole width: confirm at the bottom left, cancel at the bottom right
+    lv_obj_set_size(lv_msgbox_get_btns(s_restore_box), lv_pct(100), 36);
+    lv_obj_center(s_restore_box);
+    lv_obj_add_event_cb(s_restore_box, restore_box_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)factory);
+}
+
+/* An icon at the bottom left of the Configuration screen; x from the left edge */
+static void restore_icon_create(const char *symbol, lv_color_t color, lv_coord_t x, bool factory)
+{
+    lv_obj_t *btn = lv_btn_create(ui_ScreenReset);
+    lv_obj_set_size(btn, 40, 36);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_LEFT, x, -16);
+    lv_obj_set_style_radius(btn, 17, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn, color, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_event_cb(btn, restore_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)factory);
+    lv_obj_t *icon = lv_label_create(btn);
+    lv_label_set_text(icon, symbol);
+    lv_obj_set_style_text_font(icon, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_center(icon);
+}
+
 static void setup_button_setup(void)
 {
-    lv_obj_set_align(ui_ButtonSetup, LV_ALIGN_BOTTOM_RIGHT);
-    lv_obj_set_pos(ui_ButtonSetup, -16, -16);
-    lv_label_set_text_fmt(ui_LabelSetupBtn, "%d", SETUP_COUNTDOWN_S);
-    lv_obj_add_event_cb(ui_ButtonSetup, setup_button_clicked_cb, LV_EVENT_CLICKED, NULL);
+    // Soft reset (circular arrows), then factory reset (bin, red)
+    restore_icon_create(LV_SYMBOL_REFRESH, lv_color_hex(0x6E47BD), 16, false);
+    restore_icon_create(LV_SYMBOL_TRASH, lv_color_hex(0xC0392B), 66, true);
+    countdown_button_setup(ui_ButtonSetup, ui_LabelSetupBtn, SETUP_COUNTDOWN_S);
+    countdown_button_setup(ui_ButtonResetConfirm, ui_LabelSetupBtn2, RESET_COUNTDOWN_S);
+    countdown_button_setup(ui_ButtonWifiResetConfirm, ui_LabelSetupBtn1, RESET_COUNTDOWN_S);
+    lv_obj_add_event_cb(ui_ScreenReset, reset_screen_loaded_cb, LV_EVENT_SCREEN_LOADED, NULL);
+    lv_obj_add_event_cb(ui_ScreenWifiReset, reset_screen_loaded_cb, LV_EVENT_SCREEN_LOADED, NULL);
+    // Back arrow: the countdown stops with its screen
+    lv_obj_add_event_cb(ui_ScreenReset, setup_button_clicked_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
+    lv_obj_add_event_cb(ui_ScreenWifiReset, setup_button_clicked_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 }
 
 static void wifi_check_timer_handler(lv_timer_t *timer)

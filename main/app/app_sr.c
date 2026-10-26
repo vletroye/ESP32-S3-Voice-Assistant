@@ -30,12 +30,13 @@
 #include "app_audio.h"
 #include "app_wifi.h"
 #include "stt_stream.h"
+#include "settings.h"
 
 static const char *TAG = "app_sr";
 
 /*
  * Listening ends after this many fetch frames of silence following speech. The VAD itself only
- * reports silence after CONFIG_ASSISTANT_END_OF_SPEECH_MS (vad_min_noise_ms), so this adds little.
+ * reports silence after End_speech_ms of CONFIG.INI (vad_min_noise_ms), so this adds little.
  */
 #define SR_SILENCE_END_FRAMES       2
 /* Without any speech, a listening session started by wake word or touch is dropped after this delay */
@@ -260,8 +261,9 @@ esp_err_t app_sr_start(bool record_en)
     afe_config_t *afe_config = afe_config_init("MMN", models, AFE_TYPE_SR, AFE_MODE_HIGH_PERF);
     ESP_GOTO_ON_FALSE(NULL != afe_config, ESP_FAIL, err, TAG, "Failed to init afe config");
     afe_config->aec_init = false;
-    /* End of speech: silence needed before the VAD reports it (default 1000 ms) */
-    afe_config->vad_min_noise_ms = CONFIG_ASSISTANT_END_OF_SPEECH_MS;
+    /* End of speech: silence needed before the VAD reports it (End_speech_ms, ESP-SR default 1000 ms) */
+    afe_config->vad_min_noise_ms = settings_get_parameter()->end_speech_ms;
+    ESP_LOGI(TAG, "End of speech after %d ms of silence", afe_config->vad_min_noise_ms);
 
     /* Up to two wake words: French "Bonjour ESP" first, English "Hi ESP" as fallback */
     char *wn_name_1 = esp_srmodel_filter(models, ESP_WN_PREFIX, "bonjouresp");

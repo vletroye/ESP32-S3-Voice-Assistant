@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <dirent.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -17,6 +18,7 @@
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "nvs_flash.h"
+#include "driver/usb_serial_jtag.h"
 #include "app_ui_ctrl.h"
 #include "app_sr.h"
 #include "bsp/esp-bsp.h"
@@ -68,6 +70,9 @@ static volatile bool s_config_requested = false;
 /* "Redémarre": restart once the reply has been spoken (set by the reply, done by the main task) */
 static volatile bool s_restart_after_reply = false;
 static volatile bool s_restart_requested = false;
+/* The reply ended with a goodbye ("Au revoir !", "Bonne soirée."): sleep and a new conversation once spoken */
+static volatile bool s_reply_goodbye = false;
+static volatile bool s_reset_requested = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -181,9 +186,10 @@ static bool transcription_is_noise(const char *text)
     return false;
 }
 
-/* "Au revoir" alone (punctuation and case ignored) ends the conversation */
+/* Each sentence of the reply is spoken; the last one tells whether the reply says goodbye (s_goodbyes) */
 static void on_sentence(const char *sentence, void *ctx)
 {
+    s_reply_goodbye = voice_cmd_ends_with_goodbye(sentence);
     tts_stream_say(sentence);
 }
 
@@ -220,6 +226,14 @@ static void on_reply_audio(tts_event_t event)
         // Reply interrupted by a new listening session (wake word or touch)
         return;
     }
+    if (s_reply_goodbye) {
+        // The assistant said goodbye: no follow-up listening, the next conversation starts afresh
+        ESP_LOGI(TAG, "The reply says goodbye, going to sleep");
+        s_reply_goodbye = false;
+        s_reset_requested = true;       // the main task clears the conversation
+        ui_ctrl_reply_set_audio_end_flag(true);
+        return;
+    }
 #if CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS > 0
     if (!tools_sleep_after_reply()) {
         // Keep listening so that the conversation can continue without the wake word
@@ -242,6 +256,7 @@ void assistant_reply_stop(void)
 static void reply_begin(void)
 {
     s_reply_active = true;
+    s_reply_goodbye = false;
     tts_stream_begin(on_reply_audio);
 }
 
@@ -312,6 +327,45 @@ static char s_requested_language[LANG_SIZE];
 static char s_requested_model[MODEL_SIZE];
 static volatile bool s_language_requested = false;
 static volatile bool s_model_requested = false;
+static volatile bool s_restore_requested = false;
+static volatile bool s_factory_requested = false;
+
+void assistant_request_restore(bool factory)
+{
+    s_factory_requested = factory;
+    s_restore_requested = true;
+}
+
+/* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
+static const char *const s_user_files[] = {
+    "history.json", "history.tmp", "places.json", "or_free.json", "record.wav",
+};
+
+/*
+ * The files of the configuration drive given with the firmware, removed: installed again at start-up; with
+ * the factory reset, those written by the assistant (conversation, places, free models) too
+ */
+static void remove_firmware_files(bool factory)
+{
+    DIR *dir = opendir("/spiffs");
+    struct dirent *e;
+    while (dir && (e = readdir(dir)) != NULL) {
+        size_t len = strlen(e->d_name);
+        bool phrases = strncmp(e->d_name, "phrases_", 8) == 0 && len > 4 && strcmp(e->d_name + len - 4, ".txt") == 0;
+        bool user_file = false;
+        for (size_t i = 0; factory && i < sizeof(s_user_files) / sizeof(s_user_files[0]); i++) {
+            user_file |= (strcmp(e->d_name, s_user_files[i]) == 0);
+        }
+        if (phrases || user_file || strcmp(e->d_name, "agents.ini") == 0) {
+            char path[300];
+            snprintf(path, sizeof(path), "/spiffs/%s", e->d_name);
+            ESP_LOGI(TAG, "%s %s", remove(path) == 0 ? "Removed" : "Could not remove", path);
+        }
+    }
+    if (dir) {
+        closedir(dir);
+    }
+}
 
 void assistant_request_language(const char *code)
 {
@@ -560,11 +614,10 @@ void app_main()
     sys_param = settings_get_parameter();
     app_lang_set(sys_param->lang);
 
-    // The OpenRouter models of CONFIG.INI, before the Settings screen lists the models
-    llm_set_openrouter_models(sys_param->openrouter_models);
-
     bsp_spiffs_mount();
-    // The free OpenRouter models of the last list read (the live one is read once a day, below)
+    // The models offered (AGENTS.INI), then the free OpenRouter ones of the last list read (the live one is read
+    // once a day, below): before the Settings screen lists them
+    llm_load_models();
     openrouter_free_init();
     bsp_i2c_init();
 
@@ -640,6 +693,35 @@ void app_main()
             bsp_codec_power_amp_off();
             vTaskDelay(pdMS_TO_TICKS(30));
             esp_restart();
+        }
+        if (s_restore_requested) {
+            // Icons of the Configuration screen: soft reset (then restart) or factory reset (then configuration
+            // mode with a PC connected, otherwise restart)
+            s_restore_requested = false;
+            bool factory = s_factory_requested;
+            ESP_LOGI(TAG, "%s reset", factory ? "Factory" : "Soft");
+            bool done;
+            if (factory) {
+                done = (settings_factory_wipe() == ESP_OK);
+            } else {
+                llm_history_save();
+                weather_places_save();
+                done = (settings_restore_defaults() == ESP_OK);
+            }
+            if (done) {
+                remove_firmware_files(factory);
+            }
+            bsp_codec_mute_set(true);
+            bsp_codec_power_amp_off();
+            vTaskDelay(pdMS_TO_TICKS(30));
+            if (factory && done && usb_serial_jtag_is_connected()) {
+                settings_factory_reset();   // configuration mode: the drive shows up on the PC
+            }
+            esp_restart();
+        }
+        if (s_reset_requested) {
+            s_reset_requested = false;
+            llm_reset();
         }
         if (s_config_requested) {
             s_config_requested = false;

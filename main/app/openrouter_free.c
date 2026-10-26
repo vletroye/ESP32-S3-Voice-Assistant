@@ -210,11 +210,18 @@ void openrouter_free_init(void)
         apply(NULL, NULL, 0);   // the automatic choice, until the list is read
         return;
     }
-    char text[1024];
-    size_t n = fread(text, 1, sizeof(text) - 1, f);
+    // On the heap: called from app_main, whose stack is small
+    const size_t size = 1024;
+    char *text = malloc(size);
+    size_t n = text ? fread(text, 1, size - 1, f) : 0;
     fclose(f);
+    if (!text) {
+        apply(NULL, NULL, 0);
+        return;
+    }
     text[n] = '\0';
     cJSON *root = cJSON_Parse(text);
+    free(text);
     const cJSON *fetched = cJSON_GetObjectItem(root, "fetched");
     s_fetched = cJSON_IsNumber(fetched) ? (time_t)fetched->valuedouble : 0;
     const char *ids[LLM_OPENROUTER_FREE_MAX];

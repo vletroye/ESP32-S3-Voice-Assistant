@@ -86,7 +86,7 @@ flowchart LR
 | Stage | Service | Details |
 | --- | --- | --- |
 | Wake word | local (ESP-SR 2.5.5) | WakeNet9 "Bonjour ESP" + "Hi ESP", 2-mic AFE |
-| End of speech | local | ESP-SR VAD, 0.9 s of silence |
+| End of speech | local | ESP-SR VAD, 0.9 s of silence (`End_speech_ms`) |
 | Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output streamed continuously |
 | Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
 | Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
@@ -126,8 +126,8 @@ How to read this table:
 - **Tools** (weather, volume, web search, Homey) are offered to the Claude models only; GPT, Gemini and the
   OpenRouter models answer from their own knowledge.
 - **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three
-  default models were among the most used on OpenRouter in October 2026 (prices as shown there then); replace them
-  with `OpenRouter_list` in `CONFIG.INI`.
+  default models were among the most used on OpenRouter in October 2026 (prices as shown there then); change them
+  in the `[openrouter]` section of `AGENTS.INI`.
 - **Free OpenRouter models**, read from its live list (`GET https://openrouter.ai/api/v1/models`, ~800 KB, read
   model by model) at most once a day, while the assistant sleeps: those whose `pricing.prompt` and
   `pricing.completion` are `"0"`, text in and text only out, without code or moderation models; the **6 most
@@ -145,11 +145,39 @@ How to read this table:
   100 output tokens per question. Reasoning/thinking tokens are billed as output on top of that, so Sol, Opus and
   Astra cost more than shown, depending on the question. Transcription and voice (OpenAI) are billed separately
   and do not depend on the chosen model. Prices as of October 2026; check the providers' pricing pages.
-- The effort is kept `low` on every model to favour a fast spoken answer. Raising it (in `llm_models[]`) makes
+- The effort is kept `low` on every model to favour a fast spoken answer. Raising it (in `AGENTS.INI`) makes
   Opus, Sol and Astra think more, and makes them slower and more expensive.
 
-The list lives in `main/app/llm.c` (`llm_models[]`). Any other model id can be set in `CONFIG.INI`
-(`claude-…` → Anthropic, `gpt-…` → OpenAI); it then shows up as an extra entry in the Settings list.
+### AGENTS.INI: the models offered
+
+The models are listed in **`AGENTS.INI`**, one section per provider (`[anthropic]`, `[openai]`, `[google]`,
+`[openrouter]`), one line per model:
+
+```ini
+[anthropic]
+# model id        = shown name        | reasoning | spoken name | Claude thinking (optional)
+claude-haiku-5-5  = Claude Haiku 5.5  | low       | Haiku       | disabled
+claude-sonnet-5-5 = Claude Sonnet 5.5 | low       | Sonnet      | between_tools
+
+[openrouter]
+deepseek/deepseek-v4.1-flash-1017 = DeepSeek V4.1 Flash | low | DeepSeek
+```
+
+- **Model id**: the id of the provider's API. **Shown name**: in the Settings screen. **Reasoning**: the effort
+  asked (Anthropic and OpenRouter `low|medium|high`, OpenAI `none|low|…`, Google `minimal|low|…`). **Spoken name**:
+  read in the spoken list of models, and said to choose it.
+- **Claude thinking** (optional, Anthropic only): `disabled`, `between_tools` or `default` (left to the model).
+  Without it, it comes from the name: `disabled` for a Haiku, `between_tools` for a Sonnet, left to the model
+  otherwise (Opus cannot turn thinking off).
+- The **section gives the provider**; the models are numbered in the file's order (Settings screen,
+  "utilise le modèle 3"), then the free OpenRouter models are added. A section of an unknown provider is ignored
+  (a new provider needs its client in the firmware).
+- The file given with the firmware (`main/agents/agents.ini`) is installed as `/spiffs/agents.ini` at the first
+  start, or when it is emptied; it is read at start-up (at most 32 models). In configuration mode it appears on the
+  drive as **`AGENTS.INI`**, editable with its comments (wait a few seconds after saving, then press **Restart**).
+- A model id set in `Chat_model` but not in the file still works: its provider then comes from the id
+  (`vendor/model` → OpenRouter, `gpt-…` → OpenAI, `gemini-…` → Google, otherwise Anthropic), and it shows up as an
+  extra entry in the Settings list.
 
 ### Typical latencies (measured with Claude Haiku 5.5)
 
@@ -189,7 +217,7 @@ Main modules of the assistant (`main/app/`):
 | `app_sr.c` | ESP-SR: AFE, wake word, speech and end-of-speech detection |
 | `app_audio.c` | Listening sessions, system sounds (wake beep preloaded in PSRAM) |
 | `stt_stream.c` | Live transcription (OpenAI Realtime, permanent WebSocket) |
-| `llm.c` | Model list and dispatch to the provider of the chosen model |
+| `llm.c` | Models offered (read from `AGENTS.INI`, installed from `main/agents/agents.ini`) and dispatch to the provider of the chosen model |
 | `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
 | `openai_chat.c` | GPT client (Responses API, SSE streaming), history |
 | `openrouter_chat.c` | OpenRouter client (Chat Completions, SSE streaming), history kept on the device |
@@ -254,33 +282,61 @@ Tap the gear icon on the home screen:
 
 For the language and the model, press **Save** (bottom right, enabled once something changed): the choice is
 saved to the device's NVS and applied at once, without restarting (the speech session reconnects, ~2 s).
-The folder-and-gear icon (top right) switches to the configuration mode described below.
+The folder-and-gear icon (top right) opens the **Configuration** screen: its button at the bottom right ("OK (30)") counts
+down from 30 and switches to the configuration mode described below at 0 (tap it to switch at once, or the back
+arrow to stay).
+
+At the bottom left of this Configuration screen (the one opened from Settings), two icons reset the device.
+Tapping one stops the countdown and asks for a confirmation:
+
+- **Soft reset** (circular arrows): the settings of `CONFIG.INI` go back to their defaults (language, model,
+  voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`, `Base_url`,
+  `Claude_key`, `Gemini_key`, `OpenRouter_key`) and Homey (`Homey_url`, `Homey_key`); `PERSONA.TXT`, `MEMORY.TXT`
+  and the comments of `CONFIG.INI` are kept. `VOICE_FR.TXT`, `VOICE_EN.TXT` and `AGENTS.INI` are replaced by the
+  versions of the firmware (your changes to them are lost). Then the device restarts. This is how phrases or
+  models added to the firmware reach a device whose files already exist (only missing sections are added
+  otherwise).
+- **Factory reset** (bin, red): **everything** goes back to the firmware's state: every setting is erased (Wi-Fi,
+  API keys, Homey, `PERSONA.TXT`, `MEMORY.TXT`, comments of `CONFIG.INI`), as well as the phrase files,
+  `AGENTS.INI`, the saved conversation, the places of the weather and the list of free models. Before that,
+  `CONFIG.INI` is saved as **`CONFIG.BKP`** (on SPIFFS, shown on the configuration drive), with `PERSONA.TXT` and
+  `MEMORY.TXT` at its end as comments; this backup is only replaced when `CONFIG.INI` differs from the firmware's,
+  so a second factory reset in a row keeps the settings saved by the first one. Nothing is erased if the backup
+  fails. Then, with a PC connected, the device switches to the configuration mode (its drive shows up on the PC,
+  which may offer to open it); without a PC it restarts, and since the Wi-Fi is erased it starts the
+  configuration mode anyway.
+
+The firmware holds **no Wi-Fi nor API key** (no build option for them): after a factory reset they are empty and
+must be filled in `CONFIG.INI` (copy them from `CONFIG.BKP`). Without a Wi-Fi network or an OpenAI key, the
+device starts in configuration mode.
 
 ### On the device: `CONFIG.INI`
 
-On first boot (or via **Settings → Reset → OK**), the BOX enters configuration mode and shows up on the
-PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Restart**:
+On first boot (or via **Settings → Configuration → OK**), the BOX enters configuration mode and shows up on the
+PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Restart** (bottom right of the screen).
+The keys keep the order and the comments of the file as you last saved it; keys it does not hold are added in
+the order of the table below (`s_ini_key_order` in `board_flash.c`):
 
 | Key | Role | Example |
 | --- | --- | --- |
-| `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
 | `Base_url` | OpenAI API URL | `https://api.openai.com/v1/` |
-| `ChatGPT_key` | OpenAI key (transcription, voice, GPT answers) | `sk-proj-…` |
-| `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
-| `Gemini_key` | Gemini key from Google AI Studio (Gemini answers), empty for none | `AIza…` |
-| `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models), empty for none | `sk-or-…` |
-| `OpenRouter_list` | OpenRouter models offered, comma-separated `vendor/model[=Name]` (at most 6; empty for the 3 defaults). Without a name, one is made from the id and its first word is spoken in the list | `deepseek/deepseek-v4.1-flash-1017=DeepSeek, moonshotai/kimi-k3.1-pro=Kimi` |
-| `Homey_key` | Its API key (shown in the app's settings) | |
-| `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.x.y:52199/mcp` |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`, `gemini-3.8-flash`… |
-| `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
 | `Voice` | Voice of the answers (also set from the Settings screen or by voice: "change de voix") | `marin`, `cedar`, `coral`… |
+| `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
+| `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
+| `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
+| `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
 | `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
-| `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
+| `ChatGPT_key` | OpenAI key (transcription, voice, GPT answers) | `sk-proj-…` |
+| `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
+| `Gemini_key` | Gemini key from Google AI Studio (Gemini answers), empty for none | `AIza…` |
+| `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.x.y:52199/mcp` |
+| `Homey_key` | Its API key (shown in the app's settings) | |
+| `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models), empty for none | `sk-or-…` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
-| `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
+| `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
 
 The drive also holds **`PERSONA.TXT`**: free text always given to the assistant with every question
 (Claude, GPT, Gemini and OpenRouter alike), kept across conversations, "Au revoir" included. For example:
@@ -288,6 +344,10 @@ The drive also holds **`PERSONA.TXT`**: free text always given to the assistant 
 ```text
 You are an everyday copilot named ESP, running on an ESP32-S3-BX3. Be direct, efficient, and dynamic. Always get straight to the point, favoring short, clear answers that work well spoken aloud. Your tone is warm, natural, and relaxed—like a sharp colleague who solves problems without giving long speeches.
 ```
+
+`AGENTS.INI` holds the models offered (see [AGENTS.INI](#agentsini-the-models-offered)); like the phrase files,
+it is stored on SPIFFS. `OpenRouter_list`, formerly in `CONFIG.INI`, is removed when the configuration mode starts:
+its models go into the `[openrouter]` section of `AGENTS.INI`.
 
 `VOICE_FR.TXT` and `VOICE_EN.TXT` hold the phrases of the voice commands (see
 [Writing voice phrases](#writing-voice-phrases-patterns)); they are stored on SPIFFS, not in NVS.
@@ -334,9 +394,9 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 ## Usage
 
 0. At start-up, once the Wi-Fi is connected, a welcome screen shows the steps; its button at the bottom right
-   counts down from 60 and closes it at 0 (tap it, or say "Bonjour ESP", to close it at once).
+   ("OK (60)") counts down from 60 and closes it at 0 (tap it, or say "Bonjour ESP", to close it at once).
 1. Say "**Bonjour ESP**" (beep), then ask your question ("J'écoute …" is shown while you speak).
-2. After 0.9 s of silence the question is sent: "Entendu …" is shown until its transcript arrives
+2. After 0.9 s of silence (`End_speech_ms` in `CONFIG.INI`) the question is sent: "Entendu …" is shown until its transcript arrives
    (0.7 to 1.2 s), then "Je réfléchis …" until the answer starts; the answer is shown and spoken.
 3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP"
    (not after a volume change, which sends it back to sleep).
@@ -344,6 +404,8 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 5. Without speech, it goes back to sleep (no API call is made for silence).
 6. Saying just "**Au revoir**" (or another closing phrase, see below) sends it back to sleep at once, without
    an answer and without listening again, and clears the saved conversation: the next one starts afresh.
+   Likewise, when the **assistant's answer ends with a closing phrase** ("… Bonne soirée !", "Au revoir !"),
+   it goes to sleep once it has said it, without listening again, and the conversation is cleared.
    Otherwise the conversation goes on after sleep or a restart.
 
 ## Voice commands
@@ -399,7 +461,8 @@ writes either (`(é|e)diter` works too).
   RAM).
 - In configuration mode they appear on the drive as **`VOICE_FR.TXT`** and **`VOICE_EN.TXT`** (one per
   `phrases_<code>.txt` found on SPIFFS, at most 4; up to 8,191 characters each): edit them, wait a few seconds,
-  press **Restart**. Comments are kept. To go back to the version of the firmware, empty the file.
+  press **Restart**. Comments are kept. To go back to the version of the firmware, empty the file (or use the
+  soft reset icon of the Configuration screen, which does it for all of them).
 - On a device already set up, the file on SPIFFS (possibly edited) is kept: a **section added** by a newer
   firmware is appended to it at start-up (with its comments), but changes to existing sections reach it only once
   the file is emptied (or the `storage` partition erased).
@@ -430,6 +493,9 @@ same as with plain lists (whole words, from the start of what is said) and costs
 
 Recognised only when said **alone**. The French list is used when the assistant is in French, the English one
 in English (section `[s_goodbyes]` of the phrase files, `voice_cmd_is_goodbye()` in `voice_cmd.c`).
+The same list is checked against the **last sentence of each answer** of the model (whole, or its part after the
+last comma: "Avec plaisir, bonne soirée !"): when it is a closing phrase,
+the assistant goes to sleep after saying it (no follow-up listening) and the conversation is cleared.
 
 | French | English |
 | --- | --- |
@@ -465,6 +531,7 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 | Change the language (asks "Quelle langue voulez-vous ? Français ou anglais ?") | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
 | Answer to that question (within 30 s after it) | français · anglais · "en anglais s'il te plaît"… | French · English |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
+| List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
 | Change the model (asks the provider first: "Quel fournisseur voulez-vous : Anthropic, OpenAI, Google ou OpenRouter ?") | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
 | Answer to that question (within 30 s): the provider's models are then read, numbered from 1 ("Voici les modèles proposés par Google. 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router"), or directly a model name ("Sonnet") | the same |
 | Answer to the model question (within 30 s after the list) | its number in that list ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna", "Sol", "Astra", "Flash", "Flash-Lite", "Argon", "DeepSeek", "Kimi", "MiniMax"; transcription variants such as "Sonnette", "Saule", "Flash light" accepted) | its number ("three", "3", "third") or its name |

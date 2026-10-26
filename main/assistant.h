@@ -37,6 +37,15 @@ void assistant_set_location(const char *country, const char *city);
 void assistant_request_language(const char *code);
 void assistant_request_model(const char *model);
 
+/**
+ * @brief Icons of the Configuration screen, done by the main task:
+ *        - soft reset: settings back to their defaults (Wi-Fi, API keys, Homey, Persona and Memory kept), phrase
+ *          files and AGENTS.INI replaced by the firmware's, then restart;
+ *        - factory reset: CONFIG.INI saved to CONFIG.BKP (if it was changed), everything erased (settings, files,
+ *          conversation), then configuration mode with a PC connected, otherwise restart.
+ */
+void assistant_request_restore(bool factory);
+
 #ifdef __cplusplus
 }
 #endif

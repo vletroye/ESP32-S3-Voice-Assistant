@@ -42,6 +42,7 @@ static const char *TAG = "voice_cmd";
 static PHRASE_LIST(s_goodbyes);
 static PHRASE_LIST_ALL_LANGUAGES(s_change_lang);
 static PHRASE_LIST(s_lang_shortcut);
+static PHRASE_LIST(s_list_models);
 static PHRASE_LIST(s_change_model);
 static PHRASE_LIST(s_model_shortcut);
 static PHRASE_LIST(s_change_voice);
@@ -424,6 +425,67 @@ static char *model_list(llm_provider_t provider)
     return out;
 }
 
+/* A free OpenRouter model, read from its live list (openrouter_free.c) */
+static bool is_free_model(const llm_model_t *m)
+{
+    size_t len = strlen(m->id);
+    return strcmp(m->id, "openrouter/free") == 0 || (len > 5 && strcmp(m->id + len - 5, ":free") == 0);
+}
+
+/* Names of the models of a provider (free ones or not), "Haiku, Sonnet et Opus", appended to out */
+static int append_names(char *out, size_t size, llm_provider_t provider, bool free_ones)
+{
+    const app_lang_t *lang = app_lang_get();
+    int total = 0;
+    for (size_t i = 0; i < llm_model_count; i++) {
+        total += (llm_provider_of(llm_models[i].id) == provider && is_free_model(&llm_models[i]) == free_ones);
+    }
+    int n = 0;
+    for (size_t i = 0; i < llm_model_count; i++) {
+        if (llm_provider_of(llm_models[i].id) != provider || is_free_model(&llm_models[i]) != free_ones) {
+            continue;
+        }
+        n++;
+        strlcat(out, n == 1 ? "" : (n == total ? lang->and_word : ", "), size);
+        strlcat(out, llm_models[i].spoken, size);
+    }
+    return total;
+}
+
+/* "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : ..." (the models of AGENTS.INI, by provider) */
+static char *models_by_provider(void)
+{
+    const app_lang_t *lang = app_lang_get();
+    const size_t size = 1536;
+    char *out = calloc(1, size);
+    char *names = malloc(size);
+    if (!out || !names) {
+        free(names);
+        return out;
+    }
+    bool first = true;
+    for (int p = 0; p < LLM_PROVIDER_COUNT; p++) {
+        names[0] = '\0';
+        if (append_names(names, size, (llm_provider_t)p, false) == 0) {
+            continue;
+        }
+        size_t n = strlen(out);
+        snprintf(out + n, size - n, "%s", n ? " " : "");
+        n = strlen(out);
+        snprintf(out + n, size - n, first ? lang->models_first : lang->models_next, s_providers[p].name, names);
+        first = false;
+    }
+    names[0] = '\0';
+    if (append_names(names, size, LLM_PROVIDER_OPENROUTER, true) > 0) {
+        size_t n = strlen(out);
+        snprintf(out + n, size - n, " ");
+        n = strlen(out);
+        snprintf(out + n, size - n, lang->models_free, names);
+    }
+    free(names);
+    return out;
+}
+
 /* The models of the provider, numbered, then "which one?" (answered within CMD_ANSWER_TIMEOUT_US) */
 static voice_cmd_t ask_model(llm_provider_t provider, char **reply)
 {
@@ -717,10 +779,25 @@ bool voice_cmd_is_goodbye(const char *text)
     return false;
 }
 
+bool voice_cmd_ends_with_goodbye(const char *sentence)
+{
+    if (voice_cmd_is_goodbye(sentence)) {
+        return true;
+    }
+    // "Avec plaisir, bonne soirée !": the part after the last comma (or ; :)
+    const char *last = NULL;
+    for (const char *p = sentence; *p; p++) {
+        if (*p == ',' || *p == ';' || *p == ':') {
+            last = p + 1;
+        }
+    }
+    return last && voice_cmd_is_goodbye(last);
+}
+
 void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
-        &s_goodbyes, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
+        &s_goodbyes, &s_list_models, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
         &s_new_conversation, &s_edit_config, &s_restart, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_courtesy, &s_one_alone,
     };
@@ -802,6 +879,10 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         s_asked = ASKED_LANGUAGE;
         s_asked_us = esp_timer_get_time();
         *reply = reply_dup(app_lang_get()->lang_ask);
+        return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, phrases_of(&s_list_models), NULL)) {
+        *reply = models_by_provider();
         return VOICE_CMD_ANSWERED;
     }
     if (starts_with(norm, phrases_of(&s_change_model), &len)) {

@@ -45,41 +45,39 @@ typedef enum {
  */
 typedef void (*llm_text_cb_t)(const char *delta, void *ctx);
 
-/** Models offered on the Settings screen */
+/** Models offered on the Settings screen (AGENTS.INI) */
 typedef struct {
     const char *id;         /* API model id */
     const char *label;      /* Name shown in the list */
-    const char *effort;     /* Claude output_config.effort / OpenAI reasoning.effort / Gemini thinkingLevel,
-                               NULL for the default */
+    const char *effort;     /* Claude output_config.effort / OpenAI reasoning.effort / Gemini thinkingLevel /
+                               OpenRouter reasoning.effort, NULL for the default */
     const char *spoken;     /* Short name in the spoken list of models ("Haiku") */
+    const char *thinking;   /* Claude thinking.type ("disabled", "between_tools"), "default" to leave it out,
+                               NULL to choose it from the model's name */
+    llm_provider_t provider;
 } llm_model_t;
 
-/* The fixed models of Anthropic, OpenAI and Google, then the OpenRouter ones (llm_set_openrouter_models()) */
-#define LLM_OPENROUTER_MAX_MODELS   6
-/* Free OpenRouter models read from its live list, after the others (openrouter_free.c) */
+/* The models of AGENTS.INI (llm_load_models()), then the free OpenRouter ones (openrouter_free.c) */
+#define LLM_FILE_MODELS_MAX         32
 #define LLM_OPENROUTER_FREE_MAX     7
 extern llm_model_t llm_models[];
 extern size_t llm_model_count;
 
 /**
- * @brief Replace the free OpenRouter models offered, put after the other OpenRouter models. The strings are
- *        copied.
+ * @brief Read the models offered from AGENTS.INI (/spiffs/agents.ini, installed from the firmware's version when
+ *        missing or emptied). At start-up, after SPIFFS is mounted and before the Settings screen is built, from a
+ *        task whose stack is in internal RAM.
+ */
+void llm_load_models(void);
+
+/**
+ * @brief Replace the free OpenRouter models offered, put after the models of AGENTS.INI. The strings are copied.
  */
 void llm_set_openrouter_free_models(const llm_model_t *models, size_t count);
 
 /**
- * @brief Replace the OpenRouter models offered (Settings screen, voice) by a list from CONFIG.INI.
- *
- * Call before the Settings screen is built. The defaults stay when the list is empty.
- *
- * @param list "id[=Name], ...", e.g. "deepseek/deepseek-v4.1-flash-1017=DeepSeek, moonshotai/kimi-k3.1-pro"
- *             (without a name, it is made from the id); at most LLM_OPENROUTER_MAX_MODELS
- */
-void llm_set_openrouter_models(const char *list);
-
-/**
- * Provider serving a model id ("vendor/model" is OpenRouter, "gpt-..." and "o<digit>..." are OpenAI, "gemini-..."
- * Google, anything else Claude)
+ * Provider serving a model id: its section of AGENTS.INI; for a model not listed, "vendor/model" is OpenRouter,
+ * "gpt-..." and "o<digit>..." are OpenAI, "gemini-..." Google, anything else Claude
  */
 llm_provider_t llm_provider_of(const char *model);
 

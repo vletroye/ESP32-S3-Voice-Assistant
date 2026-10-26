@@ -6,7 +6,8 @@
 # An empty section disables the command. Lines starting with # are comments. Emptied file: restored.
 
 [s_goodbyes]
-# Said alone, they send the assistant back to sleep without an answer (conversation cleared)
+# Said alone, they send the assistant back to sleep without an answer (conversation cleared);
+# when the assistant's answer ends with one of them, it also goes to sleep after saying it
 goodbye[ esp]
 good (bye|night)
 bye[ (bye|esp)]
@@ -19,6 +20,13 @@ switch [the ]language
 speak[ in]
 switch to
 answer in
+
+[s_list_models]
+# Reads, by provider, the short names of the models of AGENTS.INI (and the free OpenRouter models)
+give me the list of [all ](the|your) models
+list [all ](the|your) models
+what models (do you support|are available)
+which models (do you support|are available)
 
 [s_change_model]
 change [the ]model

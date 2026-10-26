@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -136,7 +137,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     // Read SSID
     len = sizeof(g_sys_param.ssid);
     ret = nvs_get_str(my_handle, "ssid", g_sys_param.ssid, &len);
-    if (ret != ESP_OK || len == 0) {
+    if (ret != ESP_OK || len <= 1) {
         ESP_LOGI(TAG, "No SSID found");
         goto err;
     }
@@ -155,7 +156,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     if (ret == ESP_ERR_NVS_INVALID_LENGTH) {
         ESP_LOGE(TAG, "OpenAI key longer than %u characters", (unsigned)sizeof(g_sys_param.key) - 1);
     }
-    if (ret != ESP_OK || len == 0) {
+    if (ret != ESP_OK || len <= 1) {
         ESP_LOGI(TAG, "No OpenAI key found");
         goto err;
     }
@@ -203,14 +204,10 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.gemini_key[0] = '\0';
     }
 
-    // OpenRouter (optional): its key and the models offered ("" keeps the defaults)
+    // OpenRouter (optional): its key (the models offered are in AGENTS.INI)
     len = sizeof(g_sys_param.openrouter_key);
     if (nvs_get_str(my_handle, "OpenRouter_key", g_sys_param.openrouter_key, &len) != ESP_OK) {
         g_sys_param.openrouter_key[0] = '\0';
-    }
-    len = sizeof(g_sys_param.openrouter_models);
-    if (nvs_get_str(my_handle, "OpenRouter_list", g_sys_param.openrouter_models, &len) != ESP_OK) {
-        g_sys_param.openrouter_models[0] = '\0';
     }
 
     // Read the scrolling speed of the answer (optional)
@@ -224,6 +221,19 @@ esp_err_t settings_read_parameter_from_nvs(void)
         ESP_LOGW(TAG, "Scroll_speed %d out of range (5..60), using %d", g_sys_param.scroll_cps,
                  CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
         g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
+    }
+
+    // Silence after which the question is considered finished (End_speech_ms, 300 to 3000 ms)
+    char end_speech[8] = {0};
+    len = sizeof(end_speech);
+    g_sys_param.end_speech_ms = CONFIG_ASSISTANT_END_OF_SPEECH_MS;
+    if (nvs_get_str(my_handle, "End_speech_ms", end_speech, &len) == ESP_OK && atoi(end_speech) > 0) {
+        g_sys_param.end_speech_ms = atoi(end_speech);
+    }
+    if (g_sys_param.end_speech_ms < 300 || g_sys_param.end_speech_ms > 3000) {
+        ESP_LOGW(TAG, "End_speech_ms %d out of range (300..3000), using %d", g_sys_param.end_speech_ms,
+                 CONFIG_ASSISTANT_END_OF_SPEECH_MS);
+        g_sys_param.end_speech_ms = CONFIG_ASSISTANT_END_OF_SPEECH_MS;
     }
 
     // Screen off after this many seconds without presence (BOX-3-SENSOR radar), 0: never
@@ -324,7 +334,6 @@ esp_err_t settings_read_parameter_from_nvs(void)
     str_trim(g_sys_param.claude_key);
     str_trim(g_sys_param.gemini_key);
     str_trim(g_sys_param.openrouter_key);
-    str_trim(g_sys_param.openrouter_models);
     str_trim(g_sys_param.chat_model);
 
     ESP_LOGI(TAG, "stored ssid:%s", g_sys_param.ssid);
@@ -340,8 +349,6 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars), Gemini key: (%d chars), OpenRouter key: (%d chars)",
              g_sys_param.chat_model, (int)strlen(g_sys_param.claude_key), (int)strlen(g_sys_param.gemini_key),
              (int)strlen(g_sys_param.openrouter_key));
-    ESP_LOGI(TAG, "OpenRouter models: %s", g_sys_param.openrouter_models[0] ? g_sys_param.openrouter_models :
-             "(defaults)");
     return ESP_OK;
 
 err:
@@ -355,6 +362,183 @@ err:
 sys_param_t *settings_get_parameter(void)
 {
     return &g_sys_param;
+}
+
+/* Kept by the soft reset: Wi-Fi, API keys, Homey, PERSONA.TXT, MEMORY.TXT, comments of CONFIG.INI */
+static const char *const s_kept_keys[] = {
+    "ssid", "password", "ChatGPT_key", "Base_url", "Claude_key", "Gemini_key", "OpenRouter_key",
+    "Homey_url", "Homey_key", "Persona", "Memory", "Config_layout",
+};
+
+static bool is_kept_key(const char *key)
+{
+    for (size_t i = 0; i < sizeof(s_kept_keys) / sizeof(s_kept_keys[0]); i++) {
+        if (strcmp(key, s_kept_keys[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Values of the configuration mode's first start (factory_nvs); any other key's default is empty */
+static const struct {
+    const char *key;
+    const char *value;
+} s_default_values[] = {
+    { "Base_url", "https://api.openai.com/v1/" },
+    { "Language", CONFIG_ASSISTANT_LANGUAGE },
+    { "Chat_model", CONFIG_ASSISTANT_CHAT_MODEL },
+    { "Scroll_speed", "16" },
+    { "Screen_off_s", "10" },
+    { "End_speech_ms", "900" },
+    { "Scroll_mode", "line" },
+    { "Voice", "marin" },
+};
+
+static bool is_default_value(const char *key, const char *value)
+{
+    if (!value[0] || strcmp(key, "Config_layout") == 0) {
+        return true;
+    }
+    for (size_t i = 0; i < sizeof(s_default_values) / sizeof(s_default_values[0]); i++) {
+        if (strcmp(key, s_default_values[i].key) == 0) {
+            return strcmp(value, s_default_values[i].value) == 0;
+        }
+    }
+    return false;
+}
+
+/* A string of the configuration, allocated (NULL if missing) */
+static char *get_str(nvs_handle_t handle, const char *key)
+{
+    size_t len = 0;
+    if (nvs_get_str(handle, key, NULL, &len) != ESP_OK) {
+        return NULL;
+    }
+    char *value = malloc(len);
+    if (value && nvs_get_str(handle, key, value, &len) != ESP_OK) {
+        free(value);
+        value = NULL;
+    }
+    return value;
+}
+
+/* CONFIG.INI differs from the firmware's: a value was changed (from the PC, by voice or from the screen) */
+static bool config_modified(nvs_handle_t handle)
+{
+    bool modified = false;
+    nvs_iterator_t it = NULL;
+    esp_err_t res = nvs_entry_find(uf2_nvs_partition, uf2_nvs_namespace, NVS_TYPE_STR, &it);
+    while (res == ESP_OK && !modified) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        char *value = get_str(handle, info.key);
+        modified = value && !is_default_value(info.key, value);
+        if (modified) {
+            ESP_LOGI(TAG, "%s differs from the firmware's", info.key);
+        }
+        free(value);
+        res = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+    return modified;
+}
+
+/* A multi-line text (PERSONA.TXT, MEMORY.TXT) as comment lines of CONFIG.BKP */
+static void backup_text(FILE *f, const char *title, const char *text)
+{
+    fprintf(f, "\r\n# ---------- %s ----------\r\n", title);
+    for (const char *line = text; line && *line;) {
+        const char *end = strchr(line, '\n');
+        size_t len = end ? (size_t)(end - line) : strlen(line);
+        if (len && line[len - 1] == '\r') {
+            len--;
+        }
+        // Its own comment lines already start with '#'
+        fprintf(f, "%s%.*s\r\n", line[0] == '#' ? "" : "# ", (int)len, line);
+        line = end ? end + 1 : line + len;
+    }
+}
+
+/* CONFIG.INI as "key = value" lines, then PERSONA.TXT and MEMORY.TXT as comments, to SETTINGS_BACKUP_FILE */
+static esp_err_t backup_config(nvs_handle_t handle)
+{
+    FILE *f = fopen(SETTINGS_BACKUP_FILE, "w");
+    ESP_RETURN_ON_FALSE(f, ESP_FAIL, TAG, "cannot write %s", SETTINGS_BACKUP_FILE);
+    fprintf(f, "# CONFIG.INI saved before the factory reset (copy back the lines you want to keep)\r\n"
+            "[%s]\r\n", uf2_nvs_namespace);
+    nvs_iterator_t it = NULL;
+    esp_err_t res = nvs_entry_find(uf2_nvs_partition, uf2_nvs_namespace, NVS_TYPE_STR, &it);
+    while (res == ESP_OK) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        if (strcmp(info.key, "Persona") && strcmp(info.key, "Memory") && strcmp(info.key, "Config_layout")) {
+            char *value = get_str(handle, info.key);
+            if (value) {
+                fprintf(f, "%s = %s\r\n", info.key, value);
+            }
+            free(value);
+        }
+        res = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+    char *persona = get_str(handle, "Persona");
+    char *memory = get_str(handle, "Memory");
+    backup_text(f, "PERSONA.TXT", persona);
+    backup_text(f, "MEMORY.TXT", memory);
+    free(persona);
+    free(memory);
+    bool ok = (fclose(f) == 0);
+    ESP_RETURN_ON_FALSE(ok, ESP_FAIL, TAG, "cannot write %s", SETTINGS_BACKUP_FILE);
+    ESP_LOGI(TAG, "CONFIG.INI saved to %s", SETTINGS_BACKUP_FILE);
+    return ESP_OK;
+}
+
+esp_err_t settings_factory_wipe(void)
+{
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READWRITE, &handle);
+    ESP_RETURN_ON_ERROR(ret, TAG, "nvs open failed (0x%x)", ret);
+    // Unchanged since the last factory reset: its backup (the settings before it) is kept
+    if (config_modified(handle) && backup_config(handle) != ESP_OK) {
+        nvs_close(handle);
+        return ESP_FAIL;    // nothing is erased without its backup
+    }
+    ret = nvs_erase_all(handle);
+    if (ret == ESP_OK) {
+        ret = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    ESP_LOGI(TAG, "Every setting erased (%s)", esp_err_to_name(ret));
+    return ret;
+}
+
+esp_err_t settings_restore_defaults(void)
+{
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READWRITE, &handle);
+    ESP_RETURN_ON_ERROR(ret, TAG, "nvs open failed (0x%x)", ret);
+    // The keys to erase first, then erased (not while iterating); the defaults apply when they are missing
+    char keys[48][NVS_KEY_NAME_MAX_SIZE];
+    int count = 0;
+    nvs_iterator_t it = NULL;
+    esp_err_t res = nvs_entry_find(uf2_nvs_partition, uf2_nvs_namespace, NVS_TYPE_ANY, &it);
+    while (res == ESP_OK && count < (int)(sizeof(keys) / sizeof(keys[0]))) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        if (!is_kept_key(info.key)) {
+            strlcpy(keys[count++], info.key, sizeof(keys[0]));
+        }
+        res = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+    for (int i = 0; i < count; i++) {
+        nvs_erase_key(handle, keys[i]);
+        ESP_LOGI(TAG, "%s back to its default", keys[i]);
+    }
+    ret = nvs_commit(handle);
+    nvs_close(handle);
+    return ret;
 }
 
 esp_err_t settings_save_str(const char *key, const char *value)

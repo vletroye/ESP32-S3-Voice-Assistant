@@ -6,12 +6,14 @@
 # Les lignes commençant par # sont des commentaires. Fichier vidé : il est remis à sa version d'origine.
 
 [s_goodbyes]
-# Dites seules, elles renvoient l'assistant en veille sans réponse (conversation effacée)
+# Dites seules, elles renvoient l'assistant en veille sans réponse (conversation effacée) ;
+# si la réponse de l'assistant se termine par l'une d'elles, il se met aussi en veille après l'avoir dite
 au revoir[ esp]
-bonne nuit[ esp]
-à (demain|plus)
+à (bientôt|demain|plus)[ esp]
 ciao
-bonne (soirée|journée|après midi)
+bonne (nuit|soirée|journée|après midi)[esp]
+bonne (nuit|soirée|journée|après midi)[esp][ et] à (bientôt|demain|plus)[ esp]
+au revoir[ esp] et bonne (nuit|soirée|journée|après midi)[esp]
 
 [s_change_lang]
 change[r] (la|de|ta) langue
@@ -23,6 +25,13 @@ on parle
 passe en
 passe à l
 réponds en
+
+[s_list_models]
+# Lit, par fournisseur, les noms courts des modèles d'AGENTS.INI (et les modèles gratuits d'OpenRouter)
+donne moi la liste (de tous (les|tes)|des|de tes) mod(è|e)les[ (disponibles|supportés)]
+liste moi [tous ](les|tes) mod(è|e)les[ (disponibles|supportés)]
+donne moi (tes|les) mod(è|e)les[ (disponibles|supportés)]
+quels sont (les|tes) mod(è|e)les[ (disponibles|supportés)]
 
 [s_change_model]
 change[r] (de|le|ton) mod(è|e)le

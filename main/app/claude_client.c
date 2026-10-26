@@ -115,7 +115,8 @@ static void replace_str(char **dst, const char *src)
     *dst = (src && src[0]) ? strdup(src) : NULL;
 }
 
-esp_err_t claude_client_init(const char *api_key, const char *model, const char *system_prompt, const char *effort)
+esp_err_t claude_client_init(const char *api_key, const char *model, const char *system_prompt, const char *effort,
+                             const char *thinking)
 {
     ESP_RETURN_ON_FALSE(api_key && api_key[0] && model && model[0], ESP_ERR_INVALID_ARG, TAG, "API key and model required");
     replace_str(&s_api_key, api_key);
@@ -125,10 +126,15 @@ esp_err_t claude_client_init(const char *api_key, const char *model, const char 
     claude_client_reset();
     s_web_search = -1;      // capability of the new model, read by the next prewarm
     /*
-     * Haiku accepts "disabled". Sonnet rejects it but only thinks between tool calls with "between_tools"
-     * (no tools are offered). Opus cannot turn thinking off: the parameter is left out.
+     * Thinking set in AGENTS.INI ("default": left to the model), else from the name: Haiku accepts "disabled";
+     * Sonnet rejects it but only thinks between tool calls with "between_tools"; Opus cannot turn thinking off,
+     * the parameter is left out.
      */
-    if (strstr(s_model, "haiku")) {
+    static char s_thinking_set[24];
+    if (thinking && thinking[0]) {
+        strlcpy(s_thinking_set, thinking, sizeof(s_thinking_set));
+        s_thinking = strcmp(s_thinking_set, "default") == 0 ? NULL : s_thinking_set;
+    } else if (strstr(s_model, "haiku")) {
         s_thinking = "disabled";
     } else if (strstr(s_model, "sonnet")) {
         s_thinking = "between_tools";

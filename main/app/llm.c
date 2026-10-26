@@ -5,6 +5,7 @@
  */
 
 #include <ctype.h>
+#include <strings.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,123 +23,172 @@
 
 static const char *TAG = "llm";
 
-/*
- * Latest models of each provider. Effort is kept low for a fast spoken answer: GPT-6 Luna can skip
- * reasoning ("none"), GPT-6.1 Sol and GPT-6 Astra start at "low"; Gemini 3.5 Flash-Lite thinks least with
- * "minimal", Gemini 3.8 Flash and Gemini 4 Argon start at "low". The OpenRouter models follow: three popular
- * ones by default, else the list of CONFIG.INI (OpenRouter_list), with a low reasoning effort.
- */
-#define LLM_FIXED_MODELS    9
-llm_model_t llm_models[LLM_FIXED_MODELS + LLM_OPENROUTER_MAX_MODELS + LLM_OPENROUTER_FREE_MAX] = {
-    { "claude-haiku-5-5",  "Claude Haiku 5.5",  "low",  "Haiku" },
-    { "claude-sonnet-5-5", "Claude Sonnet 5.5", "low",  "Sonnet" },
-    { "claude-opus-5-5",   "Claude Opus 5.5",   "low",  "Opus" },
-    { "gpt-6-luna",        "GPT-6 Luna",        "none", "Luna" },
-    { "gpt-6.1-sol",       "GPT-6.1 Sol",       "low",  "Sol" },
-    { "gpt-6-astra",       "GPT-6 Astra",       "low",  "Astra" },
-    { "gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite", "minimal", "Flash-Lite" },
-    { "gemini-3.8-flash",  "Gemini 3.8 Flash",  "low",  "Flash" },
-    { "gemini-4-argon",    "Gemini 4 Argon",    "low",  "Argon" },
-    { "deepseek/deepseek-v4.1-flash-1017", "DeepSeek V4.1 Flash", "low", "DeepSeek" },
-    { "moonshotai/kimi-k3.1-pro", "Kimi K3.1 Pro", "low", "Kimi" },
-    { "minimax/minimax-m3.1-flash", "MiniMax M3.1 Flash", "low", "MiniMax" },
-};
-size_t llm_model_count = LLM_FIXED_MODELS + 3;
-/* OpenRouter models (defaults or CONFIG.INI), then the free ones */
-static size_t s_openrouter_count = 3;
-static size_t s_free_count = 0;
+/* ---------- the models offered: AGENTS.INI ---------- */
 
-/* "deepseek-v4.1-flash" -> "Deepseek V4.1 Flash" (allocated) */
-static char *name_from_id(const char *id)
+#define AGENTS_FILE         "/spiffs/agents.ini"
+#define AGENTS_FILE_MAX     8192
+
+/* The firmware's version (main/agents/agents.ini, embedded NUL-terminated) */
+extern const char s_agents_default_start[] asm("_binary_agents_ini_start");
+extern const char s_agents_default_end[] asm("_binary_agents_ini_end");
+
+llm_model_t llm_models[LLM_FILE_MODELS_MAX + LLM_OPENROUTER_FREE_MAX];
+size_t llm_model_count = 0;
+/* Models of AGENTS.INI, then the free OpenRouter ones */
+static size_t s_file_count = 0;
+
+static const struct {
+    const char *section;
+    llm_provider_t provider;
+} s_sections[] = {
+    { "anthropic", LLM_PROVIDER_CLAUDE },
+    { "openai", LLM_PROVIDER_OPENAI },
+    { "google", LLM_PROVIDER_GEMINI },
+    { "openrouter", LLM_PROVIDER_OPENROUTER },
+};
+
+/* Without the blanks around it (in place) */
+static char *trim(char *s)
 {
-    const char *slash = strrchr(id, '/');
-    char *name = strdup(slash ? slash + 1 : id);
-    bool word_start = true;
-    for (char *c = name; c && *c; c++) {
-        if (*c == '-' || *c == '_' || *c == ':') {
-            *c = ' ';
-            word_start = true;
-        } else {
-            if (word_start) {
-                *c = toupper((unsigned char)*c);
-            }
-            word_start = false;
-        }
+    while (*s && (unsigned char)*s <= ' ') {
+        s++;
     }
-    return name;
+    size_t n = strlen(s);
+    while (n > 0 && (unsigned char)s[n - 1] <= ' ') {
+        s[--n] = '\0';
+    }
+    return s;
 }
 
-void llm_set_openrouter_models(const char *list)
+/* "id = label | effort | spoken | thinking" lines, by "[provider]" section, into llm_models */
+static size_t parse_models(const char *text)
 {
-    if (!list) {
-        return;
-    }
+    char *copy = strdup(text);
     size_t count = 0;
-    char *copy = strdup(list);
-    for (char *item = copy ? strtok(copy, ",") : NULL; item && count < LLM_OPENROUTER_MAX_MODELS;
-            item = strtok(NULL, ",")) {
-        // "id[=Name]", spaces around ignored
-        char *name = strchr(item, '=');
-        if (name) {
-            *name++ = '\0';
-        }
-        char *id = item;
-        while (*id == ' ') {
-            id++;
-        }
-        size_t len = strlen(id);
-        while (len > 0 && id[len - 1] == ' ') {
-            id[--len] = '\0';
-        }
-        if (!strchr(id, '/')) {
-            ESP_LOGW(TAG, "OpenRouter model \"%s\" ignored (expected vendor/model)", id);
+    int provider = -1;      // section not known yet: its lines are ignored
+    for (char *line = copy ? strtok(copy, "\n") : NULL; line && count < LLM_FILE_MODELS_MAX;
+            line = strtok(NULL, "\n")) {
+        line = trim(line);
+        if (!line[0] || line[0] == '#' || line[0] == ';') {
             continue;
         }
-        while (name && *name == ' ') {
-            name++;
-        }
-        len = name ? strlen(name) : 0;
-        while (len > 0 && name[len - 1] == ' ') {
-            name[--len] = '\0';
-        }
-        llm_model_t *m = &llm_models[LLM_FIXED_MODELS + count++];
-        m->id = strdup(id);
-        m->label = (name && name[0]) ? strdup(name) : name_from_id(id);
-        m->effort = "low";
-        // Spoken in the list of models: the name given, else the first word of the one made from the id
-        char *spoken = strdup(m->label);
-        if (spoken && !(name && name[0])) {
-            char *space = strchr(spoken, ' ');
-            if (space) {
-                *space = '\0';
+        if (line[0] == '[') {
+            char *close = strchr(line, ']');
+            if (close) {
+                *close = '\0';
             }
+            provider = -1;
+            for (size_t i = 0; i < sizeof(s_sections) / sizeof(s_sections[0]); i++) {
+                if (strcasecmp(trim(line + 1), s_sections[i].section) == 0) {
+                    provider = s_sections[i].provider;
+                }
+            }
+            if (provider < 0) {
+                ESP_LOGW(TAG, "AGENTS.INI: [%s] is not a known provider: its models are ignored", line + 1);
+            }
+            continue;
         }
-        m->spoken = spoken;
+        char *eq = strchr(line, '=');
+        if (provider < 0 || !eq) {
+            continue;
+        }
+        *eq = '\0';
+        char *fields[4] = { NULL };
+        char *rest = eq + 1;
+        for (int f = 0; f < 4 && rest; f++) {
+            char *bar = strchr(rest, '|');
+            if (bar) {
+                *bar = '\0';
+            }
+            fields[f] = trim(rest);
+            rest = bar ? bar + 1 : NULL;
+        }
+        const char *id = trim(line);
+        if (!id[0] || !fields[0] || !fields[0][0]) {
+            ESP_LOGW(TAG, "AGENTS.INI: line without a model id or a name, ignored");
+            continue;
+        }
+        llm_model_t *m = &llm_models[count++];
+        m->id = strdup(id);
+        m->label = strdup(fields[0]);
+        m->effort = (fields[1] && fields[1][0]) ? strdup(fields[1]) : "low";
+        m->spoken = strdup((fields[2] && fields[2][0]) ? fields[2] : fields[0]);
+        m->thinking = (fields[3] && fields[3][0]) ? strdup(fields[3]) : NULL;
+        m->provider = (llm_provider_t)provider;
     }
     free(copy);
-    if (count) {
-        s_openrouter_count = count;
-        llm_model_count = LLM_FIXED_MODELS + s_openrouter_count;
-        s_free_count = 0;
-        ESP_LOGI(TAG, "%u OpenRouter model(s) from CONFIG.INI", (unsigned)count);
+    return count;
+}
+
+static char *read_agents_file(void)
+{
+    FILE *f = fopen(AGENTS_FILE, "r");
+    if (!f) {
+        return NULL;
     }
+    char *text = malloc(AGENTS_FILE_MAX);
+    size_t n = text ? fread(text, 1, AGENTS_FILE_MAX - 1, f) : 0;
+    fclose(f);
+    if (text) {
+        text[n] = '\0';
+    }
+    return text;
+}
+
+void llm_load_models(void)
+{
+    char *text = read_agents_file();
+    bool blank = true;
+    for (const char *c = text; c && *c && blank; c++) {
+        blank = (unsigned char)*c <= ' ';
+    }
+    if (blank) {
+        // Missing (first start) or emptied on the configuration drive: the version given with the firmware
+        free(text);
+        size_t len = (size_t)(s_agents_default_end - s_agents_default_start) - 1;     // without the added NUL
+        FILE *f = fopen(AGENTS_FILE, "w");
+        bool ok = f && fwrite(s_agents_default_start, 1, len, f) == len;
+        if (f) {
+            ok &= (fclose(f) == 0);
+        }
+        ESP_LOGI(TAG, "%s %s (%u bytes)", ok ? "Installed" : "Could not install", AGENTS_FILE, (unsigned)len);
+        text = read_agents_file();
+    }
+    s_file_count = parse_models(text ? text : s_agents_default_start);
+    if (s_file_count == 0) {
+        ESP_LOGE(TAG, "No model in AGENTS.INI: the firmware's list is used");
+        s_file_count = parse_models(s_agents_default_start);
+    }
+    free(text);
+    llm_model_count = s_file_count;
+    ESP_LOGI(TAG, "%u models from AGENTS.INI", (unsigned)s_file_count);
 }
 
 void llm_set_openrouter_free_models(const llm_model_t *models, size_t count)
 {
-    // Copied after the other OpenRouter models; the strings of a former list are not freed: a task may still be
+    // Copied after the models of AGENTS.INI; the strings of a former list are not freed: a task may still be
     // reading them (a few hundred bytes a day)
-    size_t first = LLM_FIXED_MODELS + s_openrouter_count;
     size_t n = 0;
     for (size_t i = 0; i < count && n < LLM_OPENROUTER_FREE_MAX; i++) {
-        llm_models[first + n].id = strdup(models[i].id);
-        llm_models[first + n].label = strdup(models[i].label);
-        llm_models[first + n].effort = models[i].effort;
-        llm_models[first + n].spoken = strdup(models[i].spoken);
-        n++;
+        llm_model_t *m = &llm_models[s_file_count + n++];
+        m->id = strdup(models[i].id);
+        m->label = strdup(models[i].label);
+        m->effort = models[i].effort;
+        m->spoken = strdup(models[i].spoken);
+        m->thinking = NULL;
+        m->provider = LLM_PROVIDER_OPENROUTER;
     }
-    s_free_count = n;
-    llm_model_count = first + s_free_count;
+    llm_model_count = s_file_count + n;
+}
+
+static const llm_model_t *model_of(const char *id)
+{
+    for (size_t i = 0; i < llm_model_count; i++) {
+        if (strcmp(id, llm_models[i].id) == 0) {
+            return &llm_models[i];
+        }
+    }
+    return NULL;
 }
 
 /* Conversation history kept across sleep and restarts (SPIFFS "storage" partition) */
@@ -155,6 +205,10 @@ static bool s_dirty = false;
 
 llm_provider_t llm_provider_of(const char *model)
 {
+    const llm_model_t *listed = model_of(model);
+    if (listed) {
+        return listed->provider;
+    }
     if (strchr(model, '/')) {
         return LLM_PROVIDER_OPENROUTER;     // "vendor/model"
     }
@@ -296,7 +350,8 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
         ESP_LOGW(TAG, "No Claude_key configured for %s", model);
         ret = ESP_ERR_INVALID_ARG;
     } else {
-        ret = claude_client_init(claude_key, model, system_prompt, effort_of(model));
+        const llm_model_t *listed = model_of(model);
+        ret = claude_client_init(claude_key, model, system_prompt, effort_of(model), listed ? listed->thinking : NULL);
         // Tools (weather, volume...): offered to Claude only for now
         claude_client_set_tools(tools_definitions(), tools_run);
     }

@@ -36,23 +36,27 @@ LV_FONT_DECLARE(ui_font_Latin14);
 LV_FONT_DECLARE(ui_font_Latin16);
 LV_FONT_DECLARE(ui_font_Latin20);
 
-/* Override the texts of the SquareLine-generated screen (English) for supported languages */
+/* Place the Restart button, and override the texts of the SquareLine-generated screen (English) for supported languages */
 static void ui_localize(const char *lang)
 {
+    bsp_display_lock(0);
+    // Restart button at the bottom right, as on the assistant's screens
+    lv_obj_set_align(ui_ButtonSetup, LV_ALIGN_BOTTOM_RIGHT);
+    lv_obj_set_pos(ui_ButtonSetup, -16, -16);
     if (strcasecmp(lang, "fr") != 0) {
+        bsp_display_unlock();
         return;
     }
 
-    bsp_display_lock(0);
     lv_obj_set_style_text_font(ui_LabelSetupStepTile, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_label_set_text(ui_LabelSetupStepTile, "Configuration");
     lv_obj_set_style_text_font(ui_LabelSetupStepContent, &ui_font_Latin14, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_label_set_text(ui_LabelSetupStepContent,
-                      "1. Branchez la box sur votre PC.\n"
-                      "2. Ouvrez le lecteur « ESP-Box ».\n"
-                      "3. Dans « CONFIG.INI », renseignez le Wi-Fi, les clés OpenAI et Claude, la langue et le modèle.\n"
-                      "4. Enregistrez le fichier.\n"
-                      "5. Redémarrez l'appareil.");
+                      "1. Ouvrez le lecteur « ESP-Box ».\n"
+                      "2. Editez les fichiers de config.\n"
+                      "3. Enregistrez les changements.\n"
+                      "4. Attendez 5 secondes.\n"
+                      "5. Appuyez sur « Redémarrer ».");
     lv_obj_set_style_text_font(ui_LabelSetupBtn, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_label_set_text(ui_LabelSetupBtn, "Redémarrer");
     // The generated button (72 px) is sized for "Restart"
@@ -111,7 +115,7 @@ void app_main(void)
         buf_len_long = sizeof(ssid);
         err = nvs_get_str(my_handle, "ssid", ssid, &buf_len_long);
         if (err != ESP_OK || buf_len_long == 0) {
-            ESP_ERROR_CHECK(nvs_set_str(my_handle, "ssid", CONFIG_ESP_WIFI_SSID));
+            ESP_ERROR_CHECK(nvs_set_str(my_handle, "ssid", ""));
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "no ssid, give a init value to nvs");
         } else {
@@ -121,7 +125,7 @@ void app_main(void)
         buf_len_long = sizeof(password);
         err = nvs_get_str(my_handle, "password", password, &buf_len_long);
         if (err != ESP_OK || buf_len_long == 0) {
-            ESP_ERROR_CHECK(nvs_set_str(my_handle, "password", CONFIG_ESP_WIFI_PASSWORD));
+            ESP_ERROR_CHECK(nvs_set_str(my_handle, "password", ""));
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "no password, give a init value to nvs");
         } else {
@@ -131,7 +135,7 @@ void app_main(void)
         buf_len_long = sizeof(key);
         err = nvs_get_str(my_handle, "ChatGPT_key", key, &buf_len_long);
         if (err != ESP_OK || buf_len_long == 0) {
-            ESP_ERROR_CHECK(nvs_set_str(my_handle, "ChatGPT_key", CONFIG_OPENAI_API_KEY));
+            ESP_ERROR_CHECK(nvs_set_str(my_handle, "ChatGPT_key", ""));
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "no ChatGPT key, give a init value to key");
         } else {
@@ -164,6 +168,8 @@ void app_main(void)
         erased |= (nvs_erase_key(my_handle, "Provider") == ESP_OK);
         // Trace of a debugging session of the configuration mode
         erased |= (nvs_erase_key(my_handle, "Uf2_trace") == ESP_OK);
+        // OpenRouter models: now in AGENTS.INI
+        erased |= (nvs_erase_key(my_handle, "OpenRouter_list") == ESP_OK);
         if (erased) {
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "removed obsolete keys Model / Provider");
@@ -184,18 +190,20 @@ void app_main(void)
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "removed obsolete key Claude_model");
         }
-        nvs_init_str_if_missing("Claude_key", CONFIG_ANTHROPIC_API_KEY);
+        // No key nor Wi-Fi is given in the firmware: they are filled in CONFIG.INI
+        nvs_init_str_if_missing("Claude_key", "");
         // Gemini key (Google AI Studio), for the gemini-... models
         nvs_init_str_if_missing("Gemini_key", "");
-        // OpenRouter: its key, and the models offered ("vendor/model[=Name], ...", empty for the defaults)
+        // OpenRouter: its key (the models offered are in AGENTS.INI)
         nvs_init_str_if_missing("OpenRouter_key", "");
-        nvs_init_str_if_missing("OpenRouter_list", "");
         // Reading speed of the answer on screen, in characters per second
         char scroll_speed[8];
         snprintf(scroll_speed, sizeof(scroll_speed), "%d", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
         nvs_init_str_if_missing("Scroll_speed", scroll_speed);
         // Screen off after this many seconds without presence (radar of the BOX-3-SENSOR dock), 0: never
         nvs_init_str_if_missing("Screen_off_s", "10");
+        // Silence after which the question is considered finished (same default as ASSISTANT_END_OF_SPEECH_MS)
+        nvs_init_str_if_missing("End_speech_ms", "900");
         // How the answer scrolls: "line" (one line at a time) or "smooth" (continuous)
         nvs_init_str_if_missing("Scroll_mode", "line");
         // Voice of the answers (same default as the assistant's ASSISTANT_TTS_VOICE)

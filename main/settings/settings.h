@@ -19,7 +19,6 @@
 #define CLAUDE_KEY_SIZE 256
 #define GEMINI_KEY_SIZE 128
 #define OPENROUTER_KEY_SIZE 128
-#define OPENROUTER_MODELS_SIZE 512
 #define VOICE_SIZE 24
 #define COUNTRY_SIZE 4
 #define CITY_SIZE 48
@@ -35,10 +34,10 @@ typedef struct {
     char claude_key[CLAUDE_KEY_SIZE]; /* Anthropic key, empty if not configured. */
     char gemini_key[GEMINI_KEY_SIZE]; /* Gemini key (Google AI Studio), empty if not configured. */
     char openrouter_key[OPENROUTER_KEY_SIZE];       /* OpenRouter key, empty if not configured. */
-    char openrouter_models[OPENROUTER_MODELS_SIZE]; /* "id[=Name], ..." offered, "" for the defaults. */
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude, GPT, Gemini or OpenRouter). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     int screen_off_s;                 /* Screen off after this long without presence (radar dock), 0: never. */
+    int end_speech_ms;                /* Silence after which the question is considered finished. */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
     char voice[VOICE_SIZE];           /* OpenAI voice reading the answers (marin, cedar...). */
     char country[COUNTRY_SIZE];       /* Where the user lives: ISO 3166-1 alpha-2 code ("BE"), "" if unknown. */
@@ -67,3 +66,20 @@ sys_param_t *settings_get_parameter(void);
  * Read again at the next start: the caller restarts the device.
  */
 esp_err_t settings_save_str(const char *key, const char *value);
+
+/** CONFIG.BKP of the configuration drive: CONFIG.INI (and PERSONA.TXT, MEMORY.TXT) saved by the factory reset */
+#define SETTINGS_BACKUP_FILE    "/spiffs/config.bkp"
+
+/**
+ * @brief Soft reset: the settings of CONFIG.INI back to their defaults, except the Wi-Fi, the API keys and Homey
+ *        (Persona, Memory and the comments of CONFIG.INI are kept too). Applied at the next start (the caller
+ *        restarts the device).
+ */
+esp_err_t settings_restore_defaults(void);
+
+/**
+ * @brief Factory reset: every setting erased (Wi-Fi, keys, Persona, Memory included). CONFIG.INI is first saved to
+ *        SETTINGS_BACKUP_FILE when it differs from the firmware's (otherwise an earlier backup is kept); nothing is
+ *        erased if that backup fails.
+ */
+esp_err_t settings_factory_wipe(void);

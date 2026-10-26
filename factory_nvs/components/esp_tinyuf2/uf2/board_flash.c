@@ -115,6 +115,24 @@ static void phrase_files_find(void)
         return;
     }
     int slot = UF2_TEXT_PHRASES;
+    // The models offered (AGENTS.INI) first, when the assistant installed it
+    FILE *agents = fopen(PHRASES_DIR "/agents.ini", "r");
+    if (agents) {
+        fclose(agents);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/agents.ini", sizeof(t->path));
+        memcpy(t->fat_name, "AGENTS  INI", 12);
+        PRINTF("%s shown as AGENTS.INI", t->path);
+    }
+    // CONFIG.INI saved by the "restore" icon of the Settings screen, when there is one
+    FILE *backup = fopen(PHRASES_DIR "/config.bkp", "r");
+    if (backup) {
+        fclose(backup);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/config.bkp", sizeof(t->path));
+        memcpy(t->fat_name, "CONFIG  BKP", 12);
+        PRINTF("%s shown as CONFIG.BKP", t->path);
+    }
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && slot < UF2_TEXT_COUNT) {
         size_t len = strlen(e->d_name);
@@ -399,6 +417,39 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
     }
 }
 
+/* [Voice assistant] Order of the keys in CONFIG.INI (when not set by the file as last written); others follow */
+static const char *const s_ini_key_order[] = {
+    "Base_url", "Chat_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Country",
+    "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "OpenRouter_key",
+    "Screen_off_s", "End_speech_ms",
+};
+
+/* The keys of s_ini_key_order not written yet (from the layout), in that order */
+static void ini_gen_ordered(nvs_handle_t nvs, char used[][NVS_KEY_NAME_MAX_SIZE], int *used_count)
+{
+    for (size_t k = 0; k < sizeof(s_ini_key_order) / sizeof(s_ini_key_order[0]); k++) {
+        const char *key = s_ini_key_order[k];
+        bool done = false;
+        for (int i = 0; i < *used_count && !done; i++) {
+            done = (strcmp(key, used[i]) == 0);
+        }
+        size_t len = 0;
+        if (done || *used_count >= INI_LAYOUT_MAX_KEYS || nvs_get_str(nvs, key, NULL, &len) != ESP_OK) {
+            continue;
+        }
+        char *value = (char *)malloc(len);
+        if (value && nvs_get_str(nvs, key, value, &len) == ESP_OK) {
+#ifdef CONFIG_UF2_INI_NVS_VALUE_HIDDEN
+            ini_insert_pair(key, check_value_if_hidden(key) ? "****" : value);
+#else
+            ini_insert_pair(key, value);
+#endif
+            strlcpy(used[(*used_count)++], key, NVS_KEY_NAME_MAX_SIZE);
+        }
+        free(value);
+    }
+}
+
 static void ini_gen_from_nvs(const char *part, const char *name)
 {
     if (part == NULL || name == NULL || _ini_file == NULL) {
@@ -432,7 +483,8 @@ static void ini_gen_from_nvs(const char *part, const char *name)
         assert(0); //should not happen
     }
 
-    // [Voice assistant] The file as last written (comments included), else the keys in NVS order
+    // [Voice assistant] The file as last written (comments included), then the keys in s_ini_key_order, then
+    // any other one in NVS order
     static char used[INI_LAYOUT_MAX_KEYS][NVS_KEY_NAME_MAX_SIZE];
     int used_count = 0;
     size_t layout_len = 0;
@@ -444,6 +496,7 @@ static void ini_gen_from_nvs(const char *part, const char *name)
         ini_insert_section(name);
     }
     free(layout);
+    ini_gen_ordered(nvs, used, &used_count);
 
     do {
         nvs_entry_info_t info;

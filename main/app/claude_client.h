@@ -28,7 +28,8 @@ extern "C" {
  * Thinking is turned off when the model allows it (Haiku: disabled, Sonnet: between tool calls only);
  * Opus always thinks, its thinking blocks are kept in the history as the API requires.
  */
-esp_err_t claude_client_init(const char *api_key, const char *model, const char *system_prompt, const char *effort);
+esp_err_t claude_client_init(const char *api_key, const char *model, const char *system_prompt, const char *effort,
+                             const char *thinking);
 
 /**
  * @brief Ask a question and stream the answer, keeping a short conversation history.

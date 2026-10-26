@@ -55,6 +55,10 @@ static const app_lang_t s_languages[] = {
         .lang_already = "Je parle déjà français.",
         .lang_unknown = "Je ne connais pas cette langue. Je parle français et anglais.",
         .lang_switched = "Très bien, je parle maintenant français.",
+        .models_first = "Chez %s, je supporte : %s.",
+        .models_next = "Chez %s : %s.",
+        .models_free = "Et gratuitement, via OpenRouter : %s.",
+        .and_word = " et ",
         .provider_ask = "Quel fournisseur voulez-vous : Anthropic, OpenAI, Google ou OpenRouter ?",
         .provider_unknown = "Je n'ai pas compris. Dites Anthropic, OpenAI, Google ou OpenRouter.",
         .model_ask_intro = "Voici les modèles proposés par %s.",
@@ -131,16 +135,9 @@ static const app_lang_t s_languages[] = {
             },
         },
         .steps_title = "Étapes",
-#if !CONFIG_BSP_BOARD_ESP32_S3_BOX_Lite
-        .steps_content = "1. Réveillez l'appareil en disant « Bonjour ESP » (ou « Hi ESP »).\n"
-                         "2. Posez votre question, puis attendez la réponse.\n"
-                         "3. En veille, touchez l'écran pour réveiller l'appareil.",
-#else
-        .steps_content = "1. Réveillez l'appareil en disant « Bonjour ESP » (ou « Hi ESP »).\n"
-                         "2. Posez votre question, puis attendez la réponse.\n"
-                         "3. En veille, appuyez sur « Enter » pour réveiller l'appareil.\n"
-                         "4. Appui long sur « Enter » : ouvrir/fermer les réglages.",
-#endif
+        .steps_content = "1. Dites « Bonjour ESP » ou toucher l'écran pour commencer.\n"
+                         "2. Posez votre question et attendez la réponse.\n"
+                         "3. Touchez 2 fois l'écran pour interrompre la réponse.",
         .settings_title = "Réglages",
         .settings_language = "Langue",
         .settings_model = "Modèle",
@@ -148,9 +145,21 @@ static const app_lang_t s_languages[] = {
         .voice_sample = "Bonjour, je suis %s. Ma voix vous plaît ?",
         .settings_save = "Enregistrer",
         .settings_saved = "Enregistré.",
-        .reset_title = "Réinitialisation",
-        .reset_content = "1. Appuyez sur « OK » pour passer en mode configuration.\n"
-                         "2. Branchez la box sur votre PC et renseignez le Wi-Fi et les clés OpenAI et Claude.\n"
+        .soft_title = "Réinitialisation douce",
+        .soft_text = "Remettre les réglages par défaut et les fichiers d'origine (phrases, AGENTS.INI) ? "
+                     "Le Wi-Fi, les clés API, Homey, PERSONA.TXT et MEMORY.TXT sont gardés. "
+                     "Puis l'appareil redémarre.",
+        .soft_yes = "Réinitialiser",
+        .factory_title = "Remise à zéro complète",
+        .factory_text = "TOUT effacer : Wi-Fi, clés API, Homey, PERSONA.TXT, MEMORY.TXT, réglages, "
+                        "conversation, fichiers modifiés ? CONFIG.INI est d'abord copié dans CONFIG.BKP. "
+                        "Puis mode configuration (PC branché) ou redémarrage.",
+        .factory_yes = "Tout effacer",
+        .restore_no = "Annuler",
+        .restore_done = "...",
+        .reset_title = "Configuration",
+        .reset_content = "1. Branchez la box sur votre PC.\n"
+                         "2. Appuyez sur « OK ».\n"
                          "3. Suivez les instructions à l'écran pour terminer.",
     },
     {
@@ -190,6 +199,10 @@ static const app_lang_t s_languages[] = {
         .lang_already = "I already speak English.",
         .lang_unknown = "I don't know this language. I speak French and English.",
         .lang_switched = "Very well, I will now speak English.",
+        .models_first = "At %s, I support: %s.",
+        .models_next = "At %s: %s.",
+        .models_free = "And for free, through OpenRouter: %s.",
+        .and_word = " and ",
         .provider_ask = "Which provider do you want: Anthropic, OpenAI, Google or OpenRouter?",
         .provider_unknown = "I didn't understand. Say Anthropic, OpenAI, Google or OpenRouter.",
         .model_ask_intro = "Here are the models from %s.",
@@ -276,7 +289,19 @@ static const app_lang_t s_languages[] = {
                          "3. While asleep, press \"Enter\" to wake the device up.\n"
                          "4. Long press on \"Enter\": open/close the settings.",
 #endif
-        .reset_title = "Factory Reset",
+        .soft_title = "Soft reset",
+        .soft_text = "Restore the default settings and the original files (phrases, AGENTS.INI)? "
+                     "The Wi-Fi, the API keys, Homey, PERSONA.TXT and MEMORY.TXT are kept. "
+                     "Then the device restarts.",
+        .soft_yes = "Reset",
+        .factory_title = "Factory reset",
+        .factory_text = "Erase EVERYTHING: Wi-Fi, API keys, Homey, PERSONA.TXT, MEMORY.TXT, settings, "
+                        "conversation, changed files? CONFIG.INI is first copied to CONFIG.BKP. "
+                        "Then configuration mode (PC plugged in) or restart.",
+        .factory_yes = "Erase all",
+        .restore_no = "Cancel",
+        .restore_done = "...",
+        .reset_title = "Configuration",
         .reset_content = "1. Press \"OK\" to enter the configuration mode.\n"
                          "2. Plug the box into your PC and fill in the Wi-Fi and the OpenAI and Claude keys.\n"
                          "3. Follow the instructions on the screen to finish.",

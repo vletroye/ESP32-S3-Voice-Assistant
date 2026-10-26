@@ -88,7 +88,7 @@ extern char *_ini_file_dummy;
 #define UF2_TEXT_PERSONA             0
 #define UF2_TEXT_MEMORY              1
 #define UF2_TEXT_PHRASES             2       /* first phrase file */
-#define UF2_PHRASE_FILES_MAX         4
+#define UF2_PHRASE_FILES_MAX         5       /* AGENTS.INI and up to 4 VOICE_<CODE>.TXT */
 #define UF2_TEXT_COUNT               (UF2_TEXT_PHRASES + UF2_PHRASE_FILES_MAX)
 
 /* FAT name (11 characters, "VOICE_FRTXT") of a text file whose name is not fixed, NULL if the slot is unused */

@@ -1,20 +1,5 @@
 menu "Example Configuration"
 
-    config ESP_WIFI_SSID
-        string "WiFi SSID"
-        default "My Network SSID"
-        help
-            SSID (network name) for the example to connect to.
-    config ESP_WIFI_PASSWORD
-        string "WiFi Password"
-        default "My Password"
-        help
-            WiFi password (WPA or WPA2) for the example to use.
-    config OPENAI_API_KEY
-        string "OpenAI Key"
-        default "sk-xxxxxxxx"
-        help
-            OpenAI api key for the example to use.
     config OPENAI_URL
         string "Base URL"
         default "https://api.openai.com/v1/"
@@ -38,10 +23,5 @@ menu "Example Configuration"
         default "claude-haiku-5-5"
         help
             Model (claude-..., gpt-... or gemini-...) written to the "Chat_model" key when it does not exist yet.
-    config ANTHROPIC_API_KEY
-        string "Anthropic (Claude) key"
-        default ""
-        help
-            Anthropic API key written to the "Claude_key" key when it does not exist yet.
 
 endmenu

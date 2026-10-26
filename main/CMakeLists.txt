@@ -22,6 +22,8 @@ idf_component_register(
     EMBED_TXTFILES
         "phrases/phrases_fr.txt"
         "phrases/phrases_en.txt"
+        # Models offered (AGENTS.INI), installed on SPIFFS when missing (main/app/llm.c)
+        "agents/agents.ini"
 )
 
 set(MV_UF2_BIN_EXE ${COMPONENT_PATH}/generateuf2.py)

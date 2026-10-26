@@ -40,6 +40,10 @@ typedef struct {
     const char *lang_unknown;
     const char *lang_switched;      /* spoken in the new language, before the restart */
     /* Model changed by voice ("change de modèle"): the list of numbered models, then the choice */
+    const char *models_first;       /* "liste tes modèles", first provider: %s provider, %s its models */
+    const char *models_next;        /* next providers: %s provider, %s its models */
+    const char *models_free;        /* %s: the free OpenRouter models */
+    const char *and_word;           /* before the last name of a list: " et " */
     const char *provider_ask;       /* "change de modèle": which provider first */
     const char *provider_unknown;
     const char *model_ask_intro;    /* %s: provider ("Anthropic"), its numbered models follow */
@@ -88,6 +92,14 @@ typedef struct {
     const char *voice_sample;       /* Spoken with a voice just chosen, %s = its name */
     const char *settings_save;      /* Save button, enabled once the language or the model is changed */
     const char *settings_saved;     /* Shown while the device restarts after saving */
+    const char *soft_title;         /* Configuration screen, icon "soft reset": its confirmation */
+    const char *soft_text;
+    const char *soft_yes;
+    const char *factory_title;      /* icon "factory reset": its confirmation */
+    const char *factory_text;
+    const char *factory_yes;
+    const char *restore_no;         /* both: cancel */
+    const char *restore_done;       /* on the OK button while the device restarts */
     const char *reset_title;
     const char *reset_content;
 } app_lang_t;

@@ -173,7 +173,8 @@ static FileContent_t info[] = {
     {.name = "CONFIG  INI", .content = NULL, .size = 0  },
     {.name = "PERSONA TXT", .content = NULL, .size = 0  },
     {.name = "MEMORY  TXT", .content = NULL, .size = 0  },
-    // [Voice assistant] phrase files (VOICE_FR.TXT...), named at start-up; not listed while unnamed
+    // [Voice assistant] AGENTS.INI and the phrase files (VOICE_FR.TXT...), named at start-up; not listed while unnamed
+    {.name = "", .content = NULL, .size = 0  },
     {.name = "", .content = NULL, .size = 0  },
     {.name = "", .content = NULL, .size = 0  },
     {.name = "", .content = NULL, .size = 0  },

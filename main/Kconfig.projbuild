@@ -35,7 +35,7 @@ menu "Example Configuration"
         range 300 3000
         help
             Silence after which the question is considered finished. Lower answers faster but may
-            cut the user during a pause.
+            cut the user during a pause. Default of End_speech_ms in CONFIG.INI, which takes precedence.
 
     config ASSISTANT_TTS_MODEL
         string "Speech synthesis model"

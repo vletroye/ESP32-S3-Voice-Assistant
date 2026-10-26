@@ -401,7 +401,9 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - `[timing] final transcript … ms after the end of speech`, `[timing] first audio … ms after the transcription`
 - `claude: first text after … ms, … tokens in … (cache read …), out …`
 - `openai_chat: first text after … ms, … tokens in … (cached …), out … (reasoning …)`
-- `tts: "…": first audio … ms` per sentence, `tts: reply played, N underrun(s)`
+- `tts: "…": first audio … ms, total … ms, … bytes` per sentence (24 kHz 16-bit audio: 48,000 bytes per second
+  of speech; received slower than that, the speech gets cut), `tts: reply played, N underrun(s), M cut(s)
+  mid-sentence`, `tts: Response stalled …, reconnecting`, `tools: … -> (N chars) …`
 - `stt: committed … ms of audio; at the end of speech … ms were still to send`
 - `tools: get_weather({…})`, `weather: … in … ms`, `claude: server tool: web_search`, `… web search(es)`
 - `claude: web search: available` (capability read at the first wake)
@@ -409,6 +411,12 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 ## Design notes
 
+- **Slow speech service**: when the synthesized audio arrives slower than it is played, playback runs dry.
+  Pauses between sentences are normal; cuts in the middle of a sentence are counted. A response with no audio
+  for 15 s, or no more audio for 8 s, is given up and the WebSocket recreated, so that the rest of the reply
+  is still spoken (a stuck connection used to drop every following sentence). After a reply cut twice or more,
+  or with lost sentences, the screen adds "(Connexion trop lente : la voix n'a pas pu être lue de façon
+  fluide.)" under the answer.
 - **Memory**: internal RAM (~46 KB free while running) is reserved for stacks, DMA and the network; large
   buffers, JSON trees, TLS buffers (mbedTLS), the network task stacks and the LVGL objects live in PSRAM
   (LVGL's allocator is redirected by `main/lvgl_psram/lv_psram.h` and the top-level `CMakeLists.txt`).

@@ -6,6 +6,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include "esp_log.h"
@@ -576,6 +577,18 @@ static void reply_content_show_text(const char *text)
     reply_content_get = true;
     lv_timer_resume(scroll_timer_handle);
     ESP_LOGD(TAG, "reply scroll timer start");
+}
+
+void ui_ctrl_reply_append_notice(const char *notice)
+{
+    bsp_display_lock(0);
+    char *text = NULL;
+    asprintf(&text, "%s\n\n%s", lv_label_get_text(ui_LabelReplyContent), notice);
+    if (text) {
+        reply_content_show_text(text);
+        free(text);
+    }
+    bsp_display_unlock();
 }
 
 void ui_ctrl_label_show_text(ui_ctrl_label_t label, const char *text)

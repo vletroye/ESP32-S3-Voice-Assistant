@@ -73,6 +73,12 @@ void tts_stream_cancel(void);
  */
 bool tts_stream_is_silent(uint32_t ms);
 
+/**
+ * @brief True when the reply just played was cut several times in the middle of a sentence, or lost
+ *        sentences: the speech service (or the connection to it) was slower than the speech.
+ */
+bool tts_stream_reply_was_choppy(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -56,6 +56,7 @@ typedef struct {
     const char *place_saved;
     const char *place_cancelled;
     const char *location_line;      /* in the instructions, %s: "Evere, BE" */
+    const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
     const char *home_line;          /* in the instructions when a Homey is set: ask it, do not answer from memory */
     /* Day abbreviations of the clock under the sleeping robot, Sunday first */
     const char *weekdays[7];

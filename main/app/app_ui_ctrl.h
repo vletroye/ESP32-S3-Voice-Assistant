@@ -61,6 +61,9 @@ bool ui_ctrl_reply_get_audio_start_flag(void);
 
 void ui_ctrl_reply_set_audio_end_flag(bool result);
 
+/** Add a note on a line of its own after the answer shown */
+void ui_ctrl_reply_append_notice(const char *notice);
+
 void ui_ctrl_guide_jump(void);
 
 #ifdef __cplusplus

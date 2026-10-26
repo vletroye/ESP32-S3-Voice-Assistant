@@ -38,7 +38,14 @@
 #define TTS_SAMPLE_RATE_IN      24000   /* audio/pcm: 24 kHz, 16-bit signed, mono, little-endian */
 #define TTS_AUDIO_BUFFER_BYTES  (256 * 1024)    /* 8 s of 16 kHz mono audio, in PSRAM */
 #define TTS_SENTENCE_QUEUE_LEN  16
-#define TTS_RESPONSE_TIMEOUT_MS 30000
+/*
+ * A response that stalls (no first audio, or no more audio for a while) is given up and the connection
+ * recreated: a stuck connection would otherwise block every following sentence of the reply
+ */
+#define TTS_FIRST_AUDIO_TIMEOUT_MS  15000
+#define TTS_STALL_TIMEOUT_MS        8000
+/* Cuts in the middle of a sentence from which the reply is reported as choppy */
+#define TTS_CHOPPY_CUTS             2
 #define TTS_CONNECT_WAIT_MS     5000
 #define TTS_RECONNECT_MS        2000
 #define TTS_RECREATE_AFTER_MS   30000
@@ -174,7 +181,13 @@ static volatile uint32_t s_response_generation = 0;    /* generation of the resp
 static volatile bool s_response_active = false;
 static int64_t s_request_us = 0;
 static int64_t s_first_audio_us = 0;
+static volatile int64_t s_last_audio_us = 0;
 static size_t s_audio_bytes = 0;
+/* Quality of the current reply: speech run dry in the middle of a sentence, sentences lost */
+static volatile unsigned s_cuts = 0;
+static volatile bool s_failed = false;
+/* The connection is to be recreated before the next sentence (response stalled, request not sent) */
+static bool s_reconnect = false;
 static char s_response_status[24];
 
 /* Received frame being assembled and decoding buffers (PSRAM) */
@@ -270,8 +283,9 @@ static void on_audio_delta(const char *b64)
         ESP_LOGE(TAG, "Bad audio delta");
         return;
     }
+    s_last_audio_us = esp_timer_get_time();
     if (!s_first_audio_us) {
-        s_first_audio_us = esp_timer_get_time();
+        s_first_audio_us = s_last_audio_us;
     }
     s_audio_bytes += pcm_len;
     if (!grow((void **)&s_resampled, &s_resampled_cap, (pcm_len / 3 + 2) * sizeof(int16_t))) {
@@ -464,6 +478,7 @@ static void synthesize(esp_websocket_client_handle_t client, const char *text, u
     if (!(xEventGroupWaitBits(s_events, EV_CONNECTED, pdFALSE, pdFALSE, pdMS_TO_TICKS(TTS_CONNECT_WAIT_MS)) &
             EV_CONNECTED)) {
         ESP_LOGE(TAG, "Not connected: sentence dropped");
+        s_failed = true;
         return;
     }
     /* Just (re)connected: the session configuration must go first */
@@ -480,6 +495,8 @@ static void synthesize(esp_websocket_client_handle_t client, const char *text, u
     if (!send_response_create(client, text)) {
         s_response_active = false;
         ESP_LOGE(TAG, "Request not sent");
+        s_failed = true;
+        s_reconnect = true;
         return;
     }
 
@@ -490,15 +507,33 @@ static void synthesize(esp_websocket_client_handle_t client, const char *text, u
             send_json(client, "{\"type\":\"response.cancel\"}");
             cancel_sent = true;
         }
-        if (esp_timer_get_time() - s_request_us > TTS_RESPONSE_TIMEOUT_MS * 1000LL) {
-            ESP_LOGE(TAG, "Response timeout");
+        int64_t now = esp_timer_get_time();
+        if (s_first_audio_us ? now - s_last_audio_us > TTS_STALL_TIMEOUT_MS * 1000LL :
+                now - s_request_us > TTS_FIRST_AUDIO_TIMEOUT_MS * 1000LL) {
+            ESP_LOGE(TAG, "Response stalled (%s), reconnecting", s_first_audio_us ? "no more audio" : "no audio");
             s_response_active = false;
+            s_failed = true;
+            s_reconnect = true;
             break;
         }
     }
     ESP_LOGI(TAG, "\"%.40s%s\": first audio %lld ms, total %lld ms, %u bytes, %s", text, strlen(text) > 40 ? "..." : "",
              s_first_audio_us ? (s_first_audio_us - s_request_us) / 1000 : -1LL,
              (esp_timer_get_time() - s_request_us) / 1000, (unsigned)s_audio_bytes, s_response_status);
+}
+
+/* A new connection, after a stalled response or a request that could not be sent */
+static void reconnect(esp_websocket_client_handle_t *client, int64_t *down_since)
+{
+    s_reconnect = false;
+    if (*client) {
+        esp_websocket_client_stop(*client);
+        esp_websocket_client_destroy(*client);
+    }
+    xEventGroupClearBits(s_events, EV_CONNECTED);
+    s_session_ready = false;
+    *client = (WIFI_STATUS_CONNECTED_OK == wifi_connected_already()) ? create_client() : NULL;
+    *down_since = esp_timer_get_time();
 }
 
 /* New voice: a new session (a session cannot change its voice once it has spoken) */
@@ -574,7 +609,12 @@ static void tts_task(void *arg)
         if (item.generation == s_generation) {
             if (item.text && client) {
                 synthesize(client, item.text, item.generation);
-            } else if (!item.text) {
+                if (s_reconnect) {
+                    reconnect(&client, &down_since);
+                }
+            } else if (item.text) {
+                s_failed = true;    // no connection: the sentence is lost
+            } else {
                 s_synth_done_generation = item.generation;
             }
         }
@@ -632,7 +672,8 @@ static void playback_task(void *arg)
             } else {
                 if (synth_done && available == 0 && !done_sent) {
                     done_sent = true;
-                    ESP_LOGI(TAG, "reply played, %u underrun(s)", underruns);
+                    ESP_LOGI(TAG, "reply played, %u underrun(s), %u cut(s) mid-sentence%s", underruns,
+                             (unsigned)s_cuts, s_failed ? ", sentence(s) lost" : "");
                     if (s_event_cb) {
                         s_event_cb(TTS_EVENT_DONE);
                     }
@@ -663,12 +704,21 @@ static void playback_task(void *arg)
             playing = false;
             if (!synth_done) {
                 underruns++;
+                /* Not a pause between two sentences: speech cut while a sentence was arriving */
+                if (s_response_active && s_first_audio_us && s_response_generation == playing_generation) {
+                    s_cuts++;
+                }
             }
         }
     }
 }
 
 /* ---------- public API ---------- */
+
+bool tts_stream_reply_was_choppy(void)
+{
+    return s_failed || s_cuts >= TTS_CHOPPY_CUTS;
+}
 
 bool tts_stream_is_silent(uint32_t ms)
 {
@@ -702,6 +752,8 @@ static void drop_queued_sentences(void)
 void tts_stream_begin(tts_event_cb_t cb)
 {
     s_generation++;
+    s_cuts = 0;
+    s_failed = false;
     drop_queued_sentences();
     s_flush = true;
     s_event_cb = cb;

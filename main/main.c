@@ -206,6 +206,10 @@ static void on_reply_audio(tts_event_t event)
     // TTS_EVENT_DONE: the whole reply has been spoken
     ESP_LOGI(TAG, "[timing] reply spoken, %lld ms after the transcription", elapsed_ms(s_reply_t0));
     s_reply_active = false;
+    if (tts_stream_reply_was_choppy()) {
+        // Speech cut or sentences lost: the answer stays readable on screen, say why it was heard badly
+        ui_ctrl_reply_append_notice(app_lang_get()->voice_choppy);
+    }
     voice_cmd_reply_spoken();
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();

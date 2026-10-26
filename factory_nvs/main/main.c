@@ -212,6 +212,11 @@ void app_main(void)
     }
     nvs_close(my_handle);
 
+    // The phrase files of the voice commands are on SPIFFS (shown as VOICE_<LANG>.TXT)
+    if (bsp_spiffs_mount() != ESP_OK) {
+        ESP_LOGE(TAG, "SPIFFS not mounted: the phrase files are not shown");
+    }
+
     /* install UF2 NVS */
     tinyuf2_nvs_config_t nvs_config = DEFAULT_TINYUF2_NVS_CONFIG();
     nvs_config.part_name = uf2_nvs_partition;

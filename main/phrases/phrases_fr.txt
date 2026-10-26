@@ -1,0 +1,124 @@
+# Phrases des commandes vocales, en français (fichier VOICE_FR.TXT du disque de configuration).
+# Chaque section [s_...] porte le nom de la liste du code qu'elle remplit ; un motif par ligne.
+# Motifs : [partie optionnelle], (choix|autre choix), imbriqués si besoin : [[j ai ]une ]autre question
+# Écrire en minuscules, accents gardés, apostrophes et traits d'union remplacés par des espaces, sans ponctuation.
+# Une section absente est prise dans le fichier anglais ; une section vide désactive la commande.
+# Les lignes commençant par # sont des commentaires. Fichier vidé : il est remis à sa version d'origine.
+
+[s_goodbyes]
+# Dites seules, elles renvoient l'assistant en veille sans réponse (conversation effacée)
+au revoir[ esp]
+bonne nuit[ esp]
+à (demain|plus)
+ciao
+bonne (soirée|journée|après midi)
+
+[s_change_lang]
+change[r] (la|de|ta) langue
+
+[s_lang_shortcut]
+parle[ en]
+parlons[ en]
+on parle
+passe en
+passe à l
+réponds en
+
+[s_change_model]
+change[r] (de|le|ton) mod(è|e)le
+
+[s_model_shortcut]
+(utilise|prends) le mod(è|e)le
+passe au mod(è|e)le
+mod(è|e)le[ numéro]
+
+[s_change_voice]
+change[r] (de|la|ta|ma) voix
+[une ]autre voix
+
+[s_voice_shortcut]
+(utilise|prends|mets|choisis) la voix
+passe à la voix
+[la ]voix[ numéro]
+
+[s_new_conversation]
+(démarrons|commençons|[on ](démarre|commence)) une nouvelle (discussion|conversation)
+(on recommence|recommençons) à zéro
+nouvelle (discussion|conversation)
+[[j ai ]une ]autre question
+(passons|on passe) à autre chose
+parlons d autre chose
+(changeons|on change) de sujet
+changement de sujet
+
+[s_edit_config]
+# "éditer" et "editer", "la config" et "le config" : comme la transcription les écrit souvent
+je veux (éditer|editer|modifier) (la|le|les fichier[s] de) config[uration]
+(édite|edite|éditer|modifie|ouvre) (la|le|les fichier[s] de) config[uration]
+[passe en ]mode configuration
+
+[s_open_settings]
+(ouvre|montre|affiche) les (paramètres|réglages)
+va dans les (paramètres|réglages)
+
+[s_change_country]
+change[r] (mon|de) pays
+change le pays
+
+[s_change_city]
+change[r] (ma|de) ville
+change la ville
+
+[s_answer_prefix]
+# Mots avant le nom dans une réponse ("j'habite à Evere"), ignorés ; les articles restent ("Le Havre")
+j habite[ (à|en|au|aux)]
+(ma ville|mon pays) est
+c est
+en
+au
+aux
+à
+
+[s_yes]
+oui
+ouais
+exact[ement]
+[je ]confirme
+confirmé
+c est (ça|bon)
+d accord
+ok[ay]
+bien sûr
+absolument
+correct
+affirmatif
+
+[s_courtesy]
+# Mots admis après la réponse d'un raccourci ("parle anglais s'il te plaît")
+s il (te|vous) pla(i|î)t
+maintenant
+
+[s_one_alone]
+# "un" / "une" ne valent 1 que dits seuls : ailleurs, ce sont des articles
+[le ]un[e]
+[le ]num(é|e)ro un
+
+[s_remember]
+souviens toi[ bien] que
+rappelle toi que
+retiens[ bien] que
+n oublie pas que
+note que
+m(é|e)morise que
+
+[s_forget]
+oublie[ le fait] que
+
+[s_forget_all]
+oublie tout
+efface[ toute] ta mémoire
+
+[s_list]
+dis moi[ tout] ce que tu as (mémorisé|retenu)
+qu est ce que tu as (mémorisé|retenu)
+qu as tu mémorisé

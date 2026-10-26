@@ -78,15 +78,21 @@ extern char *_ini_file;
 extern char *_ini_file_dummy;
 
 /*
- * [Voice assistant] Text files edited from the PC and stored in NVS strings instead of CONFIG.INI, whose lines
- * and size are too short for them: PERSONA.TXT (NVS key "Persona") and MEMORY.TXT ("Memory"). Several lines;
- * lines starting with '#' are not saved. NVS strings are limited to 4000 bytes.
+ * [Voice assistant] Text files edited from the PC, with several lines: PERSONA.TXT and MEMORY.TXT stored in NVS
+ * strings (keys "Persona", "Memory"; limited to 4000 bytes) instead of CONFIG.INI, whose lines and size are too
+ * short for them, and the phrase files of the voice commands, stored on SPIFFS (/spiffs/phrases_<code>.txt,
+ * shown as VOICE_<CODE>.TXT; one per language found there, at most UF2_PHRASE_FILES_MAX).
  */
-#define CFG_UF2_TEXT_FILE_SIZE       4096
-#define CFG_UF2_TEXT_MAX_LEN         3999
+#define CFG_UF2_TEXT_FILE_SIZE       8192
+#define CFG_UF2_TEXT_MAX_LEN         3999    /* NVS-stored files */
 #define UF2_TEXT_PERSONA             0
 #define UF2_TEXT_MEMORY              1
-#define UF2_TEXT_COUNT               2
+#define UF2_TEXT_PHRASES             2       /* first phrase file */
+#define UF2_PHRASE_FILES_MAX         4
+#define UF2_TEXT_COUNT               (UF2_TEXT_PHRASES + UF2_PHRASE_FILES_MAX)
+
+/* FAT name (11 characters, "VOICE_FRTXT") of a text file whose name is not fixed, NULL if the slot is unused */
+const char *board_flash_text_fat_name(int text);
 
 /* File content served to the PC, and the buffer receiving what the PC writes (CFG_UF2_TEXT_FILE_SIZE bytes) */
 char *board_flash_text_content(int text);

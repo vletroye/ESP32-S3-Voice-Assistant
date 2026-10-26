@@ -35,6 +35,9 @@
 #include "esp_inih.h"
 #include "esp_tinyuf2.h"
 #include "esp_check.h"
+#include <ctype.h>
+#include <dirent.h>
+#include <stdio.h>
 
 #define TAG                   "uf2"
 #define PRINTF(...)           ESP_LOGI(TAG, __VA_ARGS__)
@@ -67,10 +70,12 @@ char *_ini_file_dummy = NULL;
  * text (they stay in the file) and left out by the assistant.
  */
 typedef struct {
-    const char *key;        /* NVS key */
+    const char *key;        /* NVS key, NULL for a file of SPIFFS */
     const char *help;
     char *content;
     char *dummy;
+    char path[40];          /* SPIFFS file ("" for an NVS one) */
+    char fat_name[12];      /* its name on the drive, 8.3 without the dot ("VOICE_FRTXT") */
 } text_file_t;
 
 static text_file_t s_text_files[UF2_TEXT_COUNT] = {
@@ -92,6 +97,57 @@ static text_file_t s_text_files[UF2_TEXT_COUNT] = {
     },
 };
 
+const char *board_flash_text_fat_name(int text)
+{
+    return s_text_files[text].fat_name[0] ? s_text_files[text].fat_name : NULL;
+}
+
+/* The phrase files of the voice commands found on SPIFFS ("phrases_fr.txt" -> VOICE_FR.TXT) */
+#define PHRASES_DIR     "/spiffs"
+#define PHRASES_PREFIX  "phrases_"
+#define PHRASES_SUFFIX  ".txt"
+
+static void phrase_files_find(void)
+{
+    DIR *dir = opendir(PHRASES_DIR);
+    if (!dir) {
+        PRINTFE("SPIFFS not mounted: no phrase files");
+        return;
+    }
+    int slot = UF2_TEXT_PHRASES;
+    struct dirent *e;
+    while ((e = readdir(dir)) != NULL && slot < UF2_TEXT_COUNT) {
+        size_t len = strlen(e->d_name);
+        size_t code_len = len - strlen(PHRASES_PREFIX) - strlen(PHRASES_SUFFIX);
+        if (len <= strlen(PHRASES_PREFIX) + strlen(PHRASES_SUFFIX) || code_len > 3 ||
+                strncmp(e->d_name, PHRASES_PREFIX, strlen(PHRASES_PREFIX)) != 0 ||
+                strcmp(e->d_name + len - strlen(PHRASES_SUFFIX), PHRASES_SUFFIX) != 0) {
+            continue;
+        }
+        text_file_t *t = &s_text_files[slot++];
+        snprintf(t->path, sizeof(t->path), PHRASES_DIR "/%s", e->d_name);
+        // "VOICE_" + code (upper case) padded to 8, then "TXT"
+        char base[9] = "VOICE_";
+        for (size_t i = 0; i < code_len && 6 + i < 8; i++) {
+            base[6 + i] = toupper((unsigned char)e->d_name[strlen(PHRASES_PREFIX) + i]);
+        }
+        snprintf(t->fat_name, sizeof(t->fat_name), "%-8.8sTXT", base);
+        PRINTF("%s shown as %.8s.TXT", t->path, t->fat_name);
+    }
+    closedir(dir);
+}
+
+/* A phrase file read from SPIFFS into its buffer */
+static void phrase_file_read(text_file_t *t)
+{
+    FILE *f = fopen(t->path, "r");
+    size_t n = f ? fread(t->content, 1, CFG_UF2_TEXT_FILE_SIZE - 1, f) : 0;
+    if (f) {
+        fclose(f);
+    }
+    t->content[n] = '\0';
+}
+
 char *board_flash_text_content(int text)
 {
     return s_text_files[text].content;
@@ -105,7 +161,7 @@ char *board_flash_text_dummy(int text)
 static text_file_t *text_file_of_key(const char *key)
 {
     for (int i = 0; i < UF2_TEXT_COUNT; i++) {
-        if (strcmp(key, s_text_files[i].key) == 0) {
+        if (s_text_files[i].key && strcmp(key, s_text_files[i].key) == 0) {
             return &s_text_files[i];
         }
     }
@@ -435,8 +491,11 @@ next:
     strcpy(_ini_file_dummy, _ini_file);
     for (int i = 0; i < UF2_TEXT_COUNT; i++) {
         text_file_t *t = &s_text_files[i];
+        if (t->content && t->path[0]) {
+            phrase_file_read(t);
+        }
         if (t->content) {
-            if (t->content[0] == '\0') {
+            if (t->content[0] == '\0' && t->help) {
                 strlcpy(t->content, t->help, CFG_UF2_TEXT_FILE_SIZE);
             }
             memcpy(t->dummy, t->content, CFG_UF2_TEXT_FILE_SIZE);
@@ -452,6 +511,25 @@ void board_flash_text_update(int index)
     // The written text ends at the first NUL (the end of the last sector is zero-filled)
     t->dummy[CFG_UF2_TEXT_FILE_SIZE - 1] = '\0';
     memcpy(t->content, t->dummy, CFG_UF2_TEXT_FILE_SIZE);
+
+    if (t->path[0]) {
+        // A phrase file: saved as written (emptied, the assistant installs its original version again)
+        FILE *f = fopen(t->path, "w");
+        size_t len = strlen(t->dummy);
+        bool ok = f && fwrite(t->dummy, 1, len, f) == len;
+        if (f) {
+            ok &= (fclose(f) == 0);
+        }
+        if (ok) {
+            ESP_LOGI(TAG, "%s saved (%u bytes)", t->path, (unsigned)len);
+            if (_modified_cb) {
+                _modified_cb();
+            }
+        } else {
+            ESP_LOGE(TAG, "%s not saved", t->path);
+        }
+        return;
+    }
 
     // Saved with the '#' lines (comments, left out by the assistant), without trailing spaces, within the NVS
     // string limit
@@ -540,7 +618,11 @@ void board_flash_nvs_init(const char *part_name, const char *namespace_name, nvs
         //TODO: free when support deinit
         _ini_file = (char *)calloc(1, CFG_UF2_INI_FILE_SIZE);
         _ini_file_dummy = (char *)calloc(1, CFG_UF2_INI_FILE_SIZE);
+        phrase_files_find();
         for (int i = 0; i < UF2_TEXT_COUNT; i++) {
+            if (!s_text_files[i].key && !s_text_files[i].path[0]) {
+                continue;   // unused phrase file slot
+            }
             s_text_files[i].content = (char *)calloc(1, CFG_UF2_TEXT_FILE_SIZE);
             s_text_files[i].dummy = (char *)calloc(1, CFG_UF2_TEXT_FILE_SIZE);
         }

@@ -18,6 +18,10 @@ idf_component_register(
         ${UI_DIR}
         ${APP_DIR}
         ${SETTINGS_DIR}
+    # Phrase files of the voice commands, installed on SPIFFS when missing (main/app/phrases.c)
+    EMBED_TXTFILES
+        "phrases/phrases_fr.txt"
+        "phrases/phrases_en.txt"
 )
 
 set(MV_UF2_BIN_EXE ${COMPONENT_PATH}/generateuf2.py)

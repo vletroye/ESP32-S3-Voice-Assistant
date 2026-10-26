@@ -96,7 +96,7 @@ typedef struct {
 STATIC_ASSERT(sizeof(DirEntry) == 32);
 
 typedef struct FileContent {
-    char const name[11] UF2_NONSTRING;
+    char name[11] UF2_NONSTRING;    // [Voice assistant] the phrase files get their name at start-up
     void const * content;
     uint32_t size;       // OK to use uint32_T b/c FAT32 limits filesize to (4GiB - 2)
     // [Voice assistant] clusters kept for the file: an edited file can grow in place (else what Windows
@@ -173,6 +173,11 @@ static FileContent_t info[] = {
     {.name = "CONFIG  INI", .content = NULL, .size = 0  },
     {.name = "PERSONA TXT", .content = NULL, .size = 0  },
     {.name = "MEMORY  TXT", .content = NULL, .size = 0  },
+    // [Voice assistant] phrase files (VOICE_FR.TXT...), named at start-up; not listed while unnamed
+    {.name = "", .content = NULL, .size = 0  },
+    {.name = "", .content = NULL, .size = 0  },
+    {.name = "", .content = NULL, .size = 0  },
+    {.name = "", .content = NULL, .size = 0  },
 #ifdef TINYUF2_FAVICON_HEADER
     {.name = "AUTORUN INF", .content = autorunFile, .size = sizeof(autorunFile) - 1},
     {.name = "FAVICON ICO", .content = favicon_data, .size = favicon_len            },
@@ -186,7 +191,7 @@ enum {
     FID_UF2 = NUM_FILES - 1,
     FID_INI = 2,
     FID_PERSONA = 3,    // FID_PERSONA + UF2_TEXT_xxx: the text files
-    FID_MEMORY = 4,
+    FID_TEXT_LAST = FID_PERSONA + UF2_TEXT_COUNT - 1,
     NUM_DIRENTRIES = NUM_FILES + 1 // including volume label as first root directory entry
 };
 
@@ -302,6 +307,10 @@ void uf2_init(void)
     for (int i = 0; i < UF2_TEXT_COUNT; i++) {
         char *content = board_flash_text_content(i);
         if (content) {
+            const char *fat_name = board_flash_text_fat_name(i);
+            if (fat_name) {
+                memcpy(info[FID_PERSONA + i].name, fat_name, 11);
+            }
             info[FID_PERSONA + i].content = content;
             info[FID_PERSONA + i].size = strlen(content);
             info[FID_PERSONA + i].reserved = CFG_UF2_TEXT_FILE_SIZE;
@@ -334,7 +343,7 @@ void padded_memcpy(char *dst, char const *src, int len)
  * only its directory entry, written by the PC too, tells where it now is and its size. Data sectors written
  * outside the known files are kept until then; once the place is known, its sectors go to the file.
  */
-#define TEXT_FILE_COUNT     (FID_MEMORY - FID_INI + 1)
+#define TEXT_FILE_COUNT     (FID_TEXT_LAST - FID_INI + 1)
 #define CACHED_SECTORS      32
 #define NO_SECTOR           UINT32_MAX
 
@@ -446,7 +455,7 @@ static void directory_written(const uint8_t *data)
         if (first == 0x00 || first == 0xE5 || d->attrs == 0x0F || (d->attrs & 0x08) || d->startCluster < 2) {
             continue;   // free, deleted, long name part, volume label, or empty file
         }
-        for (uint32_t fid = FID_INI; fid <= FID_MEMORY; fid++) {
+        for (uint32_t fid = FID_INI; fid <= FID_TEXT_LAST; fid++) {
             if (memcmp(d->name, info[fid].name, 11) != 0) {
                 continue;
             }
@@ -565,6 +574,10 @@ void uf2_read_block(uint32_t block_no, uint8_t *data)
                 fileIndex++, d++) {
             // WARNING -- code presumes all files take exactly one directory entry (no long file names!)
             uint32_t const startCluster = info[fileIndex].cluster_start;
+            if (!info[fileIndex].name[0]) {
+                d--;        // [Voice assistant] unused phrase file slot: not listed (all entries fit in sector 0)
+                continue;
+            }
 
             FileContent_t const *inf = &info[fileIndex];
             padded_memcpy(d->name, inf->name, 11);
@@ -667,7 +680,7 @@ int uf2_write_block(uint32_t block_no, uint8_t *data, WriteState *state)
             if (fid < 0) {
                 // plus 2 for first data cluster offset
                 uint32_t own = info_index_of(2 + sectionRelativeSector / BPB_SECTORS_PER_CLUSTER);
-                if (own >= FID_INI && own <= FID_MEMORY) {
+                if (own >= FID_INI && own <= FID_TEXT_LAST) {
                     fid = own;
                     offset = (sectionRelativeSector - (info[own].cluster_start - 2) * BPB_SECTORS_PER_CLUSTER) *
                              BPB_SECTOR_SIZE;

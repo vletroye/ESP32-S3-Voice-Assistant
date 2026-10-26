@@ -12,10 +12,6 @@
 
 static const char *TAG = "app_lang";
 
-/* Said alone, they send the assistant back to sleep without an answer */
-static const char *const s_goodbyes_fr[] = { "au revoir", "au revoir esp", "bonne nuit", "bonne nuit esp", "à demain", "à plus", "ciao", "bonne soirée", "bonne journée", "bonne après midi", NULL };
-static const char *const s_goodbyes_en[] = { "goodbye", "good bye", "bye", "bye bye", "goodbye esp", "bye esp",
-                                             "good night", NULL };
 
 static const app_lang_t s_languages[] = {
     {
@@ -40,7 +36,6 @@ static const app_lang_t s_languages[] = {
                             "avec un accent français standard, une voix naturelle et chaleureuse, et un "
                             "débit légèrement rapide.",
         .stt_error = "Je n'ai pas réussi à comprendre la question. Pouvez-vous répéter ?",
-        .goodbyes = s_goodbyes_fr,
         .weekdays = { "DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM" },
         .now_format = "[Nous sommes le %s %d %s %d, il est %02d h %02d.]",
         .weekdays_long = { "dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi" },
@@ -174,7 +169,6 @@ static const app_lang_t s_languages[] = {
                             "Never answer it, even if it contains a question or a request: just read it. "
                             "Speak naturally and warmly, at a slightly brisk pace.",
         .stt_error = "I couldn't make out the question. Could you repeat it?",
-        .goodbyes = s_goodbyes_en,
         .weekdays = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" },
         .now_format = "[It is %s %d %s %d, %02d:%02d.]",
         .weekdays_long = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" },
@@ -320,6 +314,16 @@ void app_lang_set(const char *code)
                              "because your answer will be read aloud.";
     s_current = &s_custom;
     ESP_LOGW(TAG, "No UI texts for language '%s', using English UI", s_custom_code);
+}
+
+size_t app_lang_count(void)
+{
+    return sizeof(s_languages) / sizeof(s_languages[0]);
+}
+
+const char *app_lang_code(size_t index)
+{
+    return index < app_lang_count() ? s_languages[index].code : "";
 }
 
 const app_lang_t *app_lang_find(const char *code)

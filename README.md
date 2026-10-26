@@ -190,7 +190,7 @@ Main modules of the assistant (`main/app/`):
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
-| `phrases.c` | Phrase patterns (`[optional]`, `(choice\|choice)`) expanded once into the phrase lists of the voice commands |
+| `phrases.c` | Phrase files of the voice commands (`main/phrases/phrases_<lang>.txt`, installed on SPIFFS): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |
 | `voice_cmd.c` | Settings by voice: language, model (provider, then model), voice, country and town, configuration mode ("change la langue", "change de modèle", "prends la voix Cedar", "change ma ville", "édite la config") |
 | `homey_mcp.c` | MCP client for a Homey Pro (local network, JSON answers): tool list at start-up, selected tools offered to Claude |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
@@ -274,6 +274,9 @@ The drive also holds **`PERSONA.TXT`**: free text always given to the assistant 
 You are an everyday copilot named ESP, running on an ESP32-S3-BX3. Be direct, efficient, and dynamic. Always get straight to the point, favoring short, clear answers that work well spoken aloud. Your tone is warm, natural, and relaxed—like a sharp colleague who solves problems without giving long speeches.
 ```
 
+`VOICE_FR.TXT` and `VOICE_EN.TXT` hold the phrases of the voice commands (see
+[Writing voice phrases](#writing-voice-phrases-patterns)); they are stored on SPIFFS, not in NVS.
+
 `MEMORY.TXT` holds the notes of the long-term memory, one per line (`- note (25/10/26)`): you can correct or
 delete them there.
 
@@ -328,13 +331,26 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 ## Voice commands
 
 Phrases recognised by the device itself. Punctuation and case are ignored ("Au revoir !" works), and hyphens
-and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the phrases; in the
-source they are written as patterns (see [Writing voice phrases](#writing-voice-phrases-patterns)).
+and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the phrases of both
+languages; only those of the current language are recognised (except "change la langue"). They are written as
+patterns in one file per language (see [Writing voice phrases](#writing-voice-phrases-patterns)).
 
 ### Writing voice phrases (patterns)
 
-The phrase lists of `voice_cmd.c` and `app_memory.c` are written as **patterns**, each standing for several
-phrases (`main/app/phrases.c`):
+The phrases of the voice commands of `voice_cmd.c` and `app_memory.c` are in **one file per language**:
+`main/phrases/phrases_fr.txt`, `main/phrases/phrases_en.txt`. Each list of the code is a **section named after
+its variable**, one pattern per line, `#` for comments:
+
+```text
+[s_change_lang]
+change[r] (la|de|ta) langue
+
+[s_new_conversation]
+nouvelle (discussion|conversation)
+[[j ai ]une ]autre question
+```
+
+Each pattern stands for several phrases (`main/app/phrases.c`):
 
 | Syntax | Meaning | Example | Phrases |
 | --- | --- | --- | --- |
@@ -349,20 +365,41 @@ apostrophes and hyphens as spaces (`j ai`, `let s`), no punctuation. Spaces doub
 empty part are removed. Add a variant where it is needed, e.g. both `éditer` and `editer` when the transcription
 writes either (`(é|e)diter` works too).
 
-A list is declared with `PHRASE_LIST(...)`:
+**Which phrases are recognised**
+
+- Only the files of the languages of `app_lang.c` are read, and a list takes the phrases of the **current
+  language** only: in French, "change the model" is no longer a command (it goes to the model).
+- Exception: `s_change_lang` takes the phrases of **every** language, so that "change la langue" and "change the
+  language" always work.
+- A section missing in the current language's file is taken from the English file (with a warning in the log); an
+  empty section disables the command in that language. A language of `app_lang.c` without a file uses English.
+
+**Where the files are**
+
+- The files of `main/phrases/` are built into the firmware. At start-up, each one missing on SPIFFS (first start)
+  or emptied is installed as `/spiffs/phrases_<code>.txt`; the files of SPIFFS are then read (a few KB, kept in
+  RAM).
+- In configuration mode they appear on the drive as **`VOICE_FR.TXT`** and **`VOICE_EN.TXT`** (one per
+  `phrases_<code>.txt` found on SPIFFS, at most 4; up to 8,191 characters each): edit them, wait a few seconds,
+  press **Restart**. Comments are kept. To go back to the version of the firmware, empty the file.
+- On a device already set up, the file on SPIFFS (possibly edited) is kept: a **section added** by a newer
+  firmware is appended to it at start-up (with its comments), but changes to existing sections reach it only once
+  the file is emptied (or the `storage` partition erased).
+
+In the code, a list is just declared; its phrases come from the files:
 
 ```c
-static phrase_list_t s_change_lang = PHRASE_LIST(
-    "change[r] (la|de|ta) langue", "change [the ]language", "switch [the ]language"
-);
-// used as: starts_with(norm, phrases_of(&s_change_lang), &len)
+static PHRASE_LIST_ALL_LANGUAGES(s_change_lang);    // [s_change_lang] of every language
+static PHRASE_LIST(s_change_model);                  // [s_change_model] of the current language
+// used as: starts_with(norm, phrases_of(&s_change_model), &len)
 ```
 
-The phrases are made once at start-up (`voice_cmd_init()`, `app_memory_init()`; the log shows
-`phrases: 77 phrases from 6 patterns ("je veux …")`) and kept **longest first**, so that a phrase beginning
-another one never hides it ("parle" does not take "parle en anglais" from "parle en"). A pattern with unbalanced
-brackets, or standing for more than 256 phrases, is left out with an error in the log. Matching is the same as
-with plain lists (whole words, from the start of what is said) and costs nothing more at run time.
+The phrases are made once per language, at start-up for the current one (`voice_cmd_init()`,
+`app_memory_init()`), at the first use after a change of language; the log shows
+`phrases: [s_edit_config] fr: 66 phrases from 3 patterns`. They are kept **longest first**, so that a phrase
+beginning another one never hides it ("parle" does not take "parle en anglais" from "parle en"). A pattern with
+unbalanced brackets, or standing for more than 256 phrases, is left out with an error in the log. Matching is the
+same as with plain lists (whole words, from the start of what is said) and costs nothing more at run time.
 
 ### Wake words (detected locally, without Internet)
 
@@ -374,7 +411,7 @@ with plain lists (whole words, from the start of what is said) and costs nothing
 ### Closing phrases: back to sleep, conversation cleared
 
 Recognised only when said **alone**. The French list is used when the assistant is in French, the English one
-in English (`main/app/app_lang.c`).
+in English (section `[s_goodbyes]` of the phrase files, `voice_cmd_is_goodbye()` in `voice_cmd.c`).
 
 | French | English |
 | --- | --- |

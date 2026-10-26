@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,6 +40,9 @@ typedef enum {
  * @param reply Sentence to speak (allocated, to be freed) for VOICE_CMD_ANSWERED
  */
 voice_cmd_t voice_cmd_handle(const char *text, char **reply);
+
+/** The whole transcript is a closing phrase ("au revoir", "bonne nuit"): back to sleep, conversation cleared */
+bool voice_cmd_is_goodbye(const char *text);
 
 /** Make the phrases of the commands from their patterns (at start-up, rather than at the first command) */
 void voice_cmd_init(void);

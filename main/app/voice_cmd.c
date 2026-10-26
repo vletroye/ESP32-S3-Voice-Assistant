@@ -34,66 +34,28 @@
 static const char *TAG = "voice_cmd";
 
 /*
- * Phrases as normalized by app_text_normalize(), written as patterns (phrases.h: "[optional]",
- * "(choice|choice)"); French and English are both accepted
+ * Phrase lists: their patterns are in the phrase files (main/phrases/phrases_<lang>.txt, VOICE_<LANG>.TXT on the
+ * configuration drive), in the section named after the variable (phrases.h). Only the current language's
+ * phrases are recognised, except "change la langue", recognised in every language.
  */
-static phrase_list_t s_change_lang = PHRASE_LIST(
-    "change[r] (la|de|ta) langue", "change [the ]language", "switch [the ]language"
-);
-static phrase_list_t s_lang_shortcut = PHRASE_LIST(
-    "parle[ en]", "parlons[ en]", "on parle", "passe en", "passe à l", "réponds en", "speak[ in]", "switch to",
-    "answer in"
-);
-static phrase_list_t s_change_model = PHRASE_LIST(
-    "change[r] (de|le|ton) mod(è|e)le", "change [the ]model", "switch [the ]model"
-);
-static phrase_list_t s_model_shortcut = PHRASE_LIST(
-    "(utilise|prends) le mod(è|e)le", "passe au mod(è|e)le", "mod(è|e)le[ numéro]", "use [the ]model",
-    "switch to model", "model[ number]"
-);
-static phrase_list_t s_change_voice = PHRASE_LIST(
-    "change[r] (de|la|ta|ma) voix", "[une ]autre voix", "change [(the|your) ]voice", "switch [the ]voice",
-    "another voice"
-);
-static phrase_list_t s_voice_shortcut = PHRASE_LIST(
-    "(utilise|prends|mets|choisis) la voix", "passe à la voix", "[la ]voix[ numéro]", "use [the ]voice",
-    "switch to [the ]voice", "voice[ number]"
-);
+/* Said alone, they send the assistant back to sleep without an answer */
+static PHRASE_LIST(s_goodbyes);
+static PHRASE_LIST_ALL_LANGUAGES(s_change_lang);
+static PHRASE_LIST(s_lang_shortcut);
+static PHRASE_LIST(s_change_model);
+static PHRASE_LIST(s_model_shortcut);
+static PHRASE_LIST(s_change_voice);
+static PHRASE_LIST(s_voice_shortcut);
 /* A new conversation, as after "au revoir" (normalized: lowercase, apostrophes as spaces) */
-static phrase_list_t s_new_conversation = PHRASE_LIST(
-    "(démarrons|commençons|[on ](démarre|commence)) une nouvelle (discussion|conversation)",
-    "(on recommence|recommençons) à zéro", "nouvelle (discussion|conversation)", "[[j ai ]une ]autre question",
-    "(passons|on passe) à autre chose", "parlons d autre chose", "(changeons|on change) de sujet",
-    "changement de sujet", "[let s ]start a new conversation", "new (conversation|chat)",
-    "[i have ]another question", "let s move on", "let s talk about something else", "let s change the subject",
-    "change of subject"
-);
+static PHRASE_LIST(s_new_conversation);
 /* Configuration files (normalized: "éditer" and "editer", "la config" and "le config" as often transcribed) */
-static phrase_list_t s_edit_config = PHRASE_LIST(
-    "je veux (éditer|editer|modifier) (la|le|les fichier[s] de) config[uration]",
-    "(édite|edite|éditer|modifie|ouvre) (la|le|les fichier[s] de) config[uration]",
-    "[passe en ]mode configuration", "[i want to ]edit the config[uration][ files]",
-    "open the config[uration] files", "configuration mode"
-);
-static phrase_list_t s_open_settings = PHRASE_LIST(
-    "(ouvre|montre|affiche) les (paramètres|réglages)", "va dans les (paramètres|réglages)",
-    "(open|show)[ the] settings", "display the settings", "go to the settings"
-);
-static phrase_list_t s_change_country = PHRASE_LIST(
-    "change[r] (mon|de) pays", "change le pays", "change (my|the) country"
-);
-static phrase_list_t s_change_city = PHRASE_LIST(
-    "change[r] (ma|de) ville", "change la ville", "change (my|the) city", "change my town"
-);
+static PHRASE_LIST(s_edit_config);
+static PHRASE_LIST(s_open_settings);
+static PHRASE_LIST(s_change_country);
+static PHRASE_LIST(s_change_city);
 /* Words before the name in an answer ("j'habite à Evere"), skipped; articles are kept ("Le Havre") */
-static phrase_list_t s_answer_prefix = PHRASE_LIST(
-    "j habite[ (à|en|au|aux)]", "(ma ville|mon pays) est", "c est", "en", "au", "aux", "à", "i live in",
-    "my (city|country) is", "it is", "it s", "in"
-);
-static phrase_list_t s_yes = PHRASE_LIST(
-    "oui", "ouais", "yes", "yeah", "yep", "exact[ement]", "[je ]confirme", "confirmé", "c est (ça|bon)",
-    "d accord", "ok[ay]", "bien sûr", "absolument", "correct", "sure", "right", "affirmatif"
-);
+static PHRASE_LIST(s_answer_prefix);
+static PHRASE_LIST(s_yes);
 
 /*
  * Countries known by voice: ISO 3166-1 alpha-2 code (the web search needs it), French and English names,
@@ -148,9 +110,7 @@ static const struct {
 };
 
 /* Words allowed after the answer of a shortcut ("parle anglais s'il te plaît", "modèle 3 please") */
-static phrase_list_t s_courtesy = PHRASE_LIST(
-    "s il (te|vous) pla(i|î)t", "maintenant", "please", "now"
-);
+static PHRASE_LIST(s_courtesy);
 
 /* Languages offered, with the names they may be called by (in both languages, transcription variants) */
 static const struct {
@@ -285,9 +245,7 @@ static voice_cmd_t choose_language(const char *norm, char **reply)
 /* ---------- model ---------- */
 
 /* "un" / "une" mean 1 only when said alone: elsewhere they are articles ("je veux un modèle rapide") */
-static phrase_list_t s_one_alone = PHRASE_LIST(
-    "[le ]un[e]", "[le ]num(é|e)ro un"
-);
+static PHRASE_LIST(s_one_alone);
 
 /* Providers as they may be said (normalized), by llm_provider_t; spoken as their company name */
 static const struct {
@@ -743,10 +701,22 @@ void voice_cmd_reply_spoken(void)
     }
 }
 
+bool voice_cmd_is_goodbye(const char *text)
+{
+    char norm[CMD_NORM_SIZE];
+    app_text_normalize(text, norm, sizeof(norm));
+    for (const char *const *phrase = phrases_of(&s_goodbyes); *phrase; phrase++) {
+        if (strcmp(norm, *phrase) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
-        &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
+        &s_goodbyes, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
         &s_new_conversation, &s_edit_config, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_courtesy, &s_one_alone,
     };

@@ -24,24 +24,11 @@
 
 static const char *TAG = "memory";
 
-/*
- * Phrases as normalized by app_text_normalize(), written as patterns (phrases.h: "[optional]",
- * "(choice|choice)"); French and English are both accepted
- */
-static phrase_list_t s_remember = PHRASE_LIST(
-    "souviens toi[ bien] que", "rappelle toi que", "retiens[ bien] que", "n oublie pas que", "note que",
-    "m(é|e)morise que", "[please ]remember that", "don t forget that", "note that", "memorize that"
-);
-static phrase_list_t s_forget = PHRASE_LIST(
-    "oublie[ le fait] que", "forget that"
-);
-static phrase_list_t s_forget_all = PHRASE_LIST(
-    "oublie tout", "efface[ toute] ta mémoire", "forget everything"
-);
-static phrase_list_t s_list = PHRASE_LIST(
-    "dis moi[ tout] ce que tu as (mémorisé|retenu)", "qu est ce que tu as (mémorisé|retenu)", "qu as tu mémorisé",
-    "tell me everything you remember", "what do you remember", "what have you memorized"
-);
+/* Phrase lists: their patterns are in the phrase files, in the section named after the variable (phrases.h) */
+static PHRASE_LIST(s_remember);
+static PHRASE_LIST(s_forget);
+static PHRASE_LIST(s_forget_all);
+static PHRASE_LIST(s_list);
 
 /* MEMORY.TXT as saved (comment lines included), and the notes alone, as given to the assistant */
 static char *s_file = NULL;

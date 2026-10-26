@@ -1,0 +1,108 @@
+# Phrases of the voice commands, in English (file VOICE_EN.TXT of the configuration drive).
+# Each [s_...] section is named after the list of the code it fills; one pattern per line.
+# Patterns: [optional part], (choice|other choice), nested if needed: [[i have ]an ]other question
+# Write in lowercase, accents kept, apostrophes and hyphens as spaces ("let s"), no punctuation.
+# English is also the fallback: a section missing in another language's file is taken from here.
+# An empty section disables the command. Lines starting with # are comments. Emptied file: restored.
+
+[s_goodbyes]
+# Said alone, they send the assistant back to sleep without an answer (conversation cleared)
+goodbye[ esp]
+good (bye|night)
+bye[ (bye|esp)]
+
+[s_change_lang]
+change [the ]language
+switch [the ]language
+
+[s_lang_shortcut]
+speak[ in]
+switch to
+answer in
+
+[s_change_model]
+change [the ]model
+switch [the ]model
+
+[s_model_shortcut]
+use [the ]model
+switch to model
+model[ number]
+
+[s_change_voice]
+change [(the|your) ]voice
+switch [the ]voice
+another voice
+
+[s_voice_shortcut]
+use [the ]voice
+switch to [the ]voice
+voice[ number]
+
+[s_new_conversation]
+[let s ]start a new conversation
+new (conversation|chat)
+[i have ]another question
+let s move on
+let s talk about something else
+let s change the subject
+change of subject
+
+[s_edit_config]
+[i want to ]edit the config[uration][ files]
+open the config[uration] files
+configuration mode
+
+[s_open_settings]
+(open|show)[ the] settings
+display the settings
+go to the settings
+
+[s_change_country]
+change (my|the) country
+
+[s_change_city]
+change (my|the) city
+change my town
+
+[s_answer_prefix]
+# Words before the name in an answer ("I live in Evere"), skipped
+i live in
+my (city|country) is
+it is
+it s
+in
+
+[s_yes]
+yes
+yeah
+yep
+ok[ay]
+sure
+right
+correct
+
+[s_courtesy]
+# Words allowed after the answer of a shortcut ("speak French please")
+please
+now
+
+[s_one_alone]
+# Empty: "one" is a number in every position (the numbers are in the code)
+
+[s_remember]
+[please ]remember that
+don t forget that
+note that
+memorize that
+
+[s_forget]
+forget that
+
+[s_forget_all]
+forget everything
+
+[s_list]
+tell me everything you remember
+what do you remember
+what have you memorized

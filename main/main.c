@@ -28,6 +28,7 @@
 #include "llm.h"
 #include "app_memory.h"
 #include "voice_cmd.h"
+#include "phrases.h"
 #include "assistant.h"
 #include "app_volume.h"
 #include "tools.h"
@@ -176,22 +177,6 @@ static bool transcription_is_noise(const char *text)
 }
 
 /* "Au revoir" alone (punctuation and case ignored) ends the conversation */
-static bool transcription_is_goodbye(const char *text)
-{
-    const char *const *goodbyes = app_lang_get()->goodbyes;
-    if (goodbyes == NULL) {
-        return false;
-    }
-    char norm[48];
-    app_text_normalize(text, norm, sizeof(norm));
-    for (; *goodbyes; goodbyes++) {
-        if (strcmp(norm, *goodbyes) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static void on_sentence(const char *sentence, void *ctx)
 {
     tts_stream_say(sentence);
@@ -422,7 +407,7 @@ void assistant_listen_end(void)
         goto err;
     }
 
-    if (transcription_is_goodbye(text)) {
+    if (voice_cmd_is_goodbye(text)) {
         // Back to sleep: no answer, no follow-up listening, the next conversation starts afresh
         ESP_LOGI(TAG, "Goodbye: \"%s\", going to sleep", text);
         llm_reset();
@@ -593,6 +578,8 @@ void app_main()
     app_sr_start(false);
 
     // The Persona (name, who made it, who it talks to...) and the remembered notes complete the base instructions
+    // Phrase files of the voice commands (installed at the first start), before the lists are made
+    phrases_init();
     app_memory_init(sys_param->memory);
     voice_cmd_init();
     weather_places_load();

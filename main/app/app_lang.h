@@ -24,8 +24,6 @@ typedef struct {
     const char *system_prompt;   /* System message sent with every chat request */
     const char *tts_instructions;   /* Speaking style given to the speech synthesis */
     const char *stt_error;          /* Spoken when the question could not be transcribed */
-    /* Whole sentences that end the conversation (lowercase, without punctuation), NULL-terminated */
-    const char *const *goodbyes;
     /* Long-term memory ("souviens-toi que ...") */
     const char *memory_header;      /* Introduces the notes in the instructions */
     const char *memory_saved;
@@ -101,6 +99,10 @@ typedef struct {
 void app_lang_set(const char *code);
 
 const app_lang_t *app_lang_get(void);
+
+/** Languages with texts (their phrase files are read too): count, and code of each ("fr", "en") */
+size_t app_lang_count(void);
+const char *app_lang_code(size_t index);
 
 /** Texts of a supported language (e.g. to confirm a change in the new language), NULL if not supported */
 const app_lang_t *app_lang_find(const char *code);

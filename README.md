@@ -32,7 +32,8 @@ which has been largely rewritten.
   (with the history of the last exchanges).
 - **Conversation memory**: the last 6 to 12 exchanges are kept across sleep and restarts (saved to flash in
   `/spiffs/history.json` once the assistant is back to sleep, never during an exchange), so you can ask later "what were we talking about?".
-  Saying "Au revoir" ends the conversation and clears it. Changing the model starts a new one; a full
+  Saying "Au revoir" ends the conversation and clears it; "Nouvelle discussion", "J'ai une autre question" or
+  "Passons à autre chose" clear it too, without going to sleep. Changing the model starts a new one; a full
   `idf.py flash` erases it (the `storage` partition is rewritten).
 - **Tools** (Claude models), called by Claude when the question needs them:
   - **weather** ("Quel temps fera-t-il demain à Namur ?"), from Open-Meteo, free and without key;
@@ -55,8 +56,9 @@ which has been largely rewritten.
   every question and can be edited in `MEMORY.TXT`.
 - Saying "Bonjour ESP" during an answer, or **double-tapping the screen**, **interrupts** it and listens again.
 - **Sleep screen**: under the sleeping robot, the time in glowing seven-segment digits and the date
-  (`DIM 25/10/26`), synchronized over the Internet (NTP); the speaker volume at the bottom left (bar, speaker
-  icon, percentage) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out when
+  (`DIM 25/10/26`), synchronized over the Internet (NTP); the speaker volume at the bottom left (a gauge: the
+  outline of the full bar, filled from the bottom with the volume; speaker icon and percentage below it, all
+  centred under the Settings icon) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out when
   disconnected), in the same style.
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
 - **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
@@ -314,6 +316,20 @@ in English (`main/app/app_lang.c`).
 | bonne nuit · bonne nuit ESP | bye · bye bye · bye ESP |
 | à demain · à plus · ciao | good night |
 | bonne soirée · bonne journée · bonne après-midi | |
+
+### New conversation: conversation cleared, without going to sleep
+
+Recognised at the **start** of what is said, in French and in English whatever the language
+(`main/app/voice_cmd.c`). Said alone (or with "s'il te plaît"), the assistant answers "D'accord, je t'écoute."
+and keeps listening; followed by a question ("J'ai une autre question : quelle est la capitale du Pérou ?"),
+the conversation is cleared and the model answers the question.
+
+| French | English |
+| --- | --- |
+| démarrons · commençons une nouvelle discussion / conversation · démarre · commence une nouvelle discussion / conversation · on démarre · on commence une nouvelle discussion · nouvelle discussion · nouvelle conversation | let's start a new conversation · start a new conversation · new conversation · new chat |
+| on recommence à zéro · recommençons à zéro | |
+| j'ai une autre question · une autre question · autre question | I have another question · another question |
+| passons à autre chose · on passe à autre chose · parlons d'autre chose · changeons de sujet · on change de sujet · changement de sujet | let's move on · let's talk about something else · let's change the subject · change of subject |
 
 ### Language and model
 

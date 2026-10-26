@@ -433,7 +433,12 @@ void assistant_listen_end(void)
         ui_ctrl_open_settings();
         goto err;
     }
-    if (voice_cmd != VOICE_CMD_NONE) {
+    if (voice_cmd == VOICE_CMD_NEW_CONVERSATION || voice_cmd == VOICE_CMD_NEW_CONVERSATION_ASK) {
+        // "Nouvelle discussion", "j'ai une autre question": a fresh conversation, as after "au revoir"
+        ESP_LOGI(TAG, "New conversation: \"%s\"", text);
+        llm_reset();
+    }
+    if (voice_cmd != VOICE_CMD_NONE && voice_cmd != VOICE_CMD_NEW_CONVERSATION_ASK) {
         speak_message(cmd_reply ? cmd_reply : "");
         free(cmd_reply);
         goto err;

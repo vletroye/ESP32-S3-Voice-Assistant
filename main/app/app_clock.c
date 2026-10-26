@@ -37,11 +37,17 @@ LV_FONT_DECLARE(ui_font_Latin16);
 #define COLOR_OFF       0x26305A
 #define COLOR_DATE      0xB9CCF5
 
-/* Volume indicator, bottom left: bar (filled from the bottom), speaker icon, percentage */
-#define VOLUME_COLUMN_X     4       /* left of the column, from the screen's left edge */
+/*
+ * Volume indicator, bottom left: gauge (outline of the full bar, filled from the bottom with the volume),
+ * speaker icon, percentage
+ */
+#define VOLUME_CENTER_X     41      /* below the centre of the Settings icon (48 px wide, 17 px from the left) */
 #define VOLUME_COLUMN_W     48
-#define VOLUME_BAR_W        8
-#define VOLUME_BAR_H        50
+#define VOLUME_COLUMN_X     (VOLUME_CENTER_X - VOLUME_COLUMN_W / 2)     /* from the screen's left edge */
+#define VOLUME_BAR_W        12
+#define VOLUME_BAR_H        75
+#define VOLUME_BAR_BORDER   2
+#define VOLUME_BAR_GAP      1       /* between the outline and the filling */
 #define VOLUME_BAR_BOTTOM_Y (-48)
 #define VOLUME_ICON_BOTTOM_Y (-24)
 
@@ -173,7 +179,7 @@ static void digit_show(int digit, uint8_t segments)
     s_lit[digit] = segments;
 }
 
-/* Volume bar: dark track, lit part from the bottom with the glow of the digits */
+/* Volume gauge: outline of the full bar, filled from the bottom with the glow of the digits */
 static void volume_bar_event_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -188,18 +194,27 @@ static void volume_bar_event_cb(lv_event_t *e)
     lv_area_t area;
     lv_obj_get_coords(s_volume_bar, &area);
 
-    lv_draw_rect_dsc_t off;
-    lv_draw_rect_dsc_init(&off);
-    off.radius = VOLUME_BAR_W / 2;
-    off.bg_color = lv_color_hex(COLOR_OFF);
-    lv_draw_rect(draw_ctx, &off, &area);
+    lv_draw_rect_dsc_t outline;
+    lv_draw_rect_dsc_init(&outline);
+    outline.radius = VOLUME_BAR_W / 2;
+    outline.bg_opa = LV_OPA_TRANSP;
+    outline.border_color = lv_color_hex(COLOR_DATE);
+    outline.border_opa = LV_OPA_70;
+    outline.border_width = VOLUME_BAR_BORDER;
+    lv_draw_rect(draw_ctx, &outline, &area);
 
+    // Filling: inside the outline, its height in proportion to the volume
+    const lv_coord_t inset = VOLUME_BAR_BORDER + VOLUME_BAR_GAP;
+    area.x1 += inset;
+    area.x2 -= inset;
+    area.y1 += inset;
+    area.y2 -= inset;
     int level = s_shown_volume < 0 ? 0 : s_shown_volume;
-    lv_coord_t lit = (lv_coord_t)(VOLUME_BAR_H * level / 100);
+    lv_coord_t lit = (lv_coord_t)(lv_area_get_height(&area) * level / 100);
     if (lit > 0) {
         lv_draw_rect_dsc_t on;
         lv_draw_rect_dsc_init(&on);
-        on.radius = VOLUME_BAR_W / 2;
+        on.radius = lv_area_get_width(&area) / 2;
         on.bg_color = lv_color_hex(COLOR_ON);
         on.shadow_color = lv_color_hex(COLOR_GLOW);
         on.shadow_width = GLOW_WIDTH;
@@ -368,8 +383,7 @@ void app_clock_create(lv_obj_t *parent, const char *const weekdays[7])
     lv_obj_remove_style_all(s_volume_bar);
     lv_obj_clear_flag(s_volume_bar, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(s_volume_bar, VOLUME_BAR_W, VOLUME_BAR_H);
-    lv_obj_align(s_volume_bar, LV_ALIGN_BOTTOM_LEFT, VOLUME_COLUMN_X + (VOLUME_COLUMN_W - VOLUME_BAR_W) / 2,
-                 VOLUME_BAR_BOTTOM_Y);
+    lv_obj_align(s_volume_bar, LV_ALIGN_BOTTOM_LEFT, VOLUME_CENTER_X - VOLUME_BAR_W / 2, VOLUME_BAR_BOTTOM_Y);
     lv_obj_add_event_cb(s_volume_bar, volume_bar_event_cb, LV_EVENT_ALL, NULL);
     lv_obj_refresh_ext_draw_size(s_volume_bar);
 

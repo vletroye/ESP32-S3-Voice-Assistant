@@ -48,6 +48,18 @@ static const char *const s_model_shortcut[] = {
     "modèle numéro", "modèle", "modele", "use model", "use the model", "switch to model", "model number",
     "model", NULL
 };
+/* A new conversation, as after "au revoir" (normalized: lowercase, apostrophes as spaces) */
+static const char *const s_new_conversation[] = {
+    "démarrons une nouvelle discussion", "démarrons une nouvelle conversation", "commençons une nouvelle discussion",
+    "commençons une nouvelle conversation", "démarre une nouvelle discussion", "démarre une nouvelle conversation",
+    "commence une nouvelle discussion", "commence une nouvelle conversation", "on démarre une nouvelle discussion",
+    "on commence une nouvelle discussion", "on recommence à zéro", "recommençons à zéro", "nouvelle discussion",
+    "nouvelle conversation", "j ai une autre question", "une autre question", "autre question",
+    "passons à autre chose", "on passe à autre chose", "parlons d autre chose", "changeons de sujet",
+    "on change de sujet", "changement de sujet", "let s start a new conversation", "start a new conversation",
+    "new conversation", "new chat", "i have another question", "another question", "let s move on",
+    "let s talk about something else", "let s change the subject", "change of subject", NULL
+};
 static const char *const s_open_settings[] = {
     "ouvre les paramètres", "montre les paramètres", "affiche les paramètres", "ouvre les réglages",
     "montre les réglages", "affiche les réglages", "va dans les paramètres",
@@ -500,6 +512,15 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     }
 
     size_t len = 0;
+    if (starts_with(norm, s_new_conversation, &len)) {
+        // Alone (or with "s'il te plaît"): answered here; followed by a question: the model answers it
+        const char *rest = norm + len + (norm[len] == ' ');
+        if (!*rest || starts_with(rest, s_courtesy, NULL)) {
+            *reply = reply_dup(app_lang_get()->new_conversation);
+            return VOICE_CMD_NEW_CONVERSATION;
+        }
+        return VOICE_CMD_NEW_CONVERSATION_ASK;
+    }
     if (starts_with(norm, s_change_lang, NULL)) {
         // "Change la langue en anglais": the language may already be given
         if (find_language(norm)) {

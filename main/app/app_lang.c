@@ -76,6 +76,7 @@ static const app_lang_t s_languages[] = {
                          "l'actualité, la météo ou une information locale sans préciser de lieu, il s'agit de ce "
                          "lieu et de ce pays : pour l'actualité, cherche celle de ce pays en le nommant dans ta "
                          "recherche, et ne donne pas l'actualité d'autres pays sauf s'il le demande.",
+        .new_conversation = "D'accord, je t'écoute.",
         .voice_choppy = "(Connexion trop lente : la voix n'a pas pu être lue de façon fluide.)",
         .home_line = "Pour toute question sur la maison (pièces, appareils, leur état, ambiances, flows, présence, "
                      "consommation), appelle chaque fois les outils de la Homey : les résultats plus anciens de la "
@@ -182,6 +183,7 @@ static const app_lang_t s_languages[] = {
                          "news, the weather or local information without naming a place, it is about this place and "
                          "country: for the news, search the news of this country by naming it in your search, and do "
                          "not give news from other countries unless asked.",
+        .new_conversation = "All right, I'm listening.",
         .voice_choppy = "(Connection too slow: the speech could not be played smoothly.)",
         .home_line = "For any question about the home (rooms, devices, their state, moods, flows, presence, "
                      "consumption), call the Homey tools every time: older results in the conversation may be "

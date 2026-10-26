@@ -318,6 +318,8 @@ static const struct {
     [LLM_PROVIDER_CLAUDE] = { "Anthropic", { "anthropic", "anthropique", "anthropik", "claude", "clode", NULL } },
     [LLM_PROVIDER_OPENAI] = { "OpenAI", { "openai", "open ai", "open a i", "openaï", "gpt", "chatgpt", "chat gpt" } },
     [LLM_PROVIDER_GEMINI] = { "Google", { "google", "gougle", "gemini", "gémini", "jemini", NULL } },
+    [LLM_PROVIDER_OPENROUTER] = { "OpenRouter", { "openrouter", "open router", "open routeur", "openrouteur",
+                                                  "open rooter", NULL } },
 };
 
 /* Provider named in the text, LLM_PROVIDER_COUNT if none */

@@ -31,6 +31,7 @@ LV_IMG_DECLARE(ui_img_reply_claude);
 LV_IMG_DECLARE(ui_img_reply_web);
 LV_IMG_DECLARE(ui_img_reply_local);
 LV_IMG_DECLARE(ui_img_reply_gemini);
+LV_IMG_DECLARE(ui_img_reply_openrouter);
 LV_FONT_DECLARE(ui_font_Latin14);
 LV_FONT_DECLARE(ui_font_Latin16);
 LV_FONT_DECLARE(ui_font_Latin20);
@@ -117,7 +118,7 @@ static void listen_label_set_text(const char *text)
 /* ---------- Settings screen: language and model, saved to NVS with the Save button, then restart ---------- */
 
 #define SETTINGS_RESTART_DELAY_MS       1000
-#define SETTINGS_OPTIONS_SIZE           256
+#define SETTINGS_OPTIONS_SIZE           640     /* up to 15 models */
 
 /* Languages offered, in the order of the dropdown */
 static const char *const s_settings_languages[] = { "fr", "en" };
@@ -269,7 +270,7 @@ static void settings_screen_setup(void)
 {
     const app_lang_t *lang = app_lang_get();
     const sys_param_t *param = settings_get_parameter();
-    char options[SETTINGS_OPTIONS_SIZE];
+    static char options[SETTINGS_OPTIONS_SIZE];     // static: kept off the stack
 
     lv_obj_set_style_pad_row(ui_PanelSettings, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -689,6 +690,7 @@ void ui_ctrl_reply_set_logo(ui_ctrl_logo_t logo)
                       logo == UI_CTRL_LOGO_LOCAL ? (const void *)&ui_img_reply_local :
                       logo == UI_CTRL_LOGO_CLAUDE ? (const void *)&ui_img_reply_claude :
                       logo == UI_CTRL_LOGO_GEMINI ? (const void *)&ui_img_reply_gemini :
+                      logo == UI_CTRL_LOGO_OPENROUTER ? (const void *)&ui_img_reply_openrouter :
                       (const void *)&ui_img_reply_chatgpt_logo_png;
     bsp_display_lock(0);
     lv_img_set_src(ui_ImageReplyLogo, src);

@@ -17,6 +17,7 @@
 #include "claude_client.h"
 #include "openai_chat.h"
 #include "gemini_chat.h"
+#include "openrouter_chat.h"
 #include "tools.h"
 
 static const char *TAG = "llm";
@@ -24,9 +25,11 @@ static const char *TAG = "llm";
 /*
  * Latest models of each provider. Effort is kept low for a fast spoken answer: GPT-6 Luna can skip
  * reasoning ("none"), GPT-6.1 Sol and GPT-6 Astra start at "low"; Gemini 3.5 Flash-Lite thinks least with
- * "minimal", Gemini 3.8 Flash and Gemini 4 Argon start at "low".
+ * "minimal", Gemini 3.8 Flash and Gemini 4 Argon start at "low". The OpenRouter models follow: three popular
+ * ones by default, else the list of CONFIG.INI (OpenRouter_list), with a low reasoning effort.
  */
-const llm_model_t llm_models[] = {
+#define LLM_FIXED_MODELS    9
+llm_model_t llm_models[LLM_FIXED_MODELS + LLM_OPENROUTER_MAX_MODELS] = {
     { "claude-haiku-5-5",  "Claude Haiku 5.5",  "low",  "Haiku" },
     { "claude-sonnet-5-5", "Claude Sonnet 5.5", "low",  "Sonnet" },
     { "claude-opus-5-5",   "Claude Opus 5.5",   "low",  "Opus" },
@@ -36,8 +39,85 @@ const llm_model_t llm_models[] = {
     { "gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite", "minimal", "Flash-Lite" },
     { "gemini-3.8-flash",  "Gemini 3.8 Flash",  "low",  "Flash" },
     { "gemini-4-argon",    "Gemini 4 Argon",    "low",  "Argon" },
+    { "deepseek/deepseek-v4.1-flash-1017", "DeepSeek V4.1 Flash", "low", "DeepSeek" },
+    { "moonshotai/kimi-k3.1-pro", "Kimi K3.1 Pro", "low", "Kimi" },
+    { "minimax/minimax-m3.1-flash", "MiniMax M3.1 Flash", "low", "MiniMax" },
 };
-const size_t llm_model_count = sizeof(llm_models) / sizeof(llm_models[0]);
+size_t llm_model_count = LLM_FIXED_MODELS + 3;
+
+/* "deepseek-v4.1-flash" -> "Deepseek V4.1 Flash" (allocated) */
+static char *name_from_id(const char *id)
+{
+    const char *slash = strrchr(id, '/');
+    char *name = strdup(slash ? slash + 1 : id);
+    bool word_start = true;
+    for (char *c = name; c && *c; c++) {
+        if (*c == '-' || *c == '_' || *c == ':') {
+            *c = ' ';
+            word_start = true;
+        } else {
+            if (word_start) {
+                *c = toupper((unsigned char)*c);
+            }
+            word_start = false;
+        }
+    }
+    return name;
+}
+
+void llm_set_openrouter_models(const char *list)
+{
+    if (!list) {
+        return;
+    }
+    size_t count = 0;
+    char *copy = strdup(list);
+    for (char *item = copy ? strtok(copy, ",") : NULL; item && count < LLM_OPENROUTER_MAX_MODELS;
+            item = strtok(NULL, ",")) {
+        // "id[=Name]", spaces around ignored
+        char *name = strchr(item, '=');
+        if (name) {
+            *name++ = '\0';
+        }
+        char *id = item;
+        while (*id == ' ') {
+            id++;
+        }
+        size_t len = strlen(id);
+        while (len > 0 && id[len - 1] == ' ') {
+            id[--len] = '\0';
+        }
+        if (!strchr(id, '/')) {
+            ESP_LOGW(TAG, "OpenRouter model \"%s\" ignored (expected vendor/model)", id);
+            continue;
+        }
+        while (name && *name == ' ') {
+            name++;
+        }
+        len = name ? strlen(name) : 0;
+        while (len > 0 && name[len - 1] == ' ') {
+            name[--len] = '\0';
+        }
+        llm_model_t *m = &llm_models[LLM_FIXED_MODELS + count++];
+        m->id = strdup(id);
+        m->label = (name && name[0]) ? strdup(name) : name_from_id(id);
+        m->effort = "low";
+        // Spoken in the list of models: the name given, else the first word of the one made from the id
+        char *spoken = strdup(m->label);
+        if (spoken && !(name && name[0])) {
+            char *space = strchr(spoken, ' ');
+            if (space) {
+                *space = '\0';
+            }
+        }
+        m->spoken = spoken;
+    }
+    free(copy);
+    if (count) {
+        llm_model_count = LLM_FIXED_MODELS + count;
+        ESP_LOGI(TAG, "%u OpenRouter model(s) from CONFIG.INI", (unsigned)count);
+    }
+}
 
 /* Conversation history kept across sleep and restarts (SPIFFS "storage" partition) */
 #define LLM_HISTORY_FILE        "/spiffs/history.json"
@@ -53,6 +133,9 @@ static bool s_dirty = false;
 
 llm_provider_t llm_provider_of(const char *model)
 {
+    if (strchr(model, '/')) {
+        return LLM_PROVIDER_OPENROUTER;     // "vendor/model"
+    }
     if (strncmp(model, "gpt-", 4) == 0 || (model[0] == 'o' && isdigit((unsigned char)model[1]))) {
         return LLM_PROVIDER_OPENAI;
     }
@@ -64,7 +147,8 @@ llm_provider_t llm_provider_of(const char *model)
 
 const char *llm_provider_name(llm_provider_t provider)
 {
-    return provider == LLM_PROVIDER_OPENAI ? "GPT" : provider == LLM_PROVIDER_GEMINI ? "Gemini" : "Claude";
+    return provider == LLM_PROVIDER_OPENAI ? "GPT" : provider == LLM_PROVIDER_GEMINI ? "Gemini" :
+           provider == LLM_PROVIDER_OPENROUTER ? "OpenRouter" : "Claude";
 }
 
 /* Effort of a listed model; "low" for a model only known from CONFIG.INI (accepted by every recent model) */
@@ -81,7 +165,8 @@ static const char *effort_of(const char *model)
 static const cJSON *history_get(void)
 {
     return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_history() :
-           s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_history() : claude_client_history();
+           s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_history() :
+           s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_history() : claude_client_history();
 }
 
 /* Reload the conversation saved for the same model (another model's history has another format) */
@@ -112,6 +197,8 @@ static void history_restore(void)
             openai_chat_set_history(messages);
         } else if (s_provider == LLM_PROVIDER_GEMINI) {
             gemini_chat_set_history(messages);
+        } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
+            openrouter_chat_set_history(messages);
         } else {
             claude_client_set_history(messages);
         }
@@ -159,7 +246,7 @@ void llm_history_save(void)
 }
 
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
-                   const char *gemini_key, const char *system_prompt)
+                   const char *gemini_key, const char *openrouter_key, const char *system_prompt)
 {
     // Called again when the model is changed at run time: wait for an answer being generated
     if (s_lock) {
@@ -175,6 +262,13 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
             ret = ESP_ERR_INVALID_ARG;
         } else {
             ret = gemini_chat_init(gemini_key, model, system_prompt, effort_of(model));
+        }
+    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
+        if (openrouter_key == NULL || openrouter_key[0] == '\0') {
+            ESP_LOGW(TAG, "No OpenRouter_key configured for %s", model);
+            ret = ESP_ERR_INVALID_ARG;
+        } else {
+            ret = openrouter_chat_init(openrouter_key, model, system_prompt, effort_of(model));
         }
     } else if (claude_key == NULL || claude_key[0] == '\0') {
         ESP_LOGW(TAG, "No Claude_key configured for %s", model);
@@ -208,6 +302,8 @@ void llm_set_system_prompt(const char *system_prompt)
         openai_chat_set_instructions(system_prompt);
     } else if (s_provider == LLM_PROVIDER_GEMINI) {
         gemini_chat_set_instructions(system_prompt);
+    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
+        openrouter_chat_set_instructions(system_prompt);
     } else {
         claude_client_set_system(system_prompt);
     }
@@ -251,6 +347,7 @@ llm_error_t llm_stream(const char *text, llm_text_cb_t on_text, void *ctx, char 
     xSemaphoreTake(s_lock, portMAX_DELAY);
     llm_error_t err = s_provider == LLM_PROVIDER_OPENAI ? openai_chat_stream(text, on_text, ctx, full_text)
                       : s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_stream(text, on_text, ctx, full_text)
+                      : s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_stream(text, on_text, ctx, full_text)
                       : claude_client_stream(text, on_text, ctx, full_text);
     if (err == LLM_OK) {
         s_dirty = true;
@@ -268,6 +365,8 @@ void llm_prewarm(void)
         openai_chat_prewarm();
     } else if (s_provider == LLM_PROVIDER_GEMINI) {
         gemini_chat_prewarm();
+    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
+        openrouter_chat_prewarm();
     } else {
         claude_client_prewarm();
     }
@@ -283,6 +382,8 @@ void llm_reset(void)
         openai_chat_reset();
     } else if (s_provider == LLM_PROVIDER_GEMINI) {
         gemini_chat_reset();
+    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
+        openrouter_chat_reset();
     } else {
         claude_client_reset();
     }

@@ -1,7 +1,7 @@
-# ESP32-S3-BOX-3 Voice Assistant (Claude / GPT / Gemini)
+# ESP32-S3-BOX-3 Voice Assistant (Claude / GPT / Gemini / OpenRouter)
 
 A voice assistant that runs entirely on an **ESP32-S3-BOX-3**, with no intermediate server: wake it up by
-saying "**Bonjour ESP**", ask your question, and **Claude** (or **GPT**, or **Gemini**) answers out loud.
+saying "**Bonjour ESP**", ask your question, and **Claude** (or **GPT**, **Gemini**, or a model reached through **OpenRouter**) answers out loud.
 Everything is streamed (transcription, answer, speech synthesis): the answer starts playing about
 **2.5 s** after the end of the question.
 
@@ -20,8 +20,9 @@ which has been largely rewritten.
   language and model commands, errors) and prefixed with the model id
   (`[claude-haiku-5-5] …`).
 - **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
-  (Anthropic), GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI) or Gemini 3.5 Flash-Lite, Gemini 3.8 Flash,
-  Gemini 4 Argon (Google); French or English; 10 OpenAI voices. The
+  (Anthropic), GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI), Gemini 3.5 Flash-Lite, Gemini 3.8 Flash,
+  Gemini 4 Argon (Google), or up to 6 models through OpenRouter (3 by default, your own list in `CONFIG.INI`);
+  French or English; 10 OpenAI voices. The
   language, the model and the voice can also be changed **by voice** ("Change la langue", "Utilise le modèle
   3", "Prends la voix Cedar"); all apply at once, without restarting.
 - **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays", "Change ma ville"):
@@ -85,6 +86,7 @@ flowchart LR
 | Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output streamed continuously |
 | Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
 | Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
+| Answer (OpenRouter) | OpenRouter Chat Completions API (OpenAI-compatible) | `stream: true`, `reasoning.effort` `low` with `exclude` (not returned), 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Answer (Gemini) | Gemini API `streamGenerateContent?alt=sse` | `thinkingLevel` `minimal` (Flash-Lite) or `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Speech synthesis | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice chosen in Settings (default `marin`) | Permanent WebSocket, one response per sentence, read verbatim |
 | Playback | local | 24 → 16 kHz resampling, I2S fixed at 16 kHz (shared with the mics) |
@@ -106,6 +108,9 @@ transcription and voice) and opened while the user is still speaking.
 | `gemini-3.5-flash-lite` | Google | see Google's pricing | | ★★★ (expected) | minimal | `thinkingLevel` `minimal` |
 | `gemini-3.8-flash` | Google | see Google's pricing | | ★★☆ (expected) | light | `thinkingLevel` `low` |
 | `gemini-4-argon` | Google | see Google's pricing | | ★☆☆ (expected) | light, on Google's flagship reasoning model | `thinkingLevel` `low` |
+| `deepseek/deepseek-v4.1-flash-1017` (default) | OpenRouter | $0.02 / $1 | | expected fast | depends on the model | `reasoning.effort` `low` |
+| `moonshotai/kimi-k3.1-pro` (default) | OpenRouter | $2 / $10 | | | depends on the model | `reasoning.effort` `low` |
+| `minimax/minimax-m3.1-flash` (default) | OpenRouter | $0.10 / $0.55 | | | depends on the model | `reasoning.effort` `low` |
 
 How to read this table:
 
@@ -114,8 +119,11 @@ How to read this table:
   and GPT-6 Astra (larger models that reason before answering). Measured on the device: Haiku 5.5 0.7 to 1.6 s
   (see the latencies below), GPT-6 Luna 4 to 9 s despite no reasoning (time spent waiting on OpenAI's side);
   the other ratings are expected, not measured.
-- **Tools** (weather, volume, web search, Homey) are offered to the Claude models only; GPT and Gemini answer
-  from their own knowledge.
+- **Tools** (weather, volume, web search, Homey) are offered to the Claude models only; GPT, Gemini and the
+  OpenRouter models answer from their own knowledge.
+- **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three
+  default models were among the most used on OpenRouter in October 2026 (prices as shown there then); replace them
+  with `OpenRouter_list` in `CONFIG.INI`.
 - **Gemini** prices are not listed here: check Google's pricing page (the free tier of Google AI Studio has
   usage limits; past them, Gemini answers "limite d'utilisation atteinte").
 - **Deepest reasoning**: Opus 5.5 and GPT-6 Astra are the most capable models and the only ones that really
@@ -149,7 +157,8 @@ The list lives in `main/app/llm.c` (`llm_models[]`). Any other model id can be s
 - **ESP-IDF v5.3.6** (tested with this version; 6.x versions are not compatible as is).
 - An **OpenAI API key** (transcription and voice, and GPT answers) and, for Claude, an **Anthropic API key**
   with credit (console.anthropic.com → API Keys). API credit is separate from a Claude.ai subscription
-  and from Claude usage credits. For Gemini, a **Gemini API key** (aistudio.google.com/apikey).
+  and from Claude usage credits. For Gemini, a **Gemini API key** (aistudio.google.com/apikey); for OpenRouter, an
+  **OpenRouter key** with credit (openrouter.ai → Keys).
 
 ## Repository layout
 
@@ -172,6 +181,7 @@ Main modules of the assistant (`main/app/`):
 | `llm.c` | Model list and dispatch to the provider of the chosen model |
 | `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
 | `openai_chat.c` | GPT client (Responses API, SSE streaming), history |
+| `openrouter_chat.c` | OpenRouter client (Chat Completions, SSE streaming), history kept on the device |
 | `gemini_chat.c` | Gemini client (`streamGenerateContent`, SSE streaming), history kept on the device |
 | `llm_sse.c` | Server-sent events parser shared by both clients |
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
@@ -221,7 +231,8 @@ Tap the gear icon on the home screen:
 - **Langue / Language**: Français or English (interface, transcription, answers and voice).
 - **Modèle / Model**: the model answering the questions (see the table above), numbered as in the voice
   command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra,
-  7 Gemini 3.5 Flash-Lite, 8 Gemini 3.8 Flash, 9 Gemini 4 Argon.
+  7 Gemini 3.5 Flash-Lite, 8 Gemini 3.8 Flash, 9 Gemini 4 Argon, then the OpenRouter models from 10 (10 DeepSeek
+  V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default).
 - **Voix / Voice**: the OpenAI voice reading the answers: Marin, Cedar (both recommended by OpenAI), Alloy,
   Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
   session reconnects (~2 s) and the new voice introduces itself.
@@ -242,6 +253,8 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `ChatGPT_key` | OpenAI key (transcription, voice, GPT answers) | `sk-proj-…` |
 | `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
 | `Gemini_key` | Gemini key from Google AI Studio (Gemini answers), empty for none | `AIza…` |
+| `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models), empty for none | `sk-or-…` |
+| `OpenRouter_list` | OpenRouter models offered, comma-separated `vendor/model[=Name]` (at most 6; empty for the 3 defaults). Without a name, one is made from the id and its first word is spoken in the list | `deepseek/deepseek-v4.1-flash-1017=DeepSeek, moonshotai/kimi-k3.1-pro=Kimi` |
 | `Homey_key` | Its API key (shown in the app's settings) | |
 | `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.x.y:52199/mcp` |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`, `gemini-3.8-flash`… |
@@ -254,7 +267,7 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 
 The drive also holds **`PERSONA.TXT`**: free text always given to the assistant with every question
-(Claude, GPT and Gemini alike), kept across conversations, "Au revoir" included. For example:
+(Claude, GPT, Gemini and OpenRouter alike), kept across conversations, "Au revoir" included. For example:
 
 ```text
 You are an everyday copilot named ESP, running on an ESP32-S3-BX3. Be direct, efficient, and dynamic. Always get straight to the point, favoring short, clear answers that work well spoken aloud. Your tone is warm, natural, and relaxed—like a sharp colleague who solves problems without giving long speeches.
@@ -362,11 +375,11 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 | Change the language (asks "Quelle langue voulez-vous ? Français ou anglais ?") | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
 | Answer to that question (within 30 s after it) | français · anglais · "en anglais s'il te plaît"… | French · English |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
-| Change the model (asks the provider first: "Quel fournisseur voulez-vous : Anthropic, OpenAI ou Google ?") | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
-| Answer to that question (within 30 s): the provider's models are then read, numbered from 1 ("Voici les modèles proposés par Google. 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini"), or directly a model name ("Sonnet") | the same |
-| Answer to the model question (within 30 s after the list) | its number in that list ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna", "Sol", "Astra", "Flash", "Flash-Lite", "Argon"; transcription variants such as "Sonnette", "Saule", "Flash light" accepted) | its number ("three", "3", "third") or its name |
+| Change the model (asks the provider first: "Quel fournisseur voulez-vous : Anthropic, OpenAI, Google ou OpenRouter ?") | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
+| Answer to that question (within 30 s): the provider's models are then read, numbered from 1 ("Voici les modèles proposés par Google. 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router"), or directly a model name ("Sonnet") | the same |
+| Answer to the model question (within 30 s after the list) | its number in that list ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna", "Sol", "Astra", "Flash", "Flash-Lite", "Argon", "DeepSeek", "Kimi", "MiniMax"; transcription variants such as "Sonnette", "Saule", "Flash light" accepted) | its number ("three", "3", "third") or its name |
 | Skip a step | change de modèle pour Google (lists Google's models) · change de modèle pour Sonnet (chooses it) | change model to Google · change model to Sonnet |
-| Change the model directly (numbered over all models, 1 to 9, as on the Settings screen) | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
+| Change the model directly (numbered over all models, as on the Settings screen; 1 to 10 can be said) | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
 | Change the voice (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
 | Answer to that question (within 30 s after the list) | its number (1 to 10: "deux", "2", "dixième"…) or its name ("Cedar", also heard as "Cèdre"; "Corail", "Écho", "Ballade", "Marine"…) | its number or its name |
 | Change the voice directly | prends la voix Cedar · utilise la voix 3 · passe à la voix Coral · mets la voix Sage · choisis la voix 2 · voix numéro 2 · la voix Cedar · change de voix pour Coral | use the voice Cedar · use voice 3 · switch to voice 2 · voice number 2 · voice Cedar |
@@ -446,6 +459,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - `[timing] final transcript … ms after the end of speech`, `[timing] first audio … ms after the transcription`
 - `claude: first text after … ms, … tokens in … (cache read …), out …`
 - `openai_chat: first text after … ms, … tokens in … (cached …), out … (reasoning …)`
+- `openrouter: first text after … ms, … finish: stop, tokens in … (cached …), out … (reasoning …)`
 - `gemini_chat: first text after … ms, … finish: STOP, tokens in … (cached …), out … (thoughts …)`
 - `tts: "…": first audio … ms, total … ms, … bytes` per sentence (24 kHz 16-bit audio: 48,000 bytes per second
   of speech; received slower than that, the speech gets cut), `tts: reply played, N underrun(s), M cut(s)

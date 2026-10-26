@@ -370,7 +370,8 @@ void assistant_set_model(const char *model)
     strlcpy(sys_param->chat_model, model, sizeof(sys_param->chat_model));
     char *prompt = build_system_prompt();
     llm_init(model, sys_param->claude_key, sys_param->key, sys_param->url,
-             sys_param->gemini_key, prompt ? prompt : app_lang_get()->system_prompt);
+             sys_param->gemini_key, sys_param->openrouter_key,
+             prompt ? prompt : app_lang_get()->system_prompt);
     free(prompt);
     llm_set_location(sys_param->country, sys_param->city);
     ui_ctrl_settings_sync();
@@ -485,7 +486,8 @@ void assistant_listen_end(void)
     t_start = esp_timer_get_time();
     tools_reset_requests();
     ui_ctrl_reply_set_logo(llm_provider() == LLM_PROVIDER_OPENAI ? UI_CTRL_LOGO_OPENAI :
-                           llm_provider() == LLM_PROVIDER_GEMINI ? UI_CTRL_LOGO_GEMINI : UI_CTRL_LOGO_CLAUDE);
+                           llm_provider() == LLM_PROVIDER_GEMINI ? UI_CTRL_LOGO_GEMINI :
+                           llm_provider() == LLM_PROVIDER_OPENROUTER ? UI_CTRL_LOGO_OPENROUTER : UI_CTRL_LOGO_CLAUDE);
     char *question = with_current_time(text);
     llm_error_t llm_err = llm_stream(question ? question : text, on_llm_text, &view, &response);
     free(question);
@@ -559,6 +561,9 @@ void app_main()
     sys_param = settings_get_parameter();
     app_lang_set(sys_param->lang);
 
+    // The OpenRouter models of CONFIG.INI, before the Settings screen lists the models
+    llm_set_openrouter_models(sys_param->openrouter_models);
+
     bsp_spiffs_mount();
     bsp_i2c_init();
 
@@ -592,7 +597,8 @@ void app_main()
     weather_places_load();
     char *system_prompt = build_system_prompt();
     llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,
-             sys_param->gemini_key, system_prompt ? system_prompt : app_lang_get()->system_prompt);
+             sys_param->gemini_key, sys_param->openrouter_key,
+             system_prompt ? system_prompt : app_lang_get()->system_prompt);
     free(system_prompt);
     llm_set_location(sys_param->country, sys_param->city);
     ESP_ERROR_CHECK(stt_stream_init());

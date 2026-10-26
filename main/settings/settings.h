@@ -18,6 +18,8 @@
 #define MODEL_SIZE 48
 #define CLAUDE_KEY_SIZE 256
 #define GEMINI_KEY_SIZE 128
+#define OPENROUTER_KEY_SIZE 128
+#define OPENROUTER_MODELS_SIZE 512
 #define VOICE_SIZE 24
 #define COUNTRY_SIZE 4
 #define CITY_SIZE 48
@@ -32,7 +34,9 @@ typedef struct {
     char lang[LANG_SIZE];             /* Assistant language (ISO-639-1). */
     char claude_key[CLAUDE_KEY_SIZE]; /* Anthropic key, empty if not configured. */
     char gemini_key[GEMINI_KEY_SIZE]; /* Gemini key (Google AI Studio), empty if not configured. */
-    char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude or GPT). */
+    char openrouter_key[OPENROUTER_KEY_SIZE];       /* OpenRouter key, empty if not configured. */
+    char openrouter_models[OPENROUTER_MODELS_SIZE]; /* "id[=Name], ..." offered, "" for the defaults. */
+    char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude, GPT, Gemini or OpenRouter). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
     char voice[VOICE_SIZE];           /* OpenAI voice reading the answers (marin, cedar...). */

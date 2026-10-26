@@ -13,7 +13,6 @@
 /* WAV header + RECORD_MAX_S seconds of 16 kHz mono 16-bit audio */
 #define FILE_SIZE           (44 + RECORD_MAX_S * 16000 * 2)
 #define MAX_FILE_SIZE       (1*1024*1024)
-#define RECORD_NAME         "/spiffs/record.wav"
 
 typedef struct {
     // The "RIFF" chunk descriptor

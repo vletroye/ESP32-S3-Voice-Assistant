@@ -51,10 +51,6 @@ menu "TinyUF2 Config"
         string "Product ID"
         depends on ENABLE_UF2_FLASHING
         default "12345678"
-    config UF2_INDEX_URL
-        string "Product URL"
-        depends on ENABLE_UF2_FLASHING
-        default "https://products.espressif.com/"
     config UF2_INI_FILE_SIZE
         int "UF2 NVS ini file size"
         depends on ENABLE_UF2_FLASHING

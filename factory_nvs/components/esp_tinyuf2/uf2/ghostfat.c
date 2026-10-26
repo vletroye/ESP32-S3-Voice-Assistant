@@ -143,24 +143,6 @@ STATIC_ASSERT(FAT_ENTRIES_PER_SECTOR                       ==       256); // FAT
 #define UF2_SECTOR_COUNT                (_flash_size / UF2_FIRMWARE_BYTES_PER_SECTOR)
 #define UF2_BYTE_COUNT                  (UF2_SECTOR_COUNT * BPB_SECTOR_SIZE) // always a multiple of sector size, per UF2 spec
 
-const char infoUf2File[] =
-    "APP Name: " UF2_APP_NAME "\r\n"
-    "APP Version: " UF2_APP_VERSION "\r\n"
-    "SDK version: " UF2_GIT_IDF_VERSIONS "\r\n"
-    "Model: " UF2_PRODUCT_NAME "\r\n"
-    "Board-ID: " UF2_SERIAL_NUM "\r\n"
-    "Date: " COMPILE_DATE "\r\n";
-
-const char indexFile[] =
-    "<!doctype html>\n"
-    "<html>"
-    "<body>"
-    "<script>\n"
-    "location.replace(\"" UF2_INDEX_URL "\");\n"
-    "</script>"
-    "</body>"
-    "</html>\n";
-
 #ifdef TINYUF2_FAVICON_HEADER
 #include TINYUF2_FAVICON_HEADER
 const char autorunFile[] = "[Autorun]\r\nIcon=FAVICON.ICO\r\n";
@@ -168,8 +150,9 @@ const char autorunFile[] = "[Autorun]\r\nIcon=FAVICON.ICO\r\n";
 
 // size of CURRENT.UF2:
 static FileContent_t info[] = {
-    {.name = "INFO_UF2TXT", .content = infoUf2File, .size = sizeof(infoUf2File) - 1},
-    {.name = "INDEX   HTM", .content = indexFile, .size = sizeof(indexFile) - 1},
+    // [Voice assistant] INFO_UF2.TXT and INDEX.HTM of TinyUF2 left out (no use here): unnamed, so not listed
+    {.name = "", .content = NULL, .size = 0  },
+    {.name = "", .content = NULL, .size = 0  },
     {.name = "CONFIG  INI", .content = NULL, .size = 0  },
     {.name = "PERSONA TXT", .content = NULL, .size = 0  },
     {.name = "MEMORY  TXT", .content = NULL, .size = 0  },
@@ -183,8 +166,9 @@ static FileContent_t info[] = {
     {.name = "AUTORUN INF", .content = autorunFile, .size = sizeof(autorunFile) - 1},
     {.name = "FAVICON ICO", .content = favicon_data, .size = favicon_len            },
 #endif
-    // current.uf2 must be the last element and its content must be NULL
-    {.name = "CURRENT UF2", .content = NULL, .size = 0                       },
+    // current.uf2 must be the last element and its content must be NULL. [Voice assistant] Not listed: no firmware
+    // is read nor written through the drive (no OTA partition given), it is only the free space after the files
+    {.name = "", .content = NULL, .size = 0                       },
 };
 
 enum {

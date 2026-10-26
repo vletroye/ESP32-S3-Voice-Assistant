@@ -1,18 +1,23 @@
-## TinyUF2 NVS: Adding USB capabilities to ESP-Box
+# Configuration mode of the voice assistant
 
-This standalone project provides support for dumping NVS key-value pairs, allowing users to access and modify the NVS data. They can retrieve the NVS data, make necessary changes, and write the updated values back to the NVS using.
+This project is the **configuration mode** of the assistant: a second firmware, in the `ota_0` partition, that
+the assistant switches to (first start, "édite la config", Configuration screen, factory reset). The BOX then
+shows up on the PC as a USB drive named "ESP-BOX" holding `CONFIG.INI`, `PERSONA.TXT`, `MEMORY.TXT`,
+`AGENTS.INI`, `VOICE_FR.TXT`, `VOICE_EN.TXT` and, after a factory reset, `CONFIG.BKP`. Edit them, save, wait a
+few seconds, then press **Restart** on the screen.
 
-## Build
+`components/esp_tinyuf2` is a copy of Espressif's `esp_tinyuf2` 1.2.0 component, extended for these files
+(comments kept, files that can grow, files of SPIFFS); firmware updates through the drive are not used.
 
-Run `idf.py build` to build and flash the project.
+The default values of a new `CONFIG.INI` come from the assistant's `sdkconfig` (`main/Kconfig.projbuild`): build
+the assistant first, then this project.
 
-## Flash 
-
-Since this project functions as a "factory app" for chatgpt_demo, we exclusively employ the "esptool" to flash the binaries. Checkout the [partition table](../partitions.csv)
+## Build and flash
 
 ```bash
-python -m esptool -p /dev/ttyACM0 --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m 0x700000 build/factory_nvs.bin
-
+idf.py build
+python -m esptool --chip esp32s3 -p COM3 write_flash 0x700000 build/factory_nvs.bin
 ```
 
-Check the [original implementation of Tinyuf2](https://github.com/espressif/esp-iot-solution/tree/master/components/usb/esp_tinyuf2) for more information. For more details of follow the [chatgpt_demo](../README.md) project. 
+`idf.py flash` in the assistant's folder also writes it. See the [main README](../README.md) for the keys of
+`CONFIG.INI` and the files of the drive.

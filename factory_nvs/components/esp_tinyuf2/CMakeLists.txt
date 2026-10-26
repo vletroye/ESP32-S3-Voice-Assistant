@@ -63,19 +63,5 @@ else()
     add_compile_definitions(UF2_GIT_IDF_VERSIONS="${GIT_IDF_VERSIONS}")
 endif()
 
-get_filename_component(UF2_UTILS_PATH "./utils" ABSOLUTE)
-set(ENV{UF2_UTILS_PATH} ${UF2_UTILS_PATH})
-
-if (NOT TARGET uf2_ota)
-add_custom_target (
-    uf2-ota
-    COMMAND ${CMAKE_COMMAND} -E echo "transforming ${project_bin} to ${project_name}.uf2"
-    COMMAND ${PYTHON} $ENV{UF2_UTILS_PATH}/uf2conv.py "${BUILD_DIR}/${project_bin}" -c -b 0x00 -f ${IDF_TARGET} -o "${PROJECT_DIR}/${project_name}.uf2"
-    COMMAND ${CMAKE_COMMAND} -E echo "transforming done"
-    DEPENDS gen_project_binary
-    VERBATIM USES_TERMINAL
-)
-endif()
-
 include(package_manager)
 cu_pkg_define_version(${CMAKE_CURRENT_LIST_DIR})

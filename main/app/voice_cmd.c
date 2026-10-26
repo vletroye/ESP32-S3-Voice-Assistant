@@ -20,6 +20,7 @@
 #include "assistant.h"
 #include "tts_stream.h"
 #include "app_ui_ctrl.h"
+#include "driver/usb_serial_jtag.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -71,6 +72,26 @@ static const char *const s_new_conversation[] = {
     "on change de sujet", "changement de sujet", "let s start a new conversation", "start a new conversation",
     "new conversation", "new chat", "i have another question", "another question", "let s move on",
     "let s talk about something else", "let s change the subject", "change of subject", NULL
+};
+/* Configuration files (normalized: "éditer" and "editer", "la config" and "le config" as often transcribed) */
+static const char *const s_edit_config[] = {
+    "je veux éditer la configuration", "je veux éditer la config", "je veux editer la configuration",
+    "je veux editer la config", "je veux éditer le config", "je veux éditer les fichiers de configuration",
+    "je veux éditer les fichiers de config", "je veux éditer les fichier de configuration",
+    "je veux éditer les fichier de config", "je veux editer les fichiers de configuration",
+    "je veux editer les fichiers de config", "je veux modifier la configuration", "je veux modifier la config",
+    "je veux modifier les fichiers de configuration", "je veux modifier les fichiers de config",
+    "édite la configuration", "édite la config", "édite le configuration", "édite le config",
+    "édite les fichiers de configuration", "édite les fichiers de config", "édite les fichier de configuration",
+    "édite les fichier de config", "edite la configuration", "edite la config", "edite le config",
+    "edite les fichiers de configuration", "edite les fichiers de config", "éditer la configuration",
+    "éditer la config", "éditer les fichiers de configuration", "éditer les fichiers de config",
+    "modifie la configuration", "modifie la config", "modifie les fichiers de configuration",
+    "modifie les fichiers de config", "ouvre les fichiers de configuration", "ouvre les fichiers de config",
+    "ouvre la configuration", "ouvre la config", "mode configuration", "passe en mode configuration",
+    "i want to edit the configuration", "i want to edit the config", "edit the configuration", "edit the config",
+    "edit the configuration files", "edit the config files", "open the configuration files",
+    "open the config files", "configuration mode", NULL
 };
 static const char *const s_open_settings[] = {
     "ouvre les paramètres", "montre les paramètres", "affiche les paramètres", "ouvre les réglages",
@@ -179,6 +200,7 @@ static const char *const s_numbers[][7] = {
 typedef enum {
     ASKED_NOTHING,
     ASKED_LANGUAGE,
+    ASKED_PROVIDER,
     ASKED_MODEL,
     ASKED_VOICE,
     ASKED_COUNTRY,
@@ -288,9 +310,79 @@ static voice_cmd_t choose_language(const char *norm, char **reply)
 static const char *const s_one_alone[] = { "un", "une", "le un", "le une", "numéro un", "numero un", "le numéro un",
                                            NULL };
 
-/* Model number (1-based) said in the text: a word of the model's name ("sonnet"), else a number; 0 if none */
-static int find_model(const char *norm)
+/* Providers as they may be said (normalized), by llm_provider_t; spoken as their company name */
+static const struct {
+    const char *name;
+    const char *heard[7];
+} s_providers[LLM_PROVIDER_COUNT] = {
+    [LLM_PROVIDER_CLAUDE] = { "Anthropic", { "anthropic", "anthropique", "anthropik", "claude", "clode", NULL } },
+    [LLM_PROVIDER_OPENAI] = { "OpenAI", { "openai", "open ai", "open a i", "openaï", "gpt", "chatgpt", "chat gpt" } },
+    [LLM_PROVIDER_GEMINI] = { "Google", { "google", "gougle", "gemini", "gémini", "jemini", NULL } },
+};
+
+/* Provider named in the text, LLM_PROVIDER_COUNT if none */
+static llm_provider_t find_provider(const char *norm)
 {
+    for (int p = 0; p < LLM_PROVIDER_COUNT; p++) {
+        for (size_t i = 0; i < 7 && s_providers[p].heard[i]; i++) {
+            if (has_word(norm, s_providers[p].heard[i])) {
+                return (llm_provider_t)p;
+            }
+        }
+    }
+    return LLM_PROVIDER_COUNT;
+}
+
+/* Provider whose models were listed last: the numbers said next count within its models */
+static llm_provider_t s_listed_provider = LLM_PROVIDER_COUNT;
+
+/* Models of a provider (all for LLM_PROVIDER_COUNT) */
+static bool model_listed(size_t i, llm_provider_t provider)
+{
+    return provider == LLM_PROVIDER_COUNT || llm_provider_of(llm_models[i].id) == provider;
+}
+
+static int model_count(llm_provider_t provider)
+{
+    int count = 0;
+    for (size_t i = 0; i < llm_model_count; i++) {
+        count += model_listed(i, provider);
+    }
+    return count;
+}
+
+/* Short names of the models as the transcription may write them (normalized) */
+static const struct {
+    const char *model;
+    const char *heard[4];
+} s_model_heard[] = {
+    { "claude-haiku-5-5", { "haïku", "aïku", "aiku", NULL } },
+    { "claude-sonnet-5-5", { "sonnette", "sonate", "sonnets", NULL } },
+    { "claude-opus-5-5", { "opusse", "obus", NULL } },
+    { "gpt-6-luna", { "lune", "lunar", NULL } },
+    { "gpt-6.1-sol", { "sole", "saule", "soul", NULL } },
+    { "gpt-6-astra", { "astrat", "astro", NULL } },
+    { "gemini-3.5-flash-lite", { "flash light", "flashlight", "flash lait", NULL } },
+    { "gemini-3.8-flash", { "flache", "flasch", NULL } },
+    { "gemini-4-argon", { "argonne", "argone", NULL } },
+};
+
+/* Model number (1-based, in llm_models) named in the text by a word of its name ("sonnet"); 0 if none */
+static int find_model_name(const char *norm)
+{
+    // Transcription variants first ("flash light" must not be taken for Flash)
+    for (size_t h = 0; h < sizeof(s_model_heard) / sizeof(s_model_heard[0]); h++) {
+        for (size_t k = 0; k < 4 && s_model_heard[h].heard[k]; k++) {
+            if (!has_word(norm, s_model_heard[h].heard[k])) {
+                continue;
+            }
+            for (size_t i = 0; i < llm_model_count; i++) {
+                if (strcmp(llm_models[i].id, s_model_heard[h].model) == 0) {
+                    return (int)i + 1;
+                }
+            }
+        }
+    }
     // Names: the words of the label made of letters only, except the provider ("haiku", "sonnet", "sol"...).
     // The model with the most of its words said wins: "flash lite" is Flash-Lite, "flash" alone is Flash.
     int best = 0, best_hits = 0, best_words = 0;
@@ -315,19 +407,36 @@ static int find_model(const char *norm)
             best_words = words;
         }
     }
-    if (best) {
-        return best;
+    return best;
+}
+
+/*
+ * Model (1-based, in llm_models) said in the text: its name, else its number among the models of the
+ * provider (all models for LLM_PROVIDER_COUNT); 0 if none
+ */
+static int find_model(const char *norm, llm_provider_t provider)
+{
+    int named = find_model_name(norm);
+    if (named) {
+        return named;
     }
-    for (const char *const *one = s_one_alone; *one; one++) {
+    int number = 0;
+    for (const char *const *one = s_one_alone; *one && !number; one++) {
         if (strcmp(norm, *one) == 0) {
-            return 1;
+            number = 1;
         }
     }
-    for (size_t i = 0; i < sizeof(s_numbers) / sizeof(s_numbers[0]); i++) {
+    for (size_t i = 0; i < sizeof(s_numbers) / sizeof(s_numbers[0]) && !number; i++) {
         for (size_t j = 0; j < sizeof(s_numbers[0]) / sizeof(s_numbers[0][0]) && s_numbers[i][j]; j++) {
             if (has_word(norm, s_numbers[i][j])) {
-                return (int)i + 1 <= (int)llm_model_count ? (int)i + 1 : 0;
+                number = (int)i + 1;
+                break;
             }
+        }
+    }
+    for (size_t i = 0; i < llm_model_count && number; i++) {
+        if (model_listed(i, provider) && --number == 0) {
+            return (int)i + 1;
         }
     }
     return 0;
@@ -348,8 +457,8 @@ static bool is_model_only(const char *rest)
     return false;
 }
 
-/* "Voici les modèles disponibles. 1, Haiku, celui que j'utilise. 2, Sonnet. ... Dites son numéro." */
-static char *model_list(void)
+/* "Voici les modèles proposés par Anthropic. 1, Haiku, celui que j'utilise. 2, Sonnet. ... Dites son numéro." */
+static char *model_list(llm_provider_t provider)
 {
     const app_lang_t *lang = app_lang_get();
     const char *current = settings_get_parameter()->chat_model;
@@ -357,10 +466,14 @@ static char *model_list(void)
     if (!out) {
         return NULL;
     }
-    strlcpy(out, lang->model_ask_intro, CMD_REPLY_SIZE);
+    snprintf(out, CMD_REPLY_SIZE, lang->model_ask_intro, s_providers[provider].name);
+    unsigned number = 0;
     for (size_t i = 0; i < llm_model_count; i++) {
+        if (!model_listed(i, provider)) {
+            continue;
+        }
         size_t n = strlen(out);
-        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", (unsigned)(i + 1), llm_models[i].spoken,
+        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", ++number, llm_models[i].spoken,
                  strcmp(llm_models[i].id, current) == 0 ? lang->model_current : "");
     }
     strlcat(out, " ", CMD_REPLY_SIZE);
@@ -368,13 +481,33 @@ static char *model_list(void)
     return out;
 }
 
-static voice_cmd_t choose_model(const char *norm, char **reply)
+/* The models of the provider, numbered, then "which one?" (answered within CMD_ANSWER_TIMEOUT_US) */
+static voice_cmd_t ask_model(llm_provider_t provider, char **reply)
+{
+    s_listed_provider = provider;
+    s_asked = ASKED_MODEL;
+    s_asked_us = esp_timer_get_time();
+    *reply = model_list(provider);
+    return VOICE_CMD_ANSWERED;
+}
+
+/* "Anthropic, OpenAI ou Google ?" (a model may also be named directly in the answer) */
+static voice_cmd_t ask_provider(char **reply)
+{
+    s_asked = ASKED_PROVIDER;
+    s_asked_us = esp_timer_get_time();
+    *reply = reply_dup(app_lang_get()->provider_ask);
+    return VOICE_CMD_ANSWERED;
+}
+
+/* Numbers count within the models of the provider (all models for LLM_PROVIDER_COUNT) */
+static voice_cmd_t choose_model(const char *norm, llm_provider_t provider, char **reply)
 {
     const app_lang_t *lang = app_lang_get();
-    int number = find_model(norm);
+    int number = find_model(norm, provider);
     char *text = NULL;
     if (number == 0) {
-        asprintf(&text, lang->model_unknown, (int)llm_model_count);
+        asprintf(&text, lang->model_unknown, model_count(provider));
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
@@ -385,7 +518,7 @@ static voice_cmd_t choose_model(const char *norm, char **reply)
         return VOICE_CMD_ANSWERED;
     }
     if (settings_save_str("Chat_model", model->id) != ESP_OK) {
-        asprintf(&text, lang->model_unknown, (int)llm_model_count);
+        asprintf(&text, lang->model_unknown, model_count(provider));
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
@@ -643,8 +776,22 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     if (recent && asked == ASKED_LANGUAGE) {
         return choose_language(norm, reply);
     }
+    if (recent && asked == ASKED_PROVIDER) {
+        // A model may be named at once ("Sonnet"); else the provider's models are listed
+        if (find_model_name(norm)) {
+            return choose_model(norm, LLM_PROVIDER_COUNT, reply);
+        }
+        llm_provider_t provider = find_provider(norm);
+        if (provider == LLM_PROVIDER_COUNT) {
+            s_asked = ASKED_PROVIDER;   // asked again
+            s_asked_us = esp_timer_get_time();
+            *reply = reply_dup(app_lang_get()->provider_unknown);
+            return VOICE_CMD_ANSWERED;
+        }
+        return ask_model(provider, reply);
+    }
     if (recent && asked == ASKED_MODEL) {
-        return choose_model(norm, reply);
+        return choose_model(norm, s_listed_provider, reply);
     }
     if (recent && asked == ASKED_VOICE) {
         return choose_voice(norm, reply);
@@ -691,14 +838,13 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         return VOICE_CMD_ANSWERED;
     }
     if (starts_with(norm, s_change_model, &len)) {
-        // "Change de modèle pour le 3": the model may already be given
-        if (find_model(norm + len)) {
-            return choose_model(norm + len, reply);
+        // "Change de modèle pour Sonnet" / "pour le 3": the model may already be given (numbers over all
+        // models), "change de modèle pour Google": its models are listed; else the provider is asked first
+        if (find_model(norm + len, LLM_PROVIDER_COUNT)) {
+            return choose_model(norm + len, LLM_PROVIDER_COUNT, reply);
         }
-        s_asked = ASKED_MODEL;
-        s_asked_us = esp_timer_get_time();
-        *reply = model_list();
-        return VOICE_CMD_ANSWERED;
+        llm_provider_t provider = find_provider(norm + len);
+        return provider == LLM_PROVIDER_COUNT ? ask_provider(reply) : ask_model(provider, reply);
     }
     if (starts_with(norm, s_change_voice, &len)) {
         // "Change de voix pour Cedar": the voice may already be given
@@ -709,6 +855,15 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         s_asked_us = esp_timer_get_time();
         *reply = voice_list();
         return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, s_edit_config, NULL)) {
+        // The files appear as a USB drive on the PC: without a PC (SOF packets from a host), nothing to show them
+        if (!usb_serial_jtag_is_connected()) {
+            *reply = reply_dup(app_lang_get()->config_need_pc);
+            return VOICE_CMD_ANSWERED;
+        }
+        *reply = reply_dup(app_lang_get()->config_opening);
+        return VOICE_CMD_EDIT_CONFIG;
     }
     if (starts_with(norm, s_open_settings, NULL)) {
         return VOICE_CMD_OPEN_SETTINGS;     // shown at once, nothing spoken
@@ -730,7 +885,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         return choose_language(norm + len, reply);
     }
     if (starts_with(norm, s_model_shortcut, &len) && is_model_only(norm[len] ? norm + len + 1 : norm + len)) {
-        return choose_model(norm + len, reply);
+        return choose_model(norm + len, LLM_PROVIDER_COUNT, reply);
     }
     if (starts_with(norm, s_voice_shortcut, &len) && is_voice_only(norm[len] ? norm + len + 1 : norm + len)) {
         return choose_voice(norm + len, reply);

@@ -59,6 +59,9 @@ static int64_t s_reply_t0 = 0;
 static bool homey_loaded = false;
 /* From the start of an answer until it has been spoken or interrupted (no flash write meanwhile) */
 static volatile bool s_reply_active = false;
+/* "Édite la config": configuration mode once the reply has been spoken (set by the reply, done by the main task) */
+static volatile bool s_config_after_reply = false;
+static volatile bool s_config_requested = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -211,6 +214,11 @@ static void on_reply_audio(tts_event_t event)
         ui_ctrl_reply_append_notice(app_lang_get()->voice_choppy);
     }
     voice_cmd_reply_spoken();
+    if (s_config_after_reply) {
+        s_config_after_reply = false;
+        s_config_requested = true;      // the main task saves and restarts
+        return;
+    }
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();
     if (record_flag) {
@@ -439,6 +447,7 @@ void assistant_listen_end(void)
         llm_reset();
     }
     if (voice_cmd != VOICE_CMD_NONE && voice_cmd != VOICE_CMD_NEW_CONVERSATION_ASK) {
+        s_config_after_reply = (voice_cmd == VOICE_CMD_EDIT_CONFIG);
         speak_message(cmd_reply ? cmd_reply : "");
         free(cmd_reply);
         goto err;
@@ -606,6 +615,15 @@ void app_main()
             } else {
                 homey_retry_s = 60;
             }
+        }
+        // "Édite la config": the conversation and the volume are saved, then configuration mode (USB drive)
+        if (s_config_requested) {
+            s_config_requested = false;
+            ESP_LOGI(TAG, "Restarting in configuration mode");
+            llm_history_save();
+            app_volume_save();
+            weather_places_save();
+            settings_factory_reset();
         }
         // Language or model changed from the Settings screen
         if (s_language_requested) {

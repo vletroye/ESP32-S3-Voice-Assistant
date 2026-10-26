@@ -41,7 +41,9 @@ typedef struct {
     const char *lang_unknown;
     const char *lang_switched;      /* spoken in the new language, before the restart */
     /* Model changed by voice ("change de modèle"): the list of numbered models, then the choice */
-    const char *model_ask_intro;
+    const char *provider_ask;       /* "change de modèle": which provider first */
+    const char *provider_unknown;
+    const char *model_ask_intro;    /* %s: provider ("Anthropic"), its numbered models follow */
     const char *model_current;      /* after the current model in the list */
     const char *model_ask_question;
     const char *model_already;      /* %s: model name */
@@ -61,6 +63,8 @@ typedef struct {
     const char *place_saved;
     const char *place_cancelled;
     const char *location_line;      /* in the instructions, %s: "Evere, BE" */
+    const char *config_need_pc;     /* "édite la config" without a PC connected */
+    const char *config_opening;     /* "édite la config": restarting in configuration mode */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
     const char *home_line;          /* in the instructions when a Homey is set: ask it, do not answer from memory */

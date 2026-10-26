@@ -3,7 +3,8 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Chat model answering the questions: Claude (Anthropic) or GPT (OpenAI), chosen by the model id.
+ * Chat model answering the questions: Claude (Anthropic), GPT (OpenAI) or Gemini (Google), chosen by the
+ * model id.
  */
 
 #pragma once
@@ -19,6 +20,7 @@ extern "C" {
 typedef enum {
     LLM_PROVIDER_CLAUDE = 0,
     LLM_PROVIDER_OPENAI,
+    LLM_PROVIDER_GEMINI,
     LLM_PROVIDER_COUNT,
 } llm_provider_t;
 
@@ -46,17 +48,18 @@ typedef void (*llm_text_cb_t)(const char *delta, void *ctx);
 typedef struct {
     const char *id;         /* API model id */
     const char *label;      /* Name shown in the list */
-    const char *effort;     /* Claude output_config.effort / OpenAI reasoning.effort, NULL for the default */
+    const char *effort;     /* Claude output_config.effort / OpenAI reasoning.effort / Gemini thinkingLevel,
+                               NULL for the default */
     const char *spoken;     /* Short name in the spoken list of models ("Haiku") */
 } llm_model_t;
 
 extern const llm_model_t llm_models[];
 extern const size_t llm_model_count;
 
-/** Provider serving a model id ("gpt-..." and "o<digit>..." are OpenAI, anything else Claude) */
+/** Provider serving a model id ("gpt-..." and "o<digit>..." are OpenAI, "gemini-..." Google, anything else Claude) */
 llm_provider_t llm_provider_of(const char *model);
 
-/** Provider name as said to the user ("Claude", "GPT") */
+/** Provider name as said to the user ("Claude", "GPT", "Gemini") */
 const char *llm_provider_name(llm_provider_t provider);
 
 /**
@@ -66,10 +69,11 @@ const char *llm_provider_name(llm_provider_t provider);
  * @param claude_key      Anthropic key (may be empty when a GPT model is used)
  * @param openai_key      OpenAI key
  * @param openai_base_url OpenAI base URL ending with '/', e.g. "https://api.openai.com/v1/"
+ * @param gemini_key      Gemini key (may be empty when no Gemini model is used)
  * @param system_prompt   Instructions sent with every request
  */
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
-                   const char *system_prompt);
+                   const char *gemini_key, const char *system_prompt);
 
 /** Replace the instructions (e.g. after a note was remembered); the conversation is kept */
 void llm_set_system_prompt(const char *system_prompt);

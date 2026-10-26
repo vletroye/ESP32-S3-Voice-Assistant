@@ -17,6 +17,7 @@
 #define LANG_SIZE 8
 #define MODEL_SIZE 48
 #define CLAUDE_KEY_SIZE 256
+#define GEMINI_KEY_SIZE 128
 #define VOICE_SIZE 24
 #define COUNTRY_SIZE 4
 #define CITY_SIZE 48
@@ -30,6 +31,7 @@ typedef struct {
     char url[URL_SIZE];               /* OpenAI Base url. */
     char lang[LANG_SIZE];             /* Assistant language (ISO-639-1). */
     char claude_key[CLAUDE_KEY_SIZE]; /* Anthropic key, empty if not configured. */
+    char gemini_key[GEMINI_KEY_SIZE]; /* Gemini key (Google AI Studio), empty if not configured. */
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude or GPT). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */

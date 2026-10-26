@@ -183,6 +183,8 @@ void app_main(void)
             ESP_LOGI(TAG, "removed obsolete key Claude_model");
         }
         nvs_init_str_if_missing("Claude_key", CONFIG_ANTHROPIC_API_KEY);
+        // Gemini key (Google AI Studio), for the gemini-... models
+        nvs_init_str_if_missing("Gemini_key", "");
         // Reading speed of the answer on screen, in characters per second
         char scroll_speed[8];
         snprintf(scroll_speed, sizeof(scroll_speed), "%d", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);

@@ -1,7 +1,7 @@
-# ESP32-S3-BOX-3 Voice Assistant (Claude / GPT)
+# ESP32-S3-BOX-3 Voice Assistant (Claude / GPT / Gemini)
 
 A voice assistant that runs entirely on an **ESP32-S3-BOX-3**, with no intermediate server: wake it up by
-saying "**Bonjour ESP**", ask your question, and **Claude** (or **GPT**) answers out loud.
+saying "**Bonjour ESP**", ask your question, and **Claude** (or **GPT**, or **Gemini**) answers out loud.
 Everything is streamed (transcription, answer, speech synthesis): the answer starts playing about
 **2.5 s** after the end of the question.
 
@@ -20,7 +20,8 @@ which has been largely rewritten.
   language and model commands, errors) and prefixed with the model id
   (`[claude-haiku-5-5] …`).
 - **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
-  (Anthropic) or GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI); French or English; 10 OpenAI voices. The
+  (Anthropic), GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI) or Gemini 3.5 Flash-Lite, Gemini 3.8 Flash,
+  Gemini 4 Argon (Google); French or English; 10 OpenAI voices. The
   language, the model and the voice can also be changed **by voice** ("Change la langue", "Utilise le modèle
   3", "Prends la voix Cedar"); all apply at once, without restarting.
 - **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays", "Change ma ville"):
@@ -84,6 +85,7 @@ flowchart LR
 | Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output streamed continuously |
 | Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
 | Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
+| Answer (Gemini) | Gemini API `streamGenerateContent?alt=sse` | `thinkingLevel` `minimal` (Flash-Lite) or `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Speech synthesis | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice chosen in Settings (default `marin`) | Permanent WebSocket, one response per sentence, read verbatim |
 | Playback | local | 24 → 16 kHz resampling, I2S fixed at 16 kHz (shared with the mics) |
 
@@ -101,6 +103,9 @@ transcription and voice) and opened while the user is still speaking.
 | `gpt-6.1-sol` | OpenAI | $2 / $10 | $3 + reasoning | ★★☆ | light (always some reasoning) | reasoning effort `low` |
 | `claude-opus-5-5` | Anthropic | $4 / $20 | $6 + thinking | ★☆☆ | adaptive (cannot be disabled; thinks when the question needs it) | thinking left to the model, effort `low` |
 | `gpt-6-astra` | OpenAI | $10 / $50 | $15 + reasoning | ★☆☆ slowest | light, on the most capable OpenAI model | reasoning effort `low` |
+| `gemini-3.5-flash-lite` | Google | see Google's pricing | | ★★★ (expected) | minimal | `thinkingLevel` `minimal` |
+| `gemini-3.8-flash` | Google | see Google's pricing | | ★★☆ (expected) | light | `thinkingLevel` `low` |
+| `gemini-4-argon` | Google | see Google's pricing | | ★☆☆ (expected) | light, on Google's flagship reasoning model | `thinkingLevel` `low` |
 
 How to read this table:
 
@@ -109,7 +114,10 @@ How to read this table:
   and GPT-6 Astra (larger models that reason before answering). Measured on the device: Haiku 5.5 0.7 to 1.6 s
   (see the latencies below), GPT-6 Luna 4 to 9 s despite no reasoning (time spent waiting on OpenAI's side);
   the other ratings are expected, not measured.
-- **Tools** (weather, volume, web search) are offered to the Claude models only.
+- **Tools** (weather, volume, web search, Homey) are offered to the Claude models only; GPT and Gemini answer
+  from their own knowledge.
+- **Gemini** prices are not listed here: check Google's pricing page (the free tier of Google AI Studio has
+  usage limits; past them, Gemini answers "limite d'utilisation atteinte").
 - **Deepest reasoning**: Opus 5.5 and GPT-6 Astra are the most capable models and the only ones that really
   think before answering; GPT-6.1 Sol reasons a little; Haiku 5.5, GPT-6 Luna and Sonnet 5.5 answer directly.
   For short spoken answers, the fast models are usually enough; the larger ones help with tricky questions
@@ -141,7 +149,7 @@ The list lives in `main/app/llm.c` (`llm_models[]`). Any other model id can be s
 - **ESP-IDF v5.3.6** (tested with this version; 6.x versions are not compatible as is).
 - An **OpenAI API key** (transcription and voice, and GPT answers) and, for Claude, an **Anthropic API key**
   with credit (console.anthropic.com → API Keys). API credit is separate from a Claude.ai subscription
-  and from Claude usage credits.
+  and from Claude usage credits. For Gemini, a **Gemini API key** (aistudio.google.com/apikey).
 
 ## Repository layout
 
@@ -164,6 +172,7 @@ Main modules of the assistant (`main/app/`):
 | `llm.c` | Model list and dispatch to the provider of the chosen model |
 | `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
 | `openai_chat.c` | GPT client (Responses API, SSE streaming), history |
+| `gemini_chat.c` | Gemini client (`streamGenerateContent`, SSE streaming), history kept on the device |
 | `llm_sse.c` | Server-sent events parser shared by both clients |
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
 | `tts_stream.c` | Speech synthesis (OpenAI Realtime), voice change at run time, resampling and I2S playback |
@@ -211,7 +220,8 @@ Tap the gear icon on the home screen:
 
 - **Langue / Language**: Français or English (interface, transcription, answers and voice).
 - **Modèle / Model**: the model answering the questions (see the table above), numbered as in the voice
-  command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra.
+  command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra,
+  7 Gemini 3.5 Flash-Lite, 8 Gemini 3.8 Flash, 9 Gemini 4 Argon.
 - **Voix / Voice**: the OpenAI voice reading the answers: Marin, Cedar (both recommended by OpenAI), Alloy,
   Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
   session reconnects (~2 s) and the new voice introduces itself.
@@ -231,7 +241,8 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `ChatGPT_key` | OpenAI key (transcription, voice, GPT answers) | `sk-proj-…` |
 | `Base_url` | OpenAI API URL | `https://api.openai.com/v1/` |
 | `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
-| `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
+| `Gemini_key` | Gemini key from Google AI Studio (Gemini answers), empty for none | `AIza…` |
+| `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`, `gemini-3.8-flash`… |
 | `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
 | `Voice` | Voice of the answers (also set from the Settings screen or by voice: "change de voix") | `marin`, `cedar`, `coral`… |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
@@ -243,7 +254,7 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 
 The drive also holds **`PERSONA.TXT`**: free text always given to the assistant with every question
-(Claude and GPT alike), kept across conversations, "Au revoir" included. For example:
+(Claude, GPT and Gemini alike), kept across conversations, "Au revoir" included. For example:
 
 ```text
 Tu t'appelles Jarvis. Tu es un assistant vocal créé par Valéry Letroye, sur base d'un ESP32-S3-BOX-3.
@@ -345,7 +356,7 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 | Answer to that question (within 30 s after it) | français · anglais · "en anglais s'il te plaît"… | French · English |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
 | Change the model (reads the short numbered list "1, Haiku. 2, Sonnet. …", then asks which one) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
-| Answer to that question (within 30 s after the list) | its number ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna"…) | its number ("three", "3", "third") or its name |
+| Answer to that question (within 30 s after the list) | its number ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna", "Flash", "Flash-Lite", "Argon"…) | its number ("three", "3", "third") or its name |
 | Change the model directly | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
 | Change the voice (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
 | Answer to that question (within 30 s after the list) | its number (1 to 10: "deux", "2", "dixième"…) or its name ("Cedar", also heard as "Cèdre"; "Corail", "Écho", "Ballade", "Marine"…) | its number or its name |
@@ -356,7 +367,7 @@ or "maintenant": "parle-moi de l'Angleterre en anglais", "parle plus fort" or "l
 normal questions. "Un" and
 "une" mean model 1 only when said alone (elsewhere they are articles). Answers: the confirmation ("Very well,
 I will now speak English.", spoken in the new language), "Je parle déjà français." / "J'utilise
-déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / "Dites un numéro de 1 à 6.".
+déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / ""Dites un numéro de 1 à 9.". "Flash" alone is Gemini 3.8 Flash, "Flash-Lite" Gemini 3.5 Flash-Lite.
 
 ### Settings screen
 
@@ -422,6 +433,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - `[timing] final transcript … ms after the end of speech`, `[timing] first audio … ms after the transcription`
 - `claude: first text after … ms, … tokens in … (cache read …), out …`
 - `openai_chat: first text after … ms, … tokens in … (cached …), out … (reasoning …)`
+- `gemini_chat: first text after … ms, … finish: STOP, tokens in … (cached …), out … (thoughts …)`
 - `tts: "…": first audio … ms, total … ms, … bytes` per sentence (24 kHz 16-bit audio: 48,000 bytes per second
   of speech; received slower than that, the speech gets cut), `tts: reply played, N underrun(s), M cut(s)
   mid-sentence`, `tts: Response stalled …, reconnecting`, `tools: … -> (N chars) …`

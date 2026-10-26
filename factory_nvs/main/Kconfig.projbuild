@@ -37,7 +37,7 @@ menu "Example Configuration"
         string "Default chat model"
         default "claude-haiku-5-5"
         help
-            Model (claude-... or gpt-...) written to the "Chat_model" key when it does not exist yet.
+            Model (claude-..., gpt-... or gemini-...) written to the "Chat_model" key when it does not exist yet.
     config ANTHROPIC_API_KEY
         string "Anthropic (Claude) key"
         default ""

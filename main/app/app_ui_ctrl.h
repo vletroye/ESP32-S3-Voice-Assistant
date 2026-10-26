@@ -29,6 +29,7 @@ typedef enum {
 typedef enum {
     UI_CTRL_LOGO_CLAUDE,
     UI_CTRL_LOGO_OPENAI,
+    UI_CTRL_LOGO_GEMINI,
     UI_CTRL_LOGO_WEB,
     UI_CTRL_LOGO_LOCAL,     /* answered by the device without a model (memory commands, errors) */
 } ui_ctrl_logo_t;

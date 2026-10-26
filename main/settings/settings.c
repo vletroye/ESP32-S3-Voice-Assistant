@@ -159,6 +159,12 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.claude_key[0] = '\0';
     }
 
+    // Read the Gemini key (optional)
+    len = sizeof(g_sys_param.gemini_key);
+    if (nvs_get_str(my_handle, "Gemini_key", g_sys_param.gemini_key, &len) != ESP_OK) {
+        g_sys_param.gemini_key[0] = '\0';
+    }
+
     // Read the scrolling speed of the answer (optional)
     char speed[8] = {0};
     len = sizeof(speed);
@@ -248,6 +254,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     str_trim(g_sys_param.url);
     str_trim(g_sys_param.lang);
     str_trim(g_sys_param.claude_key);
+    str_trim(g_sys_param.gemini_key);
     str_trim(g_sys_param.chat_model);
 
     ESP_LOGI(TAG, "stored ssid:%s", g_sys_param.ssid);
@@ -260,8 +267,8 @@ esp_err_t settings_read_parameter_from_nvs(void)
              g_sys_param.memory ? (int)strlen(g_sys_param.memory) : 0);
     ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s, %s", g_sys_param.lang, g_sys_param.scroll_cps,
              g_sys_param.scroll_smooth ? "smooth" : "line by line");
-    ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars)", g_sys_param.chat_model,
-             (int)strlen(g_sys_param.claude_key));
+    ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars), Gemini key: (%d chars)", g_sys_param.chat_model,
+             (int)strlen(g_sys_param.claude_key), (int)strlen(g_sys_param.gemini_key));
     return ESP_OK;
 
 err:

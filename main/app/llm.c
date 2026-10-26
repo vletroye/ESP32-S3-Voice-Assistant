@@ -16,13 +16,15 @@
 #include "llm.h"
 #include "claude_client.h"
 #include "openai_chat.h"
+#include "gemini_chat.h"
 #include "tools.h"
 
 static const char *TAG = "llm";
 
 /*
  * Latest models of each provider. Effort is kept low for a fast spoken answer: GPT-6 Luna can skip
- * reasoning ("none"), GPT-6.1 Sol and GPT-6 Astra start at "low".
+ * reasoning ("none"), GPT-6.1 Sol and GPT-6 Astra start at "low"; Gemini 3.5 Flash-Lite thinks least with
+ * "minimal", Gemini 3.8 Flash and Gemini 4 Argon start at "low".
  */
 const llm_model_t llm_models[] = {
     { "claude-haiku-5-5",  "Claude Haiku 5.5",  "low",  "Haiku" },
@@ -31,6 +33,9 @@ const llm_model_t llm_models[] = {
     { "gpt-6-luna",        "GPT-6 Luna",        "none", "Luna" },
     { "gpt-6.1-sol",       "GPT-6.1 Sol",       "low",  "Sol" },
     { "gpt-6-astra",       "GPT-6 Astra",       "low",  "Astra" },
+    { "gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite", "minimal", "Flash-Lite" },
+    { "gemini-3.8-flash",  "Gemini 3.8 Flash",  "low",  "Flash" },
+    { "gemini-4-argon",    "Gemini 4 Argon",    "low",  "Argon" },
 };
 const size_t llm_model_count = sizeof(llm_models) / sizeof(llm_models[0]);
 
@@ -51,12 +56,15 @@ llm_provider_t llm_provider_of(const char *model)
     if (strncmp(model, "gpt-", 4) == 0 || (model[0] == 'o' && isdigit((unsigned char)model[1]))) {
         return LLM_PROVIDER_OPENAI;
     }
+    if (strncmp(model, "gemini-", 7) == 0) {
+        return LLM_PROVIDER_GEMINI;
+    }
     return LLM_PROVIDER_CLAUDE;
 }
 
 const char *llm_provider_name(llm_provider_t provider)
 {
-    return provider == LLM_PROVIDER_OPENAI ? "GPT" : "Claude";
+    return provider == LLM_PROVIDER_OPENAI ? "GPT" : provider == LLM_PROVIDER_GEMINI ? "Gemini" : "Claude";
 }
 
 /* Effort of a listed model; "low" for a model only known from CONFIG.INI (accepted by every recent model) */
@@ -72,7 +80,8 @@ static const char *effort_of(const char *model)
 
 static const cJSON *history_get(void)
 {
-    return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_history() : claude_client_history();
+    return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_history() :
+           s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_history() : claude_client_history();
 }
 
 /* Reload the conversation saved for the same model (another model's history has another format) */
@@ -101,6 +110,8 @@ static void history_restore(void)
         int count = cJSON_GetArraySize(messages);
         if (s_provider == LLM_PROVIDER_OPENAI) {
             openai_chat_set_history(messages);
+        } else if (s_provider == LLM_PROVIDER_GEMINI) {
+            gemini_chat_set_history(messages);
         } else {
             claude_client_set_history(messages);
         }
@@ -148,7 +159,7 @@ void llm_history_save(void)
 }
 
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
-                   const char *system_prompt)
+                   const char *gemini_key, const char *system_prompt)
 {
     // Called again when the model is changed at run time: wait for an answer being generated
     if (s_lock) {
@@ -158,6 +169,13 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
     esp_err_t ret;
     if (s_provider == LLM_PROVIDER_OPENAI) {
         ret = openai_chat_init(openai_base_url, openai_key, model, system_prompt, effort_of(model));
+    } else if (s_provider == LLM_PROVIDER_GEMINI) {
+        if (gemini_key == NULL || gemini_key[0] == '\0') {
+            ESP_LOGW(TAG, "No Gemini_key configured for %s", model);
+            ret = ESP_ERR_INVALID_ARG;
+        } else {
+            ret = gemini_chat_init(gemini_key, model, system_prompt, effort_of(model));
+        }
     } else if (claude_key == NULL || claude_key[0] == '\0') {
         ESP_LOGW(TAG, "No Claude_key configured for %s", model);
         ret = ESP_ERR_INVALID_ARG;
@@ -188,6 +206,8 @@ void llm_set_system_prompt(const char *system_prompt)
     xSemaphoreTake(s_lock, portMAX_DELAY);
     if (s_provider == LLM_PROVIDER_OPENAI) {
         openai_chat_set_instructions(system_prompt);
+    } else if (s_provider == LLM_PROVIDER_GEMINI) {
+        gemini_chat_set_instructions(system_prompt);
     } else {
         claude_client_set_system(system_prompt);
     }
@@ -230,6 +250,7 @@ llm_error_t llm_stream(const char *text, llm_text_cb_t on_text, void *ctx, char 
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     llm_error_t err = s_provider == LLM_PROVIDER_OPENAI ? openai_chat_stream(text, on_text, ctx, full_text)
+                      : s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_stream(text, on_text, ctx, full_text)
                       : claude_client_stream(text, on_text, ctx, full_text);
     if (err == LLM_OK) {
         s_dirty = true;
@@ -245,6 +266,8 @@ void llm_prewarm(void)
     }
     if (s_provider == LLM_PROVIDER_OPENAI) {
         openai_chat_prewarm();
+    } else if (s_provider == LLM_PROVIDER_GEMINI) {
+        gemini_chat_prewarm();
     } else {
         claude_client_prewarm();
     }
@@ -258,6 +281,8 @@ void llm_reset(void)
     xSemaphoreTake(s_lock, portMAX_DELAY);
     if (s_provider == LLM_PROVIDER_OPENAI) {
         openai_chat_reset();
+    } else if (s_provider == LLM_PROVIDER_GEMINI) {
+        gemini_chat_reset();
     } else {
         claude_client_reset();
     }

@@ -291,19 +291,32 @@ static const char *const s_one_alone[] = { "un", "une", "le un", "le une", "num√
 /* Model number (1-based) said in the text: a word of the model's name ("sonnet"), else a number; 0 if none */
 static int find_model(const char *norm)
 {
-    // Names: the words of the label made of letters only, except the provider ("haiku", "sonnet", "sol"...)
+    // Names: the words of the label made of letters only, except the provider ("haiku", "sonnet", "sol"...).
+    // The model with the most of its words said wins: "flash lite" is Flash-Lite, "flash" alone is Flash.
+    int best = 0, best_hits = 0, best_words = 0;
     for (size_t i = 0; i < llm_model_count; i++) {
         char label[48];
         app_text_normalize(llm_models[i].label, label, sizeof(label));
+        int hits = 0, words = 0;
         for (char *word = strtok(label, " "); word; word = strtok(NULL, " ")) {
             bool letters = true;
             for (const char *c = word; *c; c++) {
                 letters &= !isdigit((unsigned char)*c);
             }
-            if (letters && strcmp(word, "claude") != 0 && strcmp(word, "gpt") != 0 && has_word(norm, word)) {
-                return (int)i + 1;
+            if (!letters || strcmp(word, "claude") == 0 || strcmp(word, "gpt") == 0 || strcmp(word, "gemini") == 0) {
+                continue;
             }
+            words++;
+            hits += has_word(norm, word);
         }
+        if (hits > best_hits || (hits == best_hits && hits > 0 && words < best_words)) {
+            best = (int)i + 1;
+            best_hits = hits;
+            best_words = words;
+        }
+    }
+    if (best) {
+        return best;
     }
     for (const char *const *one = s_one_alone; *one; one++) {
         if (strcmp(norm, *one) == 0) {

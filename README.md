@@ -318,8 +318,11 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 
 ## Usage
 
+0. At start-up, once the Wi-Fi is connected, a welcome screen shows the steps; its button at the bottom right
+   counts down from 60 and closes it at 0 (tap it, or say "Bonjour ESP", to close it at once).
 1. Say "**Bonjour ESP**" (beep), then ask your question ("J'écoute …" is shown while you speak).
-2. After 0.9 s of silence the question is sent; the answer is shown and spoken.
+2. After 0.9 s of silence the question is sent: "Entendu …" is shown until its transcript arrives
+   (0.7 to 1.2 s), then "Je réfléchis …" until the answer starts; the answer is shown and spoken.
 3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP"
    (not after a volume change, which sends it back to sleep).
 4. To interrupt an answer, say "Bonjour ESP" again or **double-tap** the screen: it stops and listens.
@@ -463,11 +466,12 @@ I will now speak English.", spoken in the new language), "Je parle déjà franç
 déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / "Je n'ai pas compris. Dites Anthropic, OpenAI ou Google." / "Dites un numéro
 de 1 à 3, ou le nom du modèle.". "Flash" alone is Gemini 3.8 Flash, "Flash-Lite" Gemini 3.5 Flash-Lite.
 
-### Settings screen and configuration files
+### Settings screen, configuration files, restart
 
 | French | English | Effect |
 | --- | --- | --- |
 | ouvre les paramètres · montre les paramètres · affiche les paramètres · ouvre les réglages · montre les réglages · affiche les réglages · va dans les paramètres · va dans les réglages | open the settings · show the settings · open settings · show settings · display the settings · go to the settings | The Settings screen is shown at once, without a spoken reply (no follow-up listening) |
+| redémarre · redémarre-toi · relance · relance-toi · fais un redémarrage · lance un redémarrage · redémarrage (alone, or with "s'il te plaît") | restart · restart yourself · reboot · reboot yourself (alone, or with "please") | "D'accord, je redémarre.", then the conversation, the volume and the town cache are saved, the speaker is switched off and the device restarts (section `[s_restart]`) |
 | je veux éditer la config / la configuration / les fichiers de config(uration) · édite la config / le config / les fichiers de configuration · je veux modifier la config · modifie la configuration · ouvre la config · ouvre les fichiers de configuration · passe en mode configuration · mode configuration | I want to edit the config · edit the configuration (files) · open the config files · configuration mode | With a PC connected: "D'accord, je redémarre en mode configuration…", the conversation and the volume are saved, then the device restarts in configuration mode (CONFIG.INI, PERSONA.TXT, MEMORY.TXT on a USB drive), as with the folder icon of the Settings screen; press reset to come back. Without a PC (unplugged, charger or power bank): "Connecte-moi à ton PC." |
 
 The PC is detected by the USB start-of-frame packets a host sends every millisecond (`usb_serial_jtag_is_connected()`):

@@ -65,6 +65,7 @@ static lv_coord_t s_scroll_height = 0;
 static void reply_content_scroll_timer_handler();
 static void reply_scroll_stop(void);
 static void wifi_check_timer_handler(lv_timer_t *timer);
+static void setup_button_setup(void);
 
 static void label_localize(lv_obj_t *label, const char *text, const lv_font_t *font)
 {
@@ -448,6 +449,7 @@ void ui_ctrl_init(void)
 
     ui_init();
     ui_ctrl_localize();
+    setup_button_setup();
     app_clock_create(ui_PanelSleep, app_lang_get()->weekdays);
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
@@ -461,12 +463,64 @@ void ui_ctrl_init(void)
     bsp_display_unlock();
 }
 
+/* ---------- Welcome screen (steps): its button counts down, then closes it ---------- */
+
+#define SETUP_COUNTDOWN_S   60
+
+static lv_timer_t *s_setup_countdown = NULL;
+static int s_setup_seconds_left = 0;
+
+static void setup_countdown_stop(void)
+{
+    if (s_setup_countdown) {
+        lv_timer_del(s_setup_countdown);
+        s_setup_countdown = NULL;
+    }
+}
+
+/* The button closes the screen (tap, wake word or end of the countdown): the countdown stops */
+static void setup_button_clicked_cb(lv_event_t *e)
+{
+    setup_countdown_stop();
+}
+
+static void setup_countdown_cb(lv_timer_t *timer)
+{
+    if (--s_setup_seconds_left > 0) {
+        lv_label_set_text_fmt(ui_LabelSetupBtn, "%d", s_setup_seconds_left);
+        return;
+    }
+    // As if the button had been tapped (the timer is deleted by the click callback)
+    lv_event_send(ui_ButtonSetup, LV_EVENT_CLICKED, NULL);
+}
+
+/* Shown with the steps, once the Wi-Fi is connected */
+static void setup_countdown_start(void)
+{
+    s_setup_seconds_left = SETUP_COUNTDOWN_S;
+    lv_label_set_text_fmt(ui_LabelSetupBtn, "%d", s_setup_seconds_left);
+    setup_countdown_stop();
+    s_setup_countdown = lv_timer_create(setup_countdown_cb, 1000, NULL);
+}
+
+/* The button at the bottom right, its "OK" replaced by the countdown */
+static void setup_button_setup(void)
+{
+    lv_obj_set_align(ui_ButtonSetup, LV_ALIGN_BOTTOM_RIGHT);
+    lv_obj_set_pos(ui_ButtonSetup, -16, -16);
+    lv_label_set_text_fmt(ui_LabelSetupBtn, "%d", SETUP_COUNTDOWN_S);
+    lv_obj_add_event_cb(ui_ButtonSetup, setup_button_clicked_cb, LV_EVENT_CLICKED, NULL);
+}
+
 static void wifi_check_timer_handler(lv_timer_t *timer)
 {
     if (WIFI_STATUS_CONNECTED_OK == wifi_connected_already()) {
         lv_obj_clear_flag(ui_PanelSetupSteps, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(ui_PanelSetupWifi, LV_OBJ_FLAG_HIDDEN);
         lv_timer_del(timer);
+        if (lv_scr_act() == ui_ScreenSetup) {
+            setup_countdown_start();
+        }
         if (ui_get_btn_op_group()) {
             lv_group_remove_all_objs(ui_get_btn_op_group());
             lv_group_add_obj(ui_get_btn_op_group(), ui_ButtonSetup);
@@ -518,7 +572,8 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         hide_panel[1] = ui_PanelListen;
         hide_panel[2] = ui_PanelReply;
         lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_HIDDEN);
-        listen_label_set_text(app_lang_get()->thinking);
+        // "Entendu ..." until the transcript arrives, then "Je réfléchis ..." (main.c)
+        listen_label_set_text(app_lang_get()->heard);
         // The next answer starts at the top
         reply_scroll_stop();
         lv_obj_scroll_to_y(ui_ContainerReplyContent, 0, LV_ANIM_OFF);

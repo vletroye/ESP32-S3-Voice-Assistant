@@ -11,6 +11,7 @@
  *   "utilise la voix 2" (the confirmation is spoken with the new voice);
  * - country and town: "change mon pays", "change ma ville" (asked, then confirmed before saving);
  * - "ouvre les paramètres", "open the settings": the Settings screen;
+ * - "redémarre", "restart" (alone): restart the device;
  * - "je veux éditer la config", "édite les fichiers de configuration": restart in configuration mode (CONFIG.INI,
  *   PERSONA.TXT and MEMORY.TXT on a USB drive), only when a PC is connected;
  * - "nouvelle discussion", "j'ai une autre question", "passons à autre chose": the conversation starts afresh
@@ -33,6 +34,7 @@ typedef enum {
     VOICE_CMD_NEW_CONVERSATION,     /* "nouvelle discussion" alone: clear the conversation, speak the reply */
     VOICE_CMD_NEW_CONVERSATION_ASK, /* "j'ai une autre question : ..." clear the conversation, ask the model */
     VOICE_CMD_EDIT_CONFIG,  /* "édite la config" with a PC connected: speak the reply, then restart in config mode */
+    VOICE_CMD_RESTART,      /* "redémarre": speak the reply, then restart */
 } voice_cmd_t;
 
 /**

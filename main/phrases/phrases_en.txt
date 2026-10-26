@@ -53,6 +53,11 @@ change of subject
 open the config[uration] files
 configuration mode
 
+[s_restart]
+# Said alone (or with "please"): the assistant restarts
+restart[ yourself]
+reboot[ yourself]
+
 [s_open_settings]
 (open|show)[ the] settings
 display the settings

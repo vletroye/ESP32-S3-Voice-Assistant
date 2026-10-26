@@ -50,6 +50,7 @@ static PHRASE_LIST(s_voice_shortcut);
 static PHRASE_LIST(s_new_conversation);
 /* Configuration files (normalized: "éditer" and "editer", "la config" and "le config" as often transcribed) */
 static PHRASE_LIST(s_edit_config);
+static PHRASE_LIST(s_restart);
 static PHRASE_LIST(s_open_settings);
 static PHRASE_LIST(s_change_country);
 static PHRASE_LIST(s_change_city);
@@ -717,7 +718,7 @@ void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
         &s_goodbyes, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
-        &s_new_conversation, &s_edit_config, &s_open_settings, &s_change_country, &s_change_city,
+        &s_new_conversation, &s_edit_config, &s_restart, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
@@ -818,6 +819,14 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         s_asked_us = esp_timer_get_time();
         *reply = voice_list();
         return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, phrases_of(&s_restart), &len)) {
+        // Alone (or with "s'il te plaît"): "redémarre la box" or "relance la musique" are not this command
+        const char *rest = norm + len + (norm[len] == ' ');
+        if (!*rest || starts_with(rest, phrases_of(&s_courtesy), NULL)) {
+            *reply = reply_dup(app_lang_get()->restarting);
+            return VOICE_CMD_RESTART;
+        }
     }
     if (starts_with(norm, phrases_of(&s_edit_config), NULL)) {
         // The files appear as a USB drive on the PC: without a PC (SOF packets from a host), nothing to show them

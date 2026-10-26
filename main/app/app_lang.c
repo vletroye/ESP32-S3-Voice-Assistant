@@ -17,6 +17,7 @@ static const app_lang_t s_languages[] = {
     {
         .code = "fr",
         .listening = "J'écoute ...",
+        .heard = "Entendu ...",
         .thinking = "Je réfléchis ...",
         .sorry = "Désolé, je n'ai pas compris.",
         .wifi_connecting = "Connexion au Wi-Fi\n",
@@ -80,6 +81,7 @@ static const app_lang_t s_languages[] = {
                          "recherche, et ne donne pas l'actualité d'autres pays sauf s'il le demande.",
         .config_need_pc = "Connecte-moi à ton PC.",
         .config_opening = "D'accord, je redémarre en mode configuration. Les fichiers vont apparaître sur ton PC.",
+        .restarting = "D'accord, je redémarre.",
         .new_conversation = "D'accord, je t'écoute.",
         .voice_choppy = "(Connexion trop lente : la voix n'a pas pu être lue de façon fluide.)",
         .home_line = "Pour toute question sur la maison (pièces, appareils, leur état, ambiances, flows, présence, "
@@ -154,6 +156,7 @@ static const app_lang_t s_languages[] = {
     {
         .code = "en",
         .listening = "Listening ...",
+        .heard = "Got it ...",
         .thinking = "Thinking ...",
         .sorry = "Sorry, I can't understand.",
         .wifi_connecting = "Connecting to Wi-Fi\n",
@@ -213,6 +216,7 @@ static const app_lang_t s_languages[] = {
                          "not give news from other countries unless asked.",
         .config_need_pc = "Connect me to your PC.",
         .config_opening = "All right, I'm restarting in configuration mode. The files will appear on your PC.",
+        .restarting = "All right, I'm restarting.",
         .new_conversation = "All right, I'm listening.",
         .voice_choppy = "(Connection too slow: the speech could not be played smoothly.)",
         .home_line = "For any question about the home (rooms, devices, their state, moods, flows, presence, "

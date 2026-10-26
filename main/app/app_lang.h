@@ -17,7 +17,8 @@ extern "C" {
 typedef struct {
     const char *code;            /* ISO-639-1 code passed to the transcription API */
     const char *listening;
-    const char *thinking;
+    const char *heard;              /* end of the question, until its transcript arrives */
+    const char *thinking;           /* transcript received, until the answer starts */
     const char *sorry;
     const char *wifi_connecting;
     const char *wifi_failed;
@@ -63,6 +64,7 @@ typedef struct {
     const char *location_line;      /* in the instructions, %s: "Evere, BE" */
     const char *config_need_pc;     /* "édite la config" without a PC connected */
     const char *config_opening;     /* "édite la config": restarting in configuration mode */
+    const char *restarting;         /* "redémarre" */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
     const char *home_line;          /* in the instructions when a Homey is set: ask it, do not answer from memory */

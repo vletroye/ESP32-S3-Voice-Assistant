@@ -57,6 +57,12 @@ je veux (éditer|editer|modifier) (la|le|les fichier[s] de) config[uration]
 (édite|edite|éditer|modifie|ouvre) (la|le|les fichier[s] de) config[uration]
 [passe en ]mode configuration
 
+[s_restart]
+# Dite seule (ou avec "s'il te plaît") : l'assistant redémarre
+(redémarre|redemarre|relance)[ toi]
+(fais|lance) un redémarrage
+redémarrage
+
 [s_open_settings]
 (ouvre|montre|affiche) les (paramètres|réglages)
 va dans les (paramètres|réglages)

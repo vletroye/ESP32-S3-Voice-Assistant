@@ -63,6 +63,9 @@ static volatile bool s_reply_active = false;
 /* "Édite la config": configuration mode once the reply has been spoken (set by the reply, done by the main task) */
 static volatile bool s_config_after_reply = false;
 static volatile bool s_config_requested = false;
+/* "Redémarre": restart once the reply has been spoken (set by the reply, done by the main task) */
+static volatile bool s_restart_after_reply = false;
+static volatile bool s_restart_requested = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -199,6 +202,11 @@ static void on_reply_audio(tts_event_t event)
         ui_ctrl_reply_append_notice(app_lang_get()->voice_choppy);
     }
     voice_cmd_reply_spoken();
+    if (s_restart_after_reply) {
+        s_restart_after_reply = false;
+        s_restart_requested = true;     // the main task saves and restarts
+        return;
+    }
     if (s_config_after_reply) {
         s_config_after_reply = false;
         s_config_requested = true;      // the main task saves and restarts
@@ -407,6 +415,9 @@ void assistant_listen_end(void)
         goto err;
     }
 
+    // The transcript is there: the answer is being prepared
+    ui_ctrl_label_show_text(UI_CTRL_LABEL_LISTEN_SPEAK, app_lang_get()->thinking);
+
     if (voice_cmd_is_goodbye(text)) {
         // Back to sleep: no answer, no follow-up listening, the next conversation starts afresh
         ESP_LOGI(TAG, "Goodbye: \"%s\", going to sleep", text);
@@ -434,6 +445,7 @@ void assistant_listen_end(void)
     }
     if (voice_cmd != VOICE_CMD_NONE && voice_cmd != VOICE_CMD_NEW_CONVERSATION_ASK) {
         s_config_after_reply = (voice_cmd == VOICE_CMD_EDIT_CONFIG);
+        s_restart_after_reply = (voice_cmd == VOICE_CMD_RESTART);
         speak_message(cmd_reply ? cmd_reply : "");
         free(cmd_reply);
         goto err;
@@ -611,6 +623,18 @@ void app_main()
             }
         }
         // "Édite la config": the conversation and the volume are saved, then configuration mode (USB drive)
+        if (s_restart_requested) {
+            // "Redémarre": the conversation and the volume are saved, the speaker switched off, then restart
+            s_restart_requested = false;
+            ESP_LOGI(TAG, "Restarting (voice command)");
+            llm_history_save();
+            app_volume_save();
+            weather_places_save();
+            bsp_codec_mute_set(true);
+            bsp_codec_power_amp_off();
+            vTaskDelay(pdMS_TO_TICKS(30));
+            esp_restart();
+        }
         if (s_config_requested) {
             s_config_requested = false;
             ESP_LOGI(TAG, "Restarting in configuration mode");

@@ -207,11 +207,10 @@ static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uin
     lv_obj_add_event_cb(dropdown, changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
 }
 
-/* OpenAI Realtime voices, the recommended ones first */
-static const char *const s_settings_voices[] = {
-    "marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse",
-};
-#define SETTINGS_VOICE_COUNT    (sizeof(s_settings_voices) / sizeof(s_settings_voices[0]))
+/* OpenAI Realtime voices offered (tts_stream.c) */
+#define s_settings_voices       tts_voices
+#define SETTINGS_VOICE_COUNT    tts_voice_count
+static lv_obj_t *s_voice_dropdown = NULL;
 
 /* The voice applies at once (no restart): saved, the synthesis reconnects, then a sample is spoken */
 static void settings_voice_changed_cb(lv_event_t *e)
@@ -313,6 +312,7 @@ static void settings_screen_setup(void)
 
     // Voice row: applied immediately, without the Save button
     lv_obj_t *voice_dropdown = settings_row_create(lang->settings_voice, lv_pct(62));
+    s_voice_dropdown = voice_dropdown;
     s_voice_row_label = lv_obj_get_child(lv_obj_get_parent(voice_dropdown), 0);
     options[0] = '\0';
     uint16_t voice_selected = SETTINGS_VOICE_COUNT;
@@ -380,6 +380,12 @@ void ui_ctrl_settings_sync(void)
         if (strcmp(param->chat_model, llm_models[i].id) == 0) {
             s_model_stored = i;
             lv_dropdown_set_selected(s_model_dropdown, i);
+        }
+    }
+    // Voice changed by voice ("change de voix")
+    for (size_t i = 0; i < SETTINGS_VOICE_COUNT && s_voice_dropdown; i++) {
+        if (strcmp(param->voice, s_settings_voices[i]) == 0) {
+            lv_dropdown_set_selected(s_voice_dropdown, i);
         }
     }
     lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);

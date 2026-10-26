@@ -715,6 +715,11 @@ static void playback_task(void *arg)
 
 /* ---------- public API ---------- */
 
+const char *const tts_voices[] = {
+    "marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse",
+};
+const size_t tts_voice_count = sizeof(tts_voices) / sizeof(tts_voices[0]);
+
 bool tts_stream_reply_was_choppy(void)
 {
     return s_failed || s_cuts >= TTS_CHOPPY_CUTS;

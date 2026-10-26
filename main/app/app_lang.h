@@ -47,6 +47,11 @@ typedef struct {
     const char *model_already;      /* %s: model name */
     const char *model_unknown;      /* %d: number of models */
     const char *model_switched;     /* %s: model name */
+    const char *voice_ask_intro;    /* "change de voix": the numbered voices follow */
+    const char *voice_current;      /* after the current voice in the list */
+    const char *voice_ask_question;
+    const char *voice_already;      /* %s: voice name */
+    const char *voice_unknown;      /* %d: number of voices */
     /* Country and town changed by voice ("change mon pays", "change ma ville"), confirmed before saving */
     const char *country_ask;
     const char *city_ask;

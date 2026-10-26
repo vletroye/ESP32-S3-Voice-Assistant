@@ -18,6 +18,10 @@ typedef enum {
     TTS_EVENT_DONE,         /* every sentence has been played (not sent after tts_stream_cancel()) */
 } tts_event_t;
 
+/** OpenAI Realtime voices, the recommended ones first (lowercase, as the API names them) */
+extern const char *const tts_voices[];
+extern const size_t tts_voice_count;
+
 /** Called from the playback task */
 typedef void (*tts_event_cb_t)(tts_event_t event);
 

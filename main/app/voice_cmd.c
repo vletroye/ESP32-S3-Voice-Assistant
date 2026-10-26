@@ -18,6 +18,8 @@
 #include "settings.h"
 #include "voice_cmd.h"
 #include "assistant.h"
+#include "tts_stream.h"
+#include "app_ui_ctrl.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -47,6 +49,16 @@ static const char *const s_model_shortcut[] = {
     "utilise le modèle", "utilise le modele", "prends le modèle", "passe au modèle", "passe au modele",
     "modèle numéro", "modèle", "modele", "use model", "use the model", "switch to model", "model number",
     "model", NULL
+};
+static const char *const s_change_voice[] = {
+    "change de voix", "change la voix", "change ta voix", "changer de voix", "changer la voix", "changer ta voix",
+    "change ma voix", "une autre voix", "autre voix", "change the voice", "change voice", "change your voice",
+    "switch voice", "switch the voice", "another voice", NULL
+};
+static const char *const s_voice_shortcut[] = {
+    "utilise la voix", "prends la voix", "passe à la voix", "mets la voix", "choisis la voix", "voix numéro",
+    "la voix", "voix", "use the voice", "use voice", "switch to voice", "switch to the voice", "voice number",
+    "voice", NULL
 };
 /* A new conversation, as after "au revoir" (normalized: lowercase, apostrophes as spaces) */
 static const char *const s_new_conversation[] = {
@@ -161,12 +173,14 @@ static const char *const s_numbers[][7] = {
     { "7", "sept", "septième", "seven", "seventh", NULL, NULL },
     { "8", "huit", "huitième", "eight", "eighth", NULL, NULL },
     { "9", "neuf", "neuvième", "nine", "ninth", NULL, NULL },
+    { "10", "dix", "dixième", "ten", "tenth", NULL, NULL },
 };
 
 typedef enum {
     ASKED_NOTHING,
     ASKED_LANGUAGE,
     ASKED_MODEL,
+    ASKED_VOICE,
     ASKED_COUNTRY,
     ASKED_CITY,
     CONFIRM_COUNTRY,        /* "Confirmes-tu ... ?": s_pending holds the country code */
@@ -369,6 +383,135 @@ static voice_cmd_t choose_model(const char *norm, char **reply)
     return VOICE_CMD_ANSWERED;
 }
 
+/* ---------- voice ---------- */
+
+/* Names of the voices as the transcription may write them (normalized), besides the name itself */
+static const struct {
+    const char *voice;
+    const char *heard[4];
+} s_voice_heard[] = {
+    { "marin", { "marine", "marina", NULL } },
+    { "cedar", { "cèdre", "cedre", "sidar", "cédar" } },
+    { "alloy", { "aloy", "alloi", "aloï", NULL } },
+    { "ash", { "ashe", "hache", NULL } },
+    { "ballad", { "ballade", "balade", NULL } },
+    { "coral", { "corail", "corale", NULL } },
+    { "echo", { "écho", "eco", NULL } },
+    { "shimmer", { "shimer", "chimmer", NULL } },
+    { "verse", { "vers", "verce", NULL } },
+};
+
+/* Voice number (1-based) said in the text: its name, else a number; 0 if none */
+static int find_voice(const char *norm)
+{
+    for (size_t i = 0; i < tts_voice_count; i++) {
+        if (has_word(norm, tts_voices[i])) {
+            return (int)i + 1;
+        }
+        for (size_t j = 0; j < sizeof(s_voice_heard) / sizeof(s_voice_heard[0]); j++) {
+            if (strcmp(s_voice_heard[j].voice, tts_voices[i]) != 0) {
+                continue;
+            }
+            for (size_t k = 0; k < 4 && s_voice_heard[j].heard[k]; k++) {
+                if (has_word(norm, s_voice_heard[j].heard[k])) {
+                    return (int)i + 1;
+                }
+            }
+        }
+    }
+    for (const char *const *one = s_one_alone; *one; one++) {
+        if (strcmp(norm, *one) == 0) {
+            return 1;
+        }
+    }
+    for (size_t i = 0; i < sizeof(s_numbers) / sizeof(s_numbers[0]) && i < tts_voice_count; i++) {
+        for (size_t j = 0; j < sizeof(s_numbers[0]) / sizeof(s_numbers[0][0]) && s_numbers[i][j]; j++) {
+            if (has_word(norm, s_numbers[i][j])) {
+                return (int)i + 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* After "prends la voix": only a voice name or a number ("la voix est trop forte" is not a command) */
+static bool is_voice_only(const char *rest)
+{
+    if (is_model_only(rest)) {
+        return true;    // a number
+    }
+    char word[24];
+    strlcpy(word, rest, sizeof(word));
+    char *space = strchr(word, ' ');
+    if (space) {
+        *space = '\0';
+    }
+    return word[0] && find_voice(word) && is_only(rest, word);
+}
+
+/* Voice name as spoken and shown: "Cedar" */
+static void voice_display_name(const char *voice, char *out, size_t size)
+{
+    strlcpy(out, voice, size);
+    out[0] = toupper((unsigned char)out[0]);
+}
+
+/* "Voici les voix disponibles. 1, Marin, celle que j'utilise. 2, Cedar. ... Dites son numéro ou son nom." */
+static char *voice_list(void)
+{
+    const app_lang_t *lang = app_lang_get();
+    const char *current = settings_get_parameter()->voice;
+    char *out = malloc(CMD_REPLY_SIZE);
+    if (!out) {
+        return NULL;
+    }
+    strlcpy(out, lang->voice_ask_intro, CMD_REPLY_SIZE);
+    for (size_t i = 0; i < tts_voice_count; i++) {
+        char name[24];
+        voice_display_name(tts_voices[i], name, sizeof(name));
+        size_t n = strlen(out);
+        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", (unsigned)(i + 1), name,
+                 strcmp(tts_voices[i], current) == 0 ? lang->voice_current : "");
+    }
+    strlcat(out, " ", CMD_REPLY_SIZE);
+    strlcat(out, lang->voice_ask_question, CMD_REPLY_SIZE);
+    return out;
+}
+
+/* Saved and applied at once: the confirmation is the sample of the new voice, spoken with it */
+static voice_cmd_t choose_voice(const char *norm, char **reply)
+{
+    const app_lang_t *lang = app_lang_get();
+    int number = find_voice(norm);
+    char *text = NULL;
+    if (number == 0) {
+        asprintf(&text, lang->voice_unknown, (int)tts_voice_count);
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_ANSWERED;
+    }
+    const char *voice = tts_voices[number - 1];
+    char name[24];
+    voice_display_name(voice, name, sizeof(name));
+    sys_param_t *param = settings_get_parameter();
+    if (strcmp(voice, param->voice) == 0) {
+        asprintf(&text, lang->voice_already, name);
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_ANSWERED;
+    }
+    if (settings_save_str("Voice", voice) != ESP_OK) {
+        asprintf(&text, lang->voice_unknown, (int)tts_voice_count);
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_ANSWERED;
+    }
+    ESP_LOGI(TAG, "voice %s saved", voice);
+    strlcpy(param->voice, voice, sizeof(param->voice));
+    tts_stream_set_voice(voice);
+    ui_ctrl_settings_sync();
+    asprintf(&text, lang->voice_sample, name);
+    *reply = text ? text : reply_dup("");
+    return VOICE_CMD_ANSWERED;
+}
+
 /* ---------- dispatch ---------- */
 
 /* ---------- country and town ---------- */
@@ -490,6 +633,9 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     if (recent && asked == ASKED_MODEL) {
         return choose_model(norm, reply);
     }
+    if (recent && asked == ASKED_VOICE) {
+        return choose_voice(norm, reply);
+    }
     if (recent && asked == ASKED_COUNTRY) {
         int i = find_country(norm);
         if (i < 0) {
@@ -541,6 +687,16 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         *reply = model_list();
         return VOICE_CMD_ANSWERED;
     }
+    if (starts_with(norm, s_change_voice, &len)) {
+        // "Change de voix pour Cedar": the voice may already be given
+        if (find_voice(norm + len)) {
+            return choose_voice(norm + len, reply);
+        }
+        s_asked = ASKED_VOICE;
+        s_asked_us = esp_timer_get_time();
+        *reply = voice_list();
+        return VOICE_CMD_ANSWERED;
+    }
     if (starts_with(norm, s_open_settings, NULL)) {
         return VOICE_CMD_OPEN_SETTINGS;     // shown at once, nothing spoken
     }
@@ -562,6 +718,9 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     }
     if (starts_with(norm, s_model_shortcut, &len) && is_model_only(norm[len] ? norm + len + 1 : norm + len)) {
         return choose_model(norm + len, reply);
+    }
+    if (starts_with(norm, s_voice_shortcut, &len) && is_voice_only(norm[len] ? norm + len + 1 : norm + len)) {
+        return choose_voice(norm + len, reply);
     }
     return VOICE_CMD_NONE;
 }

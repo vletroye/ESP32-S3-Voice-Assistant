@@ -21,8 +21,8 @@ which has been largely rewritten.
   (`[claude-haiku-5-5] …`).
 - **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
   (Anthropic) or GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI); French or English; 10 OpenAI voices. The
-  language and the model can also be changed **by voice** ("Change la langue", "Utilise le modèle 3"); both
-  apply at once, without restarting.
+  language, the model and the voice can also be changed **by voice** ("Change la langue", "Utilise le modèle
+  3", "Prends la voix Cedar"); all apply at once, without restarting.
 - **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays", "Change ma ville"):
   the web search favours local results, and Claude uses this place for news, weather and local questions.
 - **Persona**: a free text (name, who made it, who you are…) given to the assistant with every question,
@@ -171,7 +171,7 @@ Main modules of the assistant (`main/app/`):
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
-| `voice_cmd.c` | Settings by voice: language, model, country and town ("change la langue", "utilise le modèle 3", "change ma ville") |
+| `voice_cmd.c` | Settings by voice: language, model, voice, country and town ("change la langue", "utilise le modèle 3", "prends la voix Cedar", "change ma ville") |
 | `homey_mcp.c` | MCP client for a Homey Pro (local network, JSON answers): tool list at start-up, selected tools offered to Claude |
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
@@ -233,7 +233,7 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`… |
 | `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
-| `Voice` | Voice of the answers (also set from the Settings screen) | `marin`, `cedar`, `coral`… |
+| `Voice` | Voice of the answers (also set from the Settings screen or by voice: "change de voix") | `marin`, `cedar`, `coral`… |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
 | `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.0.171:52199/mcp` |
@@ -331,12 +331,13 @@ the conversation is cleared and the model answers the question.
 | j'ai une autre question · une autre question · autre question | I have another question · another question |
 | passons à autre chose · on passe à autre chose · parlons d'autre chose · changeons de sujet · on change de sujet · changement de sujet | let's move on · let's talk about something else · let's change the subject · change of subject |
 
-### Language and model
+### Language, model and voice
 
 Accepted in French and in English whatever the language (`main/app/voice_cmd.c`). Answered on the device; the
 new setting is saved and applied at once, without restarting (the confirmation of a new language is spoken in
 that language, after the speech session has reconnected, ~2 s). Changing the model saves the conversation and
-restores the one of the new model if it was saved last, else starts a new one.
+restores the one of the new model if it was saved last, else starts a new one. A new voice confirms itself with
+its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); the Settings screen follows.
 
 | Action | French | English |
 | --- | --- | --- |
@@ -346,9 +347,13 @@ restores the one of the new model if it was saved last, else starts a new one.
 | Change the model (reads the short numbered list "1, Haiku. 2, Sonnet. …", then asks which one) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
 | Answer to that question (within 30 s after the list) | its number ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna"…) | its number ("three", "3", "third") or its name |
 | Change the model directly | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
+| Change the voice (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
+| Answer to that question (within 30 s after the list) | its number (1 to 10: "deux", "2", "dixième"…) or its name ("Cedar", also heard as "Cèdre"; "Corail", "Écho", "Ballade", "Marine"…) | its number or its name |
+| Change the voice directly | prends la voix Cedar · utilise la voix 3 · passe à la voix Coral · mets la voix Sage · choisis la voix 2 · voix numéro 2 · la voix Cedar · change de voix pour Coral | use the voice Cedar · use voice 3 · switch to voice 2 · voice number 2 · voice Cedar |
 
-A direct phrase must contain only the language or the number, possibly followed by "s'il te plaît", "please"
-or "maintenant": "parle-moi de l'Angleterre en anglais" or "parle plus fort" remain normal questions. "Un" and
+A direct phrase must contain only the language, the number or the voice name, possibly followed by "s'il te plaît", "please"
+or "maintenant": "parle-moi de l'Angleterre en anglais", "parle plus fort" or "la voix est trop forte" remain
+normal questions. "Un" and
 "une" mean model 1 only when said alone (elsewhere they are articles). Answers: the confirmation ("Very well,
 I will now speak English.", spoken in the new language), "Je parle déjà français." / "J'utilise
 déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / "Dites un numéro de 1 à 6.".

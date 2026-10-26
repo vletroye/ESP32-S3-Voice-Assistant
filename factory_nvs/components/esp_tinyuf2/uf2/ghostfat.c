@@ -25,6 +25,7 @@
  * THE SOFTWARE.
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
@@ -324,6 +325,156 @@ void padded_memcpy(char *dst, char const *src, int len)
     }
 }
 
+/*------------------------------------------------------------------*/
+/* [Voice assistant] Text files (CONFIG.INI, PERSONA.TXT, MEMORY.TXT) written elsewhere
+ *------------------------------------------------------------------*/
+
+/*
+ * Saving an edited file, Windows may put it in other clusters than ours (the free space after CURRENT.UF2):
+ * only its directory entry, written by the PC too, tells where it now is and its size. Data sectors written
+ * outside the known files are kept until then; once the place is known, its sectors go to the file.
+ */
+#define TEXT_FILE_COUNT     (FID_MEMORY - FID_INI + 1)
+#define CACHED_SECTORS      32
+#define NO_SECTOR           UINT32_MAX
+
+typedef struct {
+    uint32_t sector;            /* data area sector, NO_SECTOR when unused */
+    uint8_t data[BPB_SECTOR_SIZE];
+} cached_sector_t;
+
+static cached_sector_t *s_cached = NULL;
+static unsigned s_cached_next = 0;
+
+/* Where the PC last wrote each text file (from its directory entry) */
+static struct {
+    uint32_t first_sector;      /* data area sector of its first cluster */
+    uint32_t size;
+    bool known;
+} s_where[TEXT_FILE_COUNT];
+
+static size_t text_capacity(uint32_t fid)
+{
+    return fid == FID_INI ? CFG_UF2_INI_FILE_SIZE : CFG_UF2_TEXT_FILE_SIZE;
+}
+
+static char *text_dummy(uint32_t fid)
+{
+    return fid == FID_INI ? _ini_file_dummy : board_flash_text_dummy(fid - FID_PERSONA);
+}
+
+static char *text_content(uint32_t fid)
+{
+    return fid == FID_INI ? _ini_file : board_flash_text_content(fid - FID_PERSONA);
+}
+
+/* A written sector, at its offset in the buffer receiving the file */
+static void text_put(uint32_t fid, size_t offset, const uint8_t *data)
+{
+    size_t capacity = text_capacity(fid);
+    char *dummy = text_dummy(fid);
+    if (!dummy || offset >= capacity - 1) {
+        return;
+    }
+    size_t n = capacity - 1 - offset;
+    memcpy(dummy + offset, data, n < BPB_SECTOR_SIZE ? n : BPB_SECTOR_SIZE);
+}
+
+/* The received file is parsed and saved if it changed */
+static void text_commit(uint32_t fid)
+{
+    size_t capacity = text_capacity(fid);
+    char *dummy = text_dummy(fid);
+    char *content = text_content(fid);
+    if (!dummy || !content) {
+        return;
+    }
+    dummy[capacity - 1] = '\0';
+    if (memcmp(dummy, content, capacity)) {
+        if (fid == FID_INI) {
+            memcpy(_ini_file, _ini_file_dummy, capacity);
+            board_flash_nvs_update(_ini_file_dummy);
+        } else {
+            board_flash_text_update(fid - FID_PERSONA);
+        }
+        info[fid].size = strlen(content);
+    }
+}
+
+/* Text file written by the PC at this data sector (its offset in *offset), -1 if none */
+static int text_written_at(uint32_t sector, size_t *offset)
+{
+    for (int i = 0; i < TEXT_FILE_COUNT; i++) {
+        uint32_t sectors = UF2_DIV_CEIL(s_where[i].size, BPB_SECTOR_SIZE);
+        if (s_where[i].known && sector >= s_where[i].first_sector && sector < s_where[i].first_sector + sectors) {
+            *offset = (sector - s_where[i].first_sector) * BPB_SECTOR_SIZE;
+            return FID_INI + i;
+        }
+    }
+    return -1;
+}
+
+/* A sector written outside the known files: kept in case a text file was put there */
+static void cache_sector(uint32_t sector, const uint8_t *data)
+{
+    if (!s_cached) {
+        s_cached = (cached_sector_t *)malloc(CACHED_SECTORS * sizeof(cached_sector_t));
+        if (!s_cached) {
+            return;
+        }
+        for (int i = 0; i < CACHED_SECTORS; i++) {
+            s_cached[i].sector = NO_SECTOR;
+        }
+    }
+    for (int i = 0; i < CACHED_SECTORS; i++) {
+        if (s_cached[i].sector == sector) {
+            memcpy(s_cached[i].data, data, BPB_SECTOR_SIZE);
+            return;
+        }
+    }
+    s_cached[s_cached_next].sector = sector;
+    memcpy(s_cached[s_cached_next].data, data, BPB_SECTOR_SIZE);
+    s_cached_next = (s_cached_next + 1) % CACHED_SECTORS;
+}
+
+/* A root directory sector written by the PC: where the text files now are and their size */
+static void directory_written(const uint8_t *data)
+{
+    const DirEntry *d = (const DirEntry *)(const void *)data;
+    for (size_t e = 0; e < DIRENTRIES_PER_SECTOR; e++, d++) {
+        uint8_t first = (uint8_t)d->name[0];
+        if (first == 0x00 || first == 0xE5 || d->attrs == 0x0F || (d->attrs & 0x08) || d->startCluster < 2) {
+            continue;   // free, deleted, long name part, volume label, or empty file
+        }
+        for (uint32_t fid = FID_INI; fid <= FID_MEMORY; fid++) {
+            if (memcmp(d->name, info[fid].name, 11) != 0) {
+                continue;
+            }
+            int i = fid - FID_INI;
+            uint32_t first_sector = (uint32_t)(d->startCluster - 2) * BPB_SECTORS_PER_CLUSTER;
+            if (s_where[i].known && s_where[i].first_sector == first_sector && s_where[i].size == d->size) {
+                continue;
+            }
+            s_where[i].first_sector = first_sector;
+            s_where[i].size = d->size;
+            s_where[i].known = true;
+            // Its sectors written before this entry, then its end at its size
+            uint32_t sectors = UF2_DIV_CEIL(d->size, BPB_SECTOR_SIZE);
+            for (int c = 0; s_cached && c < CACHED_SECTORS; c++) {
+                if (s_cached[c].sector != NO_SECTOR && s_cached[c].sector >= first_sector &&
+                        s_cached[c].sector < first_sector + sectors) {
+                    text_put(fid, (s_cached[c].sector - first_sector) * BPB_SECTOR_SIZE, s_cached[c].data);
+                }
+            }
+            char *dummy = text_dummy(fid);
+            if (dummy && d->size < text_capacity(fid)) {
+                dummy[d->size] = '\0';
+            }
+            text_commit(fid);
+        }
+    }
+}
+
 void uf2_read_block(uint32_t block_no, uint8_t *data)
 {
     memset(data, 0, BPB_SECTOR_SIZE);
@@ -431,6 +582,18 @@ void uf2_read_block(uint32_t block_no, uint8_t *data)
         // Request was to read from the data area (files, unused space, ...)
         sectionRelativeSector -= FS_START_CLUSTERS_SECTOR;
 
+        // [Voice assistant] A text file the PC wrote elsewhere is read back from there
+        size_t textOffset;
+        int textFid = text_written_at(sectionRelativeSector, &textOffset);
+        if (textFid >= 0) {
+            FileContent_t const *t = &info[textFid];
+            if (t->content && t->size > textOffset) {
+                size_t n = t->size - textOffset;
+                memcpy(data, (const uint8_t *)t->content + textOffset, n < BPB_SECTOR_SIZE ? n : BPB_SECTOR_SIZE);
+            }
+            return;
+        }
+
         // plus 2 for first data cluster offset
         uint32_t fid = info_index_of(2 + sectionRelativeSector / BPB_SECTORS_PER_CLUSTER);
         FileContent_t const * inf = &info[fid];
@@ -492,47 +655,30 @@ int uf2_write_block(uint32_t block_no, uint8_t *data, WriteState *state)
     UF2_Block *bl = (void*) data;
 
     if (!is_uf2_block(bl)) {
-        if (block_no >= FS_START_CLUSTERS_SECTOR && block_no < BPB_TOTAL_SECTORS) {
+        if (block_no >= FS_START_ROOTDIR_SECTOR && block_no < FS_START_CLUSTERS_SECTOR) {
+            // [Voice assistant] The directory tells where the PC put an edited text file
+            directory_written(data);
+        } else if (block_no >= FS_START_CLUSTERS_SECTOR && block_no < BPB_TOTAL_SECTORS) {
             uint32_t sectionRelativeSector = block_no - FS_START_CLUSTERS_SECTOR;
-            // plus 2 for first data cluster offset
-            uint32_t fid = info_index_of(2 + sectionRelativeSector / BPB_SECTORS_PER_CLUSTER);
-#if 1
-            //Bug workaround: in linux, the OS request write to a different sector if enable wear leveling
-            // Here we need to workaround to make sure the data is written to the correct sector
-            if (fid == FID_UF2 && data[0] == (uint8_t)'[') {
-                fid = FID_INI;
-                sectionRelativeSector = (info[FID_INI].cluster_start - 2) * BPB_SECTORS_PER_CLUSTER;
-            }
-#endif
-            uint32_t fileRelativeSector = sectionRelativeSector - (info[fid].cluster_start - 2) * BPB_SECTORS_PER_CLUSTER;
-
-            if (fid == FID_INI || (fid >= FID_PERSONA && fid <= FID_MEMORY)) {
-                // [Voice assistant] each written sector is copied at its offset in the file buffer, which
-                // is then parsed whole (the original code overflowed _ini_file for the 2nd sector and later)
-                bool ini = (fid == FID_INI);
-                int text = fid - FID_PERSONA;
-                size_t capacity = ini ? CFG_UF2_INI_FILE_SIZE : CFG_UF2_TEXT_FILE_SIZE;
-                char *dummy = ini ? _ini_file_dummy : board_flash_text_dummy(text);
-                char *content = ini ? _ini_file : board_flash_text_content(text);
-                size_t fileContentStartOffset = fileRelativeSector * BPB_SECTOR_SIZE;
-
-                if (dummy && fileContentStartOffset < capacity - 1) {
-                    size_t bytesToCopy = capacity - 1 - fileContentStartOffset;
-                    if (bytesToCopy > BPB_SECTOR_SIZE) {
-                        bytesToCopy = BPB_SECTOR_SIZE;
-                    }
-                    memcpy(dummy + fileContentStartOffset, data, bytesToCopy);
-                    dummy[capacity - 1] = '\0';
-                    if (memcmp(dummy, content, capacity)) {
-                        if (ini) {
-                            memcpy(_ini_file, _ini_file_dummy, capacity);
-                            board_flash_nvs_update(_ini_file_dummy);
-                        } else {
-                            board_flash_text_update(text);
-                        }
-                        info[fid].size = strlen(content);
-                    }
+            // [Voice assistant] Each written sector of a text file is copied at its offset in the file buffer,
+            // which is then parsed whole: where the PC put the file if known, else in the file's own clusters
+            size_t offset = 0;
+            int fid = text_written_at(sectionRelativeSector, &offset);
+            if (fid < 0) {
+                // plus 2 for first data cluster offset
+                uint32_t own = info_index_of(2 + sectionRelativeSector / BPB_SECTORS_PER_CLUSTER);
+                if (own >= FID_INI && own <= FID_MEMORY) {
+                    fid = own;
+                    offset = (sectionRelativeSector - (info[own].cluster_start - 2) * BPB_SECTORS_PER_CLUSTER) *
+                             BPB_SECTOR_SIZE;
+                } else if (own == FID_UF2) {
+                    // Elsewhere: kept until the directory entry says which file it belongs to
+                    cache_sector(sectionRelativeSector, data);
                 }
+            }
+            if (fid >= 0) {
+                text_put(fid, offset, data);
+                text_commit(fid);
             }
         }
         return -1;

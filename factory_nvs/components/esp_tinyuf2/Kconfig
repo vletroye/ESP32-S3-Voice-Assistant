@@ -59,7 +59,8 @@ menu "TinyUF2 Config"
         int "UF2 NVS ini file size"
         depends on ENABLE_UF2_FLASHING
         default 512
-        range 256 2048
+        # [Voice assistant] up to 4096: CONFIG.INI keeps its comments
+        range 256 4096
     config UF2_INI_NVS_VALUE_HIDDEN
         bool "Enable UF2 ini file hide NVS value"
         depends on ENABLE_UF2_FLASHING

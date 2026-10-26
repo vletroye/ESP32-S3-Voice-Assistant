@@ -138,6 +138,15 @@ static void _usb_otg_phy_init(bool enable)
         phy_conf.otg_speed = USB_PHY_SPEED_UNDEFINED;
         usb_new_phy(&phy_conf, &phy_hdl);
 #endif
+#if SOC_USB_SERIAL_JTAG_SUPPORTED && defined(USB_SERIAL_JTAG_CONF0_REG)
+        // [Voice assistant] The PHY mux (RTC register) and the USB-Serial-JTAG pad settings survive esp_restart():
+        // without this, the assistant's serial port only comes back after a hardware reset. Internal PHY back to
+        // the USB-Serial-JTAG as at power-on, and its D+ pull-up back to its own control (the host sees it attach).
+        RTCCNTL.usb_conf.sw_hw_usb_phy_sel = 0;
+        CLEAR_PERI_REG_MASK(USB_SERIAL_JTAG_CONF0_REG, USB_SERIAL_JTAG_DP_PULLDOWN);
+        SET_PERI_REG_MASK(USB_SERIAL_JTAG_CONF0_REG, USB_SERIAL_JTAG_DP_PULLUP);
+        CLEAR_PERI_REG_MASK(USB_SERIAL_JTAG_CONF0_REG, USB_SERIAL_JTAG_PAD_PULL_OVERRIDE);
+#endif
     }
 }
 

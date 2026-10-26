@@ -34,6 +34,39 @@ esp_err_t settings_factory_reset(void)
     return ESP_OK;
 }
 
+char *settings_text_without_comments(const char *text)
+{
+    text = text ? text : "";
+    char *out = malloc(strlen(text) + 1);
+    if (!out) {
+        return NULL;
+    }
+    size_t n = 0;
+    for (const char *line = text; *line;) {
+        const char *end = strchr(line, '\n');
+        size_t len = end ? (size_t)(end - line + 1) : strlen(line);
+        const char *p = line;
+        while (p < line + len && (*p == ' ' || *p == '\t')) {
+            p++;
+        }
+        if (*p != '#') {
+            memcpy(out + n, line, len);
+            n += len;
+        }
+        line += len;
+    }
+    while (n > 0 && (unsigned char)out[n - 1] <= ' ') {
+        n--;
+    }
+    out[n] = '\0';
+    size_t start = 0;
+    while (start < n && (unsigned char)out[start] <= ' ') {
+        start++;
+    }
+    memmove(out, out + start, n - start + 1);
+    return out;
+}
+
 /* Spaces, control characters and non-ASCII bytes (e.g. a pasted non-breaking space) */
 static bool is_trimmed_char(char c)
 {
@@ -235,6 +268,17 @@ esp_err_t settings_read_parameter_from_nvs(void)
     // Persona and Memory (optional): free texts, edited in PERSONA.TXT and MEMORY.TXT
     free(g_sys_param.persona);
     g_sys_param.persona = read_text(my_handle, "Persona");
+    if (g_sys_param.persona) {
+        // Its comment lines stay in the file only: the assistant gets the rest
+        char *persona = settings_text_without_comments(g_sys_param.persona);
+        if (persona) {
+            free(g_sys_param.persona);
+            g_sys_param.persona = persona[0] ? persona : NULL;
+            if (!persona[0]) {
+                free(persona);
+            }
+        }
+    }
     free(g_sys_param.memory);
     g_sys_param.memory = read_text(my_handle, "Memory");
 

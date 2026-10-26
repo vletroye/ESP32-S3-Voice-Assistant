@@ -162,6 +162,8 @@ void app_main(void)
         // Settings of former versions (OpenAI chat model, provider): no longer used
         bool erased = (nvs_erase_key(my_handle, "Model") == ESP_OK);
         erased |= (nvs_erase_key(my_handle, "Provider") == ESP_OK);
+        // Trace of a debugging session of the configuration mode
+        erased |= (nvs_erase_key(my_handle, "Uf2_trace") == ESP_OK);
         if (erased) {
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "removed obsolete keys Model / Provider");

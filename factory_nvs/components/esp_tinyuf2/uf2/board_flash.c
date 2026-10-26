@@ -62,7 +62,10 @@ static esp_partition_t const* _part_ota = NULL;
 char *_ini_file = NULL;
 char *_ini_file_dummy = NULL;
 
-/* [Voice assistant] PERSONA.TXT and MEMORY.TXT; the help is shown in an empty file ('#' lines are not saved) */
+/*
+ * [Voice assistant] PERSONA.TXT and MEMORY.TXT; the help is shown in an empty file. '#' lines are saved with the
+ * text (they stay in the file) and left out by the assistant.
+ */
 typedef struct {
     const char *key;        /* NVS key */
     const char *help;
@@ -76,14 +79,16 @@ static text_file_t s_text_files[UF2_TEXT_COUNT] = {
         .help = "# Decrivez ici l'assistant et vous-meme (nom, createur, qui vous etes...).\r\n"
                 "# Ce texte est donne a l'assistant avec chaque question. Plusieurs lignes possibles.\r\n"
                 "# Describe the assistant and yourself here; this text is given to it with every question.\r\n"
-                "# Lines starting with # are ignored.\r\n",
+                "# Les lignes commencant par # sont des commentaires : conservees, mais pas lues par l'assistant.\r\n"
+                "# Lines starting with # are comments: kept, but not read by the assistant.\r\n",
     },
     [UF2_TEXT_MEMORY] = {
         .key = "Memory",
         .help = "# Ce que vous avez demande a l'assistant de retenir (\"souviens-toi que ...\").\r\n"
                 "# Une note par ligne ; vous pouvez en corriger ou en supprimer.\r\n"
                 "# What you asked the assistant to remember (\"remember that ...\"), one note per line.\r\n"
-                "# Lines starting with # are ignored.\r\n",
+                "# Les lignes commencant par # sont des commentaires : conservees, mais pas lues par l'assistant.\r\n"
+                "# Lines starting with # are comments: kept, but not read by the assistant.\r\n",
     },
 };
 
@@ -186,6 +191,26 @@ static void ini_insert_section(const char *section)
     snprintf(_ini_file + len, CFG_UF2_INI_FILE_SIZE - len, "[%s]\r\n", section);
 }
 
+/*
+ * [Voice assistant] CONFIG.INI as last written by the PC (comments, blank lines, order), kept in this NVS key:
+ * the file is rebuilt from it with the current values, so that comments survive. Not shown in the file.
+ */
+#define INI_LAYOUT_KEY          "Config_layout"
+#define INI_LAYOUT_MAX_LEN      3999    /* NVS string limit */
+#define INI_LAYOUT_MAX_KEYS     64
+
+/* A line as is (comment, section, blank) */
+static void ini_insert_line(const char *line, size_t len)
+{
+    size_t used = strlen(_ini_file);
+    if (used + len + 3 >= CFG_UF2_INI_FILE_SIZE) {
+        PRINTFE("CONFIG.INI full: line left out");
+        return;
+    }
+    memcpy(_ini_file + used, line, len);
+    memcpy(_ini_file + used + len, "\r\n", 3);
+}
+
 static void ini_insert_pair(const char *key, const char *value)
 {
     if (key == NULL || value == NULL || _ini_file == NULL) {
@@ -233,6 +258,91 @@ static bool check_value_if_hidden(const char *key)
 }
 #endif
 
+static bool is_blank(char c)
+{
+    return c == ' ' || c == '\t';
+}
+
+/*
+ * The saved layout with the current values: "key = value ; comment" lines get the value stored in NVS (changed
+ * meanwhile by voice or by the assistant), keep their inline comment, and are dropped when the key no longer
+ * exists. The keys written are listed in `used`.
+ */
+static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[][NVS_KEY_NAME_MAX_SIZE],
+                                int *used_count)
+{
+    for (const char *line = layout; *line;) {
+        const char *end = strchr(line, '\n');
+        size_t len = end ? (size_t)(end - line) : strlen(line);
+        const char *next = line + len + (end ? 1 : 0);
+        while (len > 0 && line[len - 1] == '\r') {
+            len--;
+        }
+        const char *p = line;
+        while (p < line + len && is_blank(*p)) {
+            p++;
+        }
+        const char *eq = memchr(p, '=', line + len - p);
+        if (p == line + len || *p == '#' || *p == ';' || *p == '[' || !eq) {
+            ini_insert_line(line, len);
+            line = next;
+            continue;
+        }
+        // Key: before '=', without the blanks around it
+        const char *key_end = eq;
+        while (key_end > p && is_blank(key_end[-1])) {
+            key_end--;
+        }
+        char key[NVS_KEY_NAME_MAX_SIZE];
+        size_t key_len = (size_t)(key_end - p);
+        if (key_len == 0 || key_len >= sizeof(key)) {
+            ini_insert_line(line, len);
+            line = next;
+            continue;
+        }
+        memcpy(key, p, key_len);
+        key[key_len] = '\0';
+        // Inline comment: from the blank before a ';' (as the INI parser reads it)
+        const char *comment = NULL;
+        for (const char *c = eq + 1; c < line + len; c++) {
+            if (*c == ';' && is_blank(c[-1])) {
+                comment = c - 1;
+                while (comment > eq + 1 && is_blank(comment[-1])) {
+                    comment--;
+                }
+                break;
+            }
+        }
+        size_t value_len = 0;
+        if (strcmp(key, INI_LAYOUT_KEY) == 0 || text_file_of_key(key) ||
+                nvs_get_str(nvs, key, NULL, &value_len) != ESP_OK) {
+            line = next;    // no longer stored: left out
+            continue;
+        }
+        char *value = (char *)malloc(value_len);
+        if (value && nvs_get_str(nvs, key, value, &value_len) == ESP_OK) {
+            size_t used_len = strlen(_ini_file);
+            size_t comment_len = comment ? (size_t)(line + len - comment) : 0;
+            if (used_len + key_len + strlen(value) + comment_len + 6 < CFG_UF2_INI_FILE_SIZE) {
+                snprintf(_ini_file + used_len, CFG_UF2_INI_FILE_SIZE - used_len, "%s = %s%.*s\r\n", key,
+#ifdef CONFIG_UF2_INI_NVS_VALUE_HIDDEN
+                         check_value_if_hidden(key) ? "****" : value,
+#else
+                         value,
+#endif
+                         (int)comment_len, comment ? comment : "");
+            } else {
+                PRINTFE("CONFIG.INI full: key '%s' left out", key);
+            }
+            if (*used_count < INI_LAYOUT_MAX_KEYS) {
+                strlcpy(used[(*used_count)++], key, NVS_KEY_NAME_MAX_SIZE);
+            }
+        }
+        free(value);
+        line = next;
+    }
+}
+
 static void ini_gen_from_nvs(const char *part, const char *name)
 {
     if (part == NULL || name == NULL || _ini_file == NULL) {
@@ -260,13 +370,24 @@ static void ini_gen_from_nvs(const char *part, const char *name)
     }
 #endif
 
-    ini_insert_section(name);
-
     result = nvs_open_from_partition(part, name, NVS_READONLY, &nvs);
     if (result != ESP_OK) {
         PRINTFE("NVS open error: %s", esp_err_to_name(result));
         assert(0); //should not happen
     }
+
+    // [Voice assistant] The file as last written (comments included), else the keys in NVS order
+    static char used[INI_LAYOUT_MAX_KEYS][NVS_KEY_NAME_MAX_SIZE];
+    int used_count = 0;
+    size_t layout_len = 0;
+    char *layout = NULL;
+    if (nvs_get_str(nvs, INI_LAYOUT_KEY, NULL, &layout_len) == ESP_OK && (layout = (char *)malloc(layout_len)) &&
+            nvs_get_str(nvs, INI_LAYOUT_KEY, layout, &layout_len) == ESP_OK) {
+        ini_gen_from_layout(nvs, layout, used, &used_count);
+    } else {
+        ini_insert_section(name);
+    }
+    free(layout);
 
     do {
         nvs_entry_info_t info;
@@ -281,6 +402,15 @@ static void ini_gen_from_nvs(const char *part, const char *name)
                     strlcpy(text_file->content, str, CFG_UF2_TEXT_FILE_SIZE);
                 }
             } else if (result == ESP_OK) {
+                // [Voice assistant] Already written from the layout, or the layout itself
+                bool skip = (strcmp(info.key, INI_LAYOUT_KEY) == 0);
+                for (int i = 0; i < used_count && !skip; i++) {
+                    skip = (strcmp(info.key, used[i]) == 0);
+                }
+                if (skip) {
+                    free(str);
+                    goto next;
+                }
 #ifdef CONFIG_UF2_INI_NVS_VALUE_HIDDEN
                 if (!check_value_if_hidden(info.key)) {
                     ini_insert_pair(info.key, "****");
@@ -294,6 +424,7 @@ static void ini_gen_from_nvs(const char *part, const char *name)
             }
             free(str);
         }
+next:
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
         result = nvs_entry_next(&it);
     } while (result == ESP_OK);
@@ -322,22 +453,14 @@ void board_flash_text_update(int index)
     t->dummy[CFG_UF2_TEXT_FILE_SIZE - 1] = '\0';
     memcpy(t->content, t->dummy, CFG_UF2_TEXT_FILE_SIZE);
 
-    // Saved without the '#' lines, without trailing spaces, within the NVS string limit
+    // Saved with the '#' lines (comments, left out by the assistant), without trailing spaces, within the NVS
+    // string limit
     char *text = (char *)calloc(1, CFG_UF2_TEXT_FILE_SIZE);
     if (text == NULL) {
         return;
     }
-    size_t n = 0;
-    const char *line = t->dummy;
-    while (*line) {
-        const char *end = strchr(line, '\n');
-        size_t line_len = end ? (size_t)(end - line + 1) : strlen(line);
-        if (line[0] != '#' && n + line_len < CFG_UF2_TEXT_FILE_SIZE) {
-            memcpy(text + n, line, line_len);
-            n += line_len;
-        }
-        line += line_len;
-    }
+    size_t n = strlen(t->dummy);
+    memcpy(text, t->dummy, n);
     while (n > 0 && (unsigned char)text[n - 1] <= ' ') {
         n--;
     }
@@ -370,6 +493,9 @@ static int nvs_write_back(void* user, const char* section, const char* name,
                           const char* value)
 {
     nvs_handle_t nvs = (nvs_handle_t)user;
+    if (strcmp(name, INI_LAYOUT_KEY) == 0) {
+        return 1;   // [Voice assistant] reserved
+    }
     PRINTFD("... [%s]", section);
     PRINTFD("... (%s=%s)", name, value);
     ESP_ERROR_CHECK(nvs_set_str(nvs, name, value));
@@ -388,6 +514,20 @@ static void ini_parse_to_nvs(const char *ini_str)
         assert(0); //should not happen
     }
     ini_parse_string(ini_str, nvs_write_back, (void*)nvs);
+    // [Voice assistant] The file itself, comments included, to rebuild it the same way next time
+    size_t len = strlen(ini_str);
+    if (len <= INI_LAYOUT_MAX_LEN) {
+        char *old = (char *)calloc(1, INI_LAYOUT_MAX_LEN + 1);
+        size_t old_len = INI_LAYOUT_MAX_LEN + 1;
+        if (!old || nvs_get_str(nvs, INI_LAYOUT_KEY, old, &old_len) != ESP_OK || strcmp(old, ini_str) != 0) {
+            if (nvs_set_str(nvs, INI_LAYOUT_KEY, ini_str) == ESP_OK && nvs_commit(nvs) == ESP_OK) {
+                PRINTF("CONFIG.INI layout saved (%u bytes)", (unsigned)len);
+            }
+        }
+        free(old);
+    } else {
+        PRINTFE("CONFIG.INI too long (%u bytes) to keep its comments", (unsigned)len);
+    }
     nvs_close(nvs);
 }
 

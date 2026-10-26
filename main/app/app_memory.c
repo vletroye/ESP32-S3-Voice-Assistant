@@ -42,6 +42,8 @@ static const char *const s_list[] = {
     "what have you memorized", NULL
 };
 
+/* MEMORY.TXT as saved (comment lines included), and the notes alone, as given to the assistant */
+static char *s_file = NULL;
 static char *s_notes = NULL;
 
 void app_text_normalize(const char *text, char *out, size_t size)
@@ -63,11 +65,33 @@ void app_text_normalize(const char *text, char *out, size_t size)
     out[n] = '\0';
 }
 
+static void set_file(const char *file)
+{
+    free(s_file);
+    s_file = strdup(file ? file : "");
+    free(s_notes);
+    s_notes = settings_text_without_comments(s_file);
+}
+
 void app_memory_init(const char *notes)
 {
-    free(s_notes);
-    s_notes = strdup(notes ? notes : "");
-    ESP_LOGI(TAG, "%u bytes of notes", (unsigned)strlen(s_notes));
+    set_file(notes);
+    ESP_LOGI(TAG, "%u bytes of notes (%u with the comments)", (unsigned)strlen(app_memory_notes()),
+             (unsigned)(s_file ? strlen(s_file) : 0));
+}
+
+static const char *memory_file(void)
+{
+    return s_file ? s_file : "";
+}
+
+/* A comment line of MEMORY.TXT (kept in the file, never a note) */
+static bool is_comment(const char *line)
+{
+    while (*line == ' ' || *line == '\t') {
+        line++;
+    }
+    return *line == '#';
 }
 
 const char *app_memory_notes(void)
@@ -127,13 +151,13 @@ static char *text_after_words(const char *text, int words)
     return rest;
 }
 
-static bool save_notes(const char *notes)
+/* The whole file (comment lines included) */
+static bool save_notes(const char *file)
 {
-    if (settings_save_str("Memory", notes) != ESP_OK) {
+    if (settings_save_str("Memory", file) != ESP_OK) {
         return false;
     }
-    free(s_notes);
-    s_notes = strdup(notes);
+    set_file(file);
     return true;
 }
 
@@ -148,7 +172,7 @@ static memory_cmd_t remember(const char *fact, char **reply)
         strftime(date, sizeof(date), " (%d/%m/%y)", &t);
     }
     char *notes = NULL;
-    asprintf(&notes, "%s%s- %s%s", app_memory_notes(), app_memory_notes()[0] ? "\n" : "", fact, date);
+    asprintf(&notes, "%s%s- %s%s", memory_file(), memory_file()[0] ? "\n" : "", fact, date);
     if (!notes || strlen(notes) > MEMORY_MAX_LEN) {
         free(notes);
         *reply = strdup(lang->memory_full);
@@ -167,7 +191,7 @@ static memory_cmd_t forget(const char *what, char **reply)
     const app_lang_t *lang = app_lang_get();
     char *wanted = malloc(MEMORY_NORM_SIZE);
     char *line_norm = malloc(MEMORY_NORM_SIZE);
-    char *notes = strdup(app_memory_notes());
+    char *notes = strdup(memory_file());
     memory_cmd_t result = MEMORY_CMD_ANSWERED;
     *reply = NULL;
     if (!wanted || !line_norm || !notes) {
@@ -181,6 +205,10 @@ static memory_cmd_t forget(const char *what, char **reply)
     for (char *line = notes; *line;) {
         char *end = strchr(line, '\n');
         size_t len = end ? (size_t)(end - line) : strlen(line);
+        if (is_comment(line)) {
+            line += len + (end ? 1 : 0);    // comments are never forgotten
+            continue;
+        }
         char saved = line[len];
         line[len] = '\0';
         app_text_normalize(line, line_norm, MEMORY_NORM_SIZE);
@@ -288,11 +316,26 @@ memory_cmd_t app_memory_handle(const char *text, char **reply)
     if (match(norm, s_list, true)) {
         result = list(reply);
     } else if (match(norm, s_forget_all, true)) {
-        if (save_notes("")) {
+        // The notes go, the comment lines stay
+        char *comments = calloc(1, strlen(memory_file()) + 1);
+        for (const char *line = memory_file(); comments && *line;) {
+            const char *end = strchr(line, '\n');
+            size_t len = end ? (size_t)(end - line + 1) : strlen(line);
+            if (is_comment(line)) {
+                strncat(comments, line, len);
+            }
+            line += len;
+        }
+        size_t n = comments ? strlen(comments) : 0;
+        while (n > 0 && (unsigned char)comments[n - 1] <= ' ') {
+            comments[--n] = '\0';
+        }
+        if (comments && save_notes(comments)) {
             ESP_LOGI(TAG, "all notes forgotten");
             *reply = strdup(app_lang_get()->memory_cleared);
             result = MEMORY_CMD_CHANGED;
         }
+        free(comments);
     } else if ((phrase = match(norm, s_remember, false)) != NULL) {
         char *fact = text_after_words(text, word_count(phrase));
         if (fact && fact[0]) {

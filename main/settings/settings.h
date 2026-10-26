@@ -46,6 +46,13 @@ typedef struct {
 } sys_param_t;
 
 esp_err_t settings_factory_reset(void);
+
+/**
+ * @brief A text of PERSONA.TXT or MEMORY.TXT without its comment lines (starting with '#'), trimmed.
+ *
+ * @return Allocated (to be freed), "" when nothing is left; NULL only when out of memory
+ */
+char *settings_text_without_comments(const char *text);
 esp_err_t settings_read_parameter_from_nvs(void);
 sys_param_t *settings_get_parameter(void);
 

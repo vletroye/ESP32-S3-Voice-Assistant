@@ -238,17 +238,17 @@ PC as a USB drive named "ESP-BOX". Edit `CONFIG.INI`, save it, then press **Rest
 | Key | Role | Example |
 | --- | --- | --- |
 | `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
-| `ChatGPT_key` | OpenAI key (transcription, voice, GPT answers) | `sk-proj-…` |
 | `Base_url` | OpenAI API URL | `https://api.openai.com/v1/` |
+| `ChatGPT_key` | OpenAI key (transcription, voice, GPT answers) | `sk-proj-…` |
 | `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
 | `Gemini_key` | Gemini key from Google AI Studio (Gemini answers), empty for none | `AIza…` |
+| `Homey_key` | Its API key (shown in the app's settings) | |
+| `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.x.y:52199/mcp` |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`, `gemini-3.8-flash`… |
 | `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
 | `Voice` | Voice of the answers (also set from the Settings screen or by voice: "change de voix") | `marin`, `cedar`, `coral`… |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
-| `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.0.171:52199/mcp` |
-| `Homey_key` | Its API key (shown in the app's settings) | |
 | `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
@@ -257,16 +257,23 @@ The drive also holds **`PERSONA.TXT`**: free text always given to the assistant 
 (Claude, GPT and Gemini alike), kept across conversations, "Au revoir" included. For example:
 
 ```text
-Tu t'appelles Jarvis. Tu es un assistant vocal créé par Valéry Letroye, sur base d'un ESP32-S3-BOX-3.
-Valéry habite à ...
+You are an everyday copilot named ESP, running on an ESP32-S3-BX3. Be direct, efficient, and dynamic. Always get straight to the point, favoring short, clear answers that work well spoken aloud. Your tone is warm, natural, and relaxed—like a sharp colleague who solves problems without giving long speeches.
 ```
 
 `MEMORY.TXT` holds the notes of the long-term memory, one per line (`- note (25/10/26)`): you can correct or
 delete them there.
 
 Both files follow the same rules: several lines are allowed, up to about 3,900 characters; lines starting with
-`#` are ignored (an empty file shows a short help in such lines). They are stored in the NVS keys `Persona` and
-`Memory` and read at start-up.
+`#` are comments: kept in the file, never given to the assistant (an empty file shows a short help in such
+lines). They are stored in the NVS keys `Persona` and `Memory` and read at start-up. The memory commands keep
+the comments too: "oublie que …" never removes a `#` line, "oublie tout" removes the notes and keeps them.
+
+**Comments in `CONFIG.INI`**: lines starting with `#` or `;`, and end-of-line comments after ` ;`
+(`Volume = 70 ; a bit quieter`), are kept. The file as last saved (up to 3,999 characters) is stored in the NVS
+key `Config_layout` and rebuilt from it with the current values (a voice or volume changed by voice shows its
+new value next to its comment); keys added by a newer version are appended at the end. The file can hold up to
+4,096 characters. After saving, wait a few seconds (or eject the drive) before pressing **Restart**: Windows may
+delay the write.
 
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
 starts with this version. Spaces and line breaks pasted by mistake around the values are ignored. Keys are
@@ -450,6 +457,13 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 ## Design notes
 
+- **Configuration mode (factory_nvs)**: the copy of the tinyuf2 component in `factory_nvs/components/esp_tinyuf2`
+  is extended for the assistant. Leaving the mode with **Restart** gives the internal USB PHY back to the
+  USB-Serial-JTAG and restores its D+ pull-up: both survive `esp_restart()`, and without this the serial port
+  (COMx) only came back after a hardware reset. The edited text files are followed through the root directory
+  entries the PC writes (start cluster and size), so that a file put in other clusters is still received whole.
+  `CONFIG_UF2_INI_FILE_SIZE` is 4096 (the component's Kconfig range was widened: an out-of-range value is
+  silently replaced by the 512 default, which cut `CONFIG.INI`).
 - **Slow speech service**: when the synthesized audio arrives slower than it is played, playback runs dry.
   Pauses between sentences are normal; cuts in the middle of a sentence are counted. A response with no audio
   for 15 s, or no more audio for 8 s, is given up and the WebSocket recreated, so that the rest of the reply

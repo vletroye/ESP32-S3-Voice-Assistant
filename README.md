@@ -457,6 +457,10 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 ## Design notes
 
+- **No pop at start-up or restart**: the ES8311 driver switches the speaker amplifier (GPIO 46) on before the
+  DAC starts, and the DAC output settling was heard as a crackle at each start-up. `bsp_codec_init()` holds the
+  amplifier pin low (`gpio_hold_en`, the driver's writes are then ignored), plays 128 ms of silence, then switches
+  it on. Before a restart into the configuration mode, the output is muted and the amplifier switched off.
 - **Configuration mode (factory_nvs)**: the copy of the tinyuf2 component in `factory_nvs/components/esp_tinyuf2`
   is extended for the assistant. Leaving the mode with **Restart** gives the internal USB PHY back to the
   USB-Serial-JTAG and restores its D+ pull-up: both survive `esp_restart()`, and without this the serial port

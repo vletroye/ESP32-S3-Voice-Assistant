@@ -9,6 +9,9 @@
 
 #include "esp_log.h"
 #include "esp_check.h"
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "bsp/esp-bsp.h"
 #include "bsp_board.h"
@@ -201,16 +204,47 @@ esp_err_t bsp_codec_dev_resume(void)
     return bsp_codec_set_fs(CODEC_DEFAULT_SAMPLE_RATE, CODEC_DEFAULT_BIT_WIDTH, CODEC_DEFAULT_CHANNEL);
 }
 
+/* Silence played while the DAC settles at start-up, before the speaker amplifier is switched on */
+#define CODEC_START_SILENCE_WRITES  8       /* 8 x 256 stereo frames at 16 kHz: 128 ms */
+
 static esp_err_t bsp_codec_init()
 {
+    /*
+     * The ES8311 driver switches the speaker amplifier on when the codec is created, before the DAC starts:
+     * the DAC output settling was heard as a crackle at each start-up. The amplifier pin is held low (the
+     * driver's writes to it are then ignored) until the DAC has played some silence.
+     */
+#ifdef BSP_POWER_AMP_IO
+    gpio_set_level(BSP_POWER_AMP_IO, 0);
+#endif
     play_dev_handle = bsp_audio_codec_speaker_init();
     assert((play_dev_handle) && "play_dev_handle not initialized");
+#ifdef BSP_POWER_AMP_IO
+    gpio_set_level(BSP_POWER_AMP_IO, 0);
+    gpio_hold_en(BSP_POWER_AMP_IO);
+#endif
 
     record_dev_handle = bsp_audio_codec_microphone_init();
     assert((record_dev_handle) && "record_dev_handle not initialized");
 
     bsp_codec_set_fs(CODEC_DEFAULT_SAMPLE_RATE, CODEC_DEFAULT_BIT_WIDTH, CODEC_DEFAULT_CHANNEL);
+
+#ifdef BSP_POWER_AMP_IO
+    static int16_t silence[512];
+    for (int i = 0; i < CODEC_START_SILENCE_WRITES; i++) {
+        esp_codec_dev_write(play_dev_handle, silence, sizeof(silence));
+    }
+    gpio_hold_dis(BSP_POWER_AMP_IO);
+    gpio_set_level(BSP_POWER_AMP_IO, 1);
+#endif
     return ESP_OK;
+}
+
+void bsp_codec_power_amp_off(void)
+{
+#ifdef BSP_POWER_AMP_IO
+    gpio_set_level(BSP_POWER_AMP_IO, 0);
+#endif
 }
 
 const boards_info_t *bsp_board_get_info(void)

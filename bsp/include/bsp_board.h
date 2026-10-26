@@ -147,6 +147,12 @@ typedef esp_err_t (*bsp_bottom_get_humiture)(float *temperature, float *humidity
 esp_err_t bsp_codec_mute_set(bool enable);
 
 /**
+ * @brief Switch the speaker amplifier off, e.g. before a restart (an amplifier left on pops when the I2S
+ *        output stops)
+ */
+void bsp_codec_power_amp_off(void);
+
+/**
  * @brief Player set volume.
  *
  * @param volume: volume set

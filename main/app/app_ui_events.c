@@ -10,6 +10,7 @@
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "settings.h"
 
 static char *TAG = "ui-events";
 
@@ -28,11 +29,8 @@ void EventPanelSleepClickCb(lv_event_t *e)
 
 static void RestartToFactoryPartition(void)
 {
-    const esp_partition_t *update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
-    // Set the boot partition to switch to Project 1 using OTA handle
-    ESP_LOGI(TAG, "Switch to partition UF2");
-    esp_ota_set_boot_partition(update_partition);
-    esp_restart();
+    // Configuration mode (speaker amplifier switched off first)
+    settings_factory_reset();
 }
 
 void EventWifiResetConfirmClick(lv_event_t *e)

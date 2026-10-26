@@ -17,6 +17,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "settings.h"
+#include "bsp_board.h"
 #include "esp_ota_ops.h"
 
 static const char *TAG = "settings";
@@ -30,6 +31,10 @@ esp_err_t settings_factory_reset(void)
     const esp_partition_t *update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
     ESP_LOGI(TAG, "Switch to partition UF2");
     esp_ota_set_boot_partition(update_partition);
+    // No pop from the speaker when the audio output stops with the restart
+    bsp_codec_mute_set(true);
+    bsp_codec_power_amp_off();
+    vTaskDelay(pdMS_TO_TICKS(30));
     esp_restart();
     return ESP_OK;
 }

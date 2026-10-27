@@ -17,6 +17,7 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "gemini_chat.h"
+#include "costs.h"
 #include "llm_sse.h"
 
 #define GEMINI_BASE_URL             "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -423,6 +424,9 @@ llm_error_t gemini_chat_stream(const char *text, llm_text_cb_t on_text, void *ct
         st.first_text_us ? (int)((st.first_text_us - st.start_us) / 1000) : -1, (int)((now - st.start_us) / 1000),
         st.output_tokens, st.thoughts_tokens
     };
+    // promptTokenCount counts the cached ones; the thoughts are billed as output
+    costs_add_tokens(COST_LLM, s_model, st.input_tokens - st.cached_tokens, st.cached_tokens, 0,
+                     st.output_tokens + st.thoughts_tokens);
 
 end:
     if (st.error == LLM_OK) {

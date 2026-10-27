@@ -57,6 +57,9 @@ typedef struct {
                                NULL to choose it from the model's name */
     llm_provider_t provider;
     const char *speed;      /* "fast", "average" or "slow", from the last model test (model_test.c), NULL if none */
+    double price_in;        /* per million tokens, in the currency of CONFIG.INI (AGENTS.INI) */
+    double price_out;
+    bool priced;            /* prices given (otherwise its cost is not counted) */
 } llm_model_t;
 
 /** Measures of the last answer, set by the client of its provider */
@@ -97,6 +100,16 @@ bool llm_free_excluded(const char *id);
  *        created if missing), with a comment. Offered models are not changed (openrouter_free_init() does it).
  */
 void llm_free_exclude_add(const char *id, const char *comment);
+
+/**
+ * @brief Prices per million tokens of a model (llm_models) or of a speech model ([speech] of AGENTS.INI), in the
+ *        currency of CONFIG.INI
+ * @return false when AGENTS.INI gives none
+ */
+bool llm_price_of(const char *id, double *price_in, double *price_out);
+
+/** Price of a call ([per_call] of AGENTS.INI: "claude:web_search"); false when none is given */
+bool llm_call_price_of(const char *id, double *price);
 
 /** Number of models of AGENTS.INI (the first ones of llm_models) */
 size_t llm_agents_count(void);

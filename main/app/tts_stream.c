@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include "costs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -317,6 +318,16 @@ static void handle_message(const char *text)
     const cJSON *type = cJSON_GetObjectItem(json, "type");
     const char *t = cJSON_IsString(type) ? type->valuestring : "";
     if (strcmp(t, "response.done") == 0) {
+        // Billed tokens: text read (in, some of it cached), audio spoken (out)
+        const cJSON *usage = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "usage");
+        const cJSON *in = cJSON_GetObjectItem(usage, "input_tokens");
+        const cJSON *cached = cJSON_GetObjectItem(cJSON_GetObjectItem(usage, "input_token_details"), "cached_tokens");
+        const cJSON *out = cJSON_GetObjectItem(usage, "output_tokens");
+        if (cJSON_IsNumber(in) || cJSON_IsNumber(out)) {
+            int cached_n = cJSON_IsNumber(cached) ? cached->valueint : 0;
+            costs_add_tokens(COST_TTS, s_model, (cJSON_IsNumber(in) ? in->valueint : 0) - cached_n, cached_n, 0,
+                             cJSON_IsNumber(out) ? out->valueint : 0);
+        }
         const cJSON *status = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "status");
         strlcpy(s_response_status, cJSON_IsString(status) ? status->valuestring : "?", sizeof(s_response_status));
         s_response_active = false;

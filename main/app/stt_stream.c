@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include "costs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -52,6 +53,8 @@
 #define STT_RECONNECT_MS        2000
 #define STT_RECREATE_AFTER_MS   30000
 #define STT_WS_TASK_STACK       4608    /* internal RAM, runs the TLS handshake (~3.6 KB used) */
+/* Audio heard billed by duration: counted as this many tokens a second (OpenAI's rate for audio input) */
+#define STT_TOKENS_PER_SECOND   10
 #define STT_WS_BUFFER_SIZE      8192    /* PSRAM; larger frames, fewer TLS records */
 #define STT_POLL_MS             50
 
@@ -168,6 +171,18 @@ static void handle_message(const char *text)
             s_on_partial(s_partial);
         }
     } else if (strcmp(t, "conversation.item.input_audio_transcription.completed") == 0) {
+        // Billed: tokens of audio heard (in) and of text written (out), or the duration of the audio heard,
+        // counted as STT_TOKENS_PER_SECOND tokens (so that a price per million tokens applies)
+        const cJSON *usage = cJSON_GetObjectItem(json, "usage");
+        const cJSON *in = cJSON_GetObjectItem(usage, "input_tokens");
+        const cJSON *out = cJSON_GetObjectItem(usage, "output_tokens");
+        const cJSON *seconds = cJSON_GetObjectItem(usage, "seconds");
+        if (cJSON_IsNumber(in) || cJSON_IsNumber(out)) {
+            costs_add_tokens(COST_STT, s_model, cJSON_IsNumber(in) ? in->valueint : 0, 0, 0,
+                             cJSON_IsNumber(out) ? out->valueint : 0);
+        } else if (cJSON_IsNumber(seconds)) {
+            costs_add_tokens(COST_STT, s_model, (int)(seconds->valuedouble * STT_TOKENS_PER_SECOND), 0, 0, 0);
+        }
         const cJSON *transcript = cJSON_GetObjectItem(json, "transcript");
         if (s_awaiting && cJSON_IsString(transcript)) {
             free(s_transcript);

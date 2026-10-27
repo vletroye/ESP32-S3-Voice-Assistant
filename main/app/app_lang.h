@@ -86,6 +86,11 @@ typedef struct {
     const char *config_opening;     /* "édite la config": restarting in configuration mode */
     const char *restarting;         /* "redémarre" */
     const char *clock_shown;        /* "affiche l'heure" */
+    const char *costs_title;        /* page of the costs (tap on the cost, top right) */
+    const char *costs_conversation; /* its rows: since the last wake-up, today, this month */
+    const char *costs_today;
+    const char *costs_month;
+    const char *costs_total;        /* its last column */
     const char *clock_hidden;       /* "cache l'heure" */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */

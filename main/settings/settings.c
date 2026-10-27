@@ -267,6 +267,13 @@ esp_err_t settings_read_parameter_from_nvs(void)
     g_sys_param.sleep_after_cmd = strcasecmp(after_cmd, "on") == 0 || strcasecmp(after_cmd, "true") == 0 ||
                                   strcasecmp(after_cmd, "yes") == 0 || strcmp(after_cmd, "1") == 0;
 
+    // Currency of the prices of AGENTS.INI and of the costs (no conversion)
+    len = sizeof(g_sys_param.currency);
+    if (nvs_get_str(my_handle, "Currency", g_sys_param.currency, &len) != ESP_OK || len <= 1) {
+        strlcpy(g_sys_param.currency, CONFIG_ASSISTANT_CURRENCY, sizeof(g_sys_param.currency));
+    }
+    str_trim(g_sys_param.currency);
+
     // Free OpenRouter models: read from its live list or not, and how many offered
     char value[8] = CONFIG_ASSISTANT_OPENROUTER_FREE;
     len = sizeof(value);
@@ -454,6 +461,7 @@ static const struct {
     { "Confirm_off", CONFIG_ASSISTANT_CONFIRM_OFF },
     { "Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK },
     { "Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD },
+    { "Currency", CONFIG_ASSISTANT_CURRENCY },
     { "Volume", STR(CONFIG_VOLUME_LEVEL) },
     { "Screen_off_s", STR(CONFIG_ASSISTANT_SCREEN_OFF_S) },
     { "End_speech_ms", STR(CONFIG_ASSISTANT_END_OF_SPEECH_MS) },

@@ -133,6 +133,15 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "CONFIG  BKP", 12);
         PRINTF("%s shown as CONFIG.BKP", t->path);
     }
+    // Costs of the assistant, when some were counted
+    FILE *costs = fopen(PHRASES_DIR "/costs.txt", "r");
+    if (costs) {
+        fclose(costs);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/costs.txt", sizeof(t->path));
+        memcpy(t->fat_name, "COSTS   TXT", 12);
+        PRINTF("%s shown as COSTS.TXT", t->path);
+    }
     // Results of the model test ("teste les modèles"), when there are some
     FILE *speed = fopen(PHRASES_DIR "/speed.txt", "r");
     if (speed) {
@@ -431,7 +440,7 @@ static const char *const s_ini_key_order[] = {
     "Base_url", "Chat_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Country",
     "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "Confirm_off", "OpenRouter_key",
     "OpenRouter_free", "Free_models",
-    "Screen_off_s", "Show_clock", "End_speech_ms", "Sleep_after_cmd",
+    "Screen_off_s", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Currency",
 };
 
 /* The keys of s_ini_key_order not written yet (from the layout), in that order */

@@ -17,6 +17,7 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "openrouter_chat.h"
+#include "costs.h"
 #include "llm_sse.h"
 
 #define OPENROUTER_URL              "https://openrouter.ai/api/v1/chat/completions"
@@ -413,6 +414,8 @@ llm_error_t openrouter_chat_stream(const char *text, llm_text_cb_t on_text, void
         st.first_text_us ? (int)((st.first_text_us - st.start_us) / 1000) : -1, (int)((now - st.start_us) / 1000),
         st.output_tokens - st.reasoning_tokens, st.reasoning_tokens
     };
+    // prompt_tokens counts the cached ones; completion_tokens the reasoning (billed too)
+    costs_add_tokens(COST_LLM, s_model, st.input_tokens - st.cached_tokens, st.cached_tokens, 0, st.output_tokens);
 
 end:
     if (st.error == LLM_OK) {

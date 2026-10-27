@@ -64,6 +64,13 @@ menu "Example Configuration"
             assistant goes back to sleep instead of listening again; a command asking a question still listens
             for the answer. Default of Sleep_after_cmd in CONFIG.INI, which takes precedence.
 
+    config ASSISTANT_CURRENCY
+        string "Currency of the prices of AGENTS.INI and of the costs (EUR, USD...)"
+        default "EUR"
+        help
+            The prices of AGENTS.INI are given in this currency (no conversion); the costs (COSTS.TXT, screen)
+            are shown in it. Default of Currency in CONFIG.INI, which takes precedence.
+
     config ASSISTANT_SCREEN_OFF_S
         int "Screen off without presence (s)"
         default 10

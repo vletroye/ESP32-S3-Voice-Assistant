@@ -42,6 +42,22 @@ static size_t s_file_count = 0;
 /* Free OpenRouter models never offered: [openrouter_free_exclude] of AGENTS.INI */
 #define FREE_EXCLUDED_MAX   32
 #define FREE_EXCLUDE_SECTION    "openrouter_free_exclude"
+/* [speech]: the transcription and speech models with their prices; [per_call]: prices per call (web search) */
+#define SPEECH_SECTION          "speech"
+#define PER_CALL_SECTION        "per_call"
+#define SPEECH_MODELS_MAX       8
+#define CALL_PRICES_MAX         8
+static struct {
+    char *id;
+    double price_in;
+    double price_out;
+} s_speech[SPEECH_MODELS_MAX];
+static int s_speech_count = 0;
+static struct {
+    char *id;
+    double price;
+} s_calls[CALL_PRICES_MAX];
+static int s_call_count = 0;
 static char *s_free_excluded[FREE_EXCLUDED_MAX];
 static int s_free_excluded_count = 0;
 
@@ -74,86 +90,182 @@ static bool is_speed(const char *value)
     return strcmp(value, "fast") == 0 || strcmp(value, "average") == 0 || strcmp(value, "slow") == 0;
 }
 
-/* "id = label | effort | spoken | speed | thinking" lines, by "[provider]" section, into llm_models; speed and
- * thinking are optional and told apart by their values */
-static size_t parse_models(const char *text)
+/* A price per million tokens (or per call), in the currency of CONFIG.INI: "1.72" or "1,72" */
+static bool parse_price(const char *text, double *value)
+{
+    char buf[24];
+    strlcpy(buf, text ? text : "", sizeof(buf));
+    for (char *c = buf; *c; c++) {
+        *c = (*c == ',') ? '.' : *c;
+    }
+    char *end = NULL;
+    double v = strtod(buf, &end);
+    if (!buf[0] || end == buf || *trim(end)) {
+        return false;
+    }
+    *value = v;
+    return true;
+}
+
+/* The fields after "id =": label | effort | spoken | price in | price out | speed | thinking; the last two are
+ * optional and told apart by their values (pointers into the split line) */
+typedef struct {
+    const char *label;
+    const char *effort;
+    const char *spoken;
+    const char *speed;
+    const char *thinking;
+    double price_in;
+    double price_out;
+    bool priced;
+} fields_t;
+
+static void split_fields(char *rest, fields_t *f)
+{
+    memset(f, 0, sizeof(*f));
+    char *parts[8];
+    int n = 0;
+    for (char *r = rest; r && n < 8;) {
+        char *bar = strchr(r, '|');
+        if (bar) {
+            *bar = '\0';
+        }
+        parts[n++] = trim(r);
+        r = bar ? bar + 1 : NULL;
+    }
+    f->label = n > 0 ? parts[0] : "";
+    f->effort = n > 1 ? parts[1] : "";
+    f->spoken = n > 2 ? parts[2] : "";
+    double prices[2];
+    int priced = 0;
+    for (int i = 3; i < n; i++) {
+        if (!parts[i][0]) {
+            continue;
+        }
+        if (priced < 2 && parse_price(parts[i], &prices[priced])) {
+            priced++;
+        } else if (is_speed(parts[i])) {
+            f->speed = parts[i];
+        } else {
+            f->thinking = parts[i];
+        }
+    }
+    if (priced == 2) {
+        f->price_in = prices[0];
+        f->price_out = prices[1];
+        f->priced = true;
+    }
+}
+
+/* Section of a line ("[anthropic]"): its provider, or one of the special sections */
+typedef enum { SECTION_NONE, SECTION_MODELS, SECTION_EXCLUDE, SECTION_SPEECH, SECTION_PER_CALL } section_t;
+
+static section_t section_of(char *name, int *provider)
+{
+    *provider = -1;
+    name = trim(name);
+    for (size_t i = 0; i < sizeof(s_sections) / sizeof(s_sections[0]); i++) {
+        if (strcasecmp(name, s_sections[i].section) == 0) {
+            *provider = s_sections[i].provider;
+            return SECTION_MODELS;
+        }
+    }
+    return strcasecmp(name, FREE_EXCLUDE_SECTION) == 0 ? SECTION_EXCLUDE :
+           strcasecmp(name, SPEECH_SECTION) == 0 ? SECTION_SPEECH :
+           strcasecmp(name, PER_CALL_SECTION) == 0 ? SECTION_PER_CALL : SECTION_NONE;
+}
+
+/*
+ * The models of AGENTS.INI into models (at most max); with lists, also the excluded free models, the speech
+ * models and the per-call prices
+ */
+static size_t parse_models(const char *text, llm_model_t *models, size_t max, bool lists)
 {
     char *copy = strdup(text);
     size_t count = 0;
-    int provider = -1;      // section not known yet: its lines are ignored
-    bool exclude = false;   // in [openrouter_free_exclude]: one model id per line
-    for (int i = 0; i < s_free_excluded_count; i++) {
-        free(s_free_excluded[i]);
+    section_t section = SECTION_NONE;
+    int provider = -1;
+    if (lists) {
+        for (int i = 0; i < s_free_excluded_count; i++) {
+            free(s_free_excluded[i]);
+        }
+        s_free_excluded_count = 0;
+        s_speech_count = 0;
+        s_call_count = 0;
     }
-    s_free_excluded_count = 0;
-    for (char *line = copy ? strtok(copy, "\n") : NULL; line && count < LLM_FILE_MODELS_MAX;
-            line = strtok(NULL, "\n")) {
+    for (char *line = copy ? strtok(copy, "\n") : NULL; line && count < max; line = strtok(NULL, "\n")) {
         line = trim(line);
         if (!line[0] || line[0] == '#' || line[0] == ';') {
             continue;
         }
         if (line[0] == '[') {
             char *close = strchr(line, ']');
+            if (close && *trim(close + 1)) {
+                continue;   // "[speech]: text": not a header
+            }
             if (close) {
                 *close = '\0';
             }
-            provider = -1;
-            exclude = (strcasecmp(trim(line + 1), FREE_EXCLUDE_SECTION) == 0);
-            for (size_t i = 0; i < sizeof(s_sections) / sizeof(s_sections[0]); i++) {
-                if (strcasecmp(trim(line + 1), s_sections[i].section) == 0) {
-                    provider = s_sections[i].provider;
-                }
-            }
-            if (provider < 0 && !exclude) {
-                ESP_LOGW(TAG, "AGENTS.INI: [%s] is not a known provider: its models are ignored", line + 1);
+            section = section_of(line + 1, &provider);
+            if (section == SECTION_NONE && lists) {
+                ESP_LOGW(TAG, "AGENTS.INI: [%s] is not a known section: its lines are ignored", line + 1);
             }
             continue;
         }
-        if (exclude) {
+        if (section == SECTION_EXCLUDE) {
             // "vendor/model:free" (anything after '=' or a blank is a comment)
             line[strcspn(line, " \t=")] = '\0';
-            if (line[0] && s_free_excluded_count < FREE_EXCLUDED_MAX) {
+            if (lists && line[0] && s_free_excluded_count < FREE_EXCLUDED_MAX) {
                 s_free_excluded[s_free_excluded_count++] = strdup(line);
             }
             continue;
         }
         char *eq = strchr(line, '=');
-        if (provider < 0 || !eq) {
+        if (section == SECTION_NONE || !eq) {
             continue;
         }
         *eq = '\0';
-        char *fields[5] = { NULL };
-        char *rest = eq + 1;
-        for (int f = 0; f < 5 && rest; f++) {
-            char *bar = strchr(rest, '|');
-            if (bar) {
-                *bar = '\0';
-            }
-            fields[f] = trim(rest);
-            rest = bar ? bar + 1 : NULL;
-        }
         const char *id = trim(line);
-        if (!id[0] || !fields[0] || !fields[0][0]) {
+        if (section == SECTION_PER_CALL) {
+            // "claude:web_search = 0.0086"
+            double price;
+            if (lists && id[0] && s_call_count < CALL_PRICES_MAX && parse_price(trim(eq + 1), &price)) {
+                s_calls[s_call_count].id = strdup(id);
+                s_calls[s_call_count++].price = price;
+            }
+            continue;
+        }
+        fields_t f;
+        split_fields(eq + 1, &f);
+        if (section == SECTION_SPEECH) {
+            if (lists && id[0] && s_speech_count < SPEECH_MODELS_MAX) {
+                s_speech[s_speech_count].id = strdup(id);
+                s_speech[s_speech_count].price_in = f.price_in;
+                s_speech[s_speech_count++].price_out = f.price_out;
+                if (!f.priced) {
+                    ESP_LOGW(TAG, "AGENTS.INI: %s has no prices: its cost is not counted", id);
+                }
+            }
+            continue;
+        }
+        if (!id[0] || !f.label[0]) {
             ESP_LOGW(TAG, "AGENTS.INI: line without a model id or a name, ignored");
             continue;
         }
-        llm_model_t *m = &llm_models[count++];
+        llm_model_t *m = &models[count++];
         m->id = strdup(id);
-        m->label = strdup(fields[0]);
-        m->effort = (fields[1] && fields[1][0]) ? strdup(fields[1]) : "low";
-        m->spoken = strdup((fields[2] && fields[2][0]) ? fields[2] : fields[0]);
-        m->thinking = NULL;
-        m->speed = NULL;
-        for (int f = 3; f < 5; f++) {
-            if (fields[f] && fields[f][0]) {
-                if (is_speed(fields[f])) {
-                    m->speed = strdup(fields[f]);
-                } else {
-                    m->thinking = strdup(fields[f]);
-                }
-            }
-        }
+        m->label = strdup(f.label);
+        m->effort = f.effort[0] ? strdup(f.effort) : "low";
+        m->spoken = strdup(f.spoken[0] ? f.spoken : f.label);
+        m->speed = f.speed ? strdup(f.speed) : NULL;
+        m->thinking = f.thinking ? strdup(f.thinking) : NULL;
+        m->price_in = f.price_in;
+        m->price_out = f.price_out;
+        m->priced = f.priced;
         m->provider = (llm_provider_t)provider;
+        if (!f.priced && lists) {
+            ESP_LOGW(TAG, "AGENTS.INI: %s has no prices: its cost is not counted", id);
+        }
     }
     free(copy);
     return count;
@@ -174,6 +286,217 @@ static char *read_agents_file(void)
     return text;
 }
 
+static bool write_agents_file(const char *text)
+{
+    FILE *f = fopen(AGENTS_FILE, "w");
+    bool ok = f && fputs(text, f) >= 0;
+    if (f) {
+        ok &= (fclose(f) == 0);
+    }
+    return ok;
+}
+
+/* The prices of a model in the firmware's AGENTS.INI (to complete a file of an older firmware) */
+static bool default_prices(const char *id, double *price_in, double *price_out)
+{
+    llm_model_t *defaults = heap_caps_calloc(LLM_FILE_MODELS_MAX, sizeof(llm_model_t), MALLOC_CAP_SPIRAM);
+    size_t n = defaults ? parse_models(s_agents_default_start, defaults, LLM_FILE_MODELS_MAX, false) : 0;
+    bool found = false;
+    for (size_t i = 0; i < n; i++) {
+        if (!found && defaults[i].priced && strcmp(defaults[i].id, id) == 0) {
+            *price_in = defaults[i].price_in;
+            *price_out = defaults[i].price_out;
+            found = true;
+        }
+        free((char *)defaults[i].id);
+        free((char *)defaults[i].label);
+        free((char *)defaults[i].spoken);
+        free((char *)defaults[i].speed);
+        free((char *)defaults[i].thinking);
+        if (defaults[i].effort && strcmp(defaults[i].effort, "low") != 0) {
+            free((char *)defaults[i].effort);
+        }
+    }
+    free(defaults);
+    return found;
+}
+
+/* "1.72" without useless zeros, "0.0086" */
+static void price_text(char *buf, size_t size, double price)
+{
+    snprintf(buf, size, "%.4f", price);
+    char *dot = strchr(buf, '.');
+    if (dot) {
+        char *end = buf + strlen(buf) - 1;
+        while (end > dot + 2 && *end == '0') {
+            *end-- = '\0';
+        }
+    }
+}
+
+/*
+ * AGENTS.INI written again with, for its model lines: the speed given (speeds[i] for llm_models[i], NULL:
+ * unchanged), and the prices of the firmware's file when a line has none. Comments and other lines are kept.
+ * Returns the number of lines changed.
+ */
+static int rewrite_agents(const char *const *speeds)
+{
+    char *text = read_agents_file();
+    if (!text) {
+        return 0;
+    }
+    size_t size = strlen(text) + LLM_FILE_MODELS_MAX * 48 + 64;
+    char *out = calloc(1, size);
+    char *line_buf = malloc(512);
+    if (!out || !line_buf) {
+        free(text);
+        free(out);
+        free(line_buf);
+        return 0;
+    }
+    int changed = 0;
+    section_t section = SECTION_NONE;
+    int provider = -1;
+    for (char *line = text; line && *line;) {
+        char *end = strchr(line, '\n');
+        if (end) {
+            *end = '\0';
+        }
+        size_t len = strlen(line);
+        bool cr = len && line[len - 1] == '\r';
+        if (cr) {
+            line[--len] = '\0';
+        }
+        // The section and the model of the line, as parse_models() reads them
+        char *copy = strdup(line);
+        char *t = copy ? trim(copy) : NULL;
+        bool rebuilt = false;
+        char *close = (t && t[0] == '[') ? strchr(t, ']') : NULL;
+        if (close && *trim(close + 1)) {
+            // "[speech]: text", a comment an older firmware wrote without its '#': made a comment again
+            snprintf(line_buf, 512, "# %s", line);
+            rebuilt = true;
+            changed++;
+        } else if (t && t[0] == '[') {
+            if (close) {
+                *close = '\0';
+            }
+            section = section_of(t + 1, &provider);
+        } else if (t && section == SECTION_MODELS && t[0] != '#' && t[0] != ';' && strchr(t, '=')) {
+            char *eq = strchr(t, '=');
+            *eq = '\0';
+            const char *id = trim(t);
+            fields_t f;
+            split_fields(eq + 1, &f);
+            const char *speed = f.speed;
+            for (size_t i = 0; speeds && i < s_file_count; i++) {
+                if (speeds[i] && strcmp(id, llm_models[i].id) == 0) {
+                    speed = speeds[i];
+                }
+            }
+            double price_in = f.price_in, price_out = f.price_out;
+            bool priced = f.priced || default_prices(id, &price_in, &price_out);
+            if (priced != f.priced || speed != f.speed) {
+                // "id = label | effort | spoken | in | out[ | speed][ | thinking]", the id part as written
+                char in_text[16], out_text[16];
+                price_text(in_text, sizeof(in_text), price_in);
+                price_text(out_text, sizeof(out_text), price_out);
+                const char *line_eq = strchr(line, '=');
+                snprintf(line_buf, 512, "%.*s= %s | %s | %s", (int)(line_eq - line), line, f.label,
+                         f.effort[0] ? f.effort : "low", f.spoken[0] ? f.spoken : f.label);
+                if (priced) {
+                    strlcat(line_buf, " | ", 512);
+                    strlcat(line_buf, in_text, 512);
+                    strlcat(line_buf, " | ", 512);
+                    strlcat(line_buf, out_text, 512);
+                }
+                if (speed) {
+                    strlcat(line_buf, " | ", 512);
+                    strlcat(line_buf, speed, 512);
+                }
+                if (f.thinking) {
+                    strlcat(line_buf, " | ", 512);
+                    strlcat(line_buf, f.thinking, 512);
+                }
+                rebuilt = true;
+                changed++;
+            }
+        }
+        free(copy);
+        strlcat(out, rebuilt ? line_buf : line, size);
+        if (end) {
+            strlcat(out, cr ? "\r\n" : "\n", size);
+        }
+        line = end ? end + 1 : NULL;
+    }
+    if (changed) {
+        bool ok = write_agents_file(out);
+        ESP_LOGI(TAG, "%s %d line(s) of %s", ok ? "Rewrote" : "Could not rewrite", changed, AGENTS_FILE);
+    }
+    free(text);
+    free(out);
+    free(line_buf);
+    return changed;
+}
+
+/* The line "[section]" (alone on its line, blanks aside) of a text, NULL if none: not "# [section]: ..." */
+static const char *section_line(const char *text, const char *header)
+{
+    size_t len = strlen(header);
+    for (const char *p = strstr(text, header); p; p = strstr(p + 1, header)) {
+        const char *after = p + len;
+        while (*after == ' ' || *after == '\t' || *after == '\r') {
+            after++;
+        }
+        if ((p == text || p[-1] == '\n') && (*after == '\n' || *after == '\0')) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+/* A section of the firmware's file missing in AGENTS.INI (written by an older firmware): appended to it */
+static bool add_missing_section(const char *text, const char *section)
+{
+    char header[48];
+    snprintf(header, sizeof(header), "[%s]", section);
+    if (section_line(text, header)) {
+        return false;
+    }
+    const char *from = section_line(s_agents_default_start, header);
+    if (!from) {
+        return false;
+    }
+    // The comment lines just above the section go with it
+    const char *start = from;
+    while (start > s_agents_default_start && start[-1] == '\n') {
+        const char *prev = start - 1;
+        while (prev > s_agents_default_start && prev[-1] != '\n') {
+            prev--;
+        }
+        if (*prev != '#') {
+            break;
+        }
+        start = prev;
+    }
+    // Up to the comment lines of the next section, or to the end
+    const char *next = strstr(from + 1, "\n[");
+    const char *next_comment = strstr(from + 1, "\n#");
+    if (next_comment && (!next || next_comment < next)) {
+        next = next_comment;
+    }
+    size_t len = next ? (size_t)(next + 1 - start) : strlen(start);
+    FILE *f = fopen(AGENTS_FILE, "a");
+    if (!f) {
+        return false;
+    }
+    fputs("\n", f);
+    fwrite(start, 1, len, f);
+    fclose(f);
+    ESP_LOGI(TAG, "%s added to %s", header, AGENTS_FILE);
+    return true;
+}
+
 void llm_load_models(void)
 {
     if (!llm_models) {
@@ -188,7 +511,6 @@ void llm_load_models(void)
     }
     if (blank) {
         // Missing (first start) or emptied on the configuration drive: the version given with the firmware
-        free(text);
         size_t len = (size_t)(s_agents_default_end - s_agents_default_start) - 1;     // without the added NUL
         FILE *f = fopen(AGENTS_FILE, "w");
         bool ok = f && fwrite(s_agents_default_start, 1, len, f) == len;
@@ -196,26 +518,54 @@ void llm_load_models(void)
             ok &= (fclose(f) == 0);
         }
         ESP_LOGI(TAG, "%s %s (%u bytes)", ok ? "Installed" : "Could not install", AGENTS_FILE, (unsigned)len);
-        text = read_agents_file();
-    } else if (!strstr(text, "[" FREE_EXCLUDE_SECTION "]")) {
-        // A file of an older firmware: the section of the excluded free models is added, empty
-        FILE *f = fopen(AGENTS_FILE, "a");
-        if (f) {
-            fputs("\n[" FREE_EXCLUDE_SECTION "]\n# Free OpenRouter models never offered, one id per line "
-                  "(an id ending with * excludes those starting with it)\n", f);
-            fclose(f);
-            ESP_LOGI(TAG, "[%s] added to %s", FREE_EXCLUDE_SECTION, AGENTS_FILE);
-        }
+    } else {
+        // A file of an older firmware: the sections added since, and the prices of the models it lacks
+        add_missing_section(text, FREE_EXCLUDE_SECTION);
+        add_missing_section(text, SPEECH_SECTION);
+        add_missing_section(text, PER_CALL_SECTION);
+        rewrite_agents(NULL);
     }
-    s_file_count = parse_models(text ? text : s_agents_default_start);
+    free(text);
+    text = read_agents_file();
+    s_file_count = parse_models(text ? text : s_agents_default_start, llm_models, LLM_FILE_MODELS_MAX, true);
     if (s_file_count == 0) {
         ESP_LOGE(TAG, "No model in AGENTS.INI: the firmware's list is used");
-        s_file_count = parse_models(s_agents_default_start);
+        s_file_count = parse_models(s_agents_default_start, llm_models, LLM_FILE_MODELS_MAX, true);
     }
     free(text);
     llm_model_count = s_file_count;
-    ESP_LOGI(TAG, "%u models from AGENTS.INI, %d free OpenRouter model(s) excluded", (unsigned)s_file_count,
-             s_free_excluded_count);
+    ESP_LOGI(TAG, "%u models from AGENTS.INI, %d free OpenRouter model(s) excluded, %d speech model(s), "
+             "%d per-call price(s)", (unsigned)s_file_count, s_free_excluded_count, s_speech_count, s_call_count);
+}
+
+bool llm_price_of(const char *id, double *price_in, double *price_out)
+{
+    for (size_t i = 0; i < llm_model_count; i++) {
+        if (llm_models[i].priced && strcmp(id, llm_models[i].id) == 0) {
+            *price_in = llm_models[i].price_in;
+            *price_out = llm_models[i].price_out;
+            return true;
+        }
+    }
+    for (int i = 0; i < s_speech_count; i++) {
+        if (strcmp(id, s_speech[i].id) == 0) {
+            *price_in = s_speech[i].price_in;
+            *price_out = s_speech[i].price_out;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool llm_call_price_of(const char *id, double *price)
+{
+    for (int i = 0; i < s_call_count; i++) {
+        if (strcmp(id, s_calls[i].id) == 0) {
+            *price = s_calls[i].price;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool llm_free_excluded(const char *id)
@@ -274,103 +624,9 @@ size_t llm_agents_count(void)
     return s_file_count;
 }
 
-/* A line of AGENTS.INI with its speed: "id = label | effort | spoken | speed[ | thinking]" (id part kept) */
-static void line_with_speed(char *out, size_t size, const char *line, const char *speed)
-{
-    const char *eq = strchr(line, '=');
-    char *copy = strdup(eq + 1);
-    char *fields[8] = { NULL };
-    int n = 0;
-    for (char *rest = copy; rest && n < 8;) {
-        char *bar = strchr(rest, '|');
-        if (bar) {
-            *bar = '\0';
-        }
-        fields[n++] = trim(rest);
-        rest = bar ? bar + 1 : NULL;
-    }
-    snprintf(out, size, "%.*s= %s | %s | %s | %s", (int)(eq - line), line, n > 0 ? fields[0] : "",
-             n > 1 && fields[1][0] ? fields[1] : "low", n > 2 && fields[2][0] ? fields[2] : fields[0], speed);
-    for (int f = 3; f < n; f++) {
-        if (fields[f][0] && !is_speed(fields[f])) {
-            strlcat(out, " | ", size);
-            strlcat(out, fields[f], size);
-        }
-    }
-    free(copy);
-}
-
 void llm_save_speeds(const char *const *speeds)
 {
-    char *text = read_agents_file();
-    if (!text) {
-        return;
-    }
-    size_t size = strlen(text) + s_file_count * 16 + 64;
-    char *out = calloc(1, size);
-    char *line_buf = malloc(512);
-    if (!out || !line_buf) {
-        free(text);
-        free(out);
-        free(line_buf);
-        return;
-    }
-    int provider = -1;
-    for (char *line = text; line && *line;) {
-        char *end = strchr(line, '\n');
-        if (end) {
-            *end = '\0';
-        }
-        size_t len = strlen(line);
-        bool cr = len && line[len - 1] == '\r';
-        if (cr) {
-            line[--len] = '\0';
-        }
-        // The section and the model of the line, as parse_models() reads them
-        char *copy = strdup(line);
-        char *t = copy ? trim(copy) : NULL;
-        const char *speed = NULL;
-        if (t && t[0] == '[') {
-            char *close = strchr(t, ']');
-            if (close) {
-                *close = '\0';
-            }
-            provider = -1;
-            for (size_t i = 0; i < sizeof(s_sections) / sizeof(s_sections[0]); i++) {
-                if (strcasecmp(trim(t + 1), s_sections[i].section) == 0) {
-                    provider = s_sections[i].provider;
-                }
-            }
-        } else if (t && provider >= 0 && t[0] != '#' && t[0] != ';' && strchr(t, '=')) {
-            *strchr(t, '=') = '\0';
-            const char *id = trim(t);
-            for (size_t i = 0; i < s_file_count; i++) {
-                if (speeds[i] && strcmp(id, llm_models[i].id) == 0) {
-                    speed = speeds[i];
-                }
-            }
-        }
-        free(copy);
-        if (speed) {
-            line_with_speed(line_buf, 512, line, speed);
-            strlcat(out, line_buf, size);
-        } else {
-            strlcat(out, line, size);
-        }
-        if (end) {
-            strlcat(out, cr ? "\r\n" : "\n", size);
-        }
-        line = end ? end + 1 : NULL;
-    }
-    FILE *f = fopen(AGENTS_FILE, "w");
-    bool ok = f && fputs(out, f) >= 0;
-    if (f) {
-        ok &= (fclose(f) == 0);
-    }
-    ESP_LOGI(TAG, "%s the speeds to %s", ok ? "Written" : "Could not write", AGENTS_FILE);
-    free(text);
-    free(out);
-    free(line_buf);
+    rewrite_agents(speeds);
 }
 
 void llm_set_openrouter_free_models(const llm_model_t *models, size_t count)
@@ -385,6 +641,10 @@ void llm_set_openrouter_free_models(const llm_model_t *models, size_t count)
         m->effort = models[i].effort;
         m->spoken = strdup(models[i].spoken);
         m->thinking = NULL;
+        m->speed = NULL;
+        m->price_in = 0;        // free
+        m->price_out = 0;
+        m->priced = true;
         m->provider = LLM_PROVIDER_OPENROUTER;
     }
     llm_model_count = s_file_count + n;

@@ -64,7 +64,9 @@ which has been largely rewritten.
   disconnected), in the same style.
 - **Screen off when nobody is there** (with the ESP32-S3-BOX-3-SENSOR dock): its presence radar switches the
   screen off after `Screen_off_s` seconds without presence (10 by default) while the assistant sleeps on its
-  clock, and on again when someone comes, at the wake word or at a touch. Only the backlight: the wake word keeps
+  clock, and on again when someone comes, at the wake word or at a touch. It closes like an iris (a black ring
+  growing from the edges to the centre in 0.6 s, the backlight fading out meanwhile) and opens from the centre in
+  0.3 s; someone coming back while it closes opens it again at once. Only the backlight: the wake word keeps
   being heard. With another dock, the screen stays on.
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
 - **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
@@ -88,7 +90,7 @@ flowchart LR
 | Wake word | local (ESP-SR 2.5.5) | WakeNet9 "Bonjour ESP" + "Hi ESP", 2-mic AFE |
 | End of speech | local | ESP-SR VAD, 0.9 s of silence (`End_speech_ms`) |
 | Transcription | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output streamed continuously |
-| Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
+| Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working); prompt cache: an explicit breakpoint on the instructions (tools + system, ~8,400 tokens, read again by the first question of a new conversation within 5 minutes) plus automatic caching of the conversation |
 | Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
 | Answer (OpenRouter) | OpenRouter Chat Completions API (OpenAI-compatible) | `stream: true`, `reasoning.effort` `low` with `exclude` (not returned), 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Answer (Gemini) | Gemini API `streamGenerateContent?alt=sse` | `thinkingLevel` `minimal` (Flash-Lite) or `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
@@ -160,17 +162,33 @@ The models are listed in **`AGENTS.INI`**, one section per provider (`[anthropic
 
 ```ini
 [anthropic]
-# model id        = shown name        | reasoning | spoken name | speed | Claude thinking (optional)
-claude-haiku-5-5  = Claude Haiku 5.5  | low       | Haiku       | fast  | disabled
-claude-sonnet-5-5 = Claude Sonnet 5.5 | low       | Sonnet      | between_tools
+# model id        = shown name        | reasoning | spoken name | in   | out  | speed | Claude thinking (optional)
+claude-haiku-5-5  = Claude Haiku 5.5  | low       | Haiku       | 0.09 | 0.43 | fast  | disabled
+claude-sonnet-5-5 = Claude Sonnet 5.5 | low       | Sonnet      | 1.72 | 8.6  | between_tools
 
 [openrouter]
-deepseek/deepseek-v4.1-flash-1017 = DeepSeek V4.1 Flash | low | DeepSeek
+deepseek/deepseek-v4.1-flash-1017 = DeepSeek V4.1 Flash | low | DeepSeek | 0.02 | 0.86
+
+[speech]
+gpt-live-transcribe   = Transcription | - | STT | 2.15 | 8.6
+gpt-realtime-2.1-mini = Speech        | - | TTS | 0.52 | 17.2
+
+[per_call]
+claude:web_search = 0.0086
 ```
 
 - **Model id**: the id of the provider's API. **Shown name**: in the Settings screen. **Reasoning**: the effort
   asked (Anthropic and OpenRouter `low|medium|high`, OpenAI `none|low|…`, Google `minimal|low|…`). **Spoken name**:
   read in the spoken list of models, and said to choose it.
+- **Price in / out** (required): price of a million tokens read / written, **in the currency of `Currency`**
+  (`CONFIG.INI`, `EUR` by default; no conversion), used by the [costs](#costs-coststxt-and-the-cost-on-screen).
+  The prices of the file given with the firmware are estimates in euros: check them on the providers' pages. A
+  line of an older firmware gets the prices of the firmware's file when it has none; a model without prices is
+  not counted ("?" in `COSTS.TXT`). The free OpenRouter models cost 0.
+- **`[speech]`**: the transcription and speech models of OpenAI, same columns: transcription in = audio heard
+  (billed by duration, counted as 10 tokens a second), out = text; speech in = text read, out = audio spoken.
+- **`[per_call]`**: tools billed per call, `provider:tool = price` (`claude:web_search`); another provider's search
+  would get its own line (`openai:web_search`…).
 - **Speed** (optional): `fast`, `average` or `slow`, written by the [model test](#model-test-teste-les-modèles).
 - **Claude thinking** (optional, Anthropic only): `disabled`, `between_tools` or `default` (left to the model).
   Without it, it comes from the name: `disabled` for a Haiku, `between_tools` for a Sonnet, left to the model
@@ -187,6 +205,25 @@ deepseek/deepseek-v4.1-flash-1017 = DeepSeek V4.1 Flash | low | DeepSeek
 - A model id set in `Chat_model` but not in the file still works: its provider then comes from the id
   (`vendor/model` → OpenRouter, `gpt-…` → OpenAI, `gemini-…` → Google, otherwise Anthropic), and it shows up as an
   extra entry in the Settings list.
+
+### Costs: COSTS.TXT and the cost on screen
+
+Each request is counted: the tokens of the **transcription** (STT), of the **answer** (LLM, each round of tool
+calls included, reasoning included) and of the **speech** (TTS), plus the **web searches** of Claude. Their cost
+comes from the prices of `AGENTS.INI`; the tokens read from the cache are counted at 10 % of the price in
+(Anthropic, OpenAI), 25 % (Google, OpenRouter), and those written to it at 125 % (Anthropic).
+
+- **On screen**, top right, while the assistant sleeps, listens or prepares the answer ("Entendu…", "Je
+  réfléchis…"; hidden while the answer is shown): the cost since it
+  last woke up ("0,0123 €") and below it the cost of the day with one decimal less ("[0,123 €]"); the first
+  starts again at 0 at each wake-up (wake word or touch; not when the
+  conversation is cleared). **Tapping it** opens a page: transcription, answer (with the web searches) and speech,
+  and their total, for the current conversation ("En cours"), today ("Ce jour") and this month ("Ce mois"), all
+  models together (back arrow to return; it also closes when the assistant listens).
+- **`COSTS.TXT`** (configuration drive), written each time the assistant goes to sleep: for today, this month and
+  since the start, one line per model (calls, tokens in with the cached ones, tokens out, cost) and the total by
+  kind; then the total by kind of each of the last 12 months. The figures are kept in `/spiffs/costs.json`
+  (counters of today and this month started again on a new day or month); the factory reset erases them.
 
 ### Model test ("teste les modèles")
 
@@ -263,6 +300,7 @@ Main modules of the assistant (`main/app/`):
 | `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
 | `openai_chat.c` | GPT client (Responses API, SSE streaming), history |
 | `openrouter_chat.c` | OpenRouter client (Chat Completions, SSE streaming), history kept on the device |
+| `costs.c` | Costs: tokens and calls of each request priced with `AGENTS.INI`, by model, for today, this month, since the start and the last 12 months (`costs.json`, `COSTS.TXT`) |
 | `openrouter_free.c` | Free OpenRouter models from its live list (once a day, parsed model by model), kept on SPIFFS |
 | `app_presence.c` | Presence radar (AT581X) of the BOX-3-SENSOR dock: screen off after `Screen_off_s` without presence |
 | `gemini_chat.c` | Gemini client (`streamGenerateContent`, SSE streaming), history kept on the device |
@@ -381,6 +419,7 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `OpenRouter_free` | `on`: the free OpenRouter models are read from its live list once a day; `off`: not read (only Free (auto)) | `on` |
 | `Free_models` | How many free OpenRouter models are offered (1 to 15), the most recent ones, besides Free (auto); see the exclusions of `AGENTS.INI` | `6` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
+| `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
@@ -436,6 +475,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice when `Voice` is not set |
 | `CONFIG_ASSISTANT_OPENAI_URL` | `https://api.openai.com/v1/` | `Base_url` of a new `CONFIG.INI` |
 | `CONFIG_ASSISTANT_SHOW_CLOCK` | `on` | Clock on the sleep screen when `Show_clock` is not set |
+| `CONFIG_ASSISTANT_CURRENCY` | `EUR` | Currency when `Currency` is not set |
 | `CONFIG_ASSISTANT_SLEEP_AFTER_CMD` | `off` | Sleep after a local voice command when `Sleep_after_cmd` is not set |
 | `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
@@ -767,7 +807,6 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - More tools: timers and alarms…
 - Spoken confirmation before other sensitive Homey actions (locks, alarm), as done for turning plugs off.
 - Tools for the GPT models.
-- Cost of each exchange (transcription, model, voice) shown on screen.
 - NVS encryption to protect the API keys.
 
 ## Credits and licenses

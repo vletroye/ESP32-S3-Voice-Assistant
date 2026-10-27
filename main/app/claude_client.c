@@ -18,6 +18,7 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "claude_client.h"
+#include "costs.h"
 #include "llm_sse.h"
 
 #define CLAUDE_URL              "https://api.anthropic.com/v1/messages"
@@ -215,19 +216,24 @@ static char *build_request(void)
         cJSON_AddStringToObject(output_config, "effort", s_effort);
     }
     if (s_system) {
+        /*
+         * One text block with an explicit cache breakpoint: tools (rendered first) and instructions, the same
+         * from one conversation to the next (~8,000 tokens), are read from the cache by the first question of a
+         * new conversation too, instead of being written again (slower first word, write billed 125 %)
+         */
+        char *with_hint = NULL;
         if (s_web_search == 1) {
-            char *system = NULL;
-            asprintf(&system, "%s\n\n%s", s_system, WEB_SEARCH_HINT);
-            cJSON_AddStringToObject(req, "system", system ? system : s_system);
-            free(system);
-        } else {
-            cJSON_AddStringToObject(req, "system", s_system);
+            asprintf(&with_hint, "%s\n\n%s", s_system, WEB_SEARCH_HINT);
         }
+        cJSON *system = cJSON_AddArrayToObject(req, "system");
+        cJSON *block = cJSON_CreateObject();
+        cJSON_AddStringToObject(block, "type", "text");
+        cJSON_AddStringToObject(block, "text", with_hint ? with_hint : s_system);
+        cJSON_AddStringToObject(cJSON_AddObjectToObject(block, "cache_control"), "type", "ephemeral");
+        cJSON_AddItemToArray(system, block);
+        free(with_hint);
     }
-    /*
-     * Automatic prompt caching: the breakpoint moves to the last cacheable block. The system prompt
-     * alone is below the model's minimum cacheable size; the growing conversation reaches it.
-     */
+    /* Automatic prompt caching for the conversation: the breakpoint moves to the last cacheable block */
     cJSON *cache_control = cJSON_AddObjectToObject(req, "cache_control");
     cJSON_AddStringToObject(cache_control, "type", "ephemeral");
     /* The device's tools (referenced, owned by the llm layer), then web search when the model has it */
@@ -689,6 +695,10 @@ static void stream_once(stream_t *st)
         st->first_text_us ? (int)((st->first_text_us - st->start_us) / 1000) : -1, (int)((now - st->start_us) / 1000),
         st->output_tokens, -1
     };
+    // Each round of the answer (tool calls) is billed: input_tokens leaves out the cache reads and writes
+    costs_add_tokens(COST_LLM, s_model, st->input_tokens, st->cache_read_tokens, st->cache_write_tokens,
+                     st->output_tokens);
+    costs_add_calls("claude:web_search", st->web_searches);
 }
 
 /* An exchange whose assistant messages hold thinking blocks must be kept verbatim (the API checks them) */

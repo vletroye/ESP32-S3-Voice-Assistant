@@ -23,6 +23,7 @@
 #include "tts_stream.h"
 #include "settings.h"
 #include "assistant.h"
+#include "costs.h"
 #include "bsp/esp-bsp.h"
 
 #include "ui_helpers.h"
@@ -47,7 +48,7 @@ LV_FONT_DECLARE(ui_font_Latin20);
 #define LISTEN_TEXT_LINES               (2)
 #define LISTEN_TEXT_BOTTOM_Y            (-8)
 /* The robot is raised to leave room for these lines */
-#define ROBOT_RAISE_PX                  (20)
+#define ROBOT_RAISE_PX                  (10)
 
 static char *TAG = "ui_ctrl";
 
@@ -485,6 +486,152 @@ static void ui_ctrl_localize(void)
     ui_ctrl_apply_texts();
 }
 
+/* ---------- Costs: the conversation's at the top right; a tap opens their page ---------- */
+
+#define COSTS_REFRESH_MS    1000
+#define COSTS_COLOR         0xB9CCF5
+
+static lv_obj_t *s_cost_label = NULL;
+static lv_obj_t *s_cost_day_label = NULL;     /* below it: the cost of the day, "[0,123 €]" */
+static lv_obj_t *s_cost_screen = NULL;
+static lv_obj_t *s_cost_table = NULL;
+static lv_obj_t *s_cost_title = NULL;
+
+/* Refreshed every second (LVGL task): the cost since the last wake-up, and below it the cost of the day */
+static void cost_label_refresh(lv_timer_t *timer)
+{
+    static double shown = -1, shown_day = -1;
+    char text[32], number[24];
+    double total = costs_conversation(NULL);
+    if (total != shown) {
+        shown = total;
+        costs_format(text, sizeof(text), total, true);
+        lv_label_set_text(s_cost_label, text);
+    }
+    double day = costs_period(COST_PERIOD_TODAY, NULL, NULL);
+    if (day != shown_day) {
+        shown_day = day;
+        costs_format_short(number, sizeof(number), day, true);
+        snprintf(text, sizeof(text), "[%s]", number);
+        lv_label_set_text(s_cost_day_label, text);
+    }
+}
+
+static void cost_row(int row, const char *name, const double by_kind[COST_KINDS], double total)
+{
+    char text[24];
+    lv_table_set_cell_value(s_cost_table, row, 0, name);
+    // STT, LLM (with the tools billed per call), TTS, total
+    const double values[4] = { by_kind[COST_STT], by_kind[COST_LLM] + by_kind[COST_TOOL], by_kind[COST_TTS], total };
+    for (int c = 0; c < 4; c++) {
+        costs_format(text, sizeof(text), values[c], false);
+        lv_table_set_cell_value(s_cost_table, row, c + 1, text);
+    }
+}
+
+static void cost_page_fill(void)
+{
+    const app_lang_t *lang = app_lang_get();
+    char title[48], symbol[32];
+    costs_format(symbol, sizeof(symbol), 0, true);     // "0,0000 €": the currency after the number
+    const char *currency = strrchr(symbol, ' ') ? strrchr(symbol, ' ') + 1 : (symbol[0] == '$' ? "$" : "");
+    snprintf(title, sizeof(title), "%s (%s)", lang->costs_title, currency);
+    lv_label_set_text(s_cost_title, title);
+
+    lv_table_set_cell_value(s_cost_table, 0, 0, "");
+    lv_table_set_cell_value(s_cost_table, 0, 1, "STT");
+    lv_table_set_cell_value(s_cost_table, 0, 2, "LLM");
+    lv_table_set_cell_value(s_cost_table, 0, 3, "TTS");
+    lv_table_set_cell_value(s_cost_table, 0, 4, lang->costs_total);
+    double by_kind[COST_KINDS];
+    double total = costs_conversation(by_kind);
+    cost_row(1, lang->costs_conversation, by_kind, total);
+    total = costs_period(COST_PERIOD_TODAY, NULL, by_kind);
+    cost_row(2, lang->costs_today, by_kind, total);
+    total = costs_period(COST_PERIOD_MONTH, NULL, by_kind);
+    cost_row(3, lang->costs_month, by_kind, total);
+}
+
+static void cost_page_back_cb(lv_event_t *e)
+{
+    lv_scr_load(ui_ScreenListen);
+}
+
+static void cost_page_create(void)
+{
+    s_cost_screen = lv_obj_create(NULL);
+    lv_obj_clear_flag(s_cost_screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_img_src(s_cost_screen, &ui_img_setup_bg_png, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_t *back = lv_img_create(s_cost_screen);
+    lv_img_set_src(back, &ui_img_settings_back_png);
+    lv_obj_set_pos(back, 10, 10);
+    lv_obj_add_flag(back, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_ADV_HITTEST);
+    lv_obj_add_event_cb(back, cost_page_back_cb, LV_EVENT_CLICKED, NULL);
+
+    s_cost_title = lv_label_create(s_cost_screen);
+    lv_obj_set_style_text_font(s_cost_title, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_cost_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_cost_title, LV_ALIGN_TOP_MID, 0, 14);
+
+    s_cost_table = lv_table_create(s_cost_screen);
+    lv_table_set_col_cnt(s_cost_table, 5);
+    lv_table_set_row_cnt(s_cost_table, 4);
+    lv_table_set_col_width(s_cost_table, 0, 92);
+    for (int c = 1; c < 5; c++) {
+        lv_table_set_col_width(s_cost_table, c, 55);
+    }
+    lv_obj_set_style_text_font(s_cost_table, &ui_font_Latin14, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_cost_table, lv_color_hex(0xFFFFFF), LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(s_cost_table, LV_TEXT_ALIGN_RIGHT, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(s_cost_table, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(s_cost_table, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(s_cost_table, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(s_cost_table, 1, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(s_cost_table, lv_color_hex(0x5A6A9A), LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_side(s_cost_table, LV_BORDER_SIDE_BOTTOM, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_all(s_cost_table, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_top(s_cost_table, 6, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_bottom(s_cost_table, 6, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_left(s_cost_table, 2, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(s_cost_table, 3, LV_PART_ITEMS | LV_STATE_DEFAULT);
+    lv_obj_set_size(s_cost_table, 312, LV_SIZE_CONTENT);
+    lv_obj_align(s_cost_table, LV_ALIGN_TOP_MID, 0, 52);
+    lv_obj_clear_flag(s_cost_table, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+}
+
+static void cost_label_clicked_cb(lv_event_t *e)
+{
+    if (!s_cost_screen) {
+        cost_page_create();
+    }
+    cost_page_fill();
+    lv_scr_load(s_cost_screen);
+}
+
+static void cost_label_create(void)
+{
+    s_cost_label = lv_label_create(ui_ScreenListen);
+    lv_obj_set_style_text_font(s_cost_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_cost_label, lv_color_hex(COSTS_COLOR), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_cost_label, LV_ALIGN_TOP_RIGHT, -10, 10);
+    lv_obj_set_ext_click_area(s_cost_label, 12);
+    lv_obj_add_flag(s_cost_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_cost_label, cost_label_clicked_cb, LV_EVENT_CLICKED, NULL);
+    lv_label_set_text(s_cost_label, "");
+
+    s_cost_day_label = lv_label_create(ui_ScreenListen);
+    lv_obj_set_style_text_font(s_cost_day_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_cost_day_label, lv_color_hex(COSTS_COLOR), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_cost_day_label, LV_ALIGN_TOP_RIGHT, -10, 32);
+    lv_obj_set_ext_click_area(s_cost_day_label, 8);
+    lv_obj_add_flag(s_cost_day_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_cost_day_label, cost_label_clicked_cb, LV_EVENT_CLICKED, NULL);
+    lv_label_set_text(s_cost_day_label, "");
+    cost_label_refresh(NULL);
+    lv_timer_create(cost_label_refresh, COSTS_REFRESH_MS, NULL);
+}
+
 void ui_ctrl_init(void)
 {
     bsp_display_lock(0);
@@ -494,6 +641,7 @@ void ui_ctrl_init(void)
     setup_button_setup();
     app_clock_create(ui_PanelSleep, app_lang_get()->weekdays);
     app_clock_show(settings_get_parameter()->show_clock);
+    cost_label_create();
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
@@ -682,6 +830,10 @@ static void wifi_check_timer_handler(lv_timer_t *timer)
 static void show_panel_timer_handler(struct _lv_timer_t *t)
 {
     ui_ctrl_panel_t panel = (ui_ctrl_panel_t)t->user_data;
+    // The assistant listens or answers: back from the page of the costs
+    if (s_cost_screen && lv_scr_act() == s_cost_screen) {
+        lv_scr_load(ui_ScreenListen);
+    }
     lv_obj_t *show_panel = NULL;
     lv_obj_t *hide_panel[3] = { NULL };
 
@@ -695,6 +847,9 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         listen_label_set_text(" ");
         break;
     case UI_CTRL_PANEL_LISTEN:
+        if (current_panel == UI_CTRL_PANEL_SLEEP) {
+            costs_conversation_start();     // woken up: the cost of the conversation starts again
+        }
         show_panel = ui_PanelListen;
         hide_panel[0] = ui_PanelSleep;
         hide_panel[1] = ui_PanelGet;
@@ -743,6 +898,16 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
     }
 
     current_panel = panel;
+    // The costs: shown while asleep, listening, "Entendu", "Je réfléchis"; hidden over the answer
+    if (s_cost_label) {
+        if (panel != UI_CTRL_PANEL_REPLY) {
+            lv_obj_clear_flag(s_cost_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(s_cost_day_label, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(s_cost_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(s_cost_day_label, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
 
     ESP_LOGI(TAG, "Swich to panel[%d]", panel);
 }

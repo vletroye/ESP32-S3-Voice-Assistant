@@ -43,6 +43,7 @@
 #include "stt_stream.h"
 #include "cJSON.h"
 #include "model_test.h"
+#include "costs.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -405,6 +406,7 @@ void assistant_request_restore(bool factory)
 /* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
 static const char *const s_user_files[] = {
     "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "speed.txt", "log.txt",
+    "costs.json", "costs.tmp", "costs.txt",
 };
 
 /*
@@ -688,6 +690,8 @@ void app_main()
     // once a day, below): before the Settings screen lists them
     llm_load_models();
     openrouter_free_init();
+    // The costs counted so far (prices of AGENTS.INI, in the currency of CONFIG.INI)
+    costs_init(sys_param->currency);
     bsp_i2c_init();
 
     bsp_display_cfg_t cfg = {
@@ -759,6 +763,7 @@ void app_main()
             llm_history_save();
             app_volume_save();
             weather_places_save();
+            costs_save();
             bsp_codec_mute_set(true);
             bsp_codec_power_amp_off();
             vTaskDelay(pdMS_TO_TICKS(30));
@@ -776,6 +781,7 @@ void app_main()
             } else {
                 llm_history_save();
                 weather_places_save();
+                costs_save();
                 done = (settings_restore_defaults() == ESP_OK);
             }
             if (done) {
@@ -801,6 +807,7 @@ void app_main()
             llm_history_save();
             app_volume_save();
             weather_places_save();
+            costs_save();
             settings_factory_reset();
         }
         // Language or model changed from the Settings screen
@@ -824,6 +831,8 @@ void app_main()
             llm_history_save();
             app_volume_save();
             weather_places_save();
+            // The costs counted, saved (the conversation's stays shown until the next wake-up)
+            costs_save();
         }
         if (seconds % 30) {
             continue;

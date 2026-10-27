@@ -225,9 +225,6 @@ void app_main(void)
         nvs_init_str_if_missing("Volume", number);
         // Voice of the answers (same default as the assistant's ASSISTANT_TTS_VOICE)
         nvs_init_str_if_missing("Voice", CONFIG_ASSISTANT_TTS_VOICE);
-        // Who the assistant is and who it talks to, added to its instructions: edited in PERSONA.TXT
-        // (components/esp_tinyuf2, a copy of the tinyuf2 component extended for it), not in CONFIG.INI
-        nvs_init_str_if_missing("Persona", "");
         // Notes the assistant was asked to remember ("souviens-toi que ..."): edited in MEMORY.TXT
         nvs_init_str_if_missing("Memory", "");
         // Where the user lives: 2-letter country code (BE, FR...) and town, for the web search and the model

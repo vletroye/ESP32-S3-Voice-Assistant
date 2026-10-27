@@ -27,8 +27,8 @@ which has been largely rewritten.
   3", "Prends la voix Cedar"); all apply at once, without restarting.
 - **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays", "Change ma ville"):
   the web search favours local results, and Claude uses this place for news, weather and local questions.
-- **Persona**: a free text (name, who made it, who you are…) given to the assistant with every question,
-  edited in `PERSONA.TXT` from the PC.
+- **Persona, per language**: who the assistant is (identity, personality, instructions) and the style of its
+  voice, edited in `PERSO_FR.TXT` / `PERSO_EN.TXT` from the PC.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
@@ -285,7 +285,7 @@ Two firmwares live side by side in flash:
 | Folder | Partition | Role |
 | --- | --- | --- |
 | `main/` (root project) | `factory` (6 MB) | The voice assistant |
-| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `PERSONA.TXT` and `MEMORY.TXT` (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `PERSONA.TXT` and `MEMORY.TXT`, files that can grow when edited, and a bound-checked `CONFIG.INI`; the `INFO_UF2.TXT`, `INDEX.HTM` and `CURRENT.UF2` files of TinyUF2 are not shown, no firmware being flashed through the drive) |
+| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `MEMORY.TXT` and the files kept on SPIFFS (`AGENTS.INI`, `VOICE_FR.TXT`, `PERSO_FR.TXT`…) (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `MEMORY.TXT` and the files of SPIFFS, files that can grow when edited, a root directory spread over its 4 sectors (up to 26 files instead of 15), and a bound-checked `CONFIG.INI`; the `INFO_UF2.TXT`, `INDEX.HTM` and `CURRENT.UF2` files of TinyUF2 are not shown, no firmware being flashed through the drive) |
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
 | `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep); the conversation (`history.json`) is saved there at run time |
 
@@ -371,16 +371,18 @@ Tapping one stops the countdown and asks for a confirmation:
 
 - **Soft reset** (circular arrows): the settings of `CONFIG.INI` go back to their defaults (language, model,
   voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`, `Base_url`,
-  `Claude_key`, `Gemini_key`, `OpenRouter_key`) and Homey (`Homey_url`, `Homey_key`); `PERSONA.TXT`, `MEMORY.TXT`
+  `Claude_key`, `Gemini_key`, `OpenRouter_key`) and Homey (`Homey_url`, `Homey_key`); `PERSO_FR.TXT`,
+  `PERSO_EN.TXT`, `MEMORY.TXT`
   and the comments of `CONFIG.INI` are kept. `VOICE_FR.TXT`, `VOICE_EN.TXT` and `AGENTS.INI` are replaced by the
   versions of the firmware (your changes to them are lost). Then the device restarts. This is how phrases or
   models added to the firmware reach a device whose files already exist (only missing sections are added
   otherwise).
 - **Factory reset** (bin, red): **everything** goes back to the firmware's state: every setting is erased (Wi-Fi,
-  API keys, Homey, `PERSONA.TXT`, `MEMORY.TXT`, comments of `CONFIG.INI`), as well as the phrase files,
+  API keys, Homey, `MEMORY.TXT`, comments of `CONFIG.INI`), as well as the phrase files, `PERSO_FR.TXT`,
+  `PERSO_EN.TXT`,
   `AGENTS.INI`, the saved conversation, the places of the weather and the list of free models. Before that,
-  `CONFIG.INI` is saved as **`CONFIG.BKP`** (on SPIFFS, shown on the configuration drive), with `PERSONA.TXT` and
-  `MEMORY.TXT` at its end as comments; this backup is only replaced when `CONFIG.INI` differs from the firmware's,
+  `CONFIG.INI` is saved as **`CONFIG.BKP`** (on SPIFFS, shown on the configuration drive), with `MEMORY.TXT`,
+  `PERSO_FR.TXT` and `PERSO_EN.TXT` at its end as comments; this backup is only replaced when `CONFIG.INI` differs from the firmware's,
   so a second factory reset in a row keeps the settings saved by the first one. Nothing is erased if the backup
   fails. Then, with a PC connected, the device switches to the configuration mode (its drive shows up on the PC,
   which may offer to open it); without a PC it restarts, and since the Wi-Fi is erased it starts the
@@ -424,14 +426,39 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
 
-The drive also holds **`PERSONA.TXT`**: free text always given to the assistant with every question
-(Claude, GPT, Gemini and OpenRouter alike), kept across conversations, "Au revoir" included. For example:
+The drive also holds **`PERSO_FR.TXT`** and **`PERSO_EN.TXT`**: who the assistant is in each language, given to
+it with every question (Claude, GPT, Gemini and OpenRouter alike). Only the file of the language in use is read
+(again when the language changes); a language without its own file uses the English one.
 
-```text
-You are ESP, an everyday copilot running on an ESP32-S3-BOX-3. Your personality is inspired by JARVIS from Iron Man: polished, loyal, and quietly witty. You speak with calm composure and a touch of British understatement, and your humor is dry and occasional, never forced. You never explain your own joke.
-When something is amusing, let the wit land in a single line and move on. Do not joke when the user is stressed, frustrated, or dealing with something serious. In those moments, be calm, precise, and focused on solving the problem.
-Your tone is warm, composed, and dependable, like a trusted assistant who anticipates needs and handles things without fuss.
+```ini
+[identité]
+Tu es un assistant vocal nommé ESP qui parle français.
+
+[personnalité]
+Ta personnalité est inspirée de TARS, le robot d'Interstellar : pragmatique, direct et sec, avec un humour
+pince-sans-rire. Tu ne forces jamais l'humour : une remarque drôle, rare et courte, puis tu passes à la suite.
+
+[instructions]
+Réponds de façon courte et orale, en une à trois phrases simples, comme dans une conversation. Si une question
+demande une longue réponse, donne l'essentiel et propose de développer.
+
+[voix]
+Parle en français, avec un accent français standard, une voix naturelle et chaleureuse, et un débit légèrement
+rapide.
 ```
+
+- The instructions of the model are built in this order: **identity**, **personality**, **instructions**, then
+  what the working of the device requires (in `app_lang.c`: the answer is read aloud, so no Markdown, lists or
+  emojis; each message starts with the date and time in brackets), the location, the home (Homey) and the notes of
+  `MEMORY.TXT`. That technical part stays in the firmware, so that editing the file cannot break the device.
+- **`[voix]`** / **`[voice]`**: the style of the speech synthesis (accent, tone, pace); the firmware puts first the
+  order to read the text word for word and never answer it.
+- Section names in French or English (`[identity]`, `[personality]`, `[instructions]`, `[voice]`); several lines
+  per section (a blank line starts a new paragraph); `#` lines are comments. A missing section takes the firmware's
+  text, an empty one stays empty. The files given with the firmware (`main/persona/`) are installed when missing or
+  emptied; a factory reset erases them, a soft reset keeps them.
+- The `PERSONA.TXT` of an older firmware (NVS key `Persona`) is moved once into the `[personnalité]` of the file of
+  the language in use, then its key is erased.
 
 `AGENTS.INI` holds the models offered (see [AGENTS.INI](#agentsini-the-models-offered)); like the phrase files,
 it is stored on SPIFFS. `OpenRouter_list`, formerly in `CONFIG.INI`, is removed when the configuration mode starts:
@@ -656,7 +683,7 @@ de 1 à 3, ou le nom du modèle.". "Flash" alone is Gemini 3.8 Flash, "Flash-Lit
 | affiche / montre / remets / active l'heure · l'horloge · la date et l'heure (alone) | show / display the time · the clock · turn on the clock | The time and date are shown on the sleep screen again ("D'accord, j'affiche l'heure."); saved as `Show_clock = on` |
 | cache / masque / enlève / retire / désactive / éteins l'heure · l'horloge · la date et l'heure · n'affiche plus l'heure (alone) | hide the time · the clock · turn off the clock · don't show the time | The time and date are no longer shown on the sleep screen (volume and Wi-Fi stay); saved as `Show_clock = off` |
 | redémarre · redémarre-toi · relance · relance-toi · fais un redémarrage · lance un redémarrage · redémarrage (alone, or with "s'il te plaît") | restart · restart yourself · reboot · reboot yourself (alone, or with "please") | "D'accord, je redémarre.", then the conversation, the volume and the town cache are saved, the speaker is switched off and the device restarts (section `[s_restart]`) |
-| je veux éditer la config / la configuration / les fichiers de config(uration) · édite la config / le config / les fichiers de configuration · je veux modifier la config · modifie la configuration · ouvre la config · ouvre les fichiers de configuration · passe en mode configuration · mode configuration | I want to edit the config · edit the configuration (files) · open the config files · configuration mode | With a PC connected: "D'accord, je redémarre en mode configuration…", the conversation and the volume are saved, then the device restarts in configuration mode (CONFIG.INI, PERSONA.TXT, MEMORY.TXT on a USB drive), as with the folder icon of the Settings screen; press reset to come back. Without a PC (unplugged, charger or power bank): "Connecte-moi à ton PC." |
+| je veux éditer la config / la configuration / les fichiers de config(uration) · édite la config / le config / les fichiers de configuration · je veux modifier la config · modifie la configuration · ouvre la config · ouvre les fichiers de configuration · passe en mode configuration · mode configuration | I want to edit the config · edit the configuration (files) · open the config files · configuration mode | With a PC connected: "D'accord, je redémarre en mode configuration…", the conversation and the volume are saved, then the device restarts in configuration mode (CONFIG.INI, MEMORY.TXT, PERSO_FR.TXT… on a USB drive), as with the folder icon of the Settings screen; press reset to come back. Without a PC (unplugged, charger or power bank): "Connecte-moi à ton PC." |
 
 The PC is detected by the USB start-of-frame packets a host sends every millisecond (`usb_serial_jtag_is_connected()`):
 a charger or a power bank sends none.
@@ -694,7 +721,7 @@ No fixed wording: Claude decides when to use a tool.
 
 | Tool | Examples |
 | --- | --- |
-| Weather | "Quel temps fait-il à Namur ?", "Va-t-il pleuvoir demain ?" (your town if it is in `PERSONA.TXT`) |
+| Weather | "Quel temps fait-il à Namur ?", "Va-t-il pleuvoir demain ?" (your town: `City` in `CONFIG.INI`, or "change ma ville") |
 | Volume | "Parle plus fort", "Baisse le son", "Mets le volume à 50" (then back to sleep) |
 | Web search | "Quelles sont les dernières nouvelles ?", "Cherche sur internet …" |
 | Homey | "Allume la lumière du salon", "Éteins tout au rez-de-chaussée", "Active l'ambiance cinéma", "Lance le flow Bonne nuit", "Qui est à la maison ?", "Combien je consomme en ce moment ?" |

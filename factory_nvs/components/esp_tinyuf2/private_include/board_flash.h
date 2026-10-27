@@ -84,10 +84,9 @@ extern char *_ini_file_dummy;
  */
 #define CFG_UF2_TEXT_FILE_SIZE       8192
 #define CFG_UF2_TEXT_MAX_LEN         3999    /* NVS-stored files */
-#define UF2_TEXT_PERSONA             0
-#define UF2_TEXT_MEMORY              1
-#define UF2_TEXT_PHRASES             2       /* first phrase file */
-#define UF2_PHRASE_FILES_MAX         7       /* AGENTS.INI, CONFIG.BKP, COSTS.TXT, SPEED.TXT, VOICE_<CODE>.TXT */
+#define UF2_TEXT_MEMORY              0
+#define UF2_TEXT_PHRASES             1       /* first file of SPIFFS */
+#define UF2_PHRASE_FILES_MAX         24      /* AGENTS.INI, CONFIG.BKP, COSTS.TXT, SPEED.TXT, the files per language */
 #define UF2_TEXT_COUNT               (UF2_TEXT_PHRASES + UF2_PHRASE_FILES_MAX)
 
 /* FAT name (11 characters, "VOICE_FRTXT") of a text file whose name is not fixed, NULL if the slot is unused */

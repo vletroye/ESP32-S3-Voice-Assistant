@@ -24,6 +24,9 @@ idf_component_register(
         "phrases/phrases_en.txt"
         # Models offered (AGENTS.INI), installed on SPIFFS when missing (main/app/llm.c)
         "agents/agents.ini"
+        # Who the assistant is, per language (PERSO_FR.TXT...), installed on SPIFFS when missing (main/app/persona.c)
+        "persona/persona_fr.txt"
+        "persona/persona_en.txt"
 )
 
 set(MV_UF2_BIN_EXE ${COMPONENT_PATH}/generateuf2.py)

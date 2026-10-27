@@ -73,6 +73,9 @@ sys_param_t *settings_get_parameter(void);
  */
 esp_err_t settings_save_str(const char *key, const char *value);
 
+/** Erase a configuration value (e.g. "Persona", moved to the files of the languages) */
+esp_err_t settings_erase_key(const char *key);
+
 /** CONFIG.BKP of the configuration drive: CONFIG.INI (and PERSONA.TXT, MEMORY.TXT) saved by the factory reset */
 #define SETTINGS_BACKUP_FILE    "/spiffs/config.bkp"
 

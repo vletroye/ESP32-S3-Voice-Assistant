@@ -143,47 +143,28 @@ STATIC_ASSERT(FAT_ENTRIES_PER_SECTOR                       ==       256); // FAT
 #define UF2_SECTOR_COUNT                (_flash_size / UF2_FIRMWARE_BYTES_PER_SECTOR)
 #define UF2_BYTE_COUNT                  (UF2_SECTOR_COUNT * BPB_SECTOR_SIZE) // always a multiple of sector size, per UF2 spec
 
-#ifdef TINYUF2_FAVICON_HEADER
-#include TINYUF2_FAVICON_HEADER
-const char autorunFile[] = "[Autorun]\r\nIcon=FAVICON.ICO\r\n";
-#endif
-
-// size of CURRENT.UF2:
-static FileContent_t info[] = {
-    // [Voice assistant] INFO_UF2.TXT and INDEX.HTM of TinyUF2 left out (no use here): unnamed, so not listed
-    {.name = "", .content = NULL, .size = 0  },
-    {.name = "", .content = NULL, .size = 0  },
+/*
+ * [Voice assistant] The files of the drive, in this order: CONFIG.INI, the text files (MEMORY.TXT, then the files of
+ * SPIFFS: AGENTS.INI, VOICE_FR.TXT, PERSO_FR.TXT..., named at start-up; unnamed slots are not listed), and last the
+ * free space after the files (CURRENT.UF2 in TinyUF2, not listed: no firmware is read nor written through the drive).
+ * TinyUF2's INFO_UF2.TXT and INDEX.HTM are left out.
+ */
+static FileContent_t info[1 + UF2_TEXT_COUNT + 1] = {
     {.name = "CONFIG  INI", .content = NULL, .size = 0  },
-    {.name = "PERSONA TXT", .content = NULL, .size = 0  },
     {.name = "MEMORY  TXT", .content = NULL, .size = 0  },
-    // [Voice assistant] AGENTS.INI and the phrase files (VOICE_FR.TXT...), named at start-up; not listed while unnamed
-    {.name = "", .content = NULL, .size = 0  },
-    {.name = "", .content = NULL, .size = 0  },
-    {.name = "", .content = NULL, .size = 0  },
-    {.name = "", .content = NULL, .size = 0  },
-    {.name = "", .content = NULL, .size = 0  },
-    {.name = "", .content = NULL, .size = 0  },
-    {.name = "", .content = NULL, .size = 0  },
-#ifdef TINYUF2_FAVICON_HEADER
-    {.name = "AUTORUN INF", .content = autorunFile, .size = sizeof(autorunFile) - 1},
-    {.name = "FAVICON ICO", .content = favicon_data, .size = favicon_len            },
-#endif
-    // current.uf2 must be the last element and its content must be NULL. [Voice assistant] Not listed: no firmware
-    // is read nor written through the drive (no OTA partition given), it is only the free space after the files
-    {.name = "", .content = NULL, .size = 0                       },
 };
 
 enum {
     NUM_FILES = sizeof(info) / sizeof(info[0]),
     FID_UF2 = NUM_FILES - 1,
-    FID_INI = 2,
-    FID_PERSONA = 3,    // FID_PERSONA + UF2_TEXT_xxx: the text files
-    FID_TEXT_LAST = FID_PERSONA + UF2_TEXT_COUNT - 1,
+    FID_INI = 0,
+    FID_TEXT = 1,       // FID_TEXT + UF2_TEXT_xxx: the text files
+    FID_TEXT_LAST = FID_TEXT + UF2_TEXT_COUNT - 1,
     NUM_DIRENTRIES = NUM_FILES + 1 // including volume label as first root directory entry
 };
 
 STATIC_ASSERT(NUM_DIRENTRIES < BPB_ROOT_DIR_ENTRIES);  // FAT requirement -- Ensures BPB reserves sufficient entries for all files
-STATIC_ASSERT(NUM_DIRENTRIES < DIRENTRIES_PER_SECTOR); // GhostFAT bug workaround -- else, code overflows buffer
+// [Voice assistant] The entries span the ROOT_DIR_SECTOR_COUNT sectors of the root directory (uf2_read_block())
 
 #define NUM_SECTORS_IN_DATA_REGION (BPB_TOTAL_SECTORS - BPB_RESERVED_SECTORS - (BPB_NUMBER_OF_FATS * BPB_SECTORS_PER_FAT) - ROOT_DIR_SECTOR_COUNT)
 #define CLUSTER_COUNT              (NUM_SECTORS_IN_DATA_REGION / BPB_SECTORS_PER_CLUSTER)
@@ -296,11 +277,11 @@ void uf2_init(void)
         if (content) {
             const char *fat_name = board_flash_text_fat_name(i);
             if (fat_name) {
-                memcpy(info[FID_PERSONA + i].name, fat_name, 11);
+                memcpy(info[FID_TEXT + i].name, fat_name, 11);
             }
-            info[FID_PERSONA + i].content = content;
-            info[FID_PERSONA + i].size = strlen(content);
-            info[FID_PERSONA + i].reserved = CFG_UF2_TEXT_FILE_SIZE;
+            info[FID_TEXT + i].content = content;
+            info[FID_TEXT + i].size = strlen(content);
+            info[FID_TEXT + i].reserved = CFG_UF2_TEXT_FILE_SIZE;
         }
     }
     init_starting_clusters();
@@ -356,12 +337,12 @@ static size_t text_capacity(uint32_t fid)
 
 static char *text_dummy(uint32_t fid)
 {
-    return fid == FID_INI ? _ini_file_dummy : board_flash_text_dummy(fid - FID_PERSONA);
+    return fid == FID_INI ? _ini_file_dummy : board_flash_text_dummy(fid - FID_TEXT);
 }
 
 static char *text_content(uint32_t fid)
 {
-    return fid == FID_INI ? _ini_file : board_flash_text_content(fid - FID_PERSONA);
+    return fid == FID_INI ? _ini_file : board_flash_text_content(fid - FID_TEXT);
 }
 
 /* A written sector, at its offset in the buffer receiving the file */
@@ -391,7 +372,7 @@ static void text_commit(uint32_t fid)
             memcpy(_ini_file, _ini_file_dummy, capacity);
             board_flash_nvs_update(_ini_file_dummy);
         } else {
-            board_flash_text_update(fid - FID_PERSONA);
+            board_flash_text_update(fid - FID_TEXT);
         }
         info[fid].size = strlen(content);
     }
@@ -538,33 +519,26 @@ void uf2_read_block(uint32_t block_no, uint8_t *data)
         // Request was for a (root) directory sector .. root because not supporting subdirectories (yet)
         sectionRelativeSector -= FS_START_ROOTDIR_SECTOR;
 
-        DirEntry *d = (void*) data;                   // pointer to next free DirEntry this sector
-        int remainingEntries = DIRENTRIES_PER_SECTOR; // remaining count of DirEntries this sector
-
-        uint32_t startingFileIndex;
-
-        if (sectionRelativeSector == 0) {
-            // volume label is first directory entry
-            padded_memcpy(d->name, (char const*) BootBlock.VolumeLabel, 11);
-            d->attrs = 0x28;
-            d++;
-            remainingEntries--;
-
-            startingFileIndex = 0;
-        } else {
-            // -1 to account for volume label in first sector
-            startingFileIndex = DIRENTRIES_PER_SECTOR * sectionRelativeSector - 1;
+        // [Voice assistant] Entry 0 is the volume label, then the named files in order (the unnamed ones are not
+        // listed); this sector holds the entries [first, first + DIRENTRIES_PER_SECTOR)
+        DirEntry *dir = (void*) data;
+        uint32_t const first = sectionRelativeSector * DIRENTRIES_PER_SECTOR;
+        if (first == 0) {
+            padded_memcpy(dir->name, (char const*) BootBlock.VolumeLabel, 11);
+            dir->attrs = 0x28;
         }
-
-        for (uint32_t fileIndex = startingFileIndex;
-                remainingEntries > 0 && fileIndex < NUM_FILES; // while space remains in buffer and more files to add...
-                fileIndex++, d++) {
+        uint32_t entry = 1;
+        for (uint32_t fileIndex = 0; fileIndex < NUM_FILES; fileIndex++) {
             // WARNING -- code presumes all files take exactly one directory entry (no long file names!)
-            uint32_t const startCluster = info[fileIndex].cluster_start;
             if (!info[fileIndex].name[0]) {
-                d--;        // [Voice assistant] unused phrase file slot: not listed (all entries fit in sector 0)
                 continue;
             }
+            if (entry < first || entry >= first + DIRENTRIES_PER_SECTOR) {
+                entry++;
+                continue;
+            }
+            DirEntry *d = &dir[entry++ - first];
+            uint32_t const startCluster = info[fileIndex].cluster_start;
 
             FileContent_t const *inf = &info[fileIndex];
             padded_memcpy(d->name, inf->name, 11);

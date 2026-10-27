@@ -556,10 +556,28 @@ static esp_err_t backup_config(nvs_handle_t handle)
     nvs_release_iterator(it);
     char *persona = get_str(handle, "Persona");
     char *memory = get_str(handle, "Memory");
-    backup_text(f, "PERSONA.TXT", persona);
+    if (persona && persona[0]) {
+        backup_text(f, "PERSONA.TXT", persona);
+    }
     backup_text(f, "MEMORY.TXT", memory);
     free(persona);
     free(memory);
+    // Who the assistant is, per language (PERSO_FR.TXT...)
+    static const char *const s_persona_files[][2] = {
+        { "/spiffs/persona_fr.txt", "PERSO_FR.TXT" }, { "/spiffs/persona_en.txt", "PERSO_EN.TXT" },
+    };
+    for (size_t i = 0; i < sizeof(s_persona_files) / sizeof(s_persona_files[0]); i++) {
+        FILE *pf = fopen(s_persona_files[i][0], "r");
+        char *text = pf ? calloc(1, 8192) : NULL;
+        if (text) {
+            fread(text, 1, 8191, pf);
+            backup_text(f, s_persona_files[i][1], text);
+        }
+        if (pf) {
+            fclose(pf);
+        }
+        free(text);
+    }
     bool ok = (fclose(f) == 0);
     ESP_RETURN_ON_FALSE(ok, ESP_FAIL, TAG, "cannot write %s", SETTINGS_BACKUP_FILE);
     ESP_LOGI(TAG, "CONFIG.INI saved to %s", SETTINGS_BACKUP_FILE);
@@ -610,6 +628,20 @@ esp_err_t settings_restore_defaults(void)
     }
     ret = nvs_commit(handle);
     nvs_close(handle);
+    return ret;
+}
+
+esp_err_t settings_erase_key(const char *key)
+{
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READWRITE, &handle);
+    ESP_RETURN_ON_ERROR(ret, TAG, "nvs open failed (0x%x)", ret);
+    ret = nvs_erase_key(handle, key);
+    if (ret == ESP_OK) {
+        ret = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    ESP_LOGI(TAG, "erased %s (%s)", key, esp_err_to_name(ret));
     return ret;
 }
 

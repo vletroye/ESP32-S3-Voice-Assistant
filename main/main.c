@@ -44,6 +44,7 @@
 #include "cJSON.h"
 #include "model_test.h"
 #include "costs.h"
+#include "persona.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -349,7 +350,6 @@ static char *build_system_prompt(void)
 {
     const app_lang_t *lang = app_lang_get();
     const char *notes = app_memory_notes();
-    const char *persona = sys_param->persona ? sys_param->persona : "";
     // "Lieu de l'utilisateur : Evere, BE." (country and town from CONFIG.INI or "change mon pays / ma ville")
     char where[64] = "";
     char location[256] = "";
@@ -359,12 +359,37 @@ static char *build_system_prompt(void)
         snprintf(location, sizeof(location), lang->location_line, where);
     }
     const char *home = sys_param->homey_url[0] ? lang->home_line : "";
+    // Identity, personality and instructions of PERSO_<LANG>.TXT, then what the working requires (app_lang.c),
+    // the location, the home and the notes to remember
+    const char *parts[] = {
+        persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY), persona_get(PERSONA_INSTRUCTIONS),
+        lang->system_prompt, location, home,
+    };
     char *prompt = NULL;
-    asprintf(&prompt, "%s%s%s%s%s%s%s%s%s%s%s", lang->system_prompt,
-             location[0] ? "\n\n" : "", location, home[0] ? "\n\n" : "", home,
-             persona[0] ? "\n\n" : "", persona,
-             notes[0] ? "\n\n" : "", notes[0] ? lang->memory_header : "", notes[0] ? "\n" : "", notes);
+    size_t size = 0;
+    FILE *out = open_memstream(&prompt, &size);
+    if (!out) {
+        return NULL;
+    }
+    for (size_t i = 0; i < sizeof(parts) / sizeof(parts[0]); i++) {
+        if (parts[i][0]) {
+            fprintf(out, "%s%s", ftell(out) ? "\n\n" : "", parts[i]);
+        }
+    }
+    if (notes[0]) {
+        fprintf(out, "\n\n%s\n%s", lang->memory_header, notes);
+    }
+    fclose(out);
     return prompt;
+}
+
+/* Instructions of the speech synthesis: read word for word (app_lang.c), then the [voice] of PERSO_<LANG>.TXT */
+static char *build_tts_instructions(void)
+{
+    char *text = NULL;
+    const char *voice = persona_get(PERSONA_VOICE);
+    asprintf(&text, "%s%s%s", app_lang_get()->tts_instructions, voice[0] ? " " : "", voice);
+    return text;
 }
 
 /*
@@ -406,7 +431,7 @@ void assistant_request_restore(bool factory)
 /* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
 static const char *const s_user_files[] = {
     "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "speed.txt", "log.txt",
-    "costs.json", "costs.tmp", "costs.txt",
+    "costs.json", "costs.tmp", "costs.txt", "persona_fr.txt", "persona_en.txt",
 };
 
 /*
@@ -452,8 +477,12 @@ void assistant_set_language(const char *code)
     strlcpy(sys_param->lang, code, sizeof(sys_param->lang));
     app_lang_set(code);
     const app_lang_t *lang = app_lang_get();
+    // Who the assistant is in this language (PERSO_<LANG>.TXT)
+    persona_load(lang->code);
     stt_stream_set_language(lang->code);
-    tts_stream_set_instructions(lang->tts_instructions);
+    char *tts_instructions = build_tts_instructions();
+    tts_stream_set_instructions(tts_instructions ? tts_instructions : lang->tts_instructions);
+    free(tts_instructions);
     char *prompt = build_system_prompt();
     if (prompt) {
         llm_set_system_prompt(prompt);
@@ -724,6 +753,11 @@ void app_main()
     // The Persona (name, who made it, who it talks to...) and the remembered notes complete the base instructions
     // Phrase files of the voice commands (installed at the first start), before the lists are made
     phrases_init();
+    // Who the assistant is, per language (PERSO_FR.TXT...): the PERSONA.TXT of an older firmware moves there
+    if (persona_init(app_lang_get()->code, sys_param->persona)) {
+        settings_erase_key("Persona");
+    }
+    persona_load(app_lang_get()->code);
     app_memory_init(sys_param->memory);
     voice_cmd_init();
     weather_places_load();
@@ -736,8 +770,10 @@ void app_main()
     ESP_ERROR_CHECK(stt_stream_init());
     stt_stream_configure(sys_param->key, CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
     ESP_ERROR_CHECK(tts_stream_init());
+    char *tts_instructions = build_tts_instructions();
     tts_stream_configure(sys_param->url, sys_param->key, CONFIG_ASSISTANT_TTS_MODEL, sys_param->voice,
-                         app_lang_get()->tts_instructions);
+                         tts_instructions ? tts_instructions : app_lang_get()->tts_instructions);
+    free(tts_instructions);
 
     for (int seconds = 0; ; seconds++) {
         vTaskDelay(pdMS_TO_TICKS(1000));

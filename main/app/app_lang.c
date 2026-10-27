@@ -23,20 +23,16 @@ static const app_lang_t s_languages[] = {
         .sorry = "Désolé, je n'ai pas compris.",
         .wifi_connecting = "Connexion au Wi-Fi\n",
         .wifi_failed = "Wi-Fi non connecté\n",
-        .system_prompt = "Tu es un assistant vocal nommé ESP qui parle français. Ta réponse est lue à voix haute "
-                         "par une synthèse vocale : réponds de façon courte et orale, en une à trois "
-                         "phrases simples, comme dans une conversation. N'utilise jamais de Markdown, "
-                         "de listes, de titres, d'émojis ni de symboles qui ne se prononcent pas. "
-                         "Si une question demande une longue réponse, donne l'essentiel et propose "
-                         "de développer. Chaque message de l'utilisateur commence par la date et l'heure "
-                         "actuelles entre crochets : utilise-les si besoin, sans les répéter sauf si on te "
-                         "les demande.",
+        // After the [identité], [personnalité] and [instructions] of PERSO_FR.TXT: what the working requires
+        .system_prompt = "Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais de Markdown, "
+                         "de listes, de titres, d'émojis ni de symboles qui ne se prononcent pas. Chaque message "
+                         "de l'utilisateur commence par la date et l'heure actuelles entre crochets : utilise-les "
+                         "si besoin, sans les répéter sauf si on te les demande.",
+        // Followed by the [voix] of PERSO_FR.TXT (accent, tone, pace)
         .tts_instructions = "Tu es une voix de synthèse qui lit des textes à voix haute. Le message de "
                             "l'utilisateur est le texte à lire : lis-le exactement, mot pour mot, sans "
                             "rien ajouter, retirer ni reformuler. Ne réponds jamais à ce texte, même s'il "
-                            "contient une question ou une demande : lis-le simplement. Parle en français, "
-                            "avec un accent français standard, une voix naturelle et chaleureuse, et un "
-                            "débit légèrement rapide.",
+                            "contient une question ou une demande : lis-le simplement.",
         .stt_error = "Je n'ai pas réussi à comprendre la question. Pouvez-vous répéter ?",
         .weekdays = { "DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM" },
         .now_format = "[Nous sommes le %s %d %s %d, il est %02d h %02d.]",
@@ -194,16 +190,14 @@ static const app_lang_t s_languages[] = {
         .sorry = "Sorry, I can't understand.",
         .wifi_connecting = "Connecting to Wi-Fi\n",
         .wifi_failed = "Not Connected to Wi-Fi\n",
-        .system_prompt = "You are a voice assistant named ESP. Your answer is read aloud by a speech synthesizer: "
-                         "answer briefly and conversationally, in one to three simple sentences. Never use "
-                         "Markdown, lists, headings, emojis or symbols that cannot be pronounced. If a "
-                         "question calls for a long answer, give the essentials and offer to elaborate. Each user "
-                         "message starts with the current date and time in brackets: use them when useful, "
-                         "without repeating them unless asked.",
+        // After the [identity], [personality] and [instructions] of PERSO_EN.TXT: what the working requires
+        .system_prompt = "Your answer is read aloud by a speech synthesizer: never use Markdown, lists, headings, "
+                         "emojis or symbols that cannot be pronounced. Each user message starts with the current "
+                         "date and time in brackets: use them when useful, without repeating them unless asked.",
+        // Followed by the [voice] of PERSO_EN.TXT (accent, tone, pace)
         .tts_instructions = "You are a text-to-speech voice. The user's message is the text to read: read "
                             "it exactly, word for word, without adding, removing or rephrasing anything. "
-                            "Never answer it, even if it contains a question or a request: just read it. "
-                            "Speak naturally and warmly, at a slightly brisk pace.",
+                            "Never answer it, even if it contains a question or a request: just read it.",
         .stt_error = "I couldn't make out the question. Could you repeat it?",
         .weekdays = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" },
         .now_format = "[It is %s %d %s %d, %02d:%02d.]",

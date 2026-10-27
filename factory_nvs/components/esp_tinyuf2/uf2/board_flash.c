@@ -66,7 +66,7 @@ char *_ini_file = NULL;
 char *_ini_file_dummy = NULL;
 
 /*
- * [Voice assistant] PERSONA.TXT and MEMORY.TXT; the help is shown in an empty file. '#' lines are saved with the
+ * [Voice assistant] MEMORY.TXT (NVS) and the files of SPIFFS; the help is shown in an empty file. '#' lines are saved with the
  * text (they stay in the file) and left out by the assistant.
  */
 typedef struct {
@@ -79,14 +79,6 @@ typedef struct {
 } text_file_t;
 
 static text_file_t s_text_files[UF2_TEXT_COUNT] = {
-    [UF2_TEXT_PERSONA] = {
-        .key = "Persona",
-        .help = "# Decrivez ici l'assistant et vous-meme (nom, createur, qui vous etes...).\r\n"
-                "# Ce texte est donne a l'assistant avec chaque question. Plusieurs lignes possibles.\r\n"
-                "# Describe the assistant and yourself here; this text is given to it with every question.\r\n"
-                "# Les lignes commencant par # sont des commentaires : conservees, mais pas lues par l'assistant.\r\n"
-                "# Lines starting with # are comments: kept, but not read by the assistant.\r\n",
-    },
     [UF2_TEXT_MEMORY] = {
         .key = "Memory",
         .help = "# Ce que vous avez demande a l'assistant de retenir (\"souviens-toi que ...\").\r\n"
@@ -105,6 +97,7 @@ const char *board_flash_text_fat_name(int text)
 /* The phrase files of the voice commands found on SPIFFS ("phrases_fr.txt" -> VOICE_FR.TXT) */
 #define PHRASES_DIR     "/spiffs"
 #define PHRASES_PREFIX  "phrases_"
+#define PERSONA_PREFIX  "persona_"
 #define PHRASES_SUFFIX  ".txt"
 
 static void phrase_files_find(void)
@@ -153,20 +146,24 @@ static void phrase_files_find(void)
     }
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && slot < UF2_TEXT_COUNT) {
+        // phrases_<code>.txt as VOICE_<CODE>.TXT, persona_<code>.txt as PERSO_<CODE>.TXT
         size_t len = strlen(e->d_name);
-        size_t code_len = len - strlen(PHRASES_PREFIX) - strlen(PHRASES_SUFFIX);
-        if (len <= strlen(PHRASES_PREFIX) + strlen(PHRASES_SUFFIX) || code_len > 3 ||
-                strncmp(e->d_name, PHRASES_PREFIX, strlen(PHRASES_PREFIX)) != 0 ||
+        const char *prefix = strncmp(e->d_name, PHRASES_PREFIX, strlen(PHRASES_PREFIX)) == 0 ? PHRASES_PREFIX :
+                             strncmp(e->d_name, PERSONA_PREFIX, strlen(PERSONA_PREFIX)) == 0 ? PERSONA_PREFIX : NULL;
+        size_t code_len = prefix ? len - strlen(prefix) - strlen(PHRASES_SUFFIX) : 0;
+        if (!prefix || len <= strlen(prefix) + strlen(PHRASES_SUFFIX) || code_len > 3 ||
                 strcmp(e->d_name + len - strlen(PHRASES_SUFFIX), PHRASES_SUFFIX) != 0) {
             continue;
         }
         text_file_t *t = &s_text_files[slot++];
         snprintf(t->path, sizeof(t->path), PHRASES_DIR "/%s", e->d_name);
-        // "VOICE_" + code (upper case) padded to 8, then "TXT"
-        char base[9] = "VOICE_";
+        // "VOICE_" or "PERSO_" + code (upper case) padded to 8, then "TXT"
+        char base[9];
+        strlcpy(base, strcmp(prefix, PHRASES_PREFIX) == 0 ? "VOICE_" : "PERSO_", sizeof(base));
         for (size_t i = 0; i < code_len && 6 + i < 8; i++) {
-            base[6 + i] = toupper((unsigned char)e->d_name[strlen(PHRASES_PREFIX) + i]);
+            base[6 + i] = toupper((unsigned char)e->d_name[strlen(prefix) + i]);
         }
+        base[6 + (code_len < 2 ? code_len : 2)] = '\0';
         snprintf(t->fat_name, sizeof(t->fat_name), "%-8.8sTXT", base);
         PRINTF("%s shown as %.8s.TXT", t->path, t->fat_name);
     }
@@ -288,6 +285,8 @@ static void ini_insert_section(const char *section)
  * the file is rebuilt from it with the current values, so that comments survive. Not shown in the file.
  */
 #define INI_LAYOUT_KEY          "Config_layout"
+/* Who the assistant is, before it moved to PERSO_<LANG>.TXT (the assistant moves it, then erases the key) */
+#define OLD_PERSONA_KEY         "Persona"
 #define INI_LAYOUT_MAX_LEN      3999    /* NVS string limit */
 #define INI_LAYOUT_MAX_KEYS     64
 
@@ -406,7 +405,7 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
             }
         }
         size_t value_len = 0;
-        if (strcmp(key, INI_LAYOUT_KEY) == 0 || text_file_of_key(key) ||
+        if (strcmp(key, INI_LAYOUT_KEY) == 0 || strcmp(key, OLD_PERSONA_KEY) == 0 || text_file_of_key(key) ||
                 nvs_get_str(nvs, key, NULL, &value_len) != ESP_OK) {
             line = next;    // no longer stored: left out
             continue;
@@ -530,8 +529,8 @@ static void ini_gen_from_nvs(const char *part, const char *name)
                     strlcpy(text_file->content, str, CFG_UF2_TEXT_FILE_SIZE);
                 }
             } else if (result == ESP_OK) {
-                // [Voice assistant] Already written from the layout, or the layout itself
-                bool skip = (strcmp(info.key, INI_LAYOUT_KEY) == 0);
+                // [Voice assistant] Already written from the layout, the layout itself, or the old Persona key
+                bool skip = (strcmp(info.key, INI_LAYOUT_KEY) == 0 || strcmp(info.key, OLD_PERSONA_KEY) == 0);
                 for (int i = 0; i < used_count && !skip; i++) {
                     skip = (strcmp(info.key, used[i]) == 0);
                 }

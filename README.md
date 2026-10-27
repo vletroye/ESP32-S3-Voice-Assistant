@@ -376,6 +376,7 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `Gemini_key` | Gemini key from Google AI Studio (Gemini answers), empty for none | `AIza…` |
 | `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.x.y:52199/mcp` |
 | `Homey_key` | Its API key (shown in the app's settings) | |
+| `Confirm_off` | Homey device classes the assistant asks to confirm before turning them off (comma-separated; `socket`: power plugs, so that an appliance is not switched off by mistake; lights are not asked about), `off` for none | `socket` |
 | `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models), empty for none | `sk-or-…` |
 | `OpenRouter_free` | `on`: the free OpenRouter models are read from its live list once a day; `off`: not read (only Free (auto)) | `on` |
 | `Free_models` | How many free OpenRouter models are offered (1 to 15), the most recent ones, besides Free (auto); see the exclusions of `AGENTS.INI` | `6` |
@@ -436,6 +437,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
 | `CONFIG_ASSISTANT_OPENROUTER_FREE` | `on` | Free OpenRouter models read when `OpenRouter_free` is not set |
 | `CONFIG_ASSISTANT_FREE_MODELS` | `6` | Free OpenRouter models offered when `Free_models` is not set |
+| `CONFIG_ASSISTANT_CONFIRM_OFF` | `socket` | Homey classes confirmed before being turned off when `Confirm_off` is not set |
 | `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |
 | `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |
@@ -741,6 +743,13 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   conversation, and to answer an action in a few words ("C'est fait.", or what failed and the one question
   needed to go on). An expired session is reopened; retried every minute while the Homey cannot be reached.
   After an update, say "au revoir" once if the saved conversation still holds old, wrong answers about the home.
+- **Confirmation before turning off** (`Confirm_off`, power plugs by default): `devices_set_capability` and
+  `devices_zone_set_capability` get an extra `confirmed` argument. A call turning `onoff` off is checked first:
+  `devices_find` lists the devices that are on (in the zone) with their class; if it targets one of a class to
+  confirm, nothing is sent to Homey and the model gets `confirmation_required` with their names. It then asks
+  ("Tu veux vraiment éteindre la prise du frigo ?"), and after a "oui" calls again with `confirmed: true`
+  (removed before the call reaches Homey). A zone call limited to another class ("les lumières du salon") is not
+  asked about. Flows and moods that turn plugs off are not checked.
 - **Web search**: the server tool `web_search_20250305` is added to the request when the model's description
   (read by the prewarm, `GET /v1/models/{model}`) says it is supported. Its results (encrypted page contents)
   are dropped from the history once the answer is complete, so that they are not sent again with every later
@@ -750,7 +759,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 ## Roadmap
 
 - More tools: timers and alarms…
-- Spoken confirmation before sensitive Homey actions (locks, alarm).
+- Spoken confirmation before other sensitive Homey actions (locks, alarm), as done for turning plugs off.
 - Tools for the GPT models.
 - Cost of each exchange (transcription, model, voice) shown on screen.
 - NVS encryption to protect the API keys.

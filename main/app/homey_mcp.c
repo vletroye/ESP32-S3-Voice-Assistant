@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: CC0-1.0
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
@@ -45,6 +47,48 @@ static char s_session[96];              /* Mcp-Session-Id given by the server */
 static bool s_available[SELECTED_COUNT];
 static int s_next_id = 1;
 static SemaphoreHandle_t s_lock = NULL;
+/* Classes turned off only once confirmed (",socket,heater,"), "" for none */
+static char s_confirm_off[72] = "";
+
+/* The tools that turn devices off, given a "confirmed" argument when a confirmation is asked */
+#define TOOL_SET            "devices_set_capability"
+#define TOOL_ZONE_SET       "devices_zone_set_capability"
+#define CONFIRMED_ARG       "confirmed"
+
+void homey_mcp_set_confirm_off(const char *classes)
+{
+    // ",socket,heater," without blanks, lower case: a class is looked for as ",class,"
+    char *p = s_confirm_off;
+    char *end = s_confirm_off + sizeof(s_confirm_off) - 2;
+    *p++ = ',';
+    for (const char *c = classes ? classes : ""; *c && p < end; c++) {
+        if (*c == ',' || *c == ';') {
+            if (p[-1] != ',') {
+                *p++ = ',';
+            }
+        } else if (*c != ' ' && *c != '\t') {
+            *p++ = (char)tolower((unsigned char)*c);
+        }
+    }
+    if (p[-1] != ',') {
+        *p++ = ',';
+    }
+    *p = '\0';
+    if (strcmp(s_confirm_off, ",") == 0) {
+        s_confirm_off[0] = '\0';
+    }
+    ESP_LOGI(TAG, "Confirmation before turning off: %s", s_confirm_off[0] ? s_confirm_off : "none");
+}
+
+static bool class_confirmed_off(const char *cls)
+{
+    char key[40];
+    snprintf(key, sizeof(key), ",%s,", cls);
+    for (char *k = key; *k; k++) {
+        *k = (char)tolower((unsigned char)*k);
+    }
+    return s_confirm_off[0] && strstr(s_confirm_off, key) != NULL;
+}
 
 static esp_err_t on_http_event(esp_http_client_event_t *evt)
 {
@@ -201,8 +245,17 @@ cJSON *homey_mcp_load_tools(const char *url, const char *key)
             cJSON_AddStringToObject(def, "description",
                                     cJSON_IsString(description) ? description->valuestring : name->valuestring);
             const cJSON *schema = cJSON_GetObjectItem(tool, "inputSchema");
-            cJSON_AddItemToObject(def, "input_schema",
-                                  schema ? cJSON_Duplicate(schema, true) : cJSON_Parse("{\"type\":\"object\"}"));
+            cJSON *input_schema = schema ? cJSON_Duplicate(schema, true) : cJSON_Parse("{\"type\":\"object\"}");
+            cJSON *properties = cJSON_GetObjectItem(input_schema, "properties");
+            if (properties && (strcmp(name->valuestring, TOOL_SET) == 0 || strcmp(name->valuestring, TOOL_ZONE_SET) == 0)) {
+                // Turning off some devices (power plugs...) is confirmed first: see confirmation_needed()
+                cJSON *confirmed = cJSON_AddObjectToObject(properties, CONFIRMED_ARG);
+                cJSON_AddStringToObject(confirmed, "type", "boolean");
+                cJSON_AddStringToObject(confirmed, "description",
+                                        "Set true only when calling again after a confirmation_required answer, once "
+                                        "the user has explicitly confirmed turning off the devices it named.");
+            }
+            cJSON_AddItemToObject(def, "input_schema", input_schema);
             cJSON_AddItemToArray(definitions, def);
             s_available[i] = true;
         }
@@ -302,11 +355,118 @@ static char *result_text(const cJSON *result, bool *is_error)
     return out;
 }
 
+/* Objects of a result with an id and a class (devices), wherever they are in it */
+static void collect_devices(const cJSON *node, cJSON *out)
+{
+    const cJSON *child;
+    if (cJSON_IsObject(node) && cJSON_IsString(cJSON_GetObjectItem(node, "id")) &&
+            cJSON_IsString(cJSON_GetObjectItem(node, "class"))) {
+        cJSON_AddItemReferenceToArray(out, (cJSON *)node);
+    }
+    cJSON_ArrayForEach(child, node) {
+        if (cJSON_IsObject(child) || cJSON_IsArray(child)) {
+            collect_devices(child, out);
+        }
+    }
+}
+
+static bool is_off_value(const cJSON *value)
+{
+    return cJSON_IsFalse(value) || (cJSON_IsNumber(value) && value->valuedouble == 0) ||
+           (cJSON_IsString(value) && (strcasecmp(value->valuestring, "false") == 0 ||
+                                      strcasecmp(value->valuestring, "off") == 0));
+}
+
+/* The name asked is part of the device's name, or the other way round (case ignored) */
+static bool same_name(const char *a, const char *b)
+{
+    return strcasestr(a, b) != NULL || strcasestr(b, a) != NULL;
+}
+
+/*
+ * A request turning off devices of a class to confirm (Confirm_off) that are on, not confirmed yet: the answer
+ * given to the model instead of doing it (allocated), NULL to go on
+ */
+static char *confirmation_needed(const char *name, const cJSON *input)
+{
+    bool zone = strcmp(name, TOOL_ZONE_SET) == 0;
+    if (!s_confirm_off[0] || (!zone && strcmp(name, TOOL_SET) != 0) ||
+            cJSON_IsTrue(cJSON_GetObjectItem(input, CONFIRMED_ARG))) {
+        return NULL;
+    }
+    const cJSON *capability = cJSON_GetObjectItem(input, "capability");
+    if (!cJSON_IsString(capability) || strcmp(capability->valuestring, "onoff") != 0 ||
+            !is_off_value(cJSON_GetObjectItem(input, "value"))) {
+        return NULL;
+    }
+    const cJSON *only = cJSON_GetObjectItem(input, "class");
+    if (zone && cJSON_IsString(only) && !class_confirmed_off(only->valuestring)) {
+        return NULL;    // "only the lights of the kitchen"
+    }
+    // The devices that are on now (in the zone), with their class
+    cJSON *find = cJSON_CreateObject();
+    cJSON_AddStringToObject(find, "capability", "onoff");
+    cJSON_AddStringToObject(find, "operator", "truthy");
+    cJSON_AddBoolToObject(find, "compact", true);
+    const cJSON *zone_id = cJSON_GetObjectItem(input, "zone_id");
+    if (zone && cJSON_IsString(zone_id)) {
+        cJSON_AddStringToObject(find, "zone_id", zone_id->valuestring);
+    }
+    bool find_error = false;
+    char *found = homey_mcp_call("devices_find", find, &find_error);
+    cJSON_Delete(find);
+    cJSON *result = found && !find_error ? cJSON_Parse(found) : NULL;
+    free(found);
+    cJSON *devices = cJSON_CreateArray();
+    collect_devices(result, devices);
+
+    const cJSON *device_id = cJSON_GetObjectItem(input, "device_id");
+    const cJSON *device_name = cJSON_GetObjectItem(input, "name");
+    cJSON *names = cJSON_CreateArray();
+    const cJSON *d;
+    cJSON_ArrayForEach(d, devices) {
+        const char *id = cJSON_GetObjectItem(d, "id")->valuestring;
+        const char *cls = cJSON_GetObjectItem(d, "class")->valuestring;
+        const cJSON *dn = cJSON_GetObjectItem(d, "name");
+        bool targeted = zone ||
+                        (cJSON_IsString(device_id) && strcmp(device_id->valuestring, id) == 0) ||
+                        (!cJSON_IsString(device_id) && cJSON_IsString(device_name) && cJSON_IsString(dn) &&
+                         same_name(device_name->valuestring, dn->valuestring));
+        if (targeted && class_confirmed_off(cls) && (!zone || !cJSON_IsString(only) ||
+                                                     strcasecmp(only->valuestring, cls) == 0)) {
+            cJSON_AddItemToArray(names, cJSON_CreateString(cJSON_IsString(dn) ? dn->valuestring : id));
+        }
+    }
+    cJSON_Delete(devices);
+    cJSON_Delete(result);
+    char *answer = NULL;
+    if (cJSON_GetArraySize(names) > 0) {
+        cJSON *reply = cJSON_CreateObject();
+        cJSON_AddBoolToObject(reply, "confirmation_required", true);
+        cJSON_AddItemToObject(reply, "devices", names);
+        cJSON_AddStringToObject(reply, "instruction",
+                                "Nothing was changed. Briefly ask the user to confirm turning off these devices. "
+                                "If they confirm, call this tool again with the same arguments and confirmed=true; "
+                                "otherwise do not turn them off.");
+        answer = cJSON_PrintUnformatted(reply);
+        cJSON_Delete(reply);
+        ESP_LOGI(TAG, "%s: confirmation asked before turning off", name);
+    } else {
+        cJSON_Delete(names);
+    }
+    return answer;
+}
+
 char *homey_mcp_call(const char *name, const cJSON *input, bool *is_error)
 {
     *is_error = true;
     if (!s_url || !s_lock) {
         return strdup("{\"error\":\"Homey not configured\"}");
+    }
+    char *confirm = confirmation_needed(name, input);
+    if (confirm) {
+        *is_error = false;
+        return confirm;
     }
     int64_t t0 = esp_timer_get_time();
     xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -318,7 +478,9 @@ char *homey_mcp_call(const char *name, const cJSON *input, bool *is_error)
         }
         cJSON *params = cJSON_CreateObject();
         cJSON_AddStringToObject(params, "name", name);
-        cJSON_AddItemToObject(params, "arguments", input ? cJSON_Duplicate(input, true) : cJSON_CreateObject());
+        cJSON *arguments = input ? cJSON_Duplicate(input, true) : cJSON_CreateObject();
+        cJSON_DeleteItemFromObject(arguments, CONFIRMED_ARG);     // ours, unknown to Homey
+        cJSON_AddItemToObject(params, "arguments", arguments);
         char *body = request("tools/call", params);
         cJSON *answer = NULL;
         int status = body ? post(body, &answer) : -1;

@@ -71,6 +71,14 @@ menu "Example Configuration"
             The most recent free models of OpenRouter's live list offered, besides "openrouter/free".
             Default of Free_models in CONFIG.INI, which takes precedence.
 
+    config ASSISTANT_CONFIRM_OFF
+        string "Homey device classes confirmed before being turned off"
+        default "socket"
+        help
+            Comma-separated Homey device classes (socket: power plugs) that the assistant asks to confirm
+            before turning them off; "off" for none. Default of Confirm_off in CONFIG.INI, which takes
+            precedence.
+
     config ASSISTANT_SCROLL_MODE
         string "Answer scrolling mode (line or smooth)"
         default "line"

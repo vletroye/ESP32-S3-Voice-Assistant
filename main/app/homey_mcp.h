@@ -25,6 +25,13 @@ extern "C" {
  */
 cJSON *homey_mcp_load_tools(const char *url, const char *key);
 
+/**
+ * @brief Homey device classes (comma-separated, "socket" for power plugs) that are not turned off without a
+ *        confirmation: such a request first answers "confirmation_required" to the model, which asks the user and
+ *        calls again with confirmed=true. NULL or "" for none.
+ */
+void homey_mcp_set_confirm_off(const char *classes);
+
 /** The tool is one of Homey's */
 bool homey_mcp_has_tool(const char *name);
 

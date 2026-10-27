@@ -731,6 +731,7 @@ void app_main()
         static int homey_retry_s = 0;
         if (sys_param->homey_url[0] && !homey_loaded && --homey_retry_s <= 0 &&
                 wifi_connected_already() == WIFI_STATUS_CONNECTED_OK) {
+            homey_mcp_set_confirm_off(sys_param->confirm_off);
             cJSON *homey_tools = homey_mcp_load_tools(sys_param->homey_url, sys_param->homey_key);
             if (homey_tools) {
                 tools_add(homey_tools);

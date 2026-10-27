@@ -46,6 +46,7 @@ typedef struct {
     char city[CITY_SIZE];             /* Where the user lives: town ("Evere"), "" if unknown. */
     char homey_url[HOMEY_URL_SIZE];   /* MCP server of a Homey Pro on the local network, "" if none. */
     char homey_key[HOMEY_KEY_SIZE];   /* Its API key. */
+    char confirm_off[64];             /* Homey classes confirmed before being turned off ("socket"), "" for none. */
     int volume;                       /* Speaker volume 0..100, changed by voice ("parle plus fort"). */
     char *persona;                    /* Context always given to the assistant (allocated), NULL if none. */
     char *memory;                     /* Notes it was asked to remember at start-up (allocated), NULL if none. */

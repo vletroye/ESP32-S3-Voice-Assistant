@@ -429,7 +429,7 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
 /* [Voice assistant] Order of the keys in CONFIG.INI (when not set by the file as last written); others follow */
 static const char *const s_ini_key_order[] = {
     "Base_url", "Chat_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Country",
-    "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "OpenRouter_key",
+    "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "Confirm_off", "OpenRouter_key",
     "OpenRouter_free", "Free_models",
     "Screen_off_s", "End_speech_ms",
 };

@@ -313,6 +313,16 @@ esp_err_t settings_read_parameter_from_nvs(void)
     }
     str_trim(g_sys_param.homey_url);
     str_trim(g_sys_param.homey_key);
+
+    // Homey device classes to confirm before turning them off ("socket, heater"); "off" for none
+    len = sizeof(g_sys_param.confirm_off);
+    if (nvs_get_str(my_handle, "Confirm_off", g_sys_param.confirm_off, &len) != ESP_OK) {
+        strlcpy(g_sys_param.confirm_off, CONFIG_ASSISTANT_CONFIRM_OFF, sizeof(g_sys_param.confirm_off));
+    }
+    str_trim(g_sys_param.confirm_off);
+    if (strcasecmp(g_sys_param.confirm_off, "off") == 0 || strcasecmp(g_sys_param.confirm_off, "no") == 0) {
+        g_sys_param.confirm_off[0] = '\0';
+    }
     ESP_LOGI(TAG, "Homey: %s, key: (%d chars)", g_sys_param.homey_url[0] ? g_sys_param.homey_url : "-",
              (int)strlen(g_sys_param.homey_key));
 
@@ -422,6 +432,7 @@ static const struct {
     { "Scroll_mode", CONFIG_ASSISTANT_SCROLL_MODE },
     { "OpenRouter_free", CONFIG_ASSISTANT_OPENROUTER_FREE },
     { "Free_models", STR(CONFIG_ASSISTANT_FREE_MODELS) },
+    { "Confirm_off", CONFIG_ASSISTANT_CONFIRM_OFF },
     { "Volume", STR(CONFIG_VOLUME_LEVEL) },
     { "Screen_off_s", STR(CONFIG_ASSISTANT_SCREEN_OFF_S) },
     { "End_speech_ms", STR(CONFIG_ASSISTANT_END_OF_SPEECH_MS) },

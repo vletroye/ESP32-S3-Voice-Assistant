@@ -54,6 +54,8 @@ static PHRASE_LIST(s_new_conversation);
 /* Configuration files (normalized: "éditer" and "editer", "la config" and "le config" as often transcribed) */
 static PHRASE_LIST(s_edit_config);
 static PHRASE_LIST(s_restart);
+static PHRASE_LIST(s_clock_on);
+static PHRASE_LIST(s_clock_off);
 static PHRASE_LIST(s_open_settings);
 static PHRASE_LIST(s_change_country);
 static PHRASE_LIST(s_change_city);
@@ -840,7 +842,7 @@ void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
         &s_goodbyes, &s_list_models, &s_test_models, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
-        &s_new_conversation, &s_edit_config, &s_restart, &s_open_settings, &s_change_country, &s_change_city,
+        &s_new_conversation, &s_edit_config, &s_restart, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
@@ -961,6 +963,18 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         s_asked_us = esp_timer_get_time();
         *reply = voice_list();
         return VOICE_CMD_ANSWERED;
+    }
+    // "Affiche l'heure" / "cache l'heure", alone (or with "s'il te plaît"): the clock of the sleep screen
+    bool clock_on = starts_with(norm, phrases_of(&s_clock_on), &len);
+    if (clock_on || starts_with(norm, phrases_of(&s_clock_off), &len)) {
+        const char *rest = norm + len + (norm[len] == ' ');
+        if (!*rest || starts_with(rest, phrases_of(&s_courtesy), NULL)) {
+            settings_get_parameter()->show_clock = clock_on;
+            settings_save_str("Show_clock", clock_on ? "on" : "off");
+            ui_ctrl_show_clock(clock_on);
+            *reply = reply_dup(clock_on ? app_lang_get()->clock_shown : app_lang_get()->clock_hidden);
+            return VOICE_CMD_ANSWERED;
+        }
     }
     if (starts_with(norm, phrases_of(&s_restart), &len)) {
         // Alone (or with "s'il te plaît"): "redémarre la box" or "relance la musique" are not this command

@@ -30,6 +30,9 @@ void app_clock_sync_start(const char *tz);
  */
 void app_clock_create(lv_obj_t *parent, const char *const weekdays[7]);
 
+/** Show or hide the time and the date (volume and Wi-Fi stay); call with the display locked */
+void app_clock_show(bool shown);
+
 /** Day abbreviations of another language (call with the display locked) */
 void app_clock_set_weekdays(const char *const weekdays[7]);
 

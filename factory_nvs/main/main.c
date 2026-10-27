@@ -209,6 +209,8 @@ void app_main(void)
         char number[8];
         snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_SCREEN_OFF_S);
         nvs_init_str_if_missing("Screen_off_s", number);
+        // Time and date on the sleep screen (on / off)
+        nvs_init_str_if_missing("Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK);
         // Silence after which the question is considered finished (same default as ASSISTANT_END_OF_SPEECH_MS)
         snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_END_OF_SPEECH_MS);
         nvs_init_str_if_missing("End_speech_ms", number);

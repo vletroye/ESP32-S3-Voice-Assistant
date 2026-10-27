@@ -71,6 +71,17 @@ configuration mode
 restart[ yourself]
 reboot[ yourself]
 
+[s_clock_on]
+# Said alone: the time and date are shown on the sleep screen (Show_clock of CONFIG.INI)
+(show|display) the (time|clock)
+turn (on the clock|the clock on)
+
+[s_clock_off]
+# Said alone: the time and date are no longer shown on the sleep screen
+hide the (time|clock)
+turn (off the clock|the clock off)
+(do not|don t) show the (time|clock)
+
 [s_open_settings]
 (open|show)[ the] settings
 display the settings

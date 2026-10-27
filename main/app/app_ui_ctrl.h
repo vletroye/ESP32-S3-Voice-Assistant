@@ -49,6 +49,9 @@ bool ui_ctrl_screen_can_sleep(void);
 /** Leave the listening / answer panels (sleep) and show the Settings screen */
 void ui_ctrl_open_settings(void);
 
+/** Show or hide the time and the date of the sleep screen */
+void ui_ctrl_show_clock(bool shown);
+
 /** Settings screen selections (language, model) set back to the stored settings */
 void ui_ctrl_settings_sync(void);
 

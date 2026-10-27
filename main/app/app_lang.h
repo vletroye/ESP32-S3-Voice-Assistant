@@ -85,6 +85,8 @@ typedef struct {
     const char *config_need_pc;     /* "édite la config" without a PC connected */
     const char *config_opening;     /* "édite la config": restarting in configuration mode */
     const char *restarting;         /* "redémarre" */
+    const char *clock_shown;        /* "affiche l'heure" */
+    const char *clock_hidden;       /* "cache l'heure" */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
     const char *home_line;          /* in the instructions when a Homey is set: ask it, do not answer from memory */

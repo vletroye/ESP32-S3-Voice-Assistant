@@ -430,6 +430,13 @@ void ui_ctrl_settings_sync(void)
     bsp_display_unlock();
 }
 
+void ui_ctrl_show_clock(bool shown)
+{
+    bsp_display_lock(0);
+    app_clock_show(shown);
+    bsp_display_unlock();
+}
+
 void ui_ctrl_open_settings(void)
 {
     // The panels behind are back to sleep, as when the Settings screen is left with its back arrow
@@ -486,6 +493,7 @@ void ui_ctrl_init(void)
     ui_ctrl_localize();
     setup_button_setup();
     app_clock_create(ui_PanelSleep, app_lang_get()->weekdays);
+    app_clock_show(settings_get_parameter()->show_clock);
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);

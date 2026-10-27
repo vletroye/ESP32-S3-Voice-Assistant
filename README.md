@@ -380,6 +380,7 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models), empty for none | `sk-or-…` |
 | `OpenRouter_free` | `on`: the free OpenRouter models are read from its live list once a day; `off`: not read (only Free (auto)) | `on` |
 | `Free_models` | How many free OpenRouter models are offered (1 to 15), the most recent ones, besides Free (auto); see the exclusions of `AGENTS.INI` | `6` |
+| `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
 
@@ -433,6 +434,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Speech synthesis model |
 | `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice when `Voice` is not set |
 | `CONFIG_ASSISTANT_OPENAI_URL` | `https://api.openai.com/v1/` | `Base_url` of a new `CONFIG.INI` |
+| `CONFIG_ASSISTANT_SHOW_CLOCK` | `on` | Clock on the sleep screen when `Show_clock` is not set |
 | `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
 | `CONFIG_ASSISTANT_OPENROUTER_FREE` | `on` | Free OpenRouter models read when `OpenRouter_free` is not set |
@@ -609,6 +611,8 @@ de 1 à 3, ou le nom du modèle.". "Flash" alone is Gemini 3.8 Flash, "Flash-Lit
 | French | English | Effect |
 | --- | --- | --- |
 | ouvre les paramètres · montre les paramètres · affiche les paramètres · ouvre les réglages · montre les réglages · affiche les réglages · va dans les paramètres · va dans les réglages | open the settings · show the settings · open settings · show settings · display the settings · go to the settings | The Settings screen is shown at once, without a spoken reply (no follow-up listening) |
+| affiche / montre / remets / active l'heure · l'horloge · la date et l'heure (alone) | show / display the time · the clock · turn on the clock | The time and date are shown on the sleep screen again ("D'accord, j'affiche l'heure."); saved as `Show_clock = on` |
+| cache / masque / enlève / retire / désactive / éteins l'heure · l'horloge · la date et l'heure · n'affiche plus l'heure (alone) | hide the time · the clock · turn off the clock · don't show the time | The time and date are no longer shown on the sleep screen (volume and Wi-Fi stay); saved as `Show_clock = off` |
 | redémarre · redémarre-toi · relance · relance-toi · fais un redémarrage · lance un redémarrage · redémarrage (alone, or with "s'il te plaît") | restart · restart yourself · reboot · reboot yourself (alone, or with "please") | "D'accord, je redémarre.", then the conversation, the volume and the town cache are saved, the speaker is switched off and the device restarts (section `[s_restart]`) |
 | je veux éditer la config / la configuration / les fichiers de config(uration) · édite la config / le config / les fichiers de configuration · je veux modifier la config · modifie la configuration · ouvre la config · ouvre les fichiers de configuration · passe en mode configuration · mode configuration | I want to edit the config · edit the configuration (files) · open the config files · configuration mode | With a PC connected: "D'accord, je redémarre en mode configuration…", the conversation and the volume are saved, then the device restarts in configuration mode (CONFIG.INI, PERSONA.TXT, MEMORY.TXT on a USB drive), as with the folder icon of the Settings screen; press reset to come back. Without a PC (unplugged, charger or power bank): "Connecte-moi à ton PC." |
 

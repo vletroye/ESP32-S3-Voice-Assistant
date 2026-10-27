@@ -37,6 +37,7 @@ typedef struct {
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude, GPT, Gemini or OpenRouter). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     int screen_off_s;                 /* Screen off after this long without presence (radar dock), 0: never. */
+    bool show_clock;                  /* Time and date shown while the assistant sleeps. */
     bool openrouter_free;             /* Free OpenRouter models read from its live list (once a day). */
     int free_models;                  /* How many of them are offered (1..15), besides "openrouter/free". */
     int end_speech_ms;                /* Silence after which the question is considered finished. */

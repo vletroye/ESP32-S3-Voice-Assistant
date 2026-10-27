@@ -77,6 +77,17 @@ je veux (éditer|editer|modifier) (la|le|les fichier[s] de) config[uration]
 (fais|lance) un redémarrage
 redémarrage
 
+[s_clock_on]
+# Dite seule : l'heure et la date s'affichent sur l'écran de veille (Show_clock de CONFIG.INI)
+(affiche|montre|remets|active) l (heure|horloge)
+(affiche|montre|remets|active) la date et l heure
+
+[s_clock_off]
+# Dite seule : l'heure et la date ne s'affichent plus sur l'écran de veille
+(cache|masque|enlève|retire|désactive|éteins) l (heure|horloge)
+(cache|masque|enlève|retire|désactive|éteins) la date et l heure
+n affiche plus l (heure|horloge)
+
 [s_open_settings]
 (ouvre|montre|affiche) les (paramètres|réglages)
 va dans les (paramètres|réglages)

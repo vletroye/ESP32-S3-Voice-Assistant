@@ -340,6 +340,20 @@ static void clock_refresh(lv_timer_t *timer)
                           t.tm_year % 100);
 }
 
+void app_clock_show(bool shown)
+{
+    if (!s_box) {
+        return;
+    }
+    if (shown) {
+        lv_obj_clear_flag(s_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_date, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_date, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 void app_clock_set_weekdays(const char *const weekdays[7])
 {
     s_weekdays = weekdays;

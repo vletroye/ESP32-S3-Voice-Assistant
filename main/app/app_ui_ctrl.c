@@ -34,6 +34,7 @@ LV_IMG_DECLARE(ui_img_reply_web);
 LV_IMG_DECLARE(ui_img_reply_local);
 LV_IMG_DECLARE(ui_img_reply_gemini);
 LV_IMG_DECLARE(ui_img_reply_openrouter);
+LV_IMG_DECLARE(ui_img_reply_xai);
 LV_FONT_DECLARE(ui_font_Latin14);
 LV_FONT_DECLARE(ui_font_Latin16);
 LV_FONT_DECLARE(ui_font_Latin20);
@@ -1088,6 +1089,7 @@ void ui_ctrl_reply_set_logo(ui_ctrl_logo_t logo)
                       logo == UI_CTRL_LOGO_CLAUDE ? (const void *)&ui_img_reply_claude :
                       logo == UI_CTRL_LOGO_GEMINI ? (const void *)&ui_img_reply_gemini :
                       logo == UI_CTRL_LOGO_OPENROUTER ? (const void *)&ui_img_reply_openrouter :
+                      logo == UI_CTRL_LOGO_XAI ? (const void *)&ui_img_reply_xai :
                       (const void *)&ui_img_reply_chatgpt_logo_png;
     bsp_display_lock(0);
     lv_img_set_src(ui_ImageReplyLogo, src);

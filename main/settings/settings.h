@@ -19,6 +19,7 @@
 #define CLAUDE_KEY_SIZE 256
 #define GEMINI_KEY_SIZE 128
 #define OPENROUTER_KEY_SIZE 128
+#define XAI_KEY_SIZE 128
 #define VOICE_SIZE 24
 #define COUNTRY_SIZE 4
 #define CITY_SIZE 48
@@ -34,7 +35,8 @@ typedef struct {
     char claude_key[CLAUDE_KEY_SIZE]; /* Anthropic key, empty if not configured. */
     char gemini_key[GEMINI_KEY_SIZE]; /* Gemini key (Google AI Studio), empty if not configured. */
     char openrouter_key[OPENROUTER_KEY_SIZE];       /* OpenRouter key, empty if not configured. */
-    char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude, GPT, Gemini or OpenRouter). */
+    char xai_key[XAI_KEY_SIZE];       /* xAI key (Grok models), empty if not configured. */
+    char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude, GPT, Gemini, Grok or OpenRouter). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     int screen_off_s;                 /* Screen off after this long without presence (radar dock), 0: never. */
     bool show_clock;                  /* Time and date shown while the assistant sleeps. */

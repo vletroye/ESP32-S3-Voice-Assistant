@@ -1,7 +1,7 @@
-# ESP32-S3-BOX-3 Voice Assistant (Claude / GPT / Gemini / OpenRouter)
+# ESP32-S3-BOX-3 Voice Assistant (Claude / GPT / Gemini / Grok / OpenRouter)
 
 A voice assistant that runs entirely on an **ESP32-S3-BOX-3**, with no intermediate server: wake it up by
-saying "**Bonjour ESP**", ask your question, and **Claude** (or **GPT**, **Gemini**, or a model reached through **OpenRouter**) answers out loud.
+saying "**Bonjour ESP**", ask your question, and **Claude** (or **GPT**, **Gemini**, **Grok**, or a model reached through **OpenRouter**) answers out loud.
 Everything is streamed (transcription, answer, speech synthesis): the answer starts playing about
 **2.5 s** after the end of the question.
 
@@ -22,7 +22,7 @@ which has been largely rewritten.
   (`[claude-haiku-5-5] …`).
 - **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
   (Anthropic), GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI), Gemini 3.5 Flash-Lite, Gemini 3.8 Flash,
-  Gemini 4 Argon (Google), or up to 6 models through OpenRouter (3 by default, your own list in `CONFIG.INI`);
+  Gemini 4 Argon (Google), Grok 4.7 (xAI), or up to 6 models through OpenRouter (3 by default, your own list in `CONFIG.INI`);
   French or English; 10 OpenAI voices. The
   language, the model and the voice can also be changed **by voice** ("Change la langue", "Utilise le modèle
   3", "Prends la voix Cedar"); all apply at once, without restarting.
@@ -97,6 +97,7 @@ flowchart LR
 | Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working); prompt cache: an explicit breakpoint on the instructions (tools + system, ~8,400 tokens, read again by the first question of a new conversation within 5 minutes) plus automatic caching of the conversation |
 | Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
 | Answer (OpenRouter) | OpenRouter Chat Completions API (OpenAI-compatible) | `stream: true`, `reasoning.effort` `low` with `exclude` (not returned), 6 to 12 exchanges of history kept on the device (cut in blocks) |
+| Answer (Grok) | xAI Chat Completions API (OpenAI-compatible) | `stream: true`, `reasoning_effort` `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Answer (Gemini) | Gemini API `streamGenerateContent?alt=sse` | `thinkingLevel` `minimal` (Flash-Lite) or `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Speech synthesis | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice chosen in Settings (default `marin`) | Permanent WebSocket, one response per sentence, read verbatim |
 | Playback | local | 24 → 16 kHz resampling, I2S fixed at 16 kHz (shared with the mics) |
@@ -121,6 +122,7 @@ transcription and voice) and opened while the user is still speaking.
 | `deepseek/deepseek-v4.1-flash-1017` (default) | OpenRouter | $0.02 / $1 | | expected fast | depends on the model | `reasoning.effort` `low` |
 | `moonshotai/kimi-k3.1-pro` (default) | OpenRouter | $2 / $10 | | | depends on the model | `reasoning.effort` `low` |
 | `minimax/minimax-m3.1-flash` (default) | OpenRouter | $0.10 / $0.55 | | | depends on the model | `reasoning.effort` `low` |
+| `grok-4.7` | xAI | $2 / $6 | $2.60 + reasoning | not measured | reasons (effort kept `low`) | `reasoning_effort` `low` |
 
 How to read this table:
 
@@ -129,7 +131,7 @@ How to read this table:
   and GPT-6 Astra (larger models that reason before answering). Measured on the device: Haiku 5.5 0.7 to 1.6 s
   (see the latencies below), GPT-6 Luna 4 to 9 s despite no reasoning (time spent waiting on OpenAI's side);
   the other ratings are expected, not measured.
-- **Tools** (weather, volume, web search, Homey) are offered to the Claude models only; GPT, Gemini and the
+- **Tools** (weather, volume, web search, Homey) are offered to the Claude models only; GPT, Gemini, Grok and the
   OpenRouter models answer from their own knowledge.
 - **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three
   default models were among the most used on OpenRouter in October 2026 (prices as shown there then); change them
@@ -146,6 +148,9 @@ How to read this table:
   later), so that a change of `Free_models` or of the exclusions applies at the next start; when they are not
   enough, the list is read again at the next opportunity. They still need `OpenRouter_key`, and have usage limits
   (about 50 requests a day without bought credit).
+- **Grok** (xAI): one key from console.x.ai (prepaid credit). The xAI API is OpenAI-compatible (Chat Completions);
+  its prices and model ids change often, check docs.x.ai. A Grok model that rejects `reasoning_effort` gets `-` in
+  the reasoning column of `AGENTS.INI` (the parameter is then not sent).
 - **Gemini** prices are not listed here: check Google's pricing page (the free tier of Google AI Studio has
   usage limits; past them, Gemini answers "limite d'utilisation atteinte").
 - **Deepest reasoning**: Opus 5.5 and GPT-6 Astra are the most capable models and the only ones that really
@@ -162,7 +167,7 @@ How to read this table:
 ### AGENTS.INI: the models offered
 
 The models are listed in **`AGENTS.INI`**, one section per provider (`[anthropic]`, `[openai]`, `[google]`,
-`[openrouter]`), one line per model:
+`[openrouter]`, `[xai]`), one line per model:
 
 ```ini
 [anthropic]
@@ -182,7 +187,8 @@ claude:web_search = 0.0086
 ```
 
 - **Model id**: the id of the provider's API. **Shown name**: in the Settings screen. **Reasoning**: the effort
-  asked (Anthropic and OpenRouter `low|medium|high`, OpenAI `none|low|…`, Google `minimal|low|…`). **Spoken name**:
+  asked (Anthropic and OpenRouter `low|medium|high`, OpenAI `none|low|…`, Google `minimal|low|…`, xAI
+  `low|medium|high`, or `-` to send none). **Spoken name**:
   read in the spoken list of models, and said to choose it.
 - **Price in / out** (required): price of a million tokens read / written, **in the currency of `Currency`**
   (`CONFIG.INI`, `EUR` by default; no conversion), used by the [costs](#costs-coststxt-and-the-cost-on-screen).
@@ -206,8 +212,10 @@ claude:web_search = 0.0086
 - **`[openrouter_free_exclude]`**: free OpenRouter models never offered, one id per line (`vendor/model:free`, as
   shown in `SPEED.TXT` or the Settings list); an id ending with `*` excludes every model starting with it
   (`nvidia/*`), and `openrouter/free` removes Free (auto). Added empty to the file of an older firmware.
+- **`[xai]`**: the Grok models (key `XAI_key`). Added with its default model to the file of an older firmware
+  (after the other sections, so their numbers do not change).
 - A model id set in `Chat_model` but not in the file still works: its provider then comes from the id
-  (`vendor/model` → OpenRouter, `gpt-…` → OpenAI, `gemini-…` → Google, otherwise Anthropic), and it shows up as an
+  (`vendor/model` → OpenRouter, `gpt-…` → OpenAI, `gemini-…` → Google, `grok-…` → xAI, otherwise Anthropic), and it shows up as an
   extra entry in the Settings list.
 
 ### Costs: COSTS.TXT and the cost on screen
@@ -215,7 +223,7 @@ claude:web_search = 0.0086
 Each request is counted: the tokens of the **transcription** (STT), of the **answer** (LLM, each round of tool
 calls included, reasoning included) and of the **speech** (TTS), plus the **web searches** of Claude. Their cost
 comes from the prices of `AGENTS.INI`; the tokens read from the cache are counted at 10 % of the price in
-(Anthropic, OpenAI), 25 % (Google, OpenRouter), and those written to it at 125 % (Anthropic).
+(Anthropic, OpenAI), 25 % (Google, OpenRouter, xAI), and those written to it at 125 % (Anthropic).
 
 - **On screen**, top right, while the assistant sleeps, listens or prepares the answer ("Entendu…", "Je
   réfléchis…"; hidden while the answer is shown): the cost since it
@@ -280,7 +288,7 @@ conversation nor tools** but with the same instructions. The model chosen and it
 - An **OpenAI API key** (transcription and voice, and GPT answers) and, for Claude, an **Anthropic API key**
   with credit (console.anthropic.com → API Keys). API credit is separate from a Claude.ai subscription
   and from Claude usage credits. For Gemini, a **Gemini API key** (aistudio.google.com/apikey); for OpenRouter, an
-  **OpenRouter key** with credit (openrouter.ai → Keys).
+  **OpenRouter key** with credit (openrouter.ai → Keys); for Grok, an **xAI API key** with credit (console.x.ai).
 
 ## Repository layout
 
@@ -304,6 +312,7 @@ Main modules of the assistant (`main/app/`):
 | `claude_client.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
 | `openai_chat.c` | GPT client (Responses API, SSE streaming), history |
 | `openrouter_chat.c` | OpenRouter client (Chat Completions, SSE streaming), history kept on the device |
+| `xai_chat.c` | xAI client for the Grok models (Chat Completions, SSE streaming), history kept on the device |
 | `costs.c` | Costs: tokens and calls of each request priced with `AGENTS.INI`, by model, for today, this month, since the start and the last 12 months (`costs.json`, `COSTS.TXT`) |
 | `openrouter_free.c` | Free OpenRouter models from its live list (once a day, parsed model by model), kept on SPIFFS |
 | `app_presence.c` | Presence radar (AT581X) of the BOX-3-SENSOR dock: screen off after `Screen_off_s` without presence |
@@ -360,8 +369,8 @@ Tap the gear icon on the home screen:
 - **Modèle / Model**: the model answering the questions (see the table above), numbered as in the voice
   command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra,
   7 Gemini 3.5 Flash-Lite, 8 Gemini 3.8 Flash, 9 Gemini 4 Argon, then the OpenRouter models from 10 (10 DeepSeek
-  V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default), then the free ones (13 to 19 with the
-  defaults; numbers up to 13 can be said, the others are chosen by name).
+  V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default), 13 Grok 4.7 (xAI), then the free ones (14
+  to 20 with the defaults; numbers up to 13 can be said, the others are chosen by name).
 - **Voix / Voice**: the OpenAI voice reading the answers: Marin, Cedar (both recommended by OpenAI), Alloy,
   Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
   session reconnects (~2 s) and the new voice introduces itself.
@@ -377,7 +386,7 @@ Tapping one stops the countdown and asks for a confirmation:
 
 - **Soft reset** (circular arrows): the settings of `CONFIG.INI` go back to their defaults (language, model,
   voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`, `Base_url`,
-  `Claude_key`, `Gemini_key`, `OpenRouter_key`) and Homey (`Homey_url`, `Homey_key`); the `PERSO_<XX>.TXT`
+  `Claude_key`, `Gemini_key`, `OpenRouter_key`, `XAI_key`) and Homey (`Homey_url`, `Homey_key`); the `PERSO_<XX>.TXT`
   files, `MEMORY.TXT`
   and the comments of `CONFIG.INI` are kept. `VOICE_FR.TXT`, `VOICE_EN.TXT`, `LANG_FR.TXT`, `LANG_EN.TXT`,
   `COUNTRY.TXT` and `AGENTS.INI` are replaced by the versions of the firmware (your changes to them are lost);
@@ -426,6 +435,7 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `Homey_key` | Its API key (shown in the app's settings) | |
 | `Confirm_off` | Homey device classes the assistant asks to confirm before turning them off (comma-separated; `socket`: power plugs, so that an appliance is not switched off by mistake; lights are not asked about), `off` for none | `socket` |
 | `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models), empty for none | `sk-or-…` |
+| `XAI_key` | xAI key (answers of the Grok models, section `[xai]` of `AGENTS.INI`), empty for none | `xai-…` |
 | `OpenRouter_free` | `on`: the free OpenRouter models are read from its live list once a day; `off`: not read (only Free (auto)) | `on` |
 | `Free_models` | How many free OpenRouter models are offered (1 to 15), the most recent ones, besides Free (auto); see the exclusions of `AGENTS.INI` | `6` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
@@ -718,8 +728,8 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
 | Test the models: same question to each one, time to the first words spoken after each, results in `SPEED.TXT`, speed written to `AGENTS.INI` (see [Model test](#model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
 | List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
-| Change the model (asks the provider first: "Quel fournisseur voulez-vous : Anthropic, OpenAI, Google ou OpenRouter ?") | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
-| Answer to that question (within 30 s): the provider's models are then read, numbered from 1 ("Voici les modèles proposés par Google. 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router"), or directly a model name ("Sonnet") | the same |
+| Change the model (asks the provider first: "Quel fournisseur voulez-vous : Anthropic, OpenAI, Google, OpenRouter ou xAI ?") | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
+| Answer to that question (within 30 s): the provider's models are then read, numbered from 1 ("Voici les modèles proposés par Google. 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router") · xAI (or "Grok"), or directly a model name ("Sonnet") | the same |
 | Answer to the model question (within 30 s after the list) | its number in that list ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna", "Sol", "Astra", "Flash", "Flash-Lite", "Argon", "DeepSeek", "Kimi", "MiniMax"; transcription variants such as "Sonnette", "Saule", "Flash light" accepted) | its number ("three", "3", "third") or its name |
 | Skip a step | change de modèle pour Google (lists Google's models) · change de modèle pour Sonnet (chooses it) | change model to Google · change model to Sonnet |
 | Change the model directly (numbered over all models, as on the Settings screen; 1 to 10 can be said) | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
@@ -807,6 +817,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - `claude: first text after … ms, … tokens in … (cache read …), out …`
 - `openai_chat: first text after … ms, … tokens in … (cached …), out … (reasoning …)`
 - `openrouter: first text after … ms, … finish: stop, tokens in … (cached …), out … (reasoning …)`
+- `xai: first text after … ms, … finish: stop, tokens in … (cached …), out … (reasoning …)`
 - `gemini_chat: first text after … ms, … finish: STOP, tokens in … (cached …), out … (thoughts …)`
 - `tts: "…": first audio … ms, total … ms, … bytes` per sentence (24 kHz 16-bit audio: 48,000 bytes per second
   of speech; received slower than that, the speech gets cut), `tts: reply played, N underrun(s), M cut(s)

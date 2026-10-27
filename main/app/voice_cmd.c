@@ -313,6 +313,7 @@ static const struct {
     [LLM_PROVIDER_GEMINI] = { "Google", { "google", "gougle", "gemini", "gémini", "jemini", NULL } },
     [LLM_PROVIDER_OPENROUTER] = { "OpenRouter", { "openrouter", "open router", "open routeur", "openrouteur",
                                                   "open rooter", NULL } },
+    [LLM_PROVIDER_XAI] = { "xAI", { "xai", "x ai", "ix ai", "grok", "grock", "groc", "groque" } },
 };
 
 /* Provider named in the text, LLM_PROVIDER_COUNT if none */
@@ -360,6 +361,7 @@ static const struct {
     { "gemini-3.5-flash-lite", { "flash light", "flashlight", "flash lait", NULL } },
     { "gemini-3.8-flash", { "flache", "flasch", NULL } },
     { "gemini-4-argon", { "argonne", "argone", NULL } },
+    { "grok-4.7", { "grock", "groc", "groque", NULL } },
 };
 
 /* Model number (1-based, in llm_models) named in the text by a word of its name ("sonnet"); 0 if none */

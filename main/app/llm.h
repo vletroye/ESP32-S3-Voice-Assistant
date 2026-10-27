@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Chat model answering the questions: Claude (Anthropic), GPT (OpenAI), Gemini (Google) or a model reached
- * through OpenRouter, chosen by the model id.
+ * Chat model answering the questions: Claude (Anthropic), GPT (OpenAI), Gemini (Google), Grok (xAI) or a model
+ * reached through OpenRouter, chosen by the model id.
  */
 
 #pragma once
@@ -23,6 +23,7 @@ typedef enum {
     LLM_PROVIDER_OPENAI,
     LLM_PROVIDER_GEMINI,
     LLM_PROVIDER_OPENROUTER,
+    LLM_PROVIDER_XAI,
     LLM_PROVIDER_COUNT,
 } llm_provider_t;
 
@@ -51,7 +52,8 @@ typedef struct {
     const char *id;         /* API model id */
     const char *label;      /* Name shown in the list */
     const char *effort;     /* Claude output_config.effort / OpenAI reasoning.effort / Gemini thinkingLevel /
-                               OpenRouter reasoning.effort, NULL for the default */
+                               OpenRouter reasoning.effort / xAI reasoning_effort ("-": not sent), NULL for the
+                               default */
     const char *spoken;     /* Short name in the spoken list of models ("Haiku") */
     const char *thinking;   /* Claude thinking.type ("disabled", "between_tools"), "default" to leave it out,
                                NULL to choose it from the model's name */
@@ -129,11 +131,11 @@ llm_error_t llm_probe(const llm_model_t *model, const char *question, llm_stats_
 
 /**
  * Provider serving a model id: its section of AGENTS.INI; for a model not listed, "vendor/model" is OpenRouter,
- * "gpt-..." and "o<digit>..." are OpenAI, "gemini-..." Google, anything else Claude
+ * "gpt-..." and "o<digit>..." are OpenAI, "gemini-..." Google, "grok-..." xAI, anything else Claude
  */
 llm_provider_t llm_provider_of(const char *model);
 
-/** Provider name as said to the user ("Claude", "GPT", "Gemini", "OpenRouter") */
+/** Provider name as said to the user ("Claude", "GPT", "Gemini", "OpenRouter", "Grok") */
 const char *llm_provider_name(llm_provider_t provider);
 
 /**
@@ -145,10 +147,12 @@ const char *llm_provider_name(llm_provider_t provider);
  * @param openai_base_url OpenAI base URL ending with '/', e.g. "https://api.openai.com/v1/"
  * @param gemini_key      Gemini key (may be empty when no Gemini model is used)
  * @param openrouter_key  OpenRouter key (may be empty when no OpenRouter model is used)
+ * @param xai_key         xAI key (may be empty when no Grok model is used)
  * @param system_prompt   Instructions sent with every request
  */
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
-                   const char *gemini_key, const char *openrouter_key, const char *system_prompt);
+                   const char *gemini_key, const char *openrouter_key, const char *xai_key,
+                   const char *system_prompt);
 
 /** Replace the instructions (e.g. after a note was remembered); the conversation is kept */
 void llm_set_system_prompt(const char *system_prompt);

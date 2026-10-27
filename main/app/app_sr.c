@@ -288,10 +288,10 @@ esp_err_t app_sr_start(bool record_en)
     ESP_GOTO_ON_FALSE(ESP_OK == ret, ESP_FAIL, err, TAG,  "Failed to set language");
 
     /* Stack sizes measured with uxTaskGetSystemState(), plus a 2 KB margin: internal RAM is scarce */
-    ret_val = xTaskCreatePinnedToCore(&audio_feed_task, "Feed Task", 3584, (void *)afe_data, 5, &g_sr_data->feed_task, 0);
+    ret_val = xTaskCreatePinnedToCore(&audio_feed_task, "Feed Task", 3072, (void *)afe_data, 5, &g_sr_data->feed_task, 0);
     ESP_GOTO_ON_FALSE(pdPASS == ret_val, ESP_FAIL, err, TAG,  "Failed create audio feed task");
 
-    ret_val = xTaskCreatePinnedToCore(&audio_detect_task, "Detect Task", 4608, (void *)afe_data, 5, &g_sr_data->detect_task, 1);
+    ret_val = xTaskCreatePinnedToCore(&audio_detect_task, "Detect Task", 3584, (void *)afe_data, 5, &g_sr_data->detect_task, 1);
     ESP_GOTO_ON_FALSE(pdPASS == ret_val, ESP_FAIL, err, TAG,  "Failed create audio detect task");
 
     ret_val = xTaskCreatePinnedToCore(&sr_handler_task, "SR Handler Task", 6656, NULL, 5, &g_sr_data->handle_task, 0);

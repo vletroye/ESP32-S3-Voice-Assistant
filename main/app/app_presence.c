@@ -133,7 +133,7 @@ void app_presence_init(int screen_off_s)
     };
     gpio_config(&out);
     // Small task, internal RAM (I2C and GPIO only)
-    if (xTaskCreatePinnedToCore(presence_task, "presence", 3 * 1024, NULL, 2, NULL, 1) != pdPASS) {
+    if (xTaskCreatePinnedToCore(presence_task, "presence", 2 * 1024, NULL, 2, NULL, 1) != pdPASS) {
         ESP_LOGE(TAG, "No presence task: the screen stays on");
         return;
     }

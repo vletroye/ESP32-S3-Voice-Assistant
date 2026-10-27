@@ -52,6 +52,10 @@ typedef struct {
     const char *test_unavailable;   /* %s spoken name */
     const char *test_done;          /* %s fastest */
     const char *test_none;
+    const char *exclude_ask;        /* %s spoken name, %s its mean time: exclude it? */
+    const char *exclude_yes;        /* before the next question */
+    const char *exclude_no;
+    const char *exclude_finished;   /* after the last answer */
     char decimal_mark;              /* ',' or '.' */
     const char *second_one;         /* "seconde", below second_one_below_ms */
     const char *seconds;

@@ -47,6 +47,9 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply);
 /** The whole transcript is a closing phrase ("au revoir", "bonne nuit"): back to sleep, conversation cleared */
 bool voice_cmd_is_goodbye(const char *text);
 
+/** The next answer is about excluding a slow free model (model test): yes / no */
+void voice_cmd_expect_exclusion(void);
+
 /**
  * @brief Whether a sentence of the assistant's answer says goodbye: the whole sentence, or its part after the
  *        last comma ("Avec plaisir, bonne soirée !"), is one of the closing phrases

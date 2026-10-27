@@ -60,6 +60,7 @@ static PHRASE_LIST(s_change_city);
 /* Words before the name in an answer ("j'habite à Evere"), skipped; articles are kept ("Le Havre") */
 static PHRASE_LIST(s_answer_prefix);
 static PHRASE_LIST(s_yes);
+static PHRASE_LIST(s_no);
 
 /*
  * Countries known by voice: ISO 3166-1 alpha-2 code (the web search needs it), French and English names,
@@ -152,6 +153,7 @@ typedef enum {
     ASKED_CITY,
     CONFIRM_COUNTRY,        /* "Confirmes-tu ... ?": s_pending holds the country code */
     CONFIRM_CITY,           /* s_pending holds the town */
+    CONFIRM_EXCLUDE,        /* model test: exclude the slow free model asked about? */
 } asked_t;
 
 static asked_t s_asked = ASKED_NOTHING;
@@ -762,6 +764,44 @@ static voice_cmd_t confirm_place(asked_t confirm, const char *norm, char **reply
     return VOICE_CMD_ANSWERED;
 }
 
+void voice_cmd_expect_exclusion(void)
+{
+    s_asked = CONFIRM_EXCLUDE;
+    s_asked_us = esp_timer_get_time();
+}
+
+static bool has_any(const char *norm, const phrase_list_t *list)
+{
+    for (const char *const *word = phrases_of(list); *word; word++) {
+        if (has_word(norm, *word)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* "Oui": the model is excluded, "non": kept; then the next one is asked. Anything else: NONE (handled as usual) */
+static voice_cmd_t answer_exclusion(const char *norm, char **reply)
+{
+    const app_lang_t *lang = app_lang_get();
+    bool no = has_any(norm, &s_no);
+    bool yes = !no && has_any(norm, &s_yes);
+    if (!yes && !no) {
+        model_test_exclusions_drop();
+        return VOICE_CMD_NONE;
+    }
+    model_test_exclusion_answer(yes);
+    char question[200];
+    bool more = model_test_exclusion_question(question, sizeof(question));
+    if (more) {
+        voice_cmd_expect_exclusion();
+    }
+    char *text = NULL;
+    asprintf(&text, "%s %s", yes ? lang->exclude_yes : lang->exclude_no, more ? question : lang->exclude_finished);
+    *reply = text ? text : reply_dup("");
+    return VOICE_CMD_ANSWERED;
+}
+
 void voice_cmd_reply_spoken(void)
 {
     if (s_asked != ASKED_NOTHING) {
@@ -801,7 +841,7 @@ void voice_cmd_init(void)
     phrase_list_t *lists[] = {
         &s_goodbyes, &s_list_models, &s_test_models, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
         &s_new_conversation, &s_edit_config, &s_restart, &s_open_settings, &s_change_country, &s_change_city,
-        &s_answer_prefix, &s_yes, &s_courtesy, &s_one_alone,
+        &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
         phrases_of(lists[i]);
@@ -861,6 +901,12 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     }
     if (recent && (asked == CONFIRM_COUNTRY || asked == CONFIRM_CITY)) {
         return confirm_place(asked, norm, reply);
+    }
+    if (recent && asked == CONFIRM_EXCLUDE) {
+        voice_cmd_t answered = answer_exclusion(norm, reply);
+        if (answered != VOICE_CMD_NONE) {
+            return answered;
+        }
     }
 
     size_t len = 0;

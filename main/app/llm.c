@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
@@ -32,7 +33,8 @@ static const char *TAG = "llm";
 extern const char s_agents_default_start[] asm("_binary_agents_ini_start");
 extern const char s_agents_default_end[] asm("_binary_agents_ini_end");
 
-llm_model_t llm_models[LLM_FILE_MODELS_MAX + LLM_OPENROUTER_FREE_MAX];
+/* PSRAM (internal RAM is scarce): LLM_FILE_MODELS_MAX + LLM_OPENROUTER_FREE_MAX entries, by llm_load_models() */
+llm_model_t *llm_models = NULL;
 size_t llm_model_count = 0;
 llm_stats_t llm_last_stats;
 /* Models of AGENTS.INI, then the free OpenRouter ones */
@@ -174,6 +176,11 @@ static char *read_agents_file(void)
 
 void llm_load_models(void)
 {
+    if (!llm_models) {
+        llm_models = heap_caps_calloc(LLM_FILE_MODELS_MAX + LLM_OPENROUTER_FREE_MAX, sizeof(llm_model_t),
+                                      MALLOC_CAP_SPIRAM);
+        assert(llm_models);
+    }
     char *text = read_agents_file();
     bool blank = true;
     for (const char *c = text; c && *c && blank; c++) {
@@ -221,6 +228,45 @@ bool llm_free_excluded(const char *id)
         }
     }
     return false;
+}
+
+void llm_free_exclude_add(const char *id, const char *comment)
+{
+    if (llm_free_excluded(id) || s_free_excluded_count >= FREE_EXCLUDED_MAX) {
+        return;
+    }
+    s_free_excluded[s_free_excluded_count++] = strdup(id);
+    char *text = read_agents_file();
+    size_t size = (text ? strlen(text) : 0) + strlen(id) + (comment ? strlen(comment) : 0) + 96;
+    char *out = calloc(1, size);
+    if (!out) {
+        free(text);
+        return;
+    }
+    char line[160];
+    snprintf(line, sizeof(line), "%s%s%s\n", id, comment ? "   # " : "", comment ? comment : "");
+    const char *header = text ? strstr(text, "[" FREE_EXCLUDE_SECTION "]") : NULL;
+    const char *after = header ? strchr(header, '\n') : NULL;
+    if (after) {
+        // Right under the section's header
+        strncat(out, text, (size_t)(after + 1 - text));
+        strlcat(out, line, size);
+        strlcat(out, after + 1, size);
+    } else {
+        strlcat(out, text ? text : "", size);
+        size_t len = strlen(out);
+        strlcat(out, (len && out[len - 1] != '\n') ? "\n" : "", size);
+        strlcat(out, header ? "\n" : "\n[" FREE_EXCLUDE_SECTION "]\n", size);
+        strlcat(out, line, size);
+    }
+    FILE *f = fopen(AGENTS_FILE, "w");
+    bool ok = f && fputs(out, f) >= 0;
+    if (f) {
+        ok &= (fclose(f) == 0);
+    }
+    ESP_LOGI(TAG, "%s %s excluded in %s", ok ? "" : "Could not write:", id, AGENTS_FILE);
+    free(text);
+    free(out);
 }
 
 size_t llm_agents_count(void)

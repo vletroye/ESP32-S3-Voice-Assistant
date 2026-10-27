@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: CC0-1.0
  *
  * "Teste les modèles": the same question asked to every model offered (AGENTS.INI, then the free OpenRouter
- * ones), one after the other, without the conversation nor tools. The times are kept in LOG.TXT (configuration
+ * ones), one after the other, without the conversation nor tools. The times are kept in SPEED.TXT (configuration
  * drive) and the speed of the models of AGENTS.INI (fast, average, slow) is written to that file.
  */
 
@@ -33,6 +33,19 @@ void model_test_cancel(void);
 
 /** The running test was stopped */
 bool model_test_cancelled(void);
+
+/**
+ * @brief After the test, the free OpenRouter models slower than MODEL_TEST_SLOW_FREE_MS on average are asked about
+ *        one by one: the question about the next one ("Le modèle X fait 7,2 secondes en moyenne. Dois-je
+ *        l'exclure ?") into buf; false when none is left.
+ */
+bool model_test_exclusion_question(char *buf, size_t size);
+
+/** The answer to that question: yes excludes the model (AGENTS.INI), then the next one is asked */
+void model_test_exclusion_answer(bool yes);
+
+/** No more questions (another sentence was said) */
+void model_test_exclusions_drop(void);
 
 #ifdef __cplusplus
 }

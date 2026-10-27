@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
@@ -183,7 +184,11 @@ static bool apply(const char *const *ids, const char *const *names, int n)
     const sys_param_t *param = settings_get_parameter();
     int wanted = param->openrouter_free ? param->free_models : 0;
     llm_model_t models[LLM_OPENROUTER_FREE_MAX];
-    static char labels[LLM_OPENROUTER_FREE_MAX][64];     // static: kept off the stack (main task)
+    // Kept while the models are offered; PSRAM (internal RAM is scarce)
+    static char (*labels)[64] = NULL;
+    if (!labels && !(labels = heap_caps_calloc(LLM_OPENROUTER_FREE_MAX, 64, MALLOC_CAP_SPIRAM))) {
+        return true;
+    }
     int count = 0;
     for (int i = 0; i < n && count < wanted && count < LLM_OPENROUTER_FREE_MAX - 1; i++) {
         if (llm_free_excluded(ids[i])) {

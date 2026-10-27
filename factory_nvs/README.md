@@ -3,7 +3,7 @@
 This project is the **configuration mode** of the assistant: a second firmware, in the `ota_0` partition, that
 the assistant switches to (first start, "édite la config", Configuration screen, factory reset). The BOX then
 shows up on the PC as a USB drive named "ESP-BOX" holding `CONFIG.INI`, `PERSONA.TXT`, `MEMORY.TXT`,
-`AGENTS.INI`, `VOICE_FR.TXT`, `VOICE_EN.TXT`, `LOG.TXT` after a model test and `CONFIG.BKP` after a
+`AGENTS.INI`, `VOICE_FR.TXT`, `VOICE_EN.TXT`, `SPEED.TXT` after a model test and `CONFIG.BKP` after a
 factory reset. Edit them, save, wait a few seconds, then press **Restart** on the screen.
 
 `components/esp_tinyuf2` is a copy of Espressif's `esp_tinyuf2` 1.2.0 component, extended for these files

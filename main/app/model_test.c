@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: CC0-1.0
  *
  * Model test: the time to the first words of each model (what is heard), its mean over the tests, the time to
- * the end of the answer and its tokens. Kept by model id in MODEL_TIMES_FILE, shown in LOG.TXT.
+ * the end of the answer and its tokens. Kept by model id in MODEL_TIMES_FILE, shown in SPEED.TXT.
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -18,18 +19,38 @@
 #include "app_lang.h"
 #include "assistant.h"
 #include "llm.h"
+#include "openrouter_free.h"
+#include "voice_cmd.h"
+#include "app_ui_ctrl.h"
 #include "model_test.h"
 
 #define MODEL_TIMES_FILE        "/spiffs/model_times.json"
 #define MODEL_TIMES_FILE_MAX    8192
-#define LOG_FILE                "/spiffs/log.txt"
+#define SPEED_FILE              "/spiffs/speed.txt"
+/* Its name before (LOG.TXT): removed by the next test */
+#define OLD_SPEED_FILE          "/spiffs/log.txt"
 /* The list of the results stays on screen this long after the end */
 #define MODEL_TEST_LIST_SHOWN_MS    15000
+/* Free OpenRouter models slower than this on average: asked whether to exclude them */
+#define MODEL_TEST_SLOW_FREE_MS     5000
 
 static const char *TAG = "model_test";
 
 static volatile bool s_running = false;
 static volatile bool s_pending = false;
+
+/* The slow free models asked about after the test, and the next one */
+typedef struct {
+    char id[80];
+    char name[48];
+    int avg_ms;
+} slow_model_t;
+/* PSRAM (internal RAM is scarce): LLM_OPENROUTER_FREE_MAX entries, allocated by the first test */
+static slow_model_t *s_slow = NULL;
+static int s_slow_count = 0;
+static volatile int s_slow_next = 0;
+/* An exclusion was added: the free models offered are chosen again (main task) */
+static volatile bool s_free_reload = false;
 static volatile bool s_cancel = false;
 
 bool model_test_running(void)
@@ -155,7 +176,7 @@ static void record(cJSON *times, const llm_model_t *m, llm_error_t err, const ll
     set_number(entry, "reasoning", st->reasoning_tokens);
 }
 
-/* ---------- LOG.TXT ---------- */
+/* ---------- SPEED.TXT ---------- */
 
 static int compare_avg(const void *a, const void *b)
 {
@@ -176,14 +197,15 @@ static const char *secs(char *buf, size_t size, double ms, bool known)
     return buf;
 }
 
-static void write_log(const cJSON *times, const char *question)
+static void write_speed_file(const cJSON *times, const char *question)
 {
     int count = cJSON_GetArraySize(times);
     const cJSON **entries = calloc(count ? count : 1, sizeof(*entries));
-    FILE *f = entries ? fopen(LOG_FILE, "w") : NULL;
+    remove(OLD_SPEED_FILE);
+    FILE *f = entries ? fopen(SPEED_FILE, "w") : NULL;
     if (!f) {
         free(entries);
-        ESP_LOGE(TAG, "Cannot write %s", LOG_FILE);
+        ESP_LOGE(TAG, "Cannot write %s", SPEED_FILE);
         return;
     }
     int i = 0;
@@ -263,6 +285,61 @@ static void classify(cJSON *times)
     llm_save_speeds(speeds);
 }
 
+/* ---------- slow free models: exclude them? ---------- */
+
+static void find_slow_free(const cJSON *times)
+{
+    s_slow_count = 0;
+    s_slow_next = 0;
+    if (!s_slow && !(s_slow = heap_caps_calloc(LLM_OPENROUTER_FREE_MAX, sizeof(slow_model_t), MALLOC_CAP_SPIRAM))) {
+        return;
+    }
+    for (size_t i = llm_agents_count(); i < llm_model_count && s_slow_count < LLM_OPENROUTER_FREE_MAX; i++) {
+        const cJSON *e = cJSON_GetObjectItem(times, llm_models[i].id);
+        if (number_of(e, "n") > 0 && number_of(e, "avg") > MODEL_TEST_SLOW_FREE_MS) {
+            slow_model_t *s = &s_slow[s_slow_count++];
+            strlcpy(s->id, llm_models[i].id, sizeof(s->id));
+            strlcpy(s->name, llm_models[i].spoken, sizeof(s->name));
+            s->avg_ms = (int)number_of(e, "avg");
+        }
+    }
+    ESP_LOGI(TAG, "%d free model(s) slower than %d ms on average", s_slow_count, MODEL_TEST_SLOW_FREE_MS);
+}
+
+static void spoken_seconds(char *buf, size_t size, int ms, bool short_unit);
+
+bool model_test_exclusion_question(char *buf, size_t size)
+{
+    if (s_slow_next >= s_slow_count) {
+        return false;
+    }
+    const slow_model_t *s = &s_slow[s_slow_next];
+    char time_text[32];
+    spoken_seconds(time_text, sizeof(time_text), s->avg_ms, false);
+    snprintf(buf, size, app_lang_get()->exclude_ask, s->name, time_text);
+    return true;
+}
+
+void model_test_exclusion_answer(bool yes)
+{
+    if (s_slow_next >= s_slow_count) {
+        return;
+    }
+    const slow_model_t *s = &s_slow[s_slow_next++];
+    if (yes) {
+        char comment[48];
+        snprintf(comment, sizeof(comment), "%.1f s on average (model test)", s->avg_ms / 1000.0);
+        llm_free_exclude_add(s->id, comment);
+        s_free_reload = true;
+    }
+    ESP_LOGI(TAG, "%s: %s", s->id, yes ? "excluded" : "kept");
+}
+
+void model_test_exclusions_drop(void)
+{
+    s_slow_next = s_slow_count;
+}
+
 /* ---------- the test ---------- */
 
 /* "1,2 secondes" (French) / "1.2 seconds"; "1,2 s" with short */
@@ -307,7 +384,7 @@ static void test_run(void)
                  st.first_ms, st.total_ms, st.answer_tokens, st.reasoning_tokens);
         record(times, m, err, &st);
         save_times(times);
-        write_log(times, lang->test_question);
+        write_speed_file(times, lang->test_question);
         if (s_cancel) {
             break;
         }
@@ -333,7 +410,7 @@ static void test_run(void)
     if (!s_cancel) {
         classify(times);
         save_times(times);
-        write_log(times, lang->test_question);
+        write_speed_file(times, lang->test_question);
         if (best) {
             snprintf(text, sizeof(text), lang->test_done, best->spoken);
         } else {
@@ -341,6 +418,16 @@ static void test_run(void)
         }
         assistant_announce(text);
         assistant_announce_end();
+        find_slow_free(times);
+        if (!s_cancel && model_test_exclusion_question(text, sizeof(text))) {
+            // Asked as an answer: the user's answer is listened to, then voice_cmd.c asks about the next one
+            voice_cmd_expect_exclusion();
+            assistant_say(text);
+            cJSON_Delete(times);
+            free(screen);
+            ESP_LOGI(TAG, "Test done, slow free models asked about");
+            return;
+        }
         // The list stays on screen a while, then back to sleep (unless someone speaks meanwhile)
         for (int t = 0; t < MODEL_TEST_LIST_SHOWN_MS / 100 && !s_cancel; t++) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -362,10 +449,18 @@ void model_test_start(void)
     s_cancel = false;
     s_running = true;
     s_pending = true;
+    s_slow_count = 0;
+    s_slow_next = 0;
 }
 
 void model_test_poll(void)
 {
+    if (s_free_reload) {
+        // Models excluded after the test: the free ones offered are chosen again from the last list read
+        s_free_reload = false;
+        openrouter_free_init();
+        ui_ctrl_models_changed();
+    }
     if (!s_pending) {
         return;
     }

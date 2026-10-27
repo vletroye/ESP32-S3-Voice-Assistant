@@ -58,6 +58,9 @@ void assistant_announce_begin(void);
 void assistant_announce(const char *text);
 void assistant_announce_end(void);
 
+/** Show and speak a text as an answer, then listen for the user's answer (follow-up listening) */
+void assistant_say(const char *text);
+
 /** Model test finished: back to sleep */
 void assistant_test_done(void);
 

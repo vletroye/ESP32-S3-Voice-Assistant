@@ -71,7 +71,7 @@ extern llm_stats_t llm_last_stats;
 /* The models of AGENTS.INI (llm_load_models()), then the free OpenRouter ones (openrouter_free.c) */
 #define LLM_FILE_MODELS_MAX         32
 #define LLM_OPENROUTER_FREE_MAX     16      /* Free_models (at most 15) and "openrouter/free" */
-extern llm_model_t llm_models[];
+extern llm_model_t *llm_models;      /* PSRAM, allocated by llm_load_models() */
 extern size_t llm_model_count;
 
 /**
@@ -91,6 +91,12 @@ void llm_set_openrouter_free_models(const llm_model_t *models, size_t count);
  * ending with '*' that it starts with ("nvidia/" followed by '*')
  */
 bool llm_free_excluded(const char *id);
+
+/**
+ * @brief Exclude a free OpenRouter model: added under [openrouter_free_exclude] of AGENTS.INI (the section is
+ *        created if missing), with a comment. Offered models are not changed (openrouter_free_init() does it).
+ */
+void llm_free_exclude_add(const char *id, const char *comment);
 
 /** Number of models of AGENTS.INI (the first ones of llm_models) */
 size_t llm_agents_count(void);

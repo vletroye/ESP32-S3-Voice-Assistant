@@ -134,13 +134,13 @@ static void phrase_files_find(void)
         PRINTF("%s shown as CONFIG.BKP", t->path);
     }
     // Results of the model test ("teste les modèles"), when there are some
-    FILE *log = fopen(PHRASES_DIR "/log.txt", "r");
-    if (log) {
-        fclose(log);
+    FILE *speed = fopen(PHRASES_DIR "/speed.txt", "r");
+    if (speed) {
+        fclose(speed);
         text_file_t *t = &s_text_files[slot++];
-        strlcpy(t->path, PHRASES_DIR "/log.txt", sizeof(t->path));
-        memcpy(t->fat_name, "LOG     TXT", 12);
-        PRINTF("%s shown as LOG.TXT", t->path);
+        strlcpy(t->path, PHRASES_DIR "/speed.txt", sizeof(t->path));
+        memcpy(t->fat_name, "SPEED   TXT", 12);
+        PRINTF("%s shown as SPEED.TXT", t->path);
     }
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && slot < UF2_TEXT_COUNT) {

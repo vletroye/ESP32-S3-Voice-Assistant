@@ -123,6 +123,7 @@ static void reply_view_refresh(reply_view_t *v)
 
 /* Streaming callback: refresh the screen at most every REPLY_UI_REFRESH_US */
 static void on_sentence(const char *sentence, void *ctx);
+static void speak_message(const char *message);
 
 static void on_llm_text(const char *delta, void *ctx)
 {
@@ -298,6 +299,11 @@ void assistant_announce_end(void)
     }
 }
 
+void assistant_say(const char *text)
+{
+    speak_message(text);
+}
+
 void assistant_test_done(void)
 {
     ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
@@ -389,7 +395,7 @@ void assistant_request_restore(bool factory)
 
 /* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
 static const char *const s_user_files[] = {
-    "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "log.txt",
+    "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "speed.txt", "log.txt",
 };
 
 /*

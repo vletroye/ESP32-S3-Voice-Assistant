@@ -182,7 +182,7 @@ deepseek/deepseek-v4.1-flash-1017 = DeepSeek V4.1 Flash | low | DeepSeek
   start, or when it is emptied; it is read at start-up (at most 32 models). In configuration mode it appears on the
   drive as **`AGENTS.INI`**, editable with its comments (wait a few seconds after saving, then press **Restart**).
 - **`[openrouter_free_exclude]`**: free OpenRouter models never offered, one id per line (`vendor/model:free`, as
-  shown in `LOG.TXT` or the Settings list); an id ending with `*` excludes every model starting with it
+  shown in `SPEED.TXT` or the Settings list); an id ending with `*` excludes every model starting with it
   (`nvidia/*`), and `openrouter/free` removes Free (auto). Added empty to the file of an older firmware.
 - A model id set in `Chat_model` but not in the file still works: its provider then comes from the id
   (`vendor/model` → OpenRouter, `gpt-…` → OpenAI, `gemini-…` → Google, otherwise Anthropic), and it shows up as an
@@ -203,16 +203,22 @@ conversation nor tools** but with the same instructions. The model chosen and it
   (or a double tap) stops the test after the model being tested.
 - The time measured is the **time to the first words** of the answer: what you hear, as the assistant speaks as
   soon as the first sentence arrives. It hardly depends on the length of the answer. To compare the models anyway,
-  `LOG.TXT` also gives the time to the end of the answer, its tokens (and the reasoning tokens when the provider
+  `SPEED.TXT` also gives the time to the end of the answer, its tokens (and the reasoning tokens when the provider
   gives them apart) and the tokens per second after the first words. Asking for exactly 5 sentences keeps the
   answers of similar length (models do not count their tokens, and each one cuts text into tokens differently).
-- **`LOG.TXT`** (on SPIFFS, shown on the configuration drive): one line per model, sorted by mean time, with its
+- **`SPEED.TXT`** (on SPIFFS, shown on the configuration drive): one line per model, sorted by mean time, with its
   last time, its **mean over every test** (`n` tests) and the date; models not available keep their mean. The
   data is kept in `/spiffs/model_times.json`; the factory reset erases both.
 - At the end, the **speed** of each model of `AGENTS.INI` is written after its spoken name: `fast` in the third of
   the range (between the fastest and the slowest mean) nearest the fastest, `slow` in the third nearest the
   slowest, `average` otherwise. A single very slow model widens the range and makes the others `fast`. The free
   models are not in `AGENTS.INI` and do not count. Comments and other lines of the file are kept.
+- Then, for each **free OpenRouter model slower than 5 s on average**, the assistant asks: "Le modèle gratuit
+  Flint fait 7,2 secondes en moyenne. Dois-je l'exclure ?" and listens. "Oui" adds it to
+  `[openrouter_free_exclude]` of `AGENTS.INI` (with its time as a comment), "non" keeps it; then it asks about
+  the next one. Any other sentence ends the questions (and is answered as usual); the answer can also be given
+  within 30 s after "Bonjour ESP". Once answered, the free models offered are chosen again at once: an excluded
+  model is replaced by the next most recent one (`MODEL_TEST_SLOW_FREE_MS` in `model_test.c`).
 - Each test costs one short answer of each paid model.
 
 ### Typical latencies (measured with Claude Haiku 5.5)
@@ -578,7 +584,7 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 | Change the language (asks "Quelle langue voulez-vous ? Français ou anglais ?") | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
 | Answer to that question (within 30 s after it) | français · anglais · "en anglais s'il te plaît"… | French · English |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
-| Test the models: same question to each one, time to the first words spoken after each, results in `LOG.TXT`, speed written to `AGENTS.INI` (see [Model test](#model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
+| Test the models: same question to each one, time to the first words spoken after each, results in `SPEED.TXT`, speed written to `AGENTS.INI` (see [Model test](#model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
 | List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
 | Change the model (asks the provider first: "Quel fournisseur voulez-vous : Anthropic, OpenAI, Google ou OpenRouter ?") | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
 | Answer to that question (within 30 s): the provider's models are then read, numbered from 1 ("Voici les modèles proposés par Google. 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router"), or directly a model name ("Sonnet") | the same |
@@ -701,14 +707,20 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   is still spoken (a stuck connection used to drop every following sentence). After a reply cut twice or more,
   or with lost sentences, the screen adds "(Connexion trop lente : la voix n'a pas pu être lue de façon
   fluide.)" under the answer.
-- **Memory**: internal RAM (~22 KB free while running, ~47 KB at start-up, largest block ~7.5 KB) is reserved
-  for stacks, DMA and the network: TLS needs some of it at each connection (`esp-aes: Failed to allocate memory`
-  when it runs out, and the speech connections then fail). Large buffers, JSON trees, TLS buffers (mbedTLS), the
-  network task stacks and the LVGL objects live in PSRAM (LVGL's allocator is redirected by
-  `main/lvgl_psram/lv_psram.h` and the top-level `CMakeLists.txt`). A plain `malloc()` of less than 1 KB goes to
-  internal RAM (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`): many small blocks kept while running, such as the
-  phrases of the voice commands (`phrases.c`), are allocated in PSRAM with `heap_caps_malloc()`. The model test
-  runs on the main task's stack (8 KB) rather than on a task of its own.
+- **Memory**: internal RAM (~40 KB free while running, largest block ~20 KB) is reserved for stacks, DMA and
+  the network: TLS needs some of it at each connection (`esp-aes: Failed to allocate memory` when it runs out,
+  and the speech connections then fail). Large buffers, JSON trees, TLS buffers (mbedTLS), the network task
+  stacks and the LVGL objects live in PSRAM (LVGL's allocator is redirected by `main/lvgl_psram/lv_psram.h` and
+  the top-level `CMakeLists.txt`). What was done to keep internal RAM free:
+  - a plain `malloc()` of less than 1 KB goes to internal RAM (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`): small
+    blocks kept while running, such as the phrases of the voice commands (`phrases.c`), are allocated in PSRAM
+    with `heap_caps_malloc()`;
+  - large static variables (parameters, models, places, dropdown texts…) are allocated in PSRAM at their first
+    use instead of being static (`.bss` is internal RAM). `CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY` is
+    **not** used: it also moves the static data of Wi-Fi, LWIP and wpa_supplicant to PSRAM, which made the
+    network very slow;
+  - task stacks in internal RAM are sized from their measured use with ~1 KB to spare (WebSocket tasks 4.5 KB,
+    wake word detection 3.5 KB, audio feed 3 KB, presence 2 KB); the model test runs on the main task's stack.
 - **No echo cancellation**: speech detection ignores the start of each listening window (beep, end of the
   answer) and filters by volume; empty transcripts and typical Whisper hallucinations on silence are ignored.
 - **Costs**: transcription is billed by the duration of audio sent (only while listening); according to

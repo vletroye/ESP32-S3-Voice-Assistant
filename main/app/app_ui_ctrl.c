@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -261,12 +262,24 @@ static uint16_t model_options(char *options, size_t size)
     return model_selected;
 }
 
+/* Text of a dropdown list being made (under the display lock): PSRAM, internal RAM is scarce */
+static char *dropdown_options(void)
+{
+    static char *options = NULL;
+    if (!options) {
+        options = heap_caps_malloc(SETTINGS_OPTIONS_SIZE, MALLOC_CAP_SPIRAM);
+        assert(options);
+    }
+    options[0] = '\0';
+    return options;
+}
+
 void ui_ctrl_models_changed(void)
 {
-    static char options[SETTINGS_OPTIONS_SIZE];
     bsp_display_lock(0);
     if (s_model_dropdown) {
-        uint16_t selected = model_options(options, sizeof(options));
+        char *options = dropdown_options();
+        uint16_t selected = model_options(options, SETTINGS_OPTIONS_SIZE);
         lv_dropdown_set_options(s_model_dropdown, options);
         lv_dropdown_set_selected(s_model_dropdown, selected);
         s_model_stored = selected;
@@ -308,7 +321,7 @@ static void settings_screen_setup(void)
 {
     const app_lang_t *lang = app_lang_get();
     const sys_param_t *param = settings_get_parameter();
-    static char options[SETTINGS_OPTIONS_SIZE];     // static: kept off the stack
+    char *options = dropdown_options();
 
     lv_obj_set_style_pad_row(ui_PanelSettings, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -331,7 +344,7 @@ static void settings_screen_setup(void)
     // Model row: the listed models, plus the current one if it was set in CONFIG.INI and is not listed
     s_model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
     s_model_row_label = lv_obj_get_child(lv_obj_get_parent(s_model_dropdown), 0);
-    uint16_t model_selected = model_options(options, sizeof(options));
+    uint16_t model_selected = model_options(options, SETTINGS_OPTIONS_SIZE);
     s_model_stored = model_selected;
     settings_dropdown_setup(s_model_dropdown, options, model_selected, settings_changed_cb);
 
@@ -345,15 +358,15 @@ static void settings_screen_setup(void)
         char name[24];
         strlcpy(name, s_settings_voices[i], sizeof(name));
         name[0] = toupper((unsigned char)name[0]);
-        strlcat(options, i ? "\n" : "", sizeof(options));
-        strlcat(options, name, sizeof(options));
+        strlcat(options, i ? "\n" : "", SETTINGS_OPTIONS_SIZE);
+        strlcat(options, name, SETTINGS_OPTIONS_SIZE);
         if (strcmp(param->voice, s_settings_voices[i]) == 0) {
             voice_selected = i;
         }
     }
     if (voice_selected == SETTINGS_VOICE_COUNT) {
-        strlcat(options, "\n", sizeof(options));
-        strlcat(options, param->voice, sizeof(options));
+        strlcat(options, "\n", SETTINGS_OPTIONS_SIZE);
+        strlcat(options, param->voice, SETTINGS_OPTIONS_SIZE);
     }
     settings_dropdown_setup(voice_dropdown, options, voice_selected, settings_voice_changed_cb);
 

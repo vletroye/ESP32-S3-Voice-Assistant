@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_http_client.h"
@@ -127,7 +128,18 @@ typedef struct {
     uint32_t used;          /* last use (higher is more recent), to replace the oldest place */
 } place_t;
 
-static place_t s_places[PLACES_MAX];
+/* PLACES_MAX places: PSRAM (internal RAM is scarce), allocated zeroed at the first use */
+static place_t *s_places_buf = NULL;
+
+static place_t *places(void)
+{
+    if (!s_places_buf) {
+        s_places_buf = heap_caps_calloc(PLACES_MAX, sizeof(place_t), MALLOC_CAP_SPIRAM);
+        assert(s_places_buf);
+    }
+    return s_places_buf;
+}
+#define s_places (places())
 static int s_place_count = 0;
 static uint32_t s_place_clock = 0;
 static bool s_places_dirty = false;

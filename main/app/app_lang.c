@@ -6,6 +6,7 @@
 
 #include <string.h>
 #include <strings.h>
+#include "esp_heap_caps.h"
 #include "sdkconfig.h"
 #include "esp_log.h"
 #include "app_lang.h"
@@ -60,13 +61,17 @@ static const app_lang_t s_languages[] = {
         .models_free = "Et gratuitement, via OpenRouter : %s.",
         .and_word = " et ",
         .test_question = "Explique en exactement 5 phrases comment se forme un arc-en-ciel.",
-        .test_start = "Je teste les %d modèles, un par un. Cela prend quelques minutes.",
+        .test_start = "Je teste les %d modèles, un par un.",
         .test_running = "Un test des modèles est déjà en cours.",
         .test_unavailable_short = "non disponible",
         .test_result = "Résultat de %s : %s.",
         .test_unavailable = "%s : non disponible.",
         .test_done = "Le modèle le plus rapide était %s.",
-        .test_none = "Test terminé, mais aucun modèle n'a répondu. Les détails sont dans LOG.TXT.",
+        .test_none = "Test terminé, mais aucun modèle n'a répondu. Les détails sont dans SPEED.TXT.",
+        .exclude_ask = "Le modèle gratuit %s fait %s en moyenne. Dois-je l'exclure ?",
+        .exclude_yes = "C'est exclu.",
+        .exclude_no = "D'accord, je le garde.",
+        .exclude_finished = "C'était le dernier modèle lent.",
         .decimal_mark = ',',
         .second_one = "seconde",
         .seconds = "secondes",
@@ -216,13 +221,17 @@ static const app_lang_t s_languages[] = {
         .models_free = "And for free, through OpenRouter: %s.",
         .and_word = " and ",
         .test_question = "Explain in exactly 5 sentences how a rainbow forms.",
-        .test_start = "I am testing the %d models, one by one. It takes a few minutes.",
+        .test_start = "I am testing the %d models, one by one.",
         .test_running = "A test of the models is already running.",
         .test_unavailable_short = "unavailable",
         .test_result = "Result of %s: %s.",
         .test_unavailable = "%s: unavailable.",
         .test_done = "The fastest model was %s.",
-        .test_none = "Test done, but no model answered. The details are in LOG.TXT.",
+        .test_none = "Test done, but no model answered. The details are in SPEED.TXT.",
+        .exclude_ask = "The free model %s takes %s on average. Shall I exclude it?",
+        .exclude_yes = "It is excluded.",
+        .exclude_no = "All right, I keep it.",
+        .exclude_finished = "That was the last slow model.",
         .decimal_mark = '.',
         .second_one = "second",
         .seconds = "seconds",
@@ -339,7 +348,8 @@ static const app_lang_t s_languages[] = {
     },
 };
 
-static app_lang_t s_custom;
+/* Texts of an unsupported language (English ones): PSRAM, allocated when needed (internal RAM is scarce) */
+static app_lang_t *s_custom = NULL;
 static char s_custom_code[LANG_CODE_SIZE];
 static const app_lang_t *s_current = &s_languages[0];
 
@@ -359,13 +369,20 @@ void app_lang_set(const char *code)
     }
 
     /* Unsupported UI language: English texts, but transcribe and answer in the requested language */
-    s_custom = s_languages[1];
+    if (!s_custom) {
+        s_custom = heap_caps_malloc(sizeof(app_lang_t), MALLOC_CAP_SPIRAM);
+        if (!s_custom) {
+            s_current = &s_languages[1];
+            return;
+        }
+    }
+    *s_custom = s_languages[1];
     strlcpy(s_custom_code, code, sizeof(s_custom_code));
-    s_custom.code = s_custom_code;
-    s_custom.system_prompt = "You are a voice assistant. Always answer in the same language as the user, "
-                             "concisely (a few sentences at most) and without Markdown formatting, "
-                             "because your answer will be read aloud.";
-    s_current = &s_custom;
+    s_custom->code = s_custom_code;
+    s_custom->system_prompt = "You are a voice assistant. Always answer in the same language as the user, "
+                              "concisely (a few sentences at most) and without Markdown formatting, "
+                              "because your answer will be read aloud.";
+    s_current = s_custom;
     ESP_LOGW(TAG, "No UI texts for language '%s', using English UI", s_custom_code);
 }
 

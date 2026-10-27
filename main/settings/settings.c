@@ -9,6 +9,7 @@
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -25,7 +26,18 @@ static const char *TAG = "settings";
 const char *uf2_nvs_partition = "nvs";
 const char *uf2_nvs_namespace = "configuration";
 static nvs_handle_t my_handle;
-static sys_param_t g_sys_param = {0};
+/* The parameters: PSRAM (internal RAM is scarce), allocated zeroed at the first use */
+static sys_param_t *s_sys_param = NULL;
+
+static sys_param_t *sys_param(void)
+{
+    if (!s_sys_param) {
+        s_sys_param = heap_caps_calloc(1, sizeof(sys_param_t), MALLOC_CAP_SPIRAM);
+        assert(s_sys_param);
+    }
+    return s_sys_param;
+}
+#define g_sys_param (*sys_param())
 
 esp_err_t settings_factory_reset(void)
 {

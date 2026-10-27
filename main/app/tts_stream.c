@@ -49,7 +49,7 @@
 #define TTS_CONNECT_WAIT_MS     5000
 #define TTS_RECONNECT_MS        2000
 #define TTS_RECREATE_AFTER_MS   30000
-#define TTS_WS_TASK_STACK       6144    /* internal RAM, runs the TLS handshake */
+#define TTS_WS_TASK_STACK       4608    /* internal RAM, runs the TLS handshake (~3.5 KB used) */
 #define TTS_WS_BUFFER_SIZE      8192    /* PSRAM */
 #define PLAYBACK_FRAMES         256
 
@@ -389,6 +389,7 @@ static esp_websocket_client_handle_t create_client(void)
         .headers = s_auth_header,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .task_stack = TTS_WS_TASK_STACK,
+        .task_name = "tts_ws",
         .task_prio = 5,
         .buffer_size = TTS_WS_BUFFER_SIZE,
         .disable_auto_reconnect = false,

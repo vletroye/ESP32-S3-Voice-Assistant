@@ -51,7 +51,7 @@
 /* Automatic reconnection by the WebSocket client; recreated from scratch if still down after this */
 #define STT_RECONNECT_MS        2000
 #define STT_RECREATE_AFTER_MS   30000
-#define STT_WS_TASK_STACK       6144    /* internal RAM, runs the TLS handshake */
+#define STT_WS_TASK_STACK       4608    /* internal RAM, runs the TLS handshake (~3.6 KB used) */
 #define STT_WS_BUFFER_SIZE      8192    /* PSRAM; larger frames, fewer TLS records */
 #define STT_POLL_MS             50
 
@@ -240,6 +240,7 @@ static esp_websocket_client_handle_t create_client(void)
         .headers = s_auth_header,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .task_stack = STT_WS_TASK_STACK,
+        .task_name = "stt_ws",
         .task_prio = 5,
         .buffer_size = STT_WS_BUFFER_SIZE,
         /* Reconnect after errors and after a close by the server (e.g. maximum session duration) */

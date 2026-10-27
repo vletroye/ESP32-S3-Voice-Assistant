@@ -22,7 +22,7 @@ switch to
 answer in
 
 [s_test_models]
-# Asks every model the same question and measures its answer time (LOG.TXT, speed in AGENTS.INI)
+# Asks every model the same question and measures its answer time (SPEED.TXT, speed in AGENTS.INI)
 test (the|your) models
 run (the|a) model test
 
@@ -99,6 +99,14 @@ ok[ay]
 sure
 right
 correct
+
+[s_no]
+# Negative answer to a question (exclude a slow model after the model test)
+no
+nope
+keep it
+don t
+never
 
 [s_courtesy]
 # Words allowed after the answer of a shortcut ("speak French please")

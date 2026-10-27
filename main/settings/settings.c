@@ -257,6 +257,16 @@ esp_err_t settings_read_parameter_from_nvs(void)
     str_trim(clock);
     g_sys_param.show_clock = strcasecmp(clock, "off") != 0 && strcasecmp(clock, "no") != 0 && strcmp(clock, "0") != 0;
 
+    // After a voice command handled locally: back to sleep (on) or listening again (off)
+    char after_cmd[8] = {0};
+    len = sizeof(after_cmd);
+    if (nvs_get_str(my_handle, "Sleep_after_cmd", after_cmd, &len) != ESP_OK) {
+        strlcpy(after_cmd, CONFIG_ASSISTANT_SLEEP_AFTER_CMD, sizeof(after_cmd));
+    }
+    str_trim(after_cmd);
+    g_sys_param.sleep_after_cmd = strcasecmp(after_cmd, "on") == 0 || strcasecmp(after_cmd, "true") == 0 ||
+                                  strcasecmp(after_cmd, "yes") == 0 || strcmp(after_cmd, "1") == 0;
+
     // Free OpenRouter models: read from its live list or not, and how many offered
     char value[8] = CONFIG_ASSISTANT_OPENROUTER_FREE;
     len = sizeof(value);
@@ -443,6 +453,7 @@ static const struct {
     { "Free_models", STR(CONFIG_ASSISTANT_FREE_MODELS) },
     { "Confirm_off", CONFIG_ASSISTANT_CONFIRM_OFF },
     { "Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK },
+    { "Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD },
     { "Volume", STR(CONFIG_VOLUME_LEVEL) },
     { "Screen_off_s", STR(CONFIG_ASSISTANT_SCREEN_OFF_S) },
     { "End_speech_ms", STR(CONFIG_ASSISTANT_END_OF_SPEECH_MS) },

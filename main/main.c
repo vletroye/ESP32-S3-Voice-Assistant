@@ -73,6 +73,8 @@ static volatile bool s_restart_after_reply = false;
 static volatile bool s_restart_requested = false;
 /* "Teste les modèles": the test starts once its announcement has been spoken */
 static volatile bool s_test_after_reply = false;
+/* The reply is the one of a voice command handled here (not of the model): Sleep_after_cmd applies */
+static volatile bool s_reply_local_cmd = false;
 /* The reply ended with a goodbye ("Au revoir !", "Bonne soirée."): sleep and a new conversation once spoken */
 static volatile bool s_reply_goodbye = false;
 static volatile bool s_reset_requested = false;
@@ -235,6 +237,12 @@ static void on_reply_audio(tts_event_t event)
         // Reply interrupted by a new listening session (wake word or touch)
         return;
     }
+    if (s_reply_local_cmd && sys_param->sleep_after_cmd && !voice_cmd_waiting_answer()) {
+        // Sleep_after_cmd: a voice command handled here (and asking nothing) does not listen again
+        ESP_LOGI(TAG, "Voice command done, going to sleep (Sleep_after_cmd)");
+        ui_ctrl_reply_set_audio_end_flag(true);
+        return;
+    }
     if (s_reply_goodbye) {
         // The assistant said goodbye: no follow-up listening, the next conversation starts afresh
         ESP_LOGI(TAG, "The reply says goodbye, going to sleep");
@@ -313,6 +321,7 @@ void assistant_test_done(void)
 static void reply_begin(void)
 {
     s_reply_active = true;
+    s_reply_local_cmd = false;
     s_reply_goodbye = false;
     tts_stream_begin(on_reply_audio);
 }
@@ -561,6 +570,7 @@ void assistant_listen_end(void)
         s_restart_after_reply = (voice_cmd == VOICE_CMD_RESTART);
         s_test_after_reply = (voice_cmd == VOICE_CMD_TEST_MODELS);
         speak_message(cmd_reply ? cmd_reply : "");
+        s_reply_local_cmd = true;
         free(cmd_reply);
         goto err;
     }
@@ -577,6 +587,7 @@ void assistant_listen_end(void)
             }
         }
         speak_message(memory_reply ? memory_reply : "");
+        s_reply_local_cmd = true;
         free(memory_reply);
         goto err;
     }

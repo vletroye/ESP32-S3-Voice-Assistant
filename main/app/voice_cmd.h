@@ -47,6 +47,9 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply);
 /** The whole transcript is a closing phrase ("au revoir", "bonne nuit"): back to sleep, conversation cleared */
 bool voice_cmd_is_goodbye(const char *text);
 
+/** The last reply asked the user a question (provider, model, town...): its answer is listened for */
+bool voice_cmd_waiting_answer(void);
+
 /** The next answer is about excluding a slow free model (model test): yes / no */
 void voice_cmd_expect_exclusion(void);
 

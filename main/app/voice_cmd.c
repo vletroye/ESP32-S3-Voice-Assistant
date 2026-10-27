@@ -766,6 +766,11 @@ static voice_cmd_t confirm_place(asked_t confirm, const char *norm, char **reply
     return VOICE_CMD_ANSWERED;
 }
 
+bool voice_cmd_waiting_answer(void)
+{
+    return s_asked != ASKED_NOTHING;
+}
+
 void voice_cmd_expect_exclusion(void)
 {
     s_asked = CONFIRM_EXCLUDE;

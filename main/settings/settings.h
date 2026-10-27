@@ -38,6 +38,7 @@ typedef struct {
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     int screen_off_s;                 /* Screen off after this long without presence (radar dock), 0: never. */
     bool show_clock;                  /* Time and date shown while the assistant sleeps. */
+    bool sleep_after_cmd;             /* Back to sleep after a voice command handled locally (no follow-up). */
     bool openrouter_free;             /* Free OpenRouter models read from its live list (once a day). */
     int free_models;                  /* How many of them are offered (1..15), besides "openrouter/free". */
     int end_speech_ms;                /* Silence after which the question is considered finished. */

@@ -381,6 +381,7 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `OpenRouter_free` | `on`: the free OpenRouter models are read from its live list once a day; `off`: not read (only Free (auto)) | `on` |
 | `Free_models` | How many free OpenRouter models are offered (1 to 15), the most recent ones, besides Free (auto); see the exclusions of `AGENTS.INI` | `6` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
+| `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
 
@@ -435,6 +436,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice when `Voice` is not set |
 | `CONFIG_ASSISTANT_OPENAI_URL` | `https://api.openai.com/v1/` | `Base_url` of a new `CONFIG.INI` |
 | `CONFIG_ASSISTANT_SHOW_CLOCK` | `on` | Clock on the sleep screen when `Show_clock` is not set |
+| `CONFIG_ASSISTANT_SLEEP_AFTER_CMD` | `off` | Sleep after a local voice command when `Sleep_after_cmd` is not set |
 | `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
 | `CONFIG_ASSISTANT_OPENROUTER_FREE` | `on` | Free OpenRouter models read when `OpenRouter_free` is not set |

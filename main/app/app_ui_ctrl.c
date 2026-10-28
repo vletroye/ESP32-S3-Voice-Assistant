@@ -25,6 +25,7 @@
 #include "assistant.h"
 #include "costs.h"
 #include "radio.h"
+#include "app_ui_radio.h"
 #include "bsp/esp-bsp.h"
 
 #include "ui_helpers.h"
@@ -869,6 +870,7 @@ void ui_ctrl_init(void)
     cost_label_create();
     model_row_create();
     head_icons_create();
+    ui_radio_init();
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
@@ -1059,10 +1061,11 @@ static void wifi_check_timer_handler(lv_timer_t *timer)
 static void show_panel_timer_handler(struct _lv_timer_t *t)
 {
     ui_ctrl_panel_t panel = (ui_ctrl_panel_t)t->user_data;
-    // The assistant listens or answers: back from the page of the costs
+    // The assistant listens or answers: back from the page of the costs or from the radio screen
     if (s_cost_screen && lv_scr_act() == s_cost_screen) {
         lv_scr_load(ui_ScreenListen);
     }
+    ui_radio_close();
     lv_obj_t *show_panel = NULL;
     lv_obj_t *hide_panel[3] = { NULL };
 

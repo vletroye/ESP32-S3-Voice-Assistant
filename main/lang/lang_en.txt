@@ -131,6 +131,13 @@ radio_fav_not = %s is not in your favourites.
 radio_fav_none = You have no favourite radio yet. While a radio plays, say: add this radio to my favourites.
 radio_fav_full = Your list of favourites is full. Remove one first.
 
+# Radio screen (tap on the volume of the sleep screen); %d: the volume
+radio_title = Radio
+radio_volume_label = Volume %d %%
+radio_treble_label = Treble
+radio_nothing = No radio
+radio_fav_empty = No favourites yet: tap the heart while a radio plays, or say "add this radio to my favourites".
+
 # Genres said ("joue du jazz", "mets de la musique classique") and the tag of Radio-Browser they stand for:
 # words/other words: tag, ... (a genre not listed is searched as said)
 radio_genres = classical/classic music/classical music: classical, jazz: jazz, rock: rock, pop: pop, electronic/electro: electronic, techno: techno, house: house, dance: dance, rap/hip hop: hip-hop, rnb/r and b: rnb, reggae: reggae, metal: metal, blues: blues, soul: soul, funk: funk, country: country, disco: disco, lounge: lounge, chill/chill out/relaxing/calm: chillout, lofi/lo fi: lofi, ambient: ambient, sixties/60s: 60s, seventies/70s: 70s, eighties/80s: 80s, nineties/90s: 90s, oldies: oldies, latin: latin, salsa: salsa, gospel: gospel, opera: opera, baroque: baroque, piano: piano, kids/children: kids, christmas: christmas, news: news, sports/sport: sports, talk: talk, world music/world: world, celtic: celtic, flamenco: flamenco, bossa nova: bossa nova

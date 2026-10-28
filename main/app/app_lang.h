@@ -87,6 +87,12 @@ typedef struct {
     const char *radio_fav_not;      /* %s: station */
     const char *radio_fav_none;
     const char *radio_fav_full;
+    /* Radio screen (tap on the volume of the sleep screen) */
+    const char *radio_title;
+    const char *radio_volume_label;     /* %d: volume */
+    const char *radio_treble_label;
+    const char *radio_nothing;
+    const char *radio_fav_empty;
     char decimal_mark;              /* ',' or '.' */
     const char *second_one;         /* "seconde", below second_one_below_ms */
     const char *seconds;

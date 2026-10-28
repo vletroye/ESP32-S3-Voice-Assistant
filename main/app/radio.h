@@ -46,7 +46,8 @@ void radio_play(const char *name, const char *url);
  */
 void radio_play_list(const radio_station_t *list, int count, int start);
 
-/** The next / previous station of the list (played); false at its end / start */
+/** The next / previous station of the list (played; after the last one comes the first): the playing one fades out
+ *  in 1 s, the new one fades in. Does not wait. False for a list of less than two stations. */
 bool radio_next(void);
 bool radio_previous(void);
 

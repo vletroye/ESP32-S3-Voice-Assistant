@@ -128,6 +128,9 @@ void radio_favorites_init(void)
 
 int radio_favorites_list(radio_station_t *out, int max)
 {
+    if (!s_lock) {
+        return 0;
+    }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     int n = s_count < max ? s_count : max;
     memcpy(out, s_favorites, n * sizeof(radio_station_t));
@@ -153,6 +156,9 @@ static int index_of(const radio_station_t *station)
 
 bool radio_favorites_contains(const radio_station_t *station)
 {
+    if (!s_lock) {
+        return false;
+    }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     bool found = station->url[0] && index_of(station) >= 0;
     xSemaphoreGive(s_lock);
@@ -161,7 +167,7 @@ bool radio_favorites_contains(const radio_station_t *station)
 
 bool radio_favorites_add(const radio_station_t *station)
 {
-    if (!station->url[0]) {
+    if (!station->url[0] || !s_lock) {
         return false;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -184,6 +190,9 @@ bool radio_favorites_add(const radio_station_t *station)
 
 bool radio_favorites_remove(const radio_station_t *station)
 {
+    if (!s_lock) {
+        return false;
+    }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     bool ok = index_of(station) >= 0;
     char *text = ok ? read_file() : NULL;
@@ -219,7 +228,10 @@ bool radio_favorites_remove(const radio_station_t *station)
 
 int radio_favorites_find(const char *norm)
 {
-    // Every word of the favourite's name said ("nostalgie belgique"), or the text in its name ("nostalgie")
+    // The text said in the favourite's name ("nostalgie" for "Nostalgie Belgique")
+    if (!s_lock) {
+        return -1;
+    }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     int found = -1;
     size_t best = 0;

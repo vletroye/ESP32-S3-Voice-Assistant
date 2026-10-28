@@ -83,6 +83,10 @@ static volatile bool s_stop = true;             /* the stream being read and pla
 static volatile bool s_play_busy = false;       /* the playback task is writing to the speaker */
 static volatile bool s_net_ended = false;       /* nothing more will come into the ring buffer */
 static volatile bool s_fade_out = false;        /* the playback fades out, then leaves (a stop) */
+static volatile uint32_t s_fade_out_samples = 0;    /* the length of that fade-out */
+/* A station of the list asked while one plays (next, previous, a favourite touched): the playing one fades out,
+ * then the session goes on with this one, without waiting in the caller (the screen stays responsive) */
+static volatile int s_pending_index = -1;
 /* The assistant listens or speaks (from radio_suspend() to radio_on_sleep()): a station asked meanwhile ("joue du
  * jazz", "suivante") plays once it sleeps again, after its spoken reply */
 static volatile bool s_awake = false;
@@ -194,7 +198,7 @@ static bool net_stream(void)
     int meta_left = -1;         // -1: audio; -2: the length byte comes next; else metadata bytes still to read
     int meta_len = 0;
     bool received = false;
-    while (chunk && meta && !s_stop) {
+    while (chunk && meta && !s_stop && !(s_pending_index >= 0 && !s_play_busy)) {
         int n = esp_http_client_read(client, chunk, RADIO_CHUNK);
         if (n <= 0) {
             ESP_LOGW(TAG, "Stream ended (%d)", n);
@@ -301,6 +305,15 @@ static void net_session(void)
         s_net_ended = true;
         if (s_stop) {
             return;     // stopped on purpose: the caller set the new state
+        }
+        if (s_pending_index >= 0) {
+            // Another station of the list asked (the playing one has faded out): it is played now
+            wait_speaker_free(RADIO_SPEAKER_WAIT_MS);
+            set_current(s_pending_index);
+            s_pending_index = -1;
+            failures = 0;
+            skipped = 0;
+            continue;
         }
         // The stream dropped (or never came): the playback ends with the buffer, then it is tried again
         wait_speaker_free(RADIO_RING_SIZE / 16 * 2);    // what was buffered is played
@@ -427,7 +440,7 @@ static inline int32_t treble_apply(int32_t sample)
 #define RADIO_LEVEL_FAST_BLOCKS 20              /* the first second: fast */
 #define RADIO_SOFT_KNEE         24000
 #define RADIO_FADE_OUT_MS       400             /* at a stop: short, the assistant stays quick to answer */
-#define RADIO_FADE_OUT_SAMPLES  (RADIO_OUT_RATE * RADIO_FADE_OUT_MS / 1000)
+#define RADIO_FADE_CHANGE_MS    1000            /* at a change of station: longer, softer */
 
 typedef struct {
     uint32_t fade;          /* samples played since the start */
@@ -499,11 +512,11 @@ static inline int32_t level_apply(int32_t sample)
     }
     // Fade-out at a stop: the reverse curve, from the level reached (even in the middle of the fade-in)
     if (s_fade_out) {
-        if (l->fade_out >= RADIO_FADE_OUT_SAMPLES) {
+        if (l->fade_out >= s_fade_out_samples) {
             l->faded_out = true;
             return 0;
         }
-        float t = 1.0f - (float)l->fade_out++ / RADIO_FADE_OUT_SAMPLES;
+        float t = 1.0f - (float)l->fade_out++ / s_fade_out_samples;
         v *= t * t;
     }
     // Soft knee above RADIO_SOFT_KNEE (a gain may push the peaks over the top)
@@ -752,18 +765,42 @@ static bool radio_init(void)
 }
 
 /* The stream stops (the session task sees it), the speaker is free once the playback task left */
-static void stream_stop(void)
+static void stream_stop_fade(int fade_ms)
 {
+    // A change of station still pending (a wake word right after "next"): that station becomes the current one
+    if (s_pending_index >= 0) {
+        set_current(s_pending_index);
+        s_pending_index = -1;
+    }
     // Playing: faded out first (the network keeps feeding it meanwhile), then stopped
     if (s_play_busy) {
+        s_fade_out_samples = RADIO_OUT_RATE * fade_ms / 1000;
         s_fade_out = true;
-        wait_speaker_free(RADIO_FADE_OUT_MS + 200);
+        wait_speaker_free(fade_ms + 200);
     }
     s_stop = true;
     if (!wait_speaker_free(RADIO_SPEAKER_WAIT_MS)) {
         ESP_LOGW(TAG, "The playback did not stop in %d ms", RADIO_SPEAKER_WAIT_MS);
     }
     s_fade_out = false;
+}
+
+static void stream_stop(void)
+{
+    stream_stop_fade(RADIO_FADE_OUT_MS);
+}
+
+/* A station of the list while one plays and the assistant sleeps: changed without waiting (the session does it once
+ * the playing one has faded out); false when it has to be done here */
+static bool change_async(int index)
+{
+    if (s_state != RADIO_PLAYING || !s_play_busy || s_awake) {
+        return false;
+    }
+    s_fade_out_samples = RADIO_OUT_RATE * RADIO_FADE_CHANGE_MS / 1000;
+    s_pending_index = index;
+    s_fade_out = true;
+    return true;
 }
 
 static void session_start(void)
@@ -791,11 +828,19 @@ void radio_play_list(const radio_station_t *list, int count, int start)
     if (!list || count <= 0 || !radio_init()) {
         return;
     }
-    stream_stop();
     count = count > RADIO_LIST_MAX ? RADIO_LIST_MAX : count;
+    start = start >= 0 && start < count ? start : 0;
+    if (s_state == RADIO_PLAYING && s_play_busy && !s_awake) {
+        // Playing: the new list replaces the old one, the session moves to its station after the fade-out
+        memcpy(s_list, list, count * sizeof(radio_station_t));
+        s_list_count = count;
+        change_async(start);
+        return;
+    }
+    stream_stop_fade(RADIO_FADE_CHANGE_MS);
     memcpy(s_list, list, count * sizeof(radio_station_t));
     s_list_count = count;
-    set_current(start >= 0 && start < count ? start : 0);
+    set_current(start);
     session_start();
 }
 
@@ -810,13 +855,18 @@ void radio_play(const char *name, const char *url)
     radio_play_list(&station, 1, 0);
 }
 
+/* The previous / next station, the list looping (after the last one, the first) */
 static bool move(int delta)
 {
-    int index = s_list_index + delta;
-    if (!s_list || index < 0 || index >= s_list_count) {
+    if (!s_list || s_list_count < 2) {
         return false;
     }
-    stream_stop();
+    int base = s_pending_index >= 0 ? s_pending_index : s_list_index;     // pressed again before the change
+    int index = (base + delta + s_list_count) % s_list_count;
+    if (change_async(index)) {
+        return true;
+    }
+    stream_stop_fade(RADIO_FADE_CHANGE_MS);
     set_current(index);
     session_start();
     return true;

@@ -46,6 +46,7 @@
 #include "costs.h"
 #include "persona.h"
 #include "country.h"
+#include "radio.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -649,6 +650,16 @@ void assistant_listen_end(void)
 
     // "Change la langue" / "change de modèle" (then the answer), "parle anglais", "utilise le modèle 3":
     // answered and applied here, without restarting
+    // PHASE 0 (radio test): "test radio" plays FIP (MP3, http), until the wake word
+    char radio_norm[64];
+    app_text_normalize(text, radio_norm, sizeof(radio_norm));
+    if (strncmp(radio_norm, "test radio", 10) == 0) {
+        ESP_LOGI(TAG, "Radio test");
+        ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
+        radio_play("http://icecast.radiofrance.fr/fip-midfi.mp3");
+        goto err;
+    }
+
     char *cmd_reply = NULL;
     voice_cmd_t voice_cmd = voice_cmd_handle(text, &cmd_reply);
     if (voice_cmd == VOICE_CMD_OPEN_SETTINGS) {

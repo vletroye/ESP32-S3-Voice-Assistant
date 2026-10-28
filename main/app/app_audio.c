@@ -30,6 +30,7 @@
 #include "stt_stream.h"
 #include "tts_stream.h"
 #include "esp_heap_caps.h"
+#include "radio.h"
 
 static const char *TAG = "app_audio";
 
@@ -339,6 +340,11 @@ void sr_handler_task(void *pvParam)
         }
 
         if (WAKENET_DETECTED == result.wakenet_mode) {
+            // PHASE 0 (radio): the radio stops, the speaker is needed for the beep and the answer
+            if (radio_playing()) {
+                ESP_LOGI(TAG, "Wake word heard over the radio");
+            }
+            radio_stop();
             // Someone speaks to the assistant: the screen goes on if it was off
             app_presence_activity();
             // A new question interrupts the reply being spoken

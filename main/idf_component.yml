@@ -4,3 +4,5 @@ dependencies:
   espressif/esp_websocket_client: "1.8.0"
   # Presence radar of the ESP32-S3-BOX-3-SENSOR dock (legacy I2C driver, like the board support)
   espressif/at581x: "1.0.0"
+  # Internet radio: MP3 / AAC decoders (main/app/radio.c)
+  espressif/esp_audio_codec: "2.6.2"

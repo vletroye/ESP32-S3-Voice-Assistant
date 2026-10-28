@@ -310,6 +310,15 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.screen_off_s = s < 0 ? 0 : s;
     }
 
+    // Treble of the radio, in dB (-12..6)
+    char treble[8] = {0};
+    len = sizeof(treble);
+    g_sys_param.radio_treble = CONFIG_ASSISTANT_RADIO_TREBLE;
+    if (nvs_get_str(my_handle, "Radio_treble", treble, &len) == ESP_OK && treble[0]) {
+        int db = atoi(treble);
+        g_sys_param.radio_treble = db < -12 ? -12 : (db > 6 ? 6 : db);
+    }
+
     // Speaker volume (optional, saved when changed by voice)
     char volume[8] = {0};
     len = sizeof(volume);
@@ -479,6 +488,7 @@ static const struct {
     { "Currency", CONFIG_ASSISTANT_CURRENCY },
     { "Volume", STR(CONFIG_VOLUME_LEVEL) },
     { "Screen_off_s", STR(CONFIG_ASSISTANT_SCREEN_OFF_S) },
+    { "Radio_treble", STR(CONFIG_ASSISTANT_RADIO_TREBLE) },
     { "End_speech_ms", STR(CONFIG_ASSISTANT_END_OF_SPEECH_MS) },
 };
 

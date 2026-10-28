@@ -213,6 +213,9 @@ void app_main(void)
         char number[8];
         snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_SCREEN_OFF_S);
         nvs_init_str_if_missing("Screen_off_s", number);
+        // Treble of the radio, in dB (negative: softer)
+        snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_RADIO_TREBLE);
+        nvs_init_str_if_missing("Radio_treble", number);
         // Time and date on the sleep screen (on / off)
         nvs_init_str_if_missing("Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK);
         // After a voice command handled locally: back to sleep (on) or listening again (off)

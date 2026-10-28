@@ -535,6 +535,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
+| `Radio_treble` | Treble of the radio (above about 3 kHz), in dB, from `-12` to `6`: negative softens them on the small speaker, `0` leaves the sound as it is | `-6` |
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
 
 **Comments in `CONFIG.INI`**: lines starting with `#` or `;`, and end-of-line comments after a `;` preceded by
@@ -786,6 +787,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_SHOW_CLOCK` | `on` | Clock on the sleep screen when `Show_clock` is not set |
 | `CONFIG_ASSISTANT_CURRENCY` | `EUR` | Currency when `Currency` is not set |
 | `CONFIG_ASSISTANT_SLEEP_AFTER_CMD` | `off` | Sleep after a local voice command when `Sleep_after_cmd` is not set |
+| `CONFIG_ASSISTANT_RADIO_TREBLE` | `-6` | Treble of the radio when `Radio_treble` is not set |
 | `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
 | `CONFIG_ASSISTANT_OPENROUTER_FREE` | `on` | Free OpenRouter models read when `OpenRouter_free` is not set |

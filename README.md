@@ -506,6 +506,10 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
   firmware is appended to the file at start-up, with its comment.
 - Only the language in use is read (another one when the language changes, or when a voice command names it);
   each one read stays in PSRAM.
+- **Saving a `LANG_<XX>.TXT` is slow, and that is normal**: at about 12 KB, it is one of the largest files of the
+  drive, and Windows writes it to the device's flash in several steps, which can take a while (up to some tens of
+  seconds). Be patient: wait until the copy is really finished (Windows' progress window closed, or the drive
+  ejected) before pressing **Restart**, or the file may be cut, and its texts lost.
 
 **Adding a language**: add it to `Languages` in `CONFIG.INI`, e.g. `Languages = FR:Français, EN:English,
 DE:Deutsch`, then press Restart. At start-up the device creates `LANG_DE.TXT`, `VOICE_DE.TXT` and `PERSO_DE.TXT`

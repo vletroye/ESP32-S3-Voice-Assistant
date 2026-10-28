@@ -165,6 +165,7 @@ static const lang_field_t s_fields[] = {
     { "costs_today", offsetof(app_lang_t, costs_today), FIELD_TEXT, 1 },
     { "costs_month", offsetof(app_lang_t, costs_month), FIELD_TEXT, 1 },
     { "costs_total", offsetof(app_lang_t, costs_total), FIELD_TEXT, 1 },
+    { "costs_cost", offsetof(app_lang_t, costs_cost), FIELD_TEXT, 1 },
     { "clock_hidden", offsetof(app_lang_t, clock_hidden), FIELD_TEXT, 1 },
     { "new_conversation", offsetof(app_lang_t, new_conversation), FIELD_TEXT, 1 },
     { "voice_choppy", offsetof(app_lang_t, voice_choppy), FIELD_TEXT, 1 },

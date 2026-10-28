@@ -127,7 +127,8 @@ typedef struct {
     const char *costs_conversation; /* its rows: since the last wake-up, today, this month */
     const char *costs_today;
     const char *costs_month;
-    const char *costs_total;        /* its last column */
+    const char *costs_total;
+    const char *costs_cost;         /* row of the amounts (the tokens In / Out below) */        /* its last column */
     const char *clock_hidden;       /* "cache l'heure" */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */

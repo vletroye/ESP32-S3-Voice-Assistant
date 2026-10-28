@@ -64,6 +64,25 @@ double costs_conversation(double by_kind[COST_KINDS]);
  */
 double costs_period(cost_period_t period, const char *model, double by_kind[COST_KINDS]);
 
+/* The costs page: the conversation (since the last wake-up), today or this month */
+typedef enum {
+    COST_SCOPE_CONVERSATION = 0,
+    COST_SCOPE_TODAY,
+    COST_SCOPE_MONTH,
+} cost_scope_t;
+
+typedef struct {
+    double cost;
+    double in;      /* tokens read (those read or written in the cache included) */
+    double out;     /* tokens written */
+} cost_detail_t;
+
+/** Cost and tokens of each kind for the scope */
+void costs_detail(cost_scope_t scope, cost_detail_t by_kind[COST_KINDS]);
+
+/** Tokens, short: "850", "42,3 k", "1,25 M" (decimal mark of the language) */
+void costs_format_tokens(char *buf, size_t size, double tokens);
+
 /** An amount with the currency: "0,0123 €", "$0.0123" (4 decimals under 1, 2 above) */
 void costs_format(char *buf, size_t size, double amount, bool with_currency);
 

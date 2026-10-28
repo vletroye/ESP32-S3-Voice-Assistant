@@ -53,8 +53,10 @@ static SemaphoreHandle_t s_lock = NULL;
 static cJSON *s_root = NULL;
 static bool s_dirty = false;
 static char s_currency[8] = "EUR";
-/* Since the assistant last woke up */
+/* Since the assistant last woke up: cost, tokens read and written */
 static double s_conv[COST_KINDS];
+static double s_conv_in[COST_KINDS];
+static double s_conv_out[COST_KINDS];
 
 /* ---------- dates ---------- */
 
@@ -188,6 +190,8 @@ static void add(cost_kind_t kind, const char *model, const int tokens[4], int ca
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     s_conv[kind] += cost;
+    s_conv_in[kind] += tokens[0] + tokens[1] + tokens[2];
+    s_conv_out[kind] += tokens[3];
     roll_over();
     for (size_t p = 0; p < sizeof(s_periods) / sizeof(s_periods[0]); p++) {
         add_entry(object_of(s_root, s_periods[p]), model, kind, tokens, calls, cost, priced);
@@ -231,6 +235,8 @@ void costs_conversation_start(void)
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     memset(s_conv, 0, sizeof(s_conv));
+    memset(s_conv_in, 0, sizeof(s_conv_in));
+    memset(s_conv_out, 0, sizeof(s_conv_out));
     xSemaphoreGive(s_lock);
 }
 
@@ -280,7 +286,57 @@ double costs_period(cost_period_t period, const char *model, double by_kind[COST
     return total;
 }
 
+static double number_in(const cJSON *obj, const char *name)
+{
+    const cJSON *item = cJSON_GetObjectItem(obj, name);
+    return cJSON_IsNumber(item) ? item->valuedouble : 0;
+}
+
+void costs_detail(cost_scope_t scope, cost_detail_t by_kind[COST_KINDS])
+{
+    memset(by_kind, 0, COST_KINDS * sizeof(cost_detail_t));
+    if (!s_lock) {
+        return;
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    if (scope == COST_SCOPE_CONVERSATION) {
+        for (int k = 0; k < COST_KINDS; k++) {
+            by_kind[k] = (cost_detail_t) { s_conv[k], s_conv_in[k], s_conv_out[k] };
+        }
+    } else {
+        roll_over();
+        const cJSON *e;
+        cJSON_ArrayForEach(e, cJSON_GetObjectItem(s_root, s_periods[scope == COST_SCOPE_TODAY ? COST_PERIOD_TODAY :
+                                                                       COST_PERIOD_MONTH])) {
+            const cJSON *k = cJSON_GetObjectItem(e, "k");
+            if (!cJSON_IsNumber(k) || k->valueint < 0 || k->valueint >= COST_KINDS) {
+                continue;
+            }
+            cost_detail_t *d = &by_kind[k->valueint];
+            d->cost += number_in(e, "cost");
+            d->in += number_in(e, "in") + number_in(e, "read") + number_in(e, "write");
+            d->out += number_in(e, "out");
+        }
+    }
+    xSemaphoreGive(s_lock);
+}
+
 /* ---------- formatting ---------- */
+
+void costs_format_tokens(char *buf, size_t size, double tokens)
+{
+    if (tokens < 1000) {
+        snprintf(buf, size, "%.0f", tokens);
+    } else if (tokens < 1e6) {
+        snprintf(buf, size, "%.1f k", tokens / 1e3);
+    } else {
+        snprintf(buf, size, "%.2f M", tokens / 1e6);
+    }
+    char mark = app_lang_get()->decimal_mark;
+    for (char *c = buf; *c; c++) {
+        *c = (*c == '.') ? mark : *c;
+    }
+}
 
 /* "0,0123" with the decimal mark of the language; 4 decimals under 1, 2 above (one less with fewer) */
 static void amount_text_ex(char *buf, size_t size, double amount, int fewer)

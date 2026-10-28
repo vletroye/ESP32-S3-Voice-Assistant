@@ -222,6 +222,9 @@ costs_month = This month
 # its last column
 costs_total = Total
 
+# its first row (the tokens In / Out below)
+costs_cost = Cost
+
 # "cache l'heure"
 clock_hidden = All right, I no longer show the time.
 

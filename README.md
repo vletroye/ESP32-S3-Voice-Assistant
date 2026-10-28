@@ -316,9 +316,12 @@ comes from the prices of `AGENTS.INI`; the tokens read from the cache are counte
   réfléchis…"; hidden while the answer is shown): the cost since it
   last woke up ("0,0123 €") and below it the cost of the day with one decimal less ("[0,123 €]"); the first
   starts again at 0 at each wake-up (wake word or touch; not when the
-  conversation is cleared). **Tapping it** opens a page: transcription, answer (with the web searches) and speech,
-  and their total, for the current conversation ("En cours"), today ("Ce jour") and this month ("Ce mois"), all
-  models together (back arrow to return; it also closes when the assistant listens).
+  conversation is cleared). **Tapping it** opens a page showing one period at a time, chosen by its tabs: the
+  current conversation ("En cours", shown first), today ("Ce jour") or this month ("Ce mois"; the tab shown in
+  white and underlined). For transcription, answer (with the web searches) and speech, and their total: the cost,
+  then below it the tokens **In** (read, cache included; for the transcription, the audio heard at 10 tokens a
+  second) and **Out** (written), shortened ("42,3 k"), all models together (back arrow to return; it also closes
+  when the assistant listens).
 - **`COSTS.TXT`** (configuration drive), written each time the assistant goes to sleep: for today, this month and
   since the start, one line per model (calls, tokens in with the cached ones, tokens out, cost) and the total by
   kind; then the total by kind of each of the last 12 months. The figures are kept in `/spiffs/costs.json`
@@ -635,7 +638,7 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
 - **Checked at start-up and after each change of language** (about 0.1 s), against the firmware's English file,
   the reference:
   - a **missing key** is appended to the file: from the firmware's file of that language when it has one (already
-    translated, with its comment), else in English, between `[TODO: ` and `]`
+    translated, with its comment), else in English, between `[TODO:` and `]`
     (`model_switched = [TODO: Very well, I now use %s.]`);
   - a text **lacking its last `%s` / `%d`** gets them at its end, in the file, in `[TO DO: %s]`
     (`model_switched = Très bien, j'utilise maintenant [TO DO: %s]`), so that its use cannot crash; a text whose
@@ -684,7 +687,7 @@ The example adds German (`DE`); the same steps work for any language whose lette
 [Languages supported on screen](#languages-lang_xxtxt): Latin-1, Latin Extended-A, Greek).
 Nothing has to be built or flashed: everything is done in the files of the configuration drive.
 
-**1. Declare the language in `CONFIG.INI`**
+#### 1. Declare the language in `CONFIG.INI`
 
 - Enter the configuration mode (Settings → folder-and-gear icon → OK, or say "édite la config"), open `CONFIG.INI`
   on the drive and add the language to `Languages`:
@@ -700,7 +703,7 @@ Nothing has to be built or flashed: everything is done in the files of the confi
   langue".
 - Save, **wait until the copy is finished**, then press **Restart**.
 
-**2. The device makes the files of the language**
+#### 2. The device makes the files of the language
 
 At start-up, for a language of `Languages` that has no files yet, the device:
 
@@ -713,7 +716,9 @@ At start-up, for a language of `Languages` that has no files yet, the device:
 Until they are translated, the language works with English texts: the transcription is already German, but the
 persona (and so the answers) and the spoken messages are English.
 
-**3. Translate `LANG_DE.TXT`** (texts of the device: screen, spoken messages, model instructions, errors)
+#### 3. Translate `LANG_DE.TXT`
+
+Texts of the device: screen, spoken messages, model instructions, errors.
 
 - Translate the text after `=` on each line; **never change the keys** (left of `=`).
 - Keep the **`%s`, `%d`, `%02d`… in the same number and order** as in English. A text lacking its last ones gets
@@ -734,10 +739,12 @@ persona (and so the answers) and the spoken messages are English.
   - `lang_already`, `lang_switched`: they name **this** language ("Ich spreche schon Deutsch.").
   - `system_prompt`, `tts_instructions`, `location_line`, `home_line`, `memory_header`, `now_format`: given to the
     models; translate them faithfully, they rule how the device works (no Markdown, date in brackets…).
-- Lines that start with `[TODO: ` are texts added in English after a firmware update: translate them and remove
-  the `[TODO: ` and `]`.
+- Lines that start with `[TODO:` are texts added in English after a firmware update: translate them and remove
+  the `[TODO:` and `]`.
 
-**4. Translate `VOICE_DE.TXT`** (phrases of the voice commands)
+#### 4. Translate `VOICE_DE.TXT`
+
+Phrases of the voice commands.
 
 - One section per command (`[s_change_lang]`, `[s_goodbyes]`, `[s_yes]`…), one pattern per line; keep the section
   names. Patterns: `[optional part]`, `(choice|choice)`, e.g. `wechsle (die|deine) sprache` (see
@@ -749,7 +756,9 @@ persona (and so the answers) and the spoken messages are English.
   `[s_answer_prefix]` (words before an answer: "ich wohne in"), `[s_yes]` / `[s_no]`, `[s_courtesy]` (words allowed
   after a short answer: "bitte"), `[s_one_alone]` ("eins" said alone means 1), `[s_goodbyes]` (back to sleep).
 
-**5. Translate `PERSO_DE.TXT`** (who the assistant is)
+#### 5. Translate `PERSO_DE.TXT`
+
+Who the assistant is.
 
 - Keep the section names **in English or French**: `[identity]`, `[personality]`, `[instructions]`, `[voice]`
   (a German `[Identität]` would be ignored).
@@ -757,7 +766,7 @@ persona (and so the answers) and the spoken messages are English.
   spricht."): it decides the language of the answers.
 - `[voice]`: accent, tone and pace of the speech synthesis ("Sprich Deutsch mit hochdeutscher Aussprache…").
 
-**6. Complete the other files**
+#### 6. Complete the other files
 
 - **`COUNTRY.TXT`**: fill the `DE` column (country names in German, other names after `/`). An empty name takes
   the English one.
@@ -766,7 +775,7 @@ persona (and so the answers) and the spoken messages are English.
   `it`, `nl` and `pt`; for another language add e.g. `pl: polonais` / `pl: polish`. Without it, the language can
   still be named by its name in `Languages` ("Polski").
 
-**7. Restart and check**
+#### 7. Restart and check
 
 - Save each file and **wait until the copy is finished** (a `LANG_` file is large: tens of seconds), then press
   **Restart**.
@@ -1074,7 +1083,7 @@ community (no key, no account), played through the speaker. Asked by voice, or f
 Opened by a tap on the **volume** of the sleep screen (bottom left); closed by the back arrow, after 60 s without
 a touch, or when the assistant listens.
 
-```
+```text
  ←              Radio
  ┌──────────────────────────────┐
  │ Classic 21                   │   the favourites: scrolled, a tap plays one
@@ -1095,7 +1104,7 @@ a touch, or when the assistant listens.
 One station per line, `name | stream URL | Radio-Browser id` (the id is optional), up to 30, on SPIFFS, shown on
 the configuration drive:
 
-```
+```text
 Classic 21 | http://exemple.be/classic21.mp3 | <id given by Radio-Browser>
 Ma radio | https://exemple.org/stream.mp3
 ```

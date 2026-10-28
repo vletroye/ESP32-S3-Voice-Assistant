@@ -612,6 +612,10 @@ static lv_obj_t *s_cost_day_label = NULL;     /* below it: the cost of the day, 
 static lv_obj_t *s_cost_screen = NULL;
 static lv_obj_t *s_cost_table = NULL;
 static lv_obj_t *s_cost_title = NULL;
+/* The periods shown one at a time: en cours, ce jour, ce mois */
+static lv_obj_t *s_cost_tabs[3];
+static cost_scope_t s_cost_scope = COST_SCOPE_CONVERSATION;
+#define COSTS_TAB_DIM       0x8A97BC
 
 /* Refreshed every second (LVGL task): the cost since the last wake-up, and below it the cost of the day */
 static void cost_label_refresh(lv_timer_t *timer)
@@ -633,14 +637,17 @@ static void cost_label_refresh(lv_timer_t *timer)
     }
 }
 
-static void cost_row(int row, const char *name, const double by_kind[COST_KINDS], double total)
+/* A row of the table: STT, LLM (with the tools billed per call), TTS, total */
+static void cost_row(int row, const char *name, const double values[4], bool amounts)
 {
     char text[24];
     lv_table_set_cell_value(s_cost_table, row, 0, name);
-    // STT, LLM (with the tools billed per call), TTS, total
-    const double values[4] = { by_kind[COST_STT], by_kind[COST_LLM] + by_kind[COST_TOOL], by_kind[COST_TTS], total };
     for (int c = 0; c < 4; c++) {
-        costs_format(text, sizeof(text), values[c], false);
+        if (amounts) {
+            costs_format(text, sizeof(text), values[c], false);
+        } else {
+            costs_format_tokens(text, sizeof(text), values[c]);
+        }
         lv_table_set_cell_value(s_cost_table, row, c + 1, text);
     }
 }
@@ -654,18 +661,39 @@ static void cost_page_fill(void)
     snprintf(title, sizeof(title), "%s (%s)", lang->costs_title, currency);
     lv_label_set_text(s_cost_title, title);
 
+    // The tabs: the period shown in white, underlined; the others dimmed
+    const char *names[3] = { lang->costs_conversation, lang->costs_today, lang->costs_month };
+    for (int i = 0; i < 3; i++) {
+        bool shown = (i == (int)s_cost_scope);
+        lv_label_set_text(s_cost_tabs[i], names[i]);
+        lv_obj_set_style_text_color(s_cost_tabs[i], lv_color_hex(shown ? 0xFFFFFF : COSTS_TAB_DIM),
+                                    LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_decor(s_cost_tabs[i], shown ? LV_TEXT_DECOR_UNDERLINE : LV_TEXT_DECOR_NONE,
+                                    LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+
     lv_table_set_cell_value(s_cost_table, 0, 0, "");
     lv_table_set_cell_value(s_cost_table, 0, 1, "STT");
     lv_table_set_cell_value(s_cost_table, 0, 2, "LLM");
     lv_table_set_cell_value(s_cost_table, 0, 3, "TTS");
     lv_table_set_cell_value(s_cost_table, 0, 4, lang->costs_total);
-    double by_kind[COST_KINDS];
-    double total = costs_conversation(by_kind);
-    cost_row(1, lang->costs_conversation, by_kind, total);
-    total = costs_period(COST_PERIOD_TODAY, NULL, by_kind);
-    cost_row(2, lang->costs_today, by_kind, total);
-    total = costs_period(COST_PERIOD_MONTH, NULL, by_kind);
-    cost_row(3, lang->costs_month, by_kind, total);
+    cost_detail_t d[COST_KINDS];
+    costs_detail(s_cost_scope, d);
+    // LLM with the tools billed per call (their tokens are in the answer's)
+    const double cost[4] = { d[COST_STT].cost, d[COST_LLM].cost + d[COST_TOOL].cost, d[COST_TTS].cost,
+                             d[COST_STT].cost + d[COST_LLM].cost + d[COST_TOOL].cost + d[COST_TTS].cost };
+    const double in[4] = { d[COST_STT].in, d[COST_LLM].in, d[COST_TTS].in, d[COST_STT].in + d[COST_LLM].in + d[COST_TTS].in };
+    const double out[4] = { d[COST_STT].out, d[COST_LLM].out, d[COST_TTS].out,
+                            d[COST_STT].out + d[COST_LLM].out + d[COST_TTS].out };
+    cost_row(1, lang->costs_cost, cost, true);
+    cost_row(2, "In", in, false);
+    cost_row(3, "Out", out, false);
+}
+
+static void cost_tab_cb(lv_event_t *e)
+{
+    s_cost_scope = (cost_scope_t)(intptr_t)lv_event_get_user_data(e);
+    cost_page_fill();
 }
 
 static void cost_page_back_cb(lv_event_t *e)
@@ -690,12 +718,28 @@ static void cost_page_create(void)
     lv_obj_set_style_text_color(s_cost_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_align(s_cost_title, LV_ALIGN_TOP_MID, 0, 14);
 
+    // The periods, side by side: a tap shows one
+    lv_obj_t *tabs = lv_obj_create(s_cost_screen);
+    lv_obj_remove_style_all(tabs);
+    lv_obj_set_size(tabs, 312, 30);
+    lv_obj_align(tabs, LV_ALIGN_TOP_MID, 0, 44);
+    lv_obj_set_flex_flow(tabs, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(tabs, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(tabs, LV_OBJ_FLAG_SCROLLABLE);
+    for (int i = 0; i < 3; i++) {
+        s_cost_tabs[i] = lv_label_create(tabs);
+        lv_obj_set_style_text_font(s_cost_tabs[i], &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_add_flag(s_cost_tabs[i], LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_ext_click_area(s_cost_tabs[i], 10);
+        lv_obj_add_event_cb(s_cost_tabs[i], cost_tab_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    }
+
     s_cost_table = lv_table_create(s_cost_screen);
     lv_table_set_col_cnt(s_cost_table, 5);
     lv_table_set_row_cnt(s_cost_table, 4);
-    lv_table_set_col_width(s_cost_table, 0, 92);
+    lv_table_set_col_width(s_cost_table, 0, 52);
     for (int c = 1; c < 5; c++) {
-        lv_table_set_col_width(s_cost_table, c, 55);
+        lv_table_set_col_width(s_cost_table, c, 65);
     }
     lv_obj_set_style_text_font(s_cost_table, &ui_font_Latin14, LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_text_color(s_cost_table, lv_color_hex(0xFFFFFF), LV_PART_ITEMS | LV_STATE_DEFAULT);
@@ -712,7 +756,7 @@ static void cost_page_create(void)
     lv_obj_set_style_pad_left(s_cost_table, 2, LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(s_cost_table, 3, LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_size(s_cost_table, 312, LV_SIZE_CONTENT);
-    lv_obj_align(s_cost_table, LV_ALIGN_TOP_MID, 0, 52);
+    lv_obj_align(s_cost_table, LV_ALIGN_TOP_MID, 0, 84);
     lv_obj_clear_flag(s_cost_table, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 }
 
@@ -721,6 +765,7 @@ static void cost_label_clicked_cb(lv_event_t *e)
     if (!s_cost_screen) {
         cost_page_create();
     }
+    s_cost_scope = COST_SCOPE_CONVERSATION;    // opened from the conversation's cost: shown first
     cost_page_fill();
     lv_scr_load(s_cost_screen);
 }

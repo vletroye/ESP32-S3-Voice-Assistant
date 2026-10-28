@@ -24,6 +24,8 @@
 #include "driver/usb_serial_jtag.h"
 #include "model_test.h"
 #include "country.h"
+#include "radio.h"
+#include "radio_browser.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -47,6 +49,15 @@ static PHRASE_LIST_ALL_LANGUAGES(s_change_lang);
 static PHRASE_LIST_ALL_LANGUAGES(s_lang_shortcut);
 static PHRASE_LIST(s_list_models);
 static PHRASE_LIST(s_test_models);
+/* Radio: a station ("joue la radio X"), a genre or a country ("joue du jazz"), and while one plays or is suspended:
+ * next, previous, stop, resume, what is playing */
+static PHRASE_LIST(s_radio_station);
+static PHRASE_LIST(s_radio_music);
+static PHRASE_LIST(s_radio_next);
+static PHRASE_LIST(s_radio_previous);
+static PHRASE_LIST(s_radio_stop);
+static PHRASE_LIST(s_radio_resume);
+static PHRASE_LIST(s_radio_what);
 /* "Quels sont les modèles les plus rapides ?" (before s_list_models: "quels sont les modèles ...") */
 static PHRASE_LIST(s_fastest_models);
 static PHRASE_LIST(s_change_model);
@@ -975,13 +986,171 @@ bool voice_cmd_ends_with_goodbye(const char *sentence)
 void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
-        &s_goodbyes, &s_list_models, &s_test_models, &s_fastest_models, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
+        &s_goodbyes, &s_list_models, &s_test_models, &s_fastest_models, &s_radio_station, &s_radio_music,
+        &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
         &s_new_conversation, &s_edit_config, &s_restart, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
         phrases_of(lists[i]);
     }
+}
+
+/* ---------- radio ---------- */
+
+/* The words of the genre in "radio_genres" ("classique/musique classique: classical, ...") said in the text: its
+ * Radio-Browser tag (the longest words found win); false if none */
+static bool radio_genre_tag(const char *genres, const char *norm, char *tag, size_t size)
+{
+    char *copy = strdup(genres ? genres : "");
+    size_t best = 0;
+    for (char *entry = copy; entry && *entry;) {
+        char *comma = strchr(entry, ',');
+        if (comma) {
+            *comma = '\0';
+        }
+        char *colon = strchr(entry, ':');
+        if (colon) {
+            *colon = '\0';
+            char found_tag[48];
+            strlcpy(found_tag, colon + 1, sizeof(found_tag));
+            char *t = found_tag;
+            while (*t == ' ') {
+                t++;
+            }
+            for (char *word = entry; word && *word;) {
+                char *slash = strchr(word, '/');
+                if (slash) {
+                    *slash = '\0';
+                }
+                char w[CMD_NORM_SIZE];
+                app_text_normalize(word, w, sizeof(w));
+                if (w[0] && strlen(w) > best && has_word(norm, w)) {
+                    best = strlen(w);
+                    strlcpy(tag, t, size);
+                }
+                word = slash ? slash + 1 : NULL;
+            }
+        }
+        entry = comma ? comma + 1 : NULL;
+    }
+    free(copy);
+    return best > 0;
+}
+
+/* After a radio phrase, nothing else but "s'il te plaît", "please"... */
+static bool radio_alone(const char *rest)
+{
+    return !*rest || starts_with(rest, phrases_of(&s_courtesy), NULL);
+}
+
+static voice_cmd_t radio_reply(char **reply, const char *format, const char *value)
+{
+    char *text = NULL;
+    asprintf(&text, format, value ? value : "");
+    *reply = text ? text : reply_dup("");
+    return VOICE_CMD_RADIO;
+}
+
+/* Search and play (once the reply is spoken): "Je joue X.", or why not */
+static voice_cmd_t radio_search(const char *name, const char *tag, const char *country, const char *asked,
+                                char **reply)
+{
+    const app_lang_t *lang = app_lang_get();
+    char first[RADIO_NAME_SIZE];
+    int n = radio_browser_play(name, tag, country, first, sizeof(first));
+    if (n < 0) {
+        *reply = reply_dup(lang->radio_unreachable);
+        return VOICE_CMD_ANSWERED;
+    }
+    if (n == 0) {
+        radio_reply(reply, lang->radio_not_found, asked);
+        return VOICE_CMD_ANSWERED;      // listening again: another try may follow
+    }
+    return radio_reply(reply, lang->radio_playing, first);
+}
+
+/* The radio commands; VOICE_CMD_NONE when the text is not one of them */
+static voice_cmd_t radio_command(const char *norm, char **reply)
+{
+    const app_lang_t *lang = app_lang_get();
+    size_t len = 0;
+    bool has_radio = radio_state() != RADIO_OFF || radio_station().url[0];
+
+    // "Joue de la musique italienne", "joue du jazz", "mets de la musique classique"
+    if (starts_with(norm, phrases_of(&s_radio_music), &len)) {
+        const char *rest = norm + len + (norm[len] == ' ');
+        if (radio_alone(rest)) {
+            if (radio_resume()) {
+                return radio_reply(reply, lang->radio_playing, radio_station_name());
+            }
+            *reply = reply_dup(lang->radio_ask);
+            return VOICE_CMD_ANSWERED;
+        }
+        char tag[48] = "";
+        char country[3] = "";
+        bool has_tag = radio_genre_tag(lang->radio_genres, rest, tag, sizeof(tag));
+        if (!has_tag && strcasecmp(lang->code, "en") != 0) {
+            const app_lang_t *english = app_lang_find("en");
+            has_tag = english && radio_genre_tag(english->radio_genres, rest, tag, sizeof(tag));
+        }
+        bool has_country = country_find(rest, country, sizeof(country));
+        if (!has_tag && !has_country) {
+            strlcpy(tag, rest, sizeof(tag));    // a genre not listed: searched as said
+        }
+        return radio_search(NULL, tag, has_country ? country : NULL, rest, reply);
+    }
+    // "Joue la radio Nostalgie"; alone: the last station again
+    if (starts_with(norm, phrases_of(&s_radio_station), &len)) {
+        const char *rest = norm + len + (norm[len] == ' ');
+        if (radio_alone(rest)) {
+            if (radio_resume()) {
+                return radio_reply(reply, lang->radio_playing, radio_station_name());
+            }
+            *reply = reply_dup(lang->radio_ask);
+            return VOICE_CMD_ANSWERED;
+        }
+        return radio_search(rest, NULL, NULL, rest, reply);
+    }
+    if (!has_radio) {
+        return VOICE_CMD_NONE;  // "stop", "suivante"... without a radio: for the model
+    }
+    if (starts_with(norm, phrases_of(&s_radio_next), &len) && radio_alone(norm + len + (norm[len] == ' '))) {
+        if (!radio_next()) {
+            *reply = reply_dup(lang->radio_last);
+            return VOICE_CMD_ANSWERED;
+        }
+        return radio_reply(reply, lang->radio_playing, radio_station_name());
+    }
+    if (starts_with(norm, phrases_of(&s_radio_previous), &len) && radio_alone(norm + len + (norm[len] == ' '))) {
+        if (!radio_previous()) {
+            *reply = reply_dup(lang->radio_first);
+            return VOICE_CMD_ANSWERED;
+        }
+        return radio_reply(reply, lang->radio_playing, radio_station_name());
+    }
+    if (starts_with(norm, phrases_of(&s_radio_stop), &len) && radio_alone(norm + len + (norm[len] == ' '))) {
+        radio_pause();
+        *reply = reply_dup(lang->radio_stopped);
+        return VOICE_CMD_RADIO;
+    }
+    if (starts_with(norm, phrases_of(&s_radio_resume), &len) && radio_alone(norm + len + (norm[len] == ' '))) {
+        radio_resume();
+        return radio_reply(reply, lang->radio_playing, radio_station_name());
+    }
+    if (starts_with(norm, phrases_of(&s_radio_what), &len)) {
+        char title[128];
+        radio_title(title, sizeof(title));
+        char *text = NULL;
+        if (title[0]) {
+            asprintf(&text, lang->radio_what_title, radio_station_name(), title);
+        } else {
+            asprintf(&text, lang->radio_what, radio_station_name());
+        }
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_RADIO;
+    }
+    return VOICE_CMD_NONE;
 }
 
 /* "Teste les modèles": announced, then run once the reply is spoken */
@@ -1070,6 +1239,11 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         if (answered != VOICE_CMD_NONE) {
             return answered;
         }
+    }
+
+    voice_cmd_t radio = radio_command(norm, reply);
+    if (radio != VOICE_CMD_NONE) {
+        return radio;
     }
 
     size_t len = 0;

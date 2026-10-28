@@ -266,6 +266,29 @@ int radio_browser_search(const char *name, const char *tag, const char *countryc
     return found;
 }
 
+int radio_browser_play(const char *name, const char *tag, const char *countrycode, char *first, size_t size)
+{
+    if (first && size) {
+        first[0] = '\0';
+    }
+    radio_station_t *list = heap_caps_calloc(RADIO_BROWSER_MAX, sizeof(radio_station_t), MALLOC_CAP_SPIRAM);
+    if (!list) {
+        return -1;
+    }
+    int n = radio_browser_search(name, tag, countrycode, list, RADIO_BROWSER_MAX);
+    if (n == 0 && tag && tag[0] && countrycode && countrycode[0]) {
+        n = radio_browser_search(name, tag, NULL, list, RADIO_BROWSER_MAX);    // "jazz belge": jazz anyway
+    }
+    if (n > 0) {
+        radio_play_list(list, n, 0);
+        if (first && size) {
+            strlcpy(first, list[0].name, size);
+        }
+    }
+    free(list);
+    return n;
+}
+
 void radio_browser_click(const char *uuid)
 {
     if (!uuid || !uuid[0]) {

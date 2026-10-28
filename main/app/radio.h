@@ -36,7 +36,8 @@ typedef enum {
     RADIO_PAUSED,       /* stopped by the user: resumed on request */
 } radio_state_t;
 
-/** Play this station (its name as said and shown, its stream URL); the one playing is replaced. Does not wait. */
+/** Play this station (its name as said and shown, its stream URL); the one playing is replaced. Does not wait.
+ *  Asked while the assistant listens or speaks, it plays once the assistant sleeps again (after its reply). */
 void radio_play(const char *name, const char *url);
 
 /**

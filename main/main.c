@@ -80,6 +80,8 @@ static volatile bool s_restart_after_reply = false;
 static volatile bool s_restart_requested = false;
 /* "Teste les modèles": the test starts once its announcement has been spoken */
 static volatile bool s_test_after_reply = false;
+/* A radio command was answered: back to sleep after the reply (the radio plays then), without listening again */
+static volatile bool s_sleep_after_local = false;
 /* The reply is the one of a voice command handled here (not of the model): Sleep_after_cmd applies */
 static volatile bool s_reply_local_cmd = false;
 /* The reply ended with a goodbye ("Au revoir !", "Bonne soirée."): sleep and a new conversation once spoken */
@@ -244,9 +246,10 @@ static void on_reply_audio(tts_event_t event)
         // Reply interrupted by a new listening session (wake word or touch)
         return;
     }
-    if (s_reply_local_cmd && sys_param->sleep_after_cmd && !voice_cmd_waiting_answer()) {
-        // Sleep_after_cmd: a voice command handled here (and asking nothing) does not listen again
-        ESP_LOGI(TAG, "Voice command done, going to sleep (Sleep_after_cmd)");
+    if (s_reply_local_cmd && (sys_param->sleep_after_cmd || s_sleep_after_local) && !voice_cmd_waiting_answer()) {
+        // Sleep_after_cmd, or a radio command: a voice command handled here (and asking nothing) does not listen again
+        s_sleep_after_local = false;
+        ESP_LOGI(TAG, "Voice command done, going to sleep");
         ui_ctrl_reply_set_audio_end_flag(true);
         return;
     }
@@ -651,57 +654,6 @@ void assistant_listen_end(void)
 
     // "Change la langue" / "change de modèle" (then the answer), "parle anglais", "utilise le modèle 3":
     // answered and applied here, without restarting
-    // TEMPORARY (radio phase 1, replaced by the voice commands of phase 3): "test radio" plays FIP, "stop radio"
-    // pauses it, "reprends la radio" resumes it
-    char radio_norm[64];
-    app_text_normalize(text, radio_norm, sizeof(radio_norm));
-    // (phase 2: "radio genre jazz", "radio pays italie", "radio nom nostalgie", "radio suivante", "radio précédente")
-    bool radio_test = strncmp(radio_norm, "test radio", 10) == 0;
-    bool radio_pause_test = strncmp(radio_norm, "stop radio", 10) == 0;
-    bool radio_resume_test = strncmp(radio_norm, "reprends la radio", 17) == 0;
-    bool radio_search_test = strncmp(radio_norm, "radio genre ", 12) == 0 || strncmp(radio_norm, "radio pays ", 11) == 0 ||
-                             strncmp(radio_norm, "radio nom ", 10) == 0;
-    bool radio_next_test = strncmp(radio_norm, "radio suivante", 14) == 0;
-    bool radio_previous_test = strncmp(radio_norm, "radio précédente", 17) == 0 ||
-                               strncmp(radio_norm, "radio precedente", 16) == 0;
-    if (radio_test || radio_pause_test || radio_resume_test || radio_search_test || radio_next_test ||
-        radio_previous_test) {
-        ESP_LOGI(TAG, "Radio test: %s", radio_norm);
-        if (radio_test) {
-            radio_play("FIP", "http://icecast.radiofrance.fr/fip-midfi.mp3");
-        } else if (radio_pause_test) {
-            radio_pause();
-        } else if (radio_next_test) {
-            radio_next();
-        } else if (radio_previous_test) {
-            radio_previous();
-        } else if (radio_search_test) {
-            radio_station_t *found = heap_caps_calloc(RADIO_BROWSER_MAX, sizeof(radio_station_t), MALLOC_CAP_SPIRAM);
-            const char *what = strchr(radio_norm + 6, ' ') + 1;
-            int n = 0;
-            if (found && strncmp(radio_norm, "radio genre ", 12) == 0) {
-                n = radio_browser_search(NULL, what, NULL, found, RADIO_BROWSER_MAX);
-            } else if (found && strncmp(radio_norm, "radio nom ", 10) == 0) {
-                n = radio_browser_search(what, NULL, NULL, found, RADIO_BROWSER_MAX);
-            } else if (found) {
-                char code[3];
-                if (country_find(what, code, sizeof(code))) {
-                    n = radio_browser_search(NULL, NULL, code, found, RADIO_BROWSER_MAX);
-                } else {
-                    ESP_LOGW(TAG, "Radio test: country \"%s\" unknown", what);
-                }
-            }
-            if (n > 0) {
-                radio_play_list(found, n, 0);
-            }
-            free(found);
-        } else {
-            radio_resume();
-        }
-        ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
-        goto err;
-    }
-
     char *cmd_reply = NULL;
     voice_cmd_t voice_cmd = voice_cmd_handle(text, &cmd_reply);
     if (voice_cmd == VOICE_CMD_OPEN_SETTINGS) {
@@ -718,6 +670,7 @@ void assistant_listen_end(void)
         s_config_after_reply = (voice_cmd == VOICE_CMD_EDIT_CONFIG);
         s_restart_after_reply = (voice_cmd == VOICE_CMD_RESTART);
         s_test_after_reply = (voice_cmd == VOICE_CMD_TEST_MODELS);
+        s_sleep_after_local = (voice_cmd == VOICE_CMD_RADIO);
         speak_message(cmd_reply ? cmd_reply : "");
         s_reply_local_cmd = true;
         free(cmd_reply);

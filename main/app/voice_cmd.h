@@ -36,6 +36,7 @@ typedef enum {
     VOICE_CMD_EDIT_CONFIG,  /* "édite la config" with a PC connected: speak the reply, then restart in config mode */
     VOICE_CMD_RESTART,      /* "redémarre": speak the reply, then restart */
     VOICE_CMD_TEST_MODELS,  /* "teste les modèles": speak the reply, then test the models (model_test.c) */
+    VOICE_CMD_RADIO,        /* a radio command: speak the reply, then back to sleep (the radio plays then) */
 } voice_cmd_t;
 
 /**

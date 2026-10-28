@@ -14,6 +14,8 @@
 #include "homey_mcp.h"
 #include "llm.h"
 #include "tools.h"
+#include "radio.h"
+#include "radio_browser.h"
 
 static const char *TAG = "tools";
 
@@ -36,7 +38,18 @@ static const char s_definitions_json[] =
     "your answer). Keep the answer short.\","
     "\"input_schema\":{\"type\":\"object\",\"properties\":{"
     "\"level\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},"
-    "\"change\":{\"type\":\"integer\",\"minimum\":-100,\"maximum\":100}}}}"
+    "\"change\":{\"type\":\"integer\",\"minimum\":-100,\"maximum\":100}}}},"
+    "{\"name\":\"play_radio\","
+    "\"description\":\"Play an internet radio on the device's speaker, found in the Radio-Browser directory "
+    "(the most listened stations first). Give a station name, a genre tag, a country code, or several. Tags are "
+    "mostly English, as the directory uses them: jazz, rock, classical, pop, chillout, lounge, 80s, oldies, "
+    "electronic, hip-hop, news, talk, kids, christmas... The radio starts once your answer has been spoken: keep "
+    "it very short (e.g. 'Je mets du jazz.'). The result gives the station that will play, or that none was "
+    "found. For stop, next station, or what is playing, the user has voice commands.\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"name\":{\"type\":\"string\",\"description\":\"Part of the station name, e.g. 'Nostalgie'\"},"
+    "\"tag\":{\"type\":\"string\",\"description\":\"One genre tag, e.g. 'jazz'\"},"
+    "\"countrycode\":{\"type\":\"string\",\"description\":\"ISO 3166-1 alpha-2 code, e.g. 'BE'\"}}}}"
     "]";
 
 static cJSON *s_definitions = NULL;
@@ -110,6 +123,35 @@ static char *run_set_volume(const cJSON *input, bool *is_error)
     return text;
 }
 
+static const char *string_input(const cJSON *input, const char *key)
+{
+    const cJSON *item = cJSON_GetObjectItem(input, key);
+    return cJSON_IsString(item) ? item->valuestring : NULL;
+}
+
+static char *run_play_radio(const cJSON *input, bool *is_error)
+{
+    char first[RADIO_NAME_SIZE];
+    int n = radio_browser_play(string_input(input, "name"), string_input(input, "tag"),
+                               string_input(input, "countrycode"), first, sizeof(first));
+    char *text = NULL;
+    if (n < 0) {
+        *is_error = true;
+        return strdup("{\"error\":\"the radio directory cannot be reached\"}");
+    }
+    if (n == 0) {
+        return strdup("{\"found\":0,\"note\":\"no station found: try another name, tag or country\"}");
+    }
+    // The radio plays once the answer has been spoken: back to sleep then, without listening again
+    s_sleep_after_reply = true;
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddNumberToObject(result, "found", n);
+    cJSON_AddStringToObject(result, "playing", first);
+    text = cJSON_PrintUnformatted(result);
+    cJSON_Delete(result);
+    return text;
+}
+
 char *tools_run(const char *name, const cJSON *input, bool *is_error)
 {
     *is_error = false;
@@ -125,6 +167,8 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
                              cJSON_IsNumber(days) ? days->valueint : 1, app_lang_get()->code, is_error);
     } else if (strcmp(name, "set_volume") == 0) {
         result = run_set_volume(input, is_error);
+    } else if (strcmp(name, "play_radio") == 0) {
+        result = run_play_radio(input, is_error);
     } else if (homey_mcp_has_tool(name)) {
         result = homey_mcp_call(name, input, is_error);
     } else {

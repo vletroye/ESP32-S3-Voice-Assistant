@@ -21,6 +21,46 @@ speak[ in]
 switch to
 answer in
 
+[s_radio_station]
+# Radio: a station by its name ("play the radio Nostalgie"), searched in Radio-Browser
+(play|put on|turn on|start) [the ]radio
+(play|put on) [the ]station
+[i want to ]listen to the radio
+
+[s_radio_music]
+# Radio: a genre or a country ("play some jazz", "play italian music", "play english rock")
+(play|put on) [me ][some ]music
+(play|put on) [me ]some
+
+[s_radio_next]
+# Radio: the next station of the list (only while a radio plays or is suspended)
+next
+next (radio|station)
+(play|skip to) the next [(radio|station)]
+skip [(this|the) (radio|station)]
+
+[s_radio_previous]
+previous
+previous (radio|station)
+(play|go back to) the previous [(radio|station)]
+
+[s_radio_stop]
+# Radio: stopped, not resumed when the assistant sleeps (only while a radio plays or is suspended)
+stop
+stop the (radio|music)
+turn off the (radio|music)
+
+[s_radio_resume]
+(resume|restart|turn the radio back on) [the (radio|music)]
+
+[s_radio_what]
+# Radio: the station and the title being played
+what s playing
+what is playing
+what (song|station) is this
+which station is this
+what is this song
+
 [s_test_models]
 # Asks every model the same question and measures its answer time (SPEED.TXT, speed in AGENTS.INI)
 test (the|your) models

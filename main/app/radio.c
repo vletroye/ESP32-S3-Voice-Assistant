@@ -81,6 +81,10 @@ static volatile radio_state_t s_state = RADIO_OFF;
 static volatile bool s_stop = true;             /* the stream being read and played stops */
 static volatile bool s_play_busy = false;       /* the playback task is writing to the speaker */
 static volatile bool s_net_ended = false;       /* nothing more will come into the ring buffer */
+static volatile bool s_fade_out = false;        /* the playback fades out, then leaves (a stop) */
+/* The assistant listens or speaks (from radio_suspend() to radio_on_sleep()): a station asked meanwhile ("joue du
+ * jazz", "suivante") plays once it sleeps again, after its spoken reply */
+static volatile bool s_awake = false;
 
 /* ---------- network ---------- */
 
@@ -279,6 +283,7 @@ static void net_session(void)
         s_title[0] = '\0';
         taskEXIT_CRITICAL(&s_title_lock);
         s_net_ended = false;
+        s_fade_out = false;
         s_stop = false;
         ESP_LOGI(TAG, "Playing %s: %s (internal RAM free %u)", s_name[0] ? s_name : "?", s_url,
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
@@ -400,6 +405,111 @@ static inline int32_t treble_apply(int32_t sample)
     return (int32_t)y;
 }
 
+/*
+ * Level of the output, after the treble:
+ * - a fade-in at each start (a station, a resumption): from silence to the full level in RADIO_FADE_MS, along a
+ *   square curve (soft at first, then faster), which sounds natural;
+ * - the stations brought to a common level: the mean square of the sound (blocks of 50 ms, silences left out) is
+ *   smoothed over ~3 s and a gain aims at RADIO_LEVEL_DBFS, between RADIO_GAIN_MIN_DB and RADIO_GAIN_MAX_DB,
+ *   moving slowly (no pumping on the music); fast during the fade-in, which hides it. Peaks pushed over the top
+ *   by a gain are softened before the hard clip.
+ * The volume of the codec (Volume, "parle plus fort") still applies on top.
+ */
+#define RADIO_FADE_MS           2000
+#define RADIO_FADE_SAMPLES      (RADIO_OUT_RATE * RADIO_FADE_MS / 1000)
+#define RADIO_LEVEL_DBFS        (-16.0f)
+#define RADIO_GAIN_MIN_DB       (-12.0f)
+#define RADIO_GAIN_MAX_DB       6.0f
+#define RADIO_SILENCE_DBFS      (-45.0f)        /* quieter blocks are not measured */
+#define RADIO_LEVEL_BLOCK       (RADIO_OUT_RATE / 20)   /* 50 ms */
+#define RADIO_LEVEL_FAST_BLOCKS 20              /* the first second: fast */
+#define RADIO_SOFT_KNEE         24000
+#define RADIO_FADE_OUT_MS       400             /* at a stop: short, the assistant stays quick to answer */
+#define RADIO_FADE_OUT_SAMPLES  (RADIO_OUT_RATE * RADIO_FADE_OUT_MS / 1000)
+
+typedef struct {
+    uint32_t fade;          /* samples played since the start */
+    float sum;              /* squares of the block being measured */
+    int count;
+    int blocks;             /* blocks measured (not silent) since the start */
+    float loudness;         /* mean square, smoothed */
+    float gain;             /* linear, applied */
+    float target_ms, silence_ms, gain_min, gain_max;
+    uint32_t fade_out;      /* samples played since the fade-out began */
+    volatile bool faded_out;    /* silent: the playback can leave */
+} level_t;
+
+static level_t s_level;     /* internal RAM: read at every output sample */
+
+static float dbfs_to_ms(float db)
+{
+    float amplitude = 32767.0f * powf(10.0f, db / 20.0f);
+    return amplitude * amplitude;
+}
+
+static void level_reset(void)
+{
+    memset(&s_level, 0, sizeof(s_level));
+    s_level.gain = 1.0f;
+    s_level.target_ms = dbfs_to_ms(RADIO_LEVEL_DBFS);
+    s_level.silence_ms = dbfs_to_ms(RADIO_SILENCE_DBFS);
+    s_level.gain_min = powf(10.0f, RADIO_GAIN_MIN_DB / 20.0f);
+    s_level.gain_max = powf(10.0f, RADIO_GAIN_MAX_DB / 20.0f);
+}
+
+/* The station's level in dBFS and the gain applied in dB (for the log) */
+static void level_read(float *dbfs, float *gain_db)
+{
+    *dbfs = s_level.loudness > 0 ? 10.0f * log10f(s_level.loudness / (32767.0f * 32767.0f)) : -99.0f;
+    *gain_db = 20.0f * log10f(s_level.gain);
+}
+
+static inline int32_t level_apply(int32_t sample)
+{
+    level_t *l = &s_level;
+    float x = (float)sample;
+    l->sum += x * x;
+    if (++l->count == RADIO_LEVEL_BLOCK) {
+        float ms = l->sum / RADIO_LEVEL_BLOCK;
+        l->sum = 0;
+        l->count = 0;
+        if (ms > l->silence_ms) {
+            bool fast = l->blocks < RADIO_LEVEL_FAST_BLOCKS;
+            l->loudness = l->blocks == 0 ? ms : l->loudness + (fast ? 0.3f : 0.0165f) * (ms - l->loudness);
+            l->blocks++;
+            float target = sqrtf(l->target_ms / l->loudness);
+            target = target < l->gain_min ? l->gain_min : (target > l->gain_max ? l->gain_max : target);
+            l->gain += (fast ? 0.5f : 0.05f) * (target - l->gain);
+            if (l->blocks == 3 * 20) {      // after 3 s of sound
+                float dbfs, gain_db;
+                level_read(&dbfs, &gain_db);
+                ESP_LOGI(TAG, "Level %.1f dBFS: gain %+.1f dB", dbfs, gain_db);
+            }
+        }
+    }
+    float v = x * l->gain;
+    if (l->fade < RADIO_FADE_SAMPLES) {
+        float t = (float)l->fade++ / RADIO_FADE_SAMPLES;
+        v *= t * t;
+    }
+    // Fade-out at a stop: the reverse curve, from the level reached (even in the middle of the fade-in)
+    if (s_fade_out) {
+        if (l->fade_out >= RADIO_FADE_OUT_SAMPLES) {
+            l->faded_out = true;
+            return 0;
+        }
+        float t = 1.0f - (float)l->fade_out++ / RADIO_FADE_OUT_SAMPLES;
+        v *= t * t;
+    }
+    // Soft knee above RADIO_SOFT_KNEE (a gain may push the peaks over the top)
+    if (v > RADIO_SOFT_KNEE) {
+        v = RADIO_SOFT_KNEE + (v - RADIO_SOFT_KNEE) * 0.25f;
+    } else if (v < -RADIO_SOFT_KNEE) {
+        v = -RADIO_SOFT_KNEE + (v + RADIO_SOFT_KNEE) * 0.25f;
+    }
+    return (int32_t)v;
+}
+
 static void resampler_init(resampler_t *r, int in_rate, int channels)
 {
     memset(r, 0, sizeof(*r));
@@ -452,7 +562,7 @@ static int resample(resampler_t *r, const int16_t *in, int frames, int16_t *out,
                 int32_t y1 = fir_at(r, r->pos + 1);
                 y += (int32_t)(((int64_t)(y1 - y) * r->frac) >> RS_FRAC_BITS);
             }
-            out[2 * written] = out[2 * written + 1] = clip16(treble_apply(y));
+            out[2 * written] = out[2 * written + 1] = clip16(level_apply(treble_apply(y)));
             written++;
             r->frac += r->step;
             r->pos += r->frac >> RS_FRAC_BITS;
@@ -473,16 +583,17 @@ static void play_stream(void)
 {
     // Some seconds buffered first
     int64_t wait_start = esp_timer_get_time();
-    while (!s_stop && ring_filled() < RADIO_PREFILL && !s_net_ended) {
+    while (!s_stop && !s_fade_out && ring_filled() < RADIO_PREFILL && !s_net_ended) {
         if (esp_timer_get_time() - wait_start > RADIO_PREFILL_WAIT_MS * 1000LL) {
             ESP_LOGE(TAG, "No audio received in %d s", RADIO_PREFILL_WAIT_MS / 1000);
             return;
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    if (s_stop || ring_filled() == 0) {
+    if (s_stop || s_fade_out || ring_filled() == 0) {
         return;
     }
+    level_reset();      // fade-in, and the level of this station measured afresh
 
     esp_aac_dec_cfg_t aac_cfg = ESP_AAC_DEC_CONFIG_DEFAULT();
     aac_cfg.aac_plus_enable = true;
@@ -510,7 +621,7 @@ static void play_stream(void)
     int64_t stats_start = esp_timer_get_time(), decode_us = 0, resample_us = 0, audio_frames = 0;
     int underruns = 0, frames_errors = 0;
     size_t min_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    while (!s_stop) {
+    while (!s_stop && !s_level.faded_out) {
         // More compressed data
         if (in_len < RADIO_IN_MAX) {
             size_t got = 0;
@@ -527,7 +638,7 @@ static void play_stream(void)
             }
         }
         // Decode what can be
-        while (in_len > 0 && !s_stop) {
+        while (in_len > 0 && !s_stop && !s_level.faded_out) {
             esp_audio_simple_dec_raw_t raw = { .buffer = in, .len = in_len };
             esp_audio_simple_dec_out_t frame = { .buffer = out, .len = out_size };
             int64_t t0 = esp_timer_get_time();
@@ -562,7 +673,7 @@ static void play_stream(void)
                 }
                 int frames = frame.decoded_size / (sizeof(int16_t) * rs->channels);
                 const int16_t *pcm = (const int16_t *)out;
-                while (frames > 0 && !s_stop) {
+                while (frames > 0 && !s_stop && !s_level.faded_out) {
                     int part = frames > 1024 ? 1024 : frames;
                     int64_t t1 = esp_timer_get_time();
                     int n = resample(rs, pcm, part, pcm16k, 2048);
@@ -584,10 +695,12 @@ static void play_stream(void)
         int64_t now = esp_timer_get_time();
         if (now - stats_start >= RADIO_STATS_US && audio_frames) {
             double audio_us = audio_frames * 1e6 / RADIO_OUT_RATE;
+            float dbfs, gain_db;
+            level_read(&dbfs, &gain_db);
             ESP_LOGI(TAG, "%.1f s played: decoding %.1f %% of a core, resampling %.1f %%, underruns %d, errors %d, "
-                     "buffer %u KB, internal RAM free %u (min %u)", audio_us / 1e6, 100.0 * decode_us / audio_us,
-                     100.0 * resample_us / audio_us, underruns, frames_errors, (unsigned)(ring_filled() / 1024),
-                     (unsigned)internal, (unsigned)min_internal);
+                     "buffer %u KB, level %.1f dBFS (gain %+.1f dB), internal RAM free %u (min %u)", audio_us / 1e6,
+                     100.0 * decode_us / audio_us, 100.0 * resample_us / audio_us, underruns, frames_errors,
+                     (unsigned)(ring_filled() / 1024), dbfs, gain_db, (unsigned)internal, (unsigned)min_internal);
             stats_start = now;
             decode_us = resample_us = audio_frames = 0;
             underruns = frames_errors = 0;
@@ -636,14 +749,24 @@ static bool radio_init(void)
 /* The stream stops (the session task sees it), the speaker is free once the playback task left */
 static void stream_stop(void)
 {
+    // Playing: faded out first (the network keeps feeding it meanwhile), then stopped
+    if (s_play_busy) {
+        s_fade_out = true;
+        wait_speaker_free(RADIO_FADE_OUT_MS + 200);
+    }
     s_stop = true;
     if (!wait_speaker_free(RADIO_SPEAKER_WAIT_MS)) {
         ESP_LOGW(TAG, "The playback did not stop in %d ms", RADIO_SPEAKER_WAIT_MS);
     }
+    s_fade_out = false;
 }
 
 static void session_start(void)
 {
+    if (s_awake) {
+        s_state = RADIO_SUSPENDED;  // played by radio_on_sleep()
+        return;
+    }
     s_state = RADIO_PLAYING;
     s_stop = true;              // the stream being played, if any, ends: the session task starts the new one
     xTaskNotifyGive(s_net_task);
@@ -725,6 +848,7 @@ radio_station_t radio_station(void)
 
 void radio_suspend(void)
 {
+    s_awake = true;
     if (s_state == RADIO_PLAYING) {
         s_state = RADIO_SUSPENDED;
         ESP_LOGI(TAG, "Suspended");
@@ -736,6 +860,7 @@ void radio_suspend(void)
 
 void radio_on_sleep(void)
 {
+    s_awake = false;
     if (s_state == RADIO_SUSPENDED) {
         ESP_LOGI(TAG, "Resumed (the assistant sleeps)");
         session_start();

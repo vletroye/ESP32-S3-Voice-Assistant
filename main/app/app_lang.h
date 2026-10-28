@@ -69,6 +69,18 @@ typedef struct {
     const char *fastest_models;     /* %s: the 3 fastest models of the last tests, with their mean time */
     const char *fastest_none;       /* no test yet: run one? */
     const char *test_declined;      /* "no" to that question */
+    /* Radio ("joue la radio X", "joue du jazz", "suivante", "stop", "qu'est-ce qui passe") */
+    const char *radio_playing;      /* %s: station */
+    const char *radio_not_found;    /* %s: what was asked */
+    const char *radio_unreachable;
+    const char *radio_ask;
+    const char *radio_stopped;
+    const char *radio_last;
+    const char *radio_first;
+    const char *radio_none;
+    const char *radio_what;         /* %s: station */
+    const char *radio_what_title;   /* %s: station, %s: title */
+    const char *radio_genres;       /* "classique/musique classique: classical, ...": words said -> Radio-Browser tag */
     char decimal_mark;              /* ',' or '.' */
     const char *second_one;         /* "seconde", below second_one_below_ms */
     const char *seconds;

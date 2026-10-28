@@ -105,6 +105,28 @@ fastest_models = The fastest models are %s.
 fastest_none = I haven't tested the models yet. Shall I run a test?
 test_declined = All right, no test.
 
+# Radio. %s: the station that will play (once this reply has been spoken)
+radio_playing = Playing %s.
+
+# %s: what was asked ("jazz", "nostalgie")
+radio_not_found = I found no radio for %s.
+radio_unreachable = I can't reach the radio directory. Please try again in a moment.
+
+# "joue la radio" without a station, and no radio played yet
+radio_ask = Which radio? Say for example: play the radio Nostalgie, or play some jazz.
+radio_stopped = All right, I'm stopping the radio.
+radio_last = That was the last radio of the list.
+radio_first = That was the first radio of the list.
+radio_none = No radio is playing.
+
+# "qu'est-ce qui passe": %s station, then %s the title when the station gives it
+radio_what = You're listening to %s.
+radio_what_title = You're listening to %s: %s.
+
+# Genres said ("joue du jazz", "mets de la musique classique") and the tag of Radio-Browser they stand for:
+# words/other words: tag, ... (a genre not listed is searched as said)
+radio_genres = classical/classic music/classical music: classical, jazz: jazz, rock: rock, pop: pop, electronic/electro: electronic, techno: techno, house: house, dance: dance, rap/hip hop: hip-hop, rnb/r and b: rnb, reggae: reggae, metal: metal, blues: blues, soul: soul, funk: funk, country: country, disco: disco, lounge: lounge, chill/chill out/relaxing/calm: chillout, lofi/lo fi: lofi, ambient: ambient, sixties/60s: 60s, seventies/70s: 70s, eighties/80s: 80s, nineties/90s: 90s, oldies: oldies, latin: latin, salsa: salsa, gospel: gospel, opera: opera, baroque: baroque, piano: piano, kids/children: kids, christmas: christmas, news: news, sports/sport: sports, talk: talk, world music/world: world, celtic: celtic, flamenco: flamenco, bossa nova: bossa nova
+
 # ',' or '.'
 decimal_mark = .
 

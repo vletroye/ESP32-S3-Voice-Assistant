@@ -26,6 +26,13 @@ extern "C" {
  */
 int radio_browser_search(const char *name, const char *tag, const char *countrycode, radio_station_t *out, int max);
 
+/**
+ * @brief Search, then play the stations found (most listened first; "suivante" moves in them). With a tag and a
+ *        country giving nothing, the tag alone is tried. first: the name of the first station. Returns the
+ *        stations found, -1 when no server answered.
+ */
+int radio_browser_play(const char *name, const char *tag, const char *countrycode, char *first, size_t size);
+
 /** Count a listen of the station (the directory's popularity), as the API asks for each station played */
 void radio_browser_click(const char *uuid);
 

@@ -98,6 +98,13 @@ exclude_no = All right, I keep it.
 # after the last answer
 exclude_finished = That was the last slow model.
 
+# "quels sont les modèles les plus rapides", %s: "Haiku (0.8 seconds), Flash-Lite (1.1 seconds) and Luna (1.4 seconds)"
+fastest_models = The fastest models are %s.
+
+# the models were never tested: run a test? ("oui" / "non")
+fastest_none = I haven't tested the models yet. Shall I run a test?
+test_declined = All right, no test.
+
 # ',' or '.'
 decimal_mark = .
 

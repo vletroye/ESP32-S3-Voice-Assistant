@@ -31,6 +31,13 @@ réponds en
 test(e) (les|tes) mod(è|e)les
 (lance|fais) (le|un) test des mod(è|e)les
 
+[s_fastest_models]
+# Les 3 modèles les plus rapides selon les tests (« teste les modèles »), avec leur temps moyen
+quel(s|) (sont|est) (le|les) mod(è|e)le[s] (le|les) plus rapide[s]
+quel(s|) mod(è|e)le[s] (est|sont) (le|les) plus rapide[s]
+(donne|dis) moi (le|les) mod(è|e)le[s] (le|les) plus rapide[s]
+(le|les) mod(è|e)le[s] (le|les) plus rapide[s]
+
 [s_list_models]
 # Lit, par fournisseur, les noms courts des modèles d'AGENTS.INI (et les modèles gratuits d'OpenRouter)
 donne moi la liste (de tous (les|tes)|des|de tes) mod(è|e)les[ (disponibles|supportés)]

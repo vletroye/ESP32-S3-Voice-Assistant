@@ -47,6 +47,12 @@ void model_test_exclusion_answer(bool yes);
 /** No more questions (another sentence was said) */
 void model_test_exclusions_drop(void);
 
+/**
+ * @brief The 3 fastest models offered according to the tests (mean time to the first words), as said:
+ *        "Haiku (0,8 seconde), Flash-Lite (1,1 seconde) et Luna (1,4 seconde)"; false if none was tested yet
+ */
+bool model_test_fastest(char *buf, size_t size);
+
 #ifdef __cplusplus
 }
 #endif

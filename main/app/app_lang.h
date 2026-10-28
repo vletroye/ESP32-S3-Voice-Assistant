@@ -66,6 +66,9 @@ typedef struct {
     const char *exclude_yes;        /* before the next question */
     const char *exclude_no;
     const char *exclude_finished;   /* after the last answer */
+    const char *fastest_models;     /* %s: the 3 fastest models of the last tests, with their mean time */
+    const char *fastest_none;       /* no test yet: run one? */
+    const char *test_declined;      /* "no" to that question */
     char decimal_mark;              /* ',' or '.' */
     const char *second_one;         /* "seconde", below second_one_below_ms */
     const char *seconds;

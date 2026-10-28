@@ -47,6 +47,8 @@ static PHRASE_LIST_ALL_LANGUAGES(s_change_lang);
 static PHRASE_LIST_ALL_LANGUAGES(s_lang_shortcut);
 static PHRASE_LIST(s_list_models);
 static PHRASE_LIST(s_test_models);
+/* "Quels sont les modèles les plus rapides ?" (before s_list_models: "quels sont les modèles ...") */
+static PHRASE_LIST(s_fastest_models);
 static PHRASE_LIST(s_change_model);
 static PHRASE_LIST(s_model_shortcut);
 static PHRASE_LIST(s_change_voice);
@@ -83,6 +85,7 @@ typedef enum {
     CONFIRM_COUNTRY,        /* "Confirmes-tu ... ?": s_pending holds the country code */
     CONFIRM_CITY,           /* s_pending holds the town */
     CONFIRM_EXCLUDE,        /* model test: exclude the slow free model asked about? */
+    CONFIRM_TEST,           /* no test yet for "les modèles les plus rapides": run one? */
 } asked_t;
 
 static asked_t s_asked = ASKED_NOTHING;
@@ -972,13 +975,26 @@ bool voice_cmd_ends_with_goodbye(const char *sentence)
 void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
-        &s_goodbyes, &s_list_models, &s_test_models, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
+        &s_goodbyes, &s_list_models, &s_test_models, &s_fastest_models, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
         &s_new_conversation, &s_edit_config, &s_restart, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
         phrases_of(lists[i]);
     }
+}
+
+/* "Teste les modèles": announced, then run once the reply is spoken */
+static voice_cmd_t test_models(char **reply)
+{
+    if (model_test_running()) {
+        *reply = reply_dup(app_lang_get()->test_running);
+        return VOICE_CMD_ANSWERED;
+    }
+    char text[160];
+    snprintf(text, sizeof(text), app_lang_get()->test_start, (int)llm_model_count);
+    *reply = reply_dup(text);
+    return VOICE_CMD_TEST_MODELS;
 }
 
 voice_cmd_t voice_cmd_handle(const char *text, char **reply)
@@ -1037,6 +1053,18 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     if (recent && (asked == CONFIRM_COUNTRY || asked == CONFIRM_CITY)) {
         return confirm_place(asked, norm, reply);
     }
+    if (recent && asked == CONFIRM_TEST) {
+        // "Oui": the test, as "teste les modèles"; "non": nothing; anything else is answered as usual
+        bool no = has_any(norm, &s_no);
+        bool yes = !no && has_any(norm, &s_yes);
+        if (yes) {
+            return test_models(reply);
+        }
+        if (no) {
+            *reply = reply_dup(app_lang_get()->test_declined);
+            return VOICE_CMD_ANSWERED;
+        }
+    }
     if (recent && asked == CONFIRM_EXCLUDE) {
         voice_cmd_t answered = answer_exclusion(norm, reply);
         if (answered != VOICE_CMD_NONE) {
@@ -1064,15 +1092,26 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         *reply = language_list(app_lang_get()->lang_ask);
         return VOICE_CMD_ANSWERED;
     }
-    if (starts_with(norm, phrases_of(&s_test_models), NULL)) {
+    if (starts_with(norm, phrases_of(&s_fastest_models), NULL)) {
+        // The 3 fastest according to the tests; none yet: a test is offered ("oui" / "non")
         if (model_test_running()) {
             *reply = reply_dup(app_lang_get()->test_running);
             return VOICE_CMD_ANSWERED;
         }
-        char text[160];
-        snprintf(text, sizeof(text), app_lang_get()->test_start, (int)llm_model_count);
-        *reply = reply_dup(text);
-        return VOICE_CMD_TEST_MODELS;
+        char list[256];
+        if (model_test_fastest(list, sizeof(list))) {
+            char *text = NULL;
+            asprintf(&text, app_lang_get()->fastest_models, list);
+            *reply = text ? text : reply_dup("");
+            return VOICE_CMD_ANSWERED;
+        }
+        s_asked = CONFIRM_TEST;
+        s_asked_us = esp_timer_get_time();
+        *reply = reply_dup(app_lang_get()->fastest_none);
+        return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, phrases_of(&s_test_models), NULL)) {
+        return test_models(reply);
     }
     if (starts_with(norm, phrases_of(&s_list_models), NULL)) {
         *reply = models_by_provider();

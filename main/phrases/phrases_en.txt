@@ -26,6 +26,13 @@ answer in
 test (the|your) models
 run (the|a) model test
 
+[s_fastest_models]
+# The 3 fastest models according to the tests ("test the models"), with their mean time
+(what|which) (are|is) the fastest model[s]
+(what|which) model[s] (are|is) [the ]fastest
+(tell|give) me the fastest model[s]
+the fastest model[s]
+
 [s_list_models]
 # Reads, by provider, the short names of the models of AGENTS.INI (and the free OpenRouter models)
 give me the list of [all ](the|your) models

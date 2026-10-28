@@ -351,6 +351,52 @@ static void spoken_seconds(char *buf, size_t size, int ms, bool short_unit)
              short_unit ? "s" : (ms < lang->second_one_below_ms ? lang->second_one : lang->seconds));
 }
 
+#define FASTEST_COUNT       3
+
+bool model_test_fastest(char *buf, size_t size)
+{
+    // The models offered now (a model removed from AGENTS.INI or excluded is not named), by mean time
+    cJSON *times = load_times();
+    int best[FASTEST_COUNT];
+    double best_avg[FASTEST_COUNT];
+    int count = 0;
+    for (size_t i = 0; i < llm_model_count; i++) {
+        const cJSON *e = cJSON_GetObjectItem(times, llm_models[i].id);
+        if (number_of(e, "n") <= 0) {
+            continue;
+        }
+        double avg = number_of(e, "avg");
+        int at = count < FASTEST_COUNT ? count : FASTEST_COUNT;
+        while (at > 0 && best_avg[at - 1] > avg) {
+            at--;
+        }
+        if (at >= FASTEST_COUNT) {
+            continue;
+        }
+        for (int k = (count < FASTEST_COUNT ? count : FASTEST_COUNT - 1); k > at; k--) {
+            best[k] = best[k - 1];
+            best_avg[k] = best_avg[k - 1];
+        }
+        best[at] = (int)i;
+        best_avg[at] = avg;
+        count += (count < FASTEST_COUNT);
+    }
+    cJSON_Delete(times);
+    if (count == 0) {
+        return false;
+    }
+    const app_lang_t *lang = app_lang_get();
+    buf[0] = '\0';
+    for (int k = 0; k < count; k++) {
+        char time_text[32];
+        spoken_seconds(time_text, sizeof(time_text), (int)best_avg[k], false);
+        size_t n = strlen(buf);
+        snprintf(buf + n, size - n, "%s%s (%s)", k == 0 ? "" : (k == count - 1 ? lang->and_word : ", "),
+                 llm_models[best[k]].spoken, time_text);
+    }
+    return true;
+}
+
 /* The screen: a line per model tested, "01 Haiku : 0,8 s", the one being tested ending with "…" */
 #define SCREEN_LINE_MAX     64
 

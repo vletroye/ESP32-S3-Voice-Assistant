@@ -53,6 +53,10 @@ void ui_ctrl_open_settings(void);
 /** A message over every screen (no button): before a restart */
 void ui_ctrl_show_message(const char *text);
 
+/** Problems of a language file: a screen with the text (scrolled when long), "Skip" (back) and "Config"
+ *  (configuration mode, to correct the file) */
+void ui_ctrl_show_problems(const char *title, const char *text);
+
 /** Show or hide the time and the date of the sleep screen */
 void ui_ctrl_show_clock(bool shown);
 

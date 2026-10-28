@@ -34,15 +34,66 @@ static PHRASE_LIST(s_list);
 static char *s_file = NULL;
 static char *s_notes = NULL;
 
+/*
+ * Lower case of a letter of Latin-1, Latin Extended-A (Polish, Czech, Turkish...) or Greek; the final sigma is
+ * taken as a sigma. Other characters are returned as they are.
+ */
+static uint32_t letter_lower(uint32_t cp)
+{
+    if (cp >= 0xC0 && cp <= 0xDE && cp != 0xD7) {
+        return cp + 0x20;                           // À..Þ
+    }
+    if (cp == 0x130) {
+        return 'i';                                 // Turkish İ
+    }
+    if (cp == 0x178) {
+        return 0xFF;                                // Ÿ
+    }
+    if ((cp >= 0x100 && cp <= 0x137) || (cp >= 0x14A && cp <= 0x177)) {
+        return cp | 1;                              // capital even, small odd: Ą ą, Č č, Ş ş, Ğ ğ (ı stays)
+    }
+    if ((cp >= 0x139 && cp <= 0x148) || (cp >= 0x179 && cp <= 0x17E)) {
+        return (cp & 1) ? cp + 1 : cp;              // capital odd, small even: Ł ł, Ň ň, Ż ż, Ž ž
+    }
+    if (cp == 0x386) {
+        return 0x3AC;                               // Ά
+    }
+    if (cp >= 0x388 && cp <= 0x38A) {
+        return cp + 0x25;                           // Έ Ή Ί
+    }
+    if (cp == 0x38C) {
+        return 0x3CC;                               // Ό
+    }
+    if (cp == 0x38E || cp == 0x38F) {
+        return cp + 0x3F;                           // Ύ Ώ
+    }
+    if ((cp >= 0x391 && cp <= 0x3A1) || (cp >= 0x3A3 && cp <= 0x3AB)) {
+        return cp + 0x20;                           // Α..Ϋ
+    }
+    if (cp == 0x3C2) {
+        return 0x3C3;                               // ς as σ
+    }
+    return cp;
+}
+
 void app_text_normalize(const char *text, char *out, size_t size)
 {
     size_t n = 0;
     for (const char *p = text; *p && n < size - 1; p++) {
         unsigned char c = (unsigned char)*p;
-        if (isalnum(c) || (c & 0x80)) {
-            // UTF-8 Latin-1 capitals (C3 80..C3 9E, e.g. "À") to lowercase, like ASCII
-            bool latin1_upper = n > 0 && (unsigned char)out[n - 1] == 0xC3 && c >= 0x80 && c <= 0x9E && c != 0x97;
-            out[n++] = latin1_upper ? c + 0x20 : tolower(c);
+        // A 2-byte UTF-8 letter (Latin-1, Latin Extended-A, Greek): in lower case
+        unsigned char next = (unsigned char)p[1];
+        if (c >= 0xC2 && c <= 0xDF && (next & 0xC0) == 0x80) {
+            uint32_t cp = letter_lower(((uint32_t)(c & 0x1F) << 6) | (next & 0x3F));
+            if (cp < 0x80) {
+                out[n++] = (char)cp;
+            } else if (n + 2 < size) {
+                out[n++] = (char)(0xC0 | (cp >> 6));
+                out[n++] = (char)(0x80 | (cp & 0x3F));
+            }
+            p++;
+        } else if (isalnum(c) || (c & 0x80)) {
+            out[n++] = tolower(c);
         } else if (n > 0 && out[n - 1] != ' ') {
             out[n++] = ' ';
         }

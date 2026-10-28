@@ -116,7 +116,7 @@ typedef struct FileContent {
 #define BPB_SECTORS_PER_CLUSTER   (CFG_UF2_SECTORS_PER_CLUSTER)
 #define BPB_RESERVED_SECTORS      (   1)
 #define BPB_NUMBER_OF_FATS        (   2)
-#define BPB_ROOT_DIR_ENTRIES      (  64)
+#define BPB_ROOT_DIR_ENTRIES      ( 128)   /* [Voice assistant] 8 sectors: CONFIG.INI, MEMORY.TXT and up to 64 files of SPIFFS */
 #define BPB_TOTAL_SECTORS         CFG_UF2_NUM_BLOCKS
 #define BPB_MEDIA_DESCRIPTOR_BYTE (0xF8)
 #define FAT_ENTRY_SIZE            (2)

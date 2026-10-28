@@ -48,6 +48,8 @@ typedef struct {
     const char *models_free;        /* %s: the free OpenRouter models */
     const char *and_word;           /* before the last name of a list: " et " */
     const char *language_added;     /* %s: a language added to Languages, before the configuration mode */
+    const char *lang_untranslated;  /* %s: code (FR), %s: language name: texts added in English to LANG_<CODE>.TXT */
+    const char *lang_bad_format;    /* %s: code, %s: keys whose %s, %d... differ from the English texts */
     /* How this language calls the languages, said to change ("de: allemand, nl: néerlandais/hollandais") */
     const char *language_names;
     /* Numbers 1, 2, 3... as said to choose a model or a voice ("premier/première, deux/deuxième, ...") */
@@ -144,6 +146,13 @@ typedef struct {
 void app_lang_set(const char *code);
 
 const app_lang_t *app_lang_get(void);
+
+/**
+ * Problems found in the file of the language in use when it was read: texts missing (added in English, to be
+ * translated) or whose %s, %d... differ from the English ones. The message to show (in that language), false if none.
+ * Reported once.
+ */
+bool app_lang_problems(char *out, size_t size);
 
 /**
  * @brief The languages offered, from Languages of CONFIG.INI ("FR:Français, EN:English"); before app_lang_set().

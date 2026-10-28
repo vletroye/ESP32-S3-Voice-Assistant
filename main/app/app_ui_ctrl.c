@@ -461,6 +461,88 @@ void ui_ctrl_show_message(const char *text)
     bsp_display_unlock();
 }
 
+/* ---------- Problems of a language file: title, text (scrolled with the finger), "Skip" and "Config" ---------- */
+
+#define PROBLEMS_BTN_W      96
+#define PROBLEMS_BTN_H      28
+#define PROBLEMS_MARGIN     16
+
+static lv_obj_t *s_problems_screen = NULL;
+static lv_obj_t *s_problems_title = NULL;
+static lv_obj_t *s_problems_box = NULL;     /* scrollable */
+static lv_obj_t *s_problems_text = NULL;
+static lv_obj_t *s_problems_back = NULL;    /* the screen shown before */
+
+static void problems_skip_cb(lv_event_t *e)
+{
+    lv_scr_load(s_problems_back ? s_problems_back : ui_ScreenListen);
+}
+
+static void problems_config_cb(lv_event_t *e)
+{
+    assistant_request_config();     // the main task saves, then restarts in configuration mode
+}
+
+static void problems_button(const char *text, lv_align_t align, lv_coord_t x, lv_event_cb_t cb)
+{
+    lv_obj_t *btn = lv_btn_create(s_problems_screen);
+    lv_obj_set_size(btn, PROBLEMS_BTN_W, PROBLEMS_BTN_H);
+    lv_obj_align(btn, align, x, -12);
+    lv_obj_set_style_radius(btn, 17, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label = lv_label_create(btn);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_label_set_text(label, text);
+    lv_obj_center(label);
+}
+
+static void problems_screen_create(void)
+{
+    s_problems_screen = lv_obj_create(NULL);
+    lv_obj_clear_flag(s_problems_screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_img_src(s_problems_screen, &ui_img_setup_bg_png, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    s_problems_title = lv_label_create(s_problems_screen);
+    lv_obj_set_style_text_font(s_problems_title, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_problems_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_problems_title, LV_ALIGN_TOP_MID, 0, 14);
+
+    // The text between the title and the buttons, scrolled with the finger when too long
+    s_problems_box = lv_obj_create(s_problems_screen);
+    lv_obj_remove_style_all(s_problems_box);
+    lv_obj_set_size(s_problems_box, 320 - 2 * PROBLEMS_MARGIN, 240 - 48 - PROBLEMS_BTN_H - 12 - 8);
+    lv_obj_align(s_problems_box, LV_ALIGN_TOP_MID, 0, 48);
+    lv_obj_set_scroll_dir(s_problems_box, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(s_problems_box, LV_SCROLLBAR_MODE_AUTO);
+
+    s_problems_text = lv_label_create(s_problems_box);
+    lv_obj_set_width(s_problems_text, lv_pct(100));
+    lv_label_set_long_mode(s_problems_text, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_font(s_problems_text, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_problems_text, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    problems_button("Skip", LV_ALIGN_BOTTOM_LEFT, PROBLEMS_MARGIN, problems_skip_cb);
+    problems_button("Config", LV_ALIGN_BOTTOM_RIGHT, -PROBLEMS_MARGIN, problems_config_cb);
+}
+
+void ui_ctrl_show_problems(const char *title, const char *text)
+{
+    bsp_display_lock(0);
+    if (!s_problems_screen) {
+        problems_screen_create();
+    }
+    lv_label_set_text(s_problems_title, title);
+    lv_label_set_text(s_problems_text, text);
+    lv_obj_scroll_to_y(s_problems_box, 0, LV_ANIM_OFF);
+    if (lv_scr_act() != s_problems_screen) {
+        s_problems_back = lv_scr_act();
+    }
+    lv_scr_load(s_problems_screen);
+    bsp_display_unlock();
+}
+
 void ui_ctrl_show_clock(bool shown)
 {
     bsp_display_lock(0);
@@ -910,6 +992,8 @@ static void restore_clicked_cb(lv_event_t *e)
     lv_obj_set_style_text_font(lv_msgbox_get_btns(s_restore_box), &ui_font_Latin14, LV_PART_ITEMS);
     // The buttons share the whole width: confirm at the bottom left, cancel at the bottom right
     lv_obj_set_size(lv_msgbox_get_btns(s_restore_box), lv_pct(100), 36);
+    // A long text (a translation) scrolls with the finger rather than leaving the screen
+    lv_obj_set_style_max_height(s_restore_box, 236, LV_PART_MAIN);
     lv_obj_center(s_restore_box);
     lv_obj_add_event_cb(s_restore_box, restore_box_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)factory);
 }

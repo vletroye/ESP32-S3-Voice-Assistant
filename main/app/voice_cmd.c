@@ -275,12 +275,72 @@ static int search_number(const char *norm, bool only, int max)
     return search.number;
 }
 
-static voice_cmd_t choose_language(const char *norm, char **reply)
+static int said_number(const char *norm);
+
+/* How the language in use names a language offered: the first name of its language_names ("allemand"), else the
+ * name given in Languages ("Deutsch") */
+static void language_spoken_name(size_t index, char *out, size_t size)
+{
+    const char *code = app_lang_code(index);
+    size_t n = strlen(code);
+    for (const char *p = app_lang_get()->language_names; p && *p; p = strchr(p, ',')) {
+        while (*p == ',' || *p == ' ') {
+            p++;
+        }
+        const char *q = p + n;
+        while (*q == ' ') {
+            q++;
+        }
+        if (strncasecmp(p, code, n) == 0 && *q == ':') {
+            q++;
+            while (*q == ' ') {
+                q++;
+            }
+            size_t len = strcspn(q, "/,");
+            while (len && q[len - 1] == ' ') {
+                len--;
+            }
+            if (len) {
+                snprintf(out, size, "%.*s", (int)len, q);
+                return;
+            }
+        }
+    }
+    strlcpy(out, app_lang_name(index), size);
+}
+
+/* "Quelle langue voulez-vous ? 1, français. 2, anglais. ...": the %s of the text of LANG_<CODE>.TXT is the
+ * numbered list of the languages offered (Languages of CONFIG.INI) */
+static char *language_list(const char *format)
+{
+    char list[320] = "";
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        char name[LANG_NAME_SIZE * 2];
+        language_spoken_name(i, name, sizeof(name));
+        size_t n = strlen(list);
+        snprintf(list + n, sizeof(list) - n, "%s%u, %s.", i ? " " : "", (unsigned)(i + 1), name);
+    }
+    char *text = NULL;
+    asprintf(&text, format, list);
+    return text ? text : reply_dup("");
+}
+
+/*
+ * The language named in the text (or, answering the question, its number in the list); unknown: the list again,
+ * and the answer is awaited again
+ */
+static voice_cmd_t choose_language(const char *norm, bool numbered, char **reply)
 {
     const app_lang_t *lang = app_lang_get();
     const char *code = find_language(norm);
+    if (!code && numbered) {
+        int number = said_number(norm);
+        code = (number >= 1 && (size_t)number <= app_lang_count()) ? app_lang_code(number - 1) : NULL;
+    }
     if (!code) {
-        *reply = reply_dup(lang->lang_unknown);
+        s_asked = ASKED_LANGUAGE;
+        s_asked_us = esp_timer_get_time();
+        *reply = language_list(lang->lang_unknown);
         return VOICE_CMD_ANSWERED;
     }
     if (strcasecmp(code, lang->code) == 0) {
@@ -288,7 +348,7 @@ static voice_cmd_t choose_language(const char *norm, char **reply)
         return VOICE_CMD_ANSWERED;
     }
     if (settings_save_str("Language", code) != ESP_OK) {
-        *reply = reply_dup(lang->lang_unknown);
+        *reply = language_list(lang->lang_unknown);
         return VOICE_CMD_ANSWERED;
     }
     ESP_LOGI(TAG, "language %s saved", code);
@@ -933,7 +993,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     s_asked = ASKED_NOTHING;
     s_asked_us = 0;
     if (recent && asked == ASKED_LANGUAGE) {
-        return choose_language(norm, reply);
+        return choose_language(norm, true, reply);
     }
     if (recent && asked == ASKED_PROVIDER) {
         // A model may be named at once ("Sonnet"); else the provider's models are listed
@@ -997,11 +1057,11 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     if (starts_with(norm, phrases_of(&s_change_lang), NULL)) {
         // "Change la langue en anglais": the language may already be given
         if (find_language(norm)) {
-            return choose_language(norm, reply);
+            return choose_language(norm, false, reply);
         }
         s_asked = ASKED_LANGUAGE;
         s_asked_us = esp_timer_get_time();
-        *reply = reply_dup(app_lang_get()->lang_ask);
+        *reply = language_list(app_lang_get()->lang_ask);
         return VOICE_CMD_ANSWERED;
     }
     if (starts_with(norm, phrases_of(&s_test_models), NULL)) {
@@ -1083,7 +1143,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     }
     // Shortcuts: only when the rest is just a language name or a model number ("parle plus fort" is not one)
     if (starts_with(norm, phrases_of(&s_lang_shortcut), &len) && is_language_only(norm[len] ? norm + len + 1 : norm + len)) {
-        return choose_language(norm + len, reply);
+        return choose_language(norm + len, false, reply);
     }
     if (starts_with(norm, phrases_of(&s_model_shortcut), &len) && is_model_only(norm[len] ? norm + len + 1 : norm + len)) {
         return choose_model(norm + len, LLM_PROVIDER_COUNT, reply);

@@ -20,6 +20,7 @@
 #include "freertos/semphr.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "app_lang.h"
 
 static const char *TAG = "app_lang";
@@ -89,6 +90,8 @@ static const lang_field_t s_fields[] = {
     { "models_free", offsetof(app_lang_t, models_free), FIELD_TEXT, 1 },
     { "and_word", offsetof(app_lang_t, and_word), FIELD_TEXT, 1 },
     { "language_added", offsetof(app_lang_t, language_added), FIELD_TEXT, 1 },
+    { "lang_untranslated", offsetof(app_lang_t, lang_untranslated), FIELD_TEXT, 1 },
+    { "lang_bad_format", offsetof(app_lang_t, lang_bad_format), FIELD_TEXT, 1 },
     { "language_names", offsetof(app_lang_t, language_names), FIELD_TEXT, 1 },
     { "numbers", offsetof(app_lang_t, numbers), FIELD_TEXT, 1 },
     { "test_question", offsetof(app_lang_t, test_question), FIELD_TEXT, 1 },
@@ -206,6 +209,9 @@ static const lang_field_t s_fields[] = {
 typedef struct lang_entry {
     char code[LANG_CODE_SIZE];
     app_lang_t texts;
+    int untranslated;               /* texts added in English to its file when read */
+    char bad_keys[160];             /* texts whose conversions differ from the English ones: "a, b" */
+    bool reported;                  /* the problems above were shown */
     struct lang_entry *next;
 } lang_entry_t;
 
@@ -281,11 +287,58 @@ static const lang_field_t *field_of(const char *key)
     return NULL;
 }
 
+/* What parse() found wrong in a file: keys whose conversions differ, and the markers to add to their lines */
+#define LANG_FIXES_MAX      16
+
+typedef struct {
+    char *bad;                      /* "a, b" */
+    size_t bad_size;
+    struct {
+        const char *key;
+        char suffix[32];            /* " [TO DO: %s]" */
+    } fixes[LANG_FIXES_MAX];
+    size_t fix_count;
+} parse_report_t;
+
+static void add_bad_key(parse_report_t *report, const char *key)
+{
+    if (report && strlen(report->bad) + strlen(key) + 3 < report->bad_size) {
+        strcat(report->bad, report->bad[0] ? ", " : "");
+        strcat(report->bad, key);
+    }
+}
+
+/*
+ * A text lacking the last conversions of the English one ("%s" forgotten): those added at its end, marked, so that
+ * its use cannot crash ("Il fait %s [TO DO: %s]"); NULL when it differs otherwise. Kept (PSRAM).
+ */
+static const char *with_missing_conversions(const char *value, const char *mine, const char *theirs)
+{
+    size_t n = strlen(mine);
+    if (strncmp(mine, theirs, n) != 0) {
+        return NULL;    // other conversions, or more: the English text is used
+    }
+    size_t size = strlen(value) + sizeof(" [TO DO: ]") + 3 * strlen(theirs + n);
+    char *fixed = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    if (!fixed) {
+        return NULL;
+    }
+    strlcpy(fixed, value, size);
+    strlcat(fixed, " [TO DO: ", size);
+    for (const char *c = theirs + n; *c; c++) {
+        char conv[4] = { '%', *c, c[1] ? ' ' : '\0', '\0' };
+        strlcat(fixed, conv, size);
+    }
+    strlcat(fixed, "]", size);
+    return fixed;
+}
+
 /*
  * The "key = text" lines of a text (modified in place and kept: the texts point into it) over texts. With
- * base, a text whose conversions differ from the base's is left out.
+ * base, a text whose conversions (%s, %d...) differ from the base's is listed in the report: lacking the last ones,
+ * they are added at its end (and the marker to write into the file is noted); else the English text is kept.
  */
-static void parse(char *text, app_lang_t *texts, const app_lang_t *base, const char *code)
+static void parse(char *text, app_lang_t *texts, const app_lang_t *base, const char *code, parse_report_t *report)
 {
     for (char *line = text; line && *line;) {
         char *end = strchr(line, '\n');
@@ -309,8 +362,20 @@ static void parse(char *text, app_lang_t *texts, const app_lang_t *base, const c
                     conversions(value, mine, sizeof(mine));
                     conversions(*(const char **)((const uint8_t *)base + field->offset), theirs, sizeof(theirs));
                     if (strcmp(mine, theirs) != 0) {
-                        ESP_LOGW(TAG, "%s: '%s' left out: its %% conversions differ from the English text",
-                                 code, field->key);
+                        add_bad_key(report, field->key);
+                        const char *fixed = with_missing_conversions(value, mine, theirs);
+                        ESP_LOGW(TAG, "%s: '%s' has the conversions '%s' instead of '%s' (English text): %s", code,
+                                 field->key, mine[0] ? mine : "-", theirs, fixed ? "the missing ones added at its end"
+                                 : "the English text is used");
+                        if (fixed) {
+                            *(const char **)slot = fixed;
+                            if (report && report->fix_count < LANG_FIXES_MAX) {
+                                report->fixes[report->fix_count].key = field->key;
+                                strlcpy(report->fixes[report->fix_count].suffix, fixed + strlen(value),
+                                        sizeof(report->fixes[0].suffix));
+                                report->fix_count++;
+                            }
+                        }
                         line = next;
                         continue;
                     }
@@ -418,20 +483,28 @@ static const char *key_line(const char *text, const char *key)
 }
 
 /*
- * Keys of the firmware's file missing in the one of SPIFFS (added by a newer firmware) are appended to it, with
- * the comment lines above them; what is there (possibly edited) is kept. Returns true when something was added.
+ * Keys missing in the file of SPIFFS (added by a newer firmware, or forgotten) are appended to it, with the
+ * comment lines above them: from the firmware's file of the language, else from the English one (counted in
+ * english: to be translated); what is there (possibly edited) is kept. Returns true when something was added.
  */
-static bool add_missing_keys(const char *code, const char *path, const char *text)
+static bool add_missing_keys(const char *code, const char *path, const char *text, int *english)
 {
     size_t len = 0;
-    const char *def = default_of(code, &len);
-    if (!def) {
-        return false;
-    }
+    const char *own = default_of(code, &len);
+    const char *en = default_of("en", &len);
     FILE *f = NULL;
+    *english = 0;
     for (size_t i = 0; i < FIELD_COUNT; i++) {
-        const char *line = key_line(def, s_fields[i].key);
-        if (!line || key_line(text, s_fields[i].key)) {
+        if (key_line(text, s_fields[i].key)) {
+            continue;
+        }
+        const char *def = own;
+        const char *line = own ? key_line(own, s_fields[i].key) : NULL;
+        if (!line) {
+            def = en;
+            line = key_line(en, s_fields[i].key);
+        }
+        if (!line) {
             continue;
         }
         // The comment lines just above it go with it
@@ -452,13 +525,78 @@ static bool add_missing_keys(const char *code, const char *path, const char *tex
             return false;
         }
         fputs("\n", f);
-        fwrite(start, 1, n, f);
-        ESP_LOGI(TAG, "%s: '%s' added (new in this firmware)", path, s_fields[i].key);
+        if (def == own || s_fields[i].kind != FIELD_TEXT) {
+            fwrite(start, 1, n, f);
+        } else {
+            // In English, to translate: "key = [TODO: text]" (inside the quotes of a quoted text)
+            fwrite(start, 1, (size_t)(line - start), f);
+            const char *eq = strchr(line, '=');
+            const char *value = eq + 1;
+            while (*value == ' ' || *value == '\t') {
+                value++;
+            }
+            const char *value_end = end ? end : line + strlen(line);
+            while (value_end > value && (value_end[-1] == '\r' || value_end[-1] == ' ')) {
+                value_end--;
+            }
+            bool quoted = (value_end - value >= 2 && *value == '"' && value_end[-1] == '"');
+            fwrite(line, 1, (size_t)(value - line), f);
+            fprintf(f, "%s[TODO: %.*s]%s\n", quoted ? "\"" : "", (int)(value_end - value - (quoted ? 2 : 0)),
+                    value + (quoted ? 1 : 0), quoted ? "\"" : "");
+        }
+        if (def != own) {
+            (*english)++;
+        }
+        ESP_LOGI(TAG, "%s: '%s' added%s", path, s_fields[i].key, def != own ? " in English (to translate)" : "");
     }
     if (f) {
         fclose(f);
     }
     return f != NULL;
+}
+
+/*
+ * The markers of the report written into the file: " [TO DO: %s]" at the end of the lines of the texts lacking
+ * conversions (inside the quotes of a quoted text). Written to a copy, then renamed.
+ */
+static void write_fixes(const char *path, const parse_report_t *report)
+{
+    char *text = read_file(path);
+    char tmp[56];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    FILE *f = text ? fopen(tmp, "w") : NULL;
+    if (!f) {
+        free(text);
+        return;
+    }
+    for (char *line = text; line && *line;) {
+        char *end = strchr(line, '\n');
+        if (end) {
+            *end = '\0';
+        }
+        char *next = end ? end + 1 : NULL;
+        size_t len = strlen(line);
+        while (len && (line[len - 1] == '\r' || line[len - 1] == ' ' || line[len - 1] == '\t')) {
+            line[--len] = '\0';
+        }
+        const char *suffix = NULL;
+        for (size_t i = 0; i < report->fix_count && !suffix; i++) {
+            suffix = (key_line(line, report->fixes[i].key) == line) ? report->fixes[i].suffix : NULL;
+        }
+        const char *eq = suffix ? strchr(line, '=') : NULL;
+        const char *quote = eq ? strchr(eq, '"') : NULL;
+        if (suffix && quote && quote != line + len - 1 && line[len - 1] == '"') {
+            fprintf(f, "%.*s%s\"\n", (int)(len - 1), line, suffix);
+        } else {
+            fprintf(f, "%s%s\n", line, suffix ? suffix : "");
+        }
+        line = next;
+    }
+    free(text);
+    bool ok = (fclose(f) == 0);
+    remove(path);
+    ok &= (rename(tmp, path) == 0);
+    ESP_LOGW(TAG, "%s: %u marker(s) [TO DO: ...] %s", path, (unsigned)report->fix_count, ok ? "written" : "NOT written");
 }
 
 /* The English texts of the firmware, the base of every language */
@@ -474,7 +612,7 @@ static void base_init(void)
     assert(text && s_base);
     memcpy(text, def, len);
     text[len] = '\0';
-    parse(text, s_base, NULL, "en (firmware)");
+    parse(text, s_base, NULL, "en (firmware)", NULL);
     s_base->code = "en";
     for (size_t i = 0; i < FIELD_COUNT; i++) {
         if (s_fields[i].kind == FIELD_TEXT && !*(const char **)((uint8_t *)s_base + s_fields[i].offset)) {
@@ -492,14 +630,16 @@ static const app_lang_t *load(const char *code)
             return &e->texts;
         }
     }
+    int64_t t0 = esp_timer_get_time();
     char path[48];
     snprintf(path, sizeof(path), LANG_FILE_FORMAT, code);
     char *text = read_file(path);
+    int english = 0;
     if (is_blank(text)) {
         free(text);
         install_default(code, path);
         text = read_file(path);
-    } else if (add_missing_keys(code, path, text)) {
+    } else if (add_missing_keys(code, path, text, &english)) {
         free(text);
         text = read_file(path);
     }
@@ -513,11 +653,22 @@ static const app_lang_t *load(const char *code)
     }
     strlcpy(e->code, code, sizeof(e->code));
     e->texts = *s_base;             // what the file does not give stays English
-    parse(text, &e->texts, s_base, code);
+    parse_report_t *report = heap_caps_calloc(1, sizeof(parse_report_t), MALLOC_CAP_SPIRAM);
+    if (report) {
+        report->bad = e->bad_keys;
+        report->bad_size = sizeof(e->bad_keys);
+    }
+    parse(text, &e->texts, s_base, code, report);
+    if (report && report->fix_count) {
+        write_fixes(path, report);
+    }
+    free(report);
     e->texts.code = e->code;
+    e->untranslated = english;
     e->next = s_loaded;
     s_loaded = e;
-    ESP_LOGI(TAG, "%s read", path);
+    ESP_LOGI(TAG, "%s read and checked in %lld ms (%d added in English, conversions differing: %s)", path,
+             (esp_timer_get_time() - t0) / 1000, english, e->bad_keys[0] ? e->bad_keys : "none");
     return &e->texts;
 }
 
@@ -671,6 +822,38 @@ const app_lang_t *app_lang_find(const char *code)
     const app_lang_t *texts = load(code);
     xSemaphoreGive(s_lock);
     return texts;
+}
+
+bool app_lang_problems(char *out, size_t size)
+{
+    const app_lang_t *lang = app_lang_get();
+    lang_entry_t *e = NULL;
+    for (lang_entry_t *l = s_loaded; l; l = l->next) {
+        e = (&l->texts == lang) ? l : e;
+    }
+    if (!e || e->reported || (!e->untranslated && !e->bad_keys[0])) {
+        return false;
+    }
+    e->reported = true;
+    char upper[LANG_CODE_SIZE];
+    for (size_t i = 0; i < sizeof(upper); i++) {
+        upper[i] = toupper((unsigned char)e->code[i]);
+    }
+    const char *name = e->code;
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        name = strcasecmp(app_lang_code(i), e->code) == 0 ? app_lang_name(i) : name;
+    }
+    out[0] = '\0';
+    if (e->untranslated) {
+        snprintf(out, size, lang->lang_untranslated, upper, name);
+    }
+    if (e->bad_keys[0]) {
+        size_t n = strlen(out);
+        snprintf(out + n, size - n, "%s", n ? "\n\n" : "");
+        n = strlen(out);
+        snprintf(out + n, size - n, lang->lang_bad_format, upper, e->bad_keys);
+    }
+    return true;
 }
 
 const app_lang_t *app_lang_get(void)

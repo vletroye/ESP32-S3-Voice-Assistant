@@ -46,6 +46,9 @@ void assistant_request_model(const char *model);
  */
 void assistant_request_restore(bool factory);
 
+/** Restart in configuration mode, done by the main task (conversation, volume and costs saved first) */
+void assistant_request_config(void);
+
 /** Model test: show a text as the answer (not spoken), scrolled to its last line */
 void assistant_show(const char *text);
 

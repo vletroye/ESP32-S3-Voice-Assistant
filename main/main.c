@@ -514,6 +514,27 @@ void assistant_request_model(const char *model)
     s_model_requested = true;
 }
 
+/* Texts of the language in use missing (added in English) or with wrong %s: a screen says which ("Skip", "Config") */
+static void show_lang_problems(void)
+{
+    char *problems = heap_caps_malloc(1024, MALLOC_CAP_SPIRAM);
+    if (problems && app_lang_problems(problems, 1024)) {
+        char title[24];
+        snprintf(title, sizeof(title), "LANG_%s.TXT", app_lang_get()->code);
+        for (char *c = title + 5; *c && *c != '.'; c++) {
+            *c = toupper((unsigned char)*c);
+        }
+        ESP_LOGW(TAG, "%s", problems);
+        ui_ctrl_show_problems(title, problems);
+    }
+    free(problems);
+}
+
+void assistant_request_config(void)
+{
+    s_config_requested = true;      // the main task saves and restarts in configuration mode
+}
+
 void assistant_set_language(const char *code)
 {
     strlcpy(sys_param->lang, code, sizeof(sys_param->lang));
@@ -532,6 +553,8 @@ void assistant_set_language(const char *code)
     }
     ui_ctrl_apply_language();
     ESP_LOGI(TAG, "Language %s applied", code);
+    // Its texts checked as at start-up: missing ones (added in English) or with wrong %s, said on screen
+    show_lang_problems();
 }
 
 void assistant_set_location(const char *country, const char *city)
@@ -813,6 +836,8 @@ void app_main()
         settings_factory_reset();       // configuration mode: the files show up on the PC
     }
     app_network_start();
+    // Texts of the language in use missing (added in English) or with wrong %s: said on screen
+    show_lang_problems();
 
     ESP_LOGI(TAG, "speech recognition start");
     app_sr_start(false);

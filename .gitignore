@@ -12,3 +12,6 @@ factory_nvs/managed_components/
 squareline/cache
 squareline/backup
 chat_gpt_events.py
+
+# Local Claude Code settings (permissions of this machine)
+.claude/settings.local.json

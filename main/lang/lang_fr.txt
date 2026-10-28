@@ -36,9 +36,10 @@ memory_empty = Je n'ai rien mémorisé pour l'instant.
 memory_list_intro = "Voici ce que vous m'avez demandé de retenir. "
 
 # Language changed by voice ("change la langue")
-lang_ask = Quelle langue voulez-vous ? Français ou anglais ?
+# %s: the languages offered (Languages of CONFIG.INI), numbered: "1, français. 2, anglais. ..."
+lang_ask = Quelle langue voulez-vous ? %s
 lang_already = Je parle déjà français.
-lang_unknown = Je ne connais pas cette langue. Je parle français et anglais.
+lang_unknown = Je ne connais pas cette langue. Dites le numéro ou le nom d'une langue : %s
 
 # spoken in the new language, before the restart
 lang_switched = Très bien, je parle maintenant français.
@@ -57,6 +58,9 @@ and_word = " et "
 
 # Une langue a été ajoutée à Languages (CONFIG.INI), %s : son nom ; affiché avant le mode configuration
 language_added = Nouvelle langue « %s » : ses fichiers ont été créés en anglais. Redémarrage en mode configuration pour les traduire.
+
+lang_untranslated = Des textes manquaient dans LANG_%s.TXT : ils y ont été ajoutés en anglais, entre [TODO: et ]. Traduisez-les en %s.
+lang_bad_format = LANG_%s.TXT : ces textes n'ont pas le même nombre de %%s que l'anglais : %s. Corrigez-les (en attendant, les %%s manquants y ont été ajoutés à la fin, dans [TO DO: %%s]).
 
 # Comment cette langue nomme les langues, dites pour en changer : code: nom/autre nom, ... (en minuscules)
 language_names = fr: français/francais, en: anglais/l anglais/angle, de: allemand, es: espagnol, it: italien, nl: néerlandais/neerlandais/hollandais, pt: portugais
@@ -148,8 +152,8 @@ country_unknown = Je ne connais pas ce pays. Redis-moi « change mon pays » pou
 place_saved = C'est enregistré.
 place_cancelled = D'accord, je ne change rien.
 
-# in the instructions, %s: "Evere, BE"
-location_line = Lieu de l'utilisateur : %s (le code à deux lettres est celui du pays). Quand il demande l'actualité, la météo ou une information locale sans préciser de lieu, il s'agit de ce lieu et de ce pays : pour l'actualité, cherche celle de ce pays en le nommant dans ta recherche, et ne donne pas l'actualité d'autres pays sauf s'il le demande.
+# in the instructions, %s: "Evere, Belgique" (town, country named in this language)
+location_line = Lieu de l'utilisateur : %s. Quand il demande l'actualité, la météo ou une information locale sans préciser de lieu, il s'agit de ce lieu et de ce pays : pour l'actualité, cherche celle de ce pays en le nommant dans ta recherche, et ne donne pas l'actualité d'autres pays sauf s'il le demande.
 
 # "édite la config" without a PC connected
 config_need_pc = Connecte-moi à ton PC.
@@ -252,12 +256,12 @@ settings_saved = Enregistré.
 
 # Configuration screen, icon "soft reset": its confirmation
 soft_title = Réinitialisation douce
-soft_text = Remettre les réglages par défaut et les fichiers d'origine (phrases, AGENTS.INI) ? Le Wi-Fi, les clés API, Homey, PERSONA.TXT et MEMORY.TXT sont gardés. Puis l'appareil redémarre.
+soft_text = Remettre les réglages par défaut et les fichiers d'origine (VOICE_ et LANG_ FR/EN, COUNTRY.TXT, AGENTS.INI) ? Le Wi-Fi, les clés API, Homey, les PERSO_xx.TXT, MEMORY.TXT et les fichiers des langues ajoutées sont gardés. Puis l'appareil redémarre.
 soft_yes = Réinitialiser
 
 # icon "factory reset": its confirmation
 factory_title = Remise à zéro complète
-factory_text = TOUT effacer : Wi-Fi, clés API, Homey, PERSONA.TXT, MEMORY.TXT, réglages, conversation, fichiers modifiés ? CONFIG.INI est d'abord copié dans CONFIG.BKP. Puis mode configuration (PC branché) ou redémarrage.
+factory_text = TOUT effacer : Wi-Fi, clés API, Homey, MEMORY.TXT, réglages, conversation, fichiers de toutes les langues (VOICE_, LANG_, PERSO_), COUNTRY.TXT ? CONFIG.INI est d'abord copié dans CONFIG.BKP. Puis mode configuration (PC branché) ou redémarrage.
 factory_yes = Tout effacer
 
 # both: cancel

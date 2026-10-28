@@ -86,7 +86,7 @@ flowchart LR
     MIC[ES7210 mics<br/>16 kHz] --> AFE[ESP-SR AFE<br/>source separation, VAD]
     AFE --> WN[WakeNet<br/>Bonjour ESP]
     AFE -->|audio 16→24 kHz| STT[OpenAI Realtime<br/>gpt-live-transcribe<br/>permanent WebSocket]
-    STT -->|transcript| LLM[Claude Messages API<br/>or OpenAI Responses API<br/>SSE streaming]
+    STT -->|transcript| LLM[Anthropic, OpenAI, OpenRouter, Google or xAI Messages API<br/>SSE streaming]
     LLM -->|text| SPL[Sentence<br/>splitter]
     SPL --> TTS[OpenAI Realtime<br/>gpt-realtime-2.1-mini<br/>permanent WebSocket]
     TTS -->|PCM 24→16 kHz| BUF[Audio buffer<br/>PSRAM]
@@ -301,7 +301,7 @@ Two firmwares live side by side in flash:
 | Folder | Partition | Role |
 | --- | --- | --- |
 | `main/` (root project) | `factory` (6 MB) | The voice assistant |
-| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `MEMORY.TXT` and the files kept on SPIFFS (`AGENTS.INI`, `VOICE_FR.TXT`, `PERSO_FR.TXT`…) (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `MEMORY.TXT` and the files of SPIFFS, files that can grow when edited, a root directory spread over its 4 sectors (up to 26 files instead of 15), and a bound-checked `CONFIG.INI`; the `INFO_UF2.TXT`, `INDEX.HTM` and `CURRENT.UF2` files of TinyUF2 are not shown, no firmware being flashed through the drive) |
+| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `MEMORY.TXT` and the files kept on SPIFFS (`AGENTS.INI`, `VOICE_FR.TXT`, `PERSO_FR.TXT`…) (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `MEMORY.TXT` and the files of SPIFFS, files that can grow when edited, a root directory of 8 sectors (up to 64 files of SPIFFS instead of 15 files in all), and a bound-checked `CONFIG.INI`; the `INFO_UF2.TXT`, `INDEX.HTM` and `CURRENT.UF2` files of TinyUF2 are not shown, no firmware being flashed through the drive) |
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
 | `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep); the conversation (`history.json`) is saved there at run time |
 
@@ -505,9 +505,18 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
 
 - One `key = text` per line; `\n` is a line break; a text with spaces at its start or end, or empty, is written
   between quotes; lists are separated by commas; `#` lines are comments.
-- Keep the `%s`, `%d`, `%02d`… of each text in the same order: a text that differs is ignored (the firmware's
-  English text is used, and the log says so). A missing key also takes the English text; a key added by a newer
-  firmware is appended to the file at start-up, with its comment.
+- Keep the `%s`, `%d`, `%02d`… of each text in the same order.
+- **Checked at start-up and after each change of language** (about 0.1 s), against the firmware's English file,
+  the reference:
+  - a **missing key** is appended to the file: from the firmware's file of that language when it has one (already
+    translated, with its comment), else in English, between `[TODO: ` and `]`
+    (`model_switched = [TODO: Very well, I now use %s.]`);
+  - a text **lacking its last `%s` / `%d`** gets them at its end, in the file, in `[TO DO: %s]`
+    (`model_switched = Très bien, j'utilise maintenant [TO DO: %s]`), so that its use cannot crash; a text whose
+    conversions differ otherwise (more of them, another kind or order) is replaced by the English one;
+  - then a screen names the file and what was found (texts added in English, keys whose `%s` differ), in the
+    language in use: **Skip** goes back, **Config** restarts in configuration mode to correct the file. Shown once
+    per language and per start.
 - Only the language in use is read (another one when the language changes, or when a voice command names it);
   each one read stays in PSRAM.
 - **Saving a `LANG_<XX>.TXT` is slow, and that is normal**: at about 12 KB, it is one of the largest files of the
@@ -521,8 +530,18 @@ from the English files (with a header asking to translate them), shows "Nouvelle
 ont été créés en anglais…" and switches to the configuration mode: translate the three files on the drive, then
 press Restart. Deutsch is then offered in the Settings screen and by voice ("parle allemand", once `de:
 allemand` is in `language_names` of `LANG_FR.TXT`, which it already is for German, Dutch, Spanish, Italian and
-Portuguese). Until translated, the texts and the persona are the English ones (the `[identity]` of the persona
+Portuguese; otherwise by its name in `Languages`, "Deutsch"). "Change la langue" reads the languages of
+`Languages` numbered, each named in the language in use (the `%s` of `lang_ask`: "Quelle langue voulez-vous ?
+1, français. 2, anglais. 3, allemand."), and the answer may be the name or the number. Until translated, the texts and the persona are the English ones (the `[identity]` of the persona
 says in which language the assistant answers); the transcription already uses the new language. Up to 12 languages; the code must have 2 letters (a longer one is left out, with a warning in the log).
+
+**Languages supported on screen**: the fonts hold Latin-1 (French, English, German, Dutch, Spanish, Italian,
+Portuguese, the Nordic languages…), **Latin Extended-A** (Polish, Czech, Slovak, Hungarian, Turkish, Croatian,
+Slovenian, Latvian, Lithuanian…) and **Greek**, and the voice commands are matched without case in all of them
+(İ / ı of Turkish included, ς taken as σ). **Not supported yet**: Russian and the other Cyrillic languages,
+Arabic, Hebrew, Chinese (except the glyphs of the 20 px font), Japanese, Korean…: their letters would show as
+gaps on screen (the voice would still read them). The fonts are in flash: they take no RAM and do not slow the
+display down.
 
 **`COUNTRY.TXT`**: the countries known by voice ("change mon pays"), one per line, with their names in the
 languages of the first line:
@@ -541,7 +560,8 @@ NL: Netherlands/Holland, Pays-Bas/Hollande, Niederlande/Holland, Nederland/Holla
 - A language of `Languages` without a column gets an empty one at the end of the file.
 
 The text files of the drive (`VOICE_`, `LANG_`, `PERSO_<XX>.TXT`, `COUNTRY.TXT`…) can hold up to 16,383
-characters each.
+characters each; the drive shows up to 64 files of SPIFFS (12 languages × 3 files, plus `AGENTS.INI`,
+`COUNTRY.TXT`, `COSTS.TXT`, `SPEED.TXT`, `CONFIG.BKP`).
 
 `MEMORY.TXT` holds the notes of the long-term memory, one per line (`- note (25/10/26)`): you can correct or
 delete them there.
@@ -731,8 +751,8 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 
 | Action | French | English |
 | --- | --- | --- |
-| Change the language (asks "Quelle langue voulez-vous ? Français ou anglais ?") | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
-| Answer to that question (within 30 s after it) | français · anglais · "en anglais s'il te plaît"… | French · English |
+| Change the language (asks "Quelle langue voulez-vous ?" with the languages of `Languages` numbered: "1, français. 2, anglais. 3, allemand."; not understood: asked again) | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
+| Answer to that question (within 30 s after it) | its number ("2", "le deuxième") or its name: français · anglais · "en anglais s'il te plaît"… | the same: "2" · French · English |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
 | Test the models: same question to each one, time to the first words spoken after each, results in `SPEED.TXT`, speed written to `AGENTS.INI` (see [Model test](#model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
 | List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
@@ -919,5 +939,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 - Based on the `chatgpt_demo` example from [esp-box](https://github.com/espressif/esp-box) (Espressif,
   CC0 / Apache-2.0 depending on the files).
-- Montserrat font (SIL Open Font License), shipped with LVGL, for accented characters.
+- Montserrat font (SIL Open Font License), shipped with LVGL, for accented characters (Latin-1 and Latin
+  Extended-A); DejaVu Sans (Bitstream Vera license, DejaVu changes in the public domain), shipped with LVGL, for
+  Greek.
 - Espressif components (ESP-IDF, ESP-SR, esp-box-3, esp_websocket_client) under their respective licenses.

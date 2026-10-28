@@ -36,9 +36,10 @@ memory_empty = I have not memorized anything yet.
 memory_list_intro = "Here is what you asked me to remember. "
 
 # Language changed by voice ("change la langue")
-lang_ask = Which language do you want? French or English?
+# %s: the languages offered (Languages of CONFIG.INI), numbered: "1, French. 2, English. ..."
+lang_ask = Which language do you want? %s
 lang_already = I already speak English.
-lang_unknown = I don't know this language. I speak French and English.
+lang_unknown = I don't know this language. Say the number or the name of a language: %s
 
 # spoken in the new language, before the restart
 lang_switched = Very well, I will now speak English.
@@ -57,6 +58,9 @@ and_word = " and "
 
 # A language was added to Languages (CONFIG.INI), %s: its name; shown before the configuration mode
 language_added = New language "%s": its files were made in English. Restarting in configuration mode to translate them.
+
+lang_untranslated = Some texts were missing in LANG_%s.TXT: they were added in English, between [TODO: and ]. Please translate them into %s.
+lang_bad_format = LANG_%s.TXT: these texts do not have the same number of %%s as the English ones: %s. Please correct them (meanwhile, the missing %%s were added at their end, in [TO DO: %%s]).
 
 # How this language calls the languages, said to change: code: name/other name, ... (in lower case)
 language_names = fr: french, en: english/inglish, de: german, es: spanish, it: italian, nl: dutch, pt: portuguese
@@ -148,8 +152,8 @@ country_unknown = I don't know this country. Say "change my country" again to re
 place_saved = Saved.
 place_cancelled = All right, nothing changed.
 
-# in the instructions, %s: "Evere, BE"
-location_line = User's location: %s (the two-letter code is the country's). When the user asks for the news, the weather or local information without naming a place, it is about this place and country: for the news, search the news of this country by naming it in your search, and do not give news from other countries unless asked.
+# in the instructions, %s: "Evere, Belgium" (town, country named in this language)
+location_line = User's location: %s. When the user asks for the news, the weather or local information without naming a place, it is about this place and country: for the news, search the news of this country by naming it in your search, and do not give news from other countries unless asked.
 
 # "édite la config" without a PC connected
 config_need_pc = Connect me to your PC.
@@ -252,12 +256,12 @@ settings_saved = Saved.
 
 # Configuration screen, icon "soft reset": its confirmation
 soft_title = Soft reset
-soft_text = Restore the default settings and the original files (phrases, AGENTS.INI)? The Wi-Fi, the API keys, Homey, PERSONA.TXT and MEMORY.TXT are kept. Then the device restarts.
+soft_text = Restore the default settings and the original files (VOICE_ and LANG_ FR/EN, COUNTRY.TXT, AGENTS.INI)? The Wi-Fi, the API keys, Homey, the PERSO_xx.TXT, MEMORY.TXT and the files of the languages added are kept. Then the device restarts.
 soft_yes = Reset
 
 # icon "factory reset": its confirmation
 factory_title = Factory reset
-factory_text = Erase EVERYTHING: Wi-Fi, API keys, Homey, PERSONA.TXT, MEMORY.TXT, settings, conversation, changed files? CONFIG.INI is first copied to CONFIG.BKP. Then configuration mode (PC plugged in) or restart.
+factory_text = Erase EVERYTHING: Wi-Fi, API keys, Homey, MEMORY.TXT, settings, conversation, files of every language (VOICE_, LANG_, PERSO_), COUNTRY.TXT? CONFIG.INI is first copied to CONFIG.BKP. Then configuration mode (PC plugged in) or restart.
 factory_yes = Erase all
 
 # both: cancel

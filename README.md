@@ -112,6 +112,10 @@ which has been largely rewritten.
   outline of the full bar, filled from the bottom with the volume; speaker icon and percentage below it, all
   centred under the Settings icon) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out
   when disconnected), in the same style.
+- **Battery level** (with the ESP32-S3-BOX-3-SENSOR dock and a cell in it): a battery under the Wi-Fi icon, with 5
+  sections lit in green from the left: 2 from 3.50 V, 3 from 3.70 V, 4 from 3.80 V, 5 from 3.95 V; below 3.50 V
+  (under ~5 %), only the first section, in red. Read 3 s after start-up, then every 30 s; hidden without the dock
+  or its cell.
 - **Model in use**, while listening and thinking ("J'écoute…", "Entendu…", "Je réfléchis…"): the icon of its
   provider and its name (as in `AGENTS.INI`) at the bottom left, right under the text. The provider's icon is also
   shown on the **robot's forehead** (asleep, listening, thinking), above the screen of its eyes, which it follows
@@ -396,7 +400,8 @@ Main modules of the assistant (`main/app/`):
 | `xai_chat.c` | xAI client for the Grok models (Chat Completions, SSE streaming), history kept on the device |
 | `costs.c` | Costs: tokens and calls of each request priced with `AGENTS.INI`, by model, for today, this month, since the start and the last 12 months (`costs.json`, `COSTS.TXT`) |
 | `openrouter_free.c` | Free OpenRouter models from its live list (once a day, parsed model by model), kept on SPIFFS |
-| `app_presence.c` | Presence radar (AT581X) of the BOX-3-SENSOR dock: screen off after `Screen_off_s` without presence |
+| `app_presence.c` | Presence radar (AT581X) of the BOX-3-SENSOR dock: screen off after `Screen_off_s` without presence; tells whether the dock is there |
+| `app_battery.c` | Battery of the BOX-3-SENSOR dock: its voltage (ADC on GPIO10) turned into the 5 sections of the sleep screen |
 | `gemini_chat.c` | Gemini client (`streamGenerateContent`, SSE streaming), history kept on the device |
 | `llm_sse.c` | Server-sent events parser and text buffers shared by the clients |
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
@@ -1154,6 +1159,11 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   200 ms. Only the backlight is switched (`bsp_display_backlight_off/on`): unlike Espressif's factory demo, which
   stops the codec and enters light sleep, the wake word keeps working. A touch is seen through LVGL's inactivity
   time.
+- **Dock battery**: the dock brings the cell's voltage to GPIO10 (ADC1 channel 9, `BSP_PMOD2_IO5`) through a 1:4
+  divider (×4.01, measured by Home Assistant users: no official schematic was found). The pin floats without the
+  dock, so it is read only when the radar answered at start-up (`app_presence_dock()`; the radar is probed even
+  with `Screen_off_s = 0`). 16 samples with the ADC's curve-fitting calibration, smoothed, ±0.02 V of hysteresis
+  around the thresholds so that the gauge does not flicker; a voltage outside 2.8–4.5 V means no cell.
 - **No pop at start-up or restart**: the ES8311 driver switches the speaker amplifier (GPIO 46) on before the
   DAC starts, and the DAC output settling was heard as a crackle at each start-up. `bsp_codec_init()` holds the
   amplifier pin low (`gpio_hold_en`, the driver's writes are then ignored), plays 128 ms of silence, then switches

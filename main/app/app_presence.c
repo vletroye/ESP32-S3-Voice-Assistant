@@ -181,14 +181,17 @@ static bool radar_probe(void)
     return found;
 }
 
+static bool s_dock = false;
+
+bool app_presence_dock(void)
+{
+    return s_dock;
+}
+
 void app_presence_init(int screen_off_s)
 {
     s_timeout_s = screen_off_s;
     s_last_activity_us = esp_timer_get_time();
-    if (s_timeout_s <= 0) {
-        ESP_LOGI(TAG, "Screen_off_s = 0: the screen stays on");
-        return;
-    }
     const i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
         .sda_io_num = BSP_I2C_EXPAND_SDA,
@@ -202,8 +205,16 @@ void app_presence_init(int screen_off_s)
         ESP_LOGW(TAG, "Dock I2C bus not available: the screen stays on");
         return;
     }
-    if (!radar_probe()) {
+    // The dock is looked for anyway (its battery is shown on the sleep screen)
+    s_dock = radar_probe();
+    if (!s_dock) {
         ESP_LOGI(TAG, "No presence radar (ESP32-S3-BOX-3-SENSOR dock): the screen stays on");
+        i2c_driver_delete(PRESENCE_I2C_PORT);
+        return;
+    }
+    ESP_LOGI(TAG, "ESP32-S3-BOX-3-SENSOR dock found");
+    if (s_timeout_s <= 0) {
+        ESP_LOGI(TAG, "Screen_off_s = 0: the screen stays on");
         i2c_driver_delete(PRESENCE_I2C_PORT);
         return;
     }

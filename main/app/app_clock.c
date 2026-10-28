@@ -13,6 +13,7 @@
 #include "app_clock.h"
 #include "app_volume.h"
 #include "app_wifi.h"
+#include "app_battery.h"
 #include "esp_wifi.h"
 
 LV_FONT_DECLARE(ui_font_Latin16);
@@ -66,6 +67,19 @@ LV_FONT_DECLARE(ui_font_Latin16);
 #define WIFI_RSSI_1         (-78)
 #define WIFI_DISCONNECTED   (-1)
 
+/*
+ * Battery of the BOX-3-SENSOR dock, under the Wi-Fi: a frame, its tip and 5 sections, green when lit; only the last
+ * one, red, when it is almost empty. Hidden without the dock or its cell.
+ */
+#define BATTERY_W           30
+#define BATTERY_H           14
+#define BATTERY_TIP_W       3
+#define BATTERY_RIGHT_X     (WIFI_RIGHT_X - (WIFI_W - BATTERY_W - BATTERY_TIP_W) / 2 - BATTERY_TIP_W)
+#define BATTERY_BOTTOM_Y    (-6)
+#define BATTERY_GREEN       0x3DDC84
+#define BATTERY_RED         0xFF4D4D
+#define BATTERY_REFRESH_S   30
+
 /* Valid once the year is past this one: the clock was synchronized */
 #define SYNCED_MIN_YEAR 2024
 
@@ -90,6 +104,9 @@ static lv_obj_t *s_volume_icon;
 static lv_obj_t *s_volume_text;
 static int s_shown_volume = -1;
 static lv_obj_t *s_wifi;
+static lv_obj_t *s_battery;
+static lv_obj_t *s_battery_tip;
+static lv_obj_t *s_battery_cells[APP_BATTERY_SECTIONS];
 static int s_wifi_level = -2;   /* lit arcs 0..3, WIFI_DISCONNECTED, -2 not shown yet */
 
 void app_clock_sync_start(const char *tz)
@@ -307,10 +324,68 @@ static void wifi_refresh(void)
     }
 }
 
+static void battery_refresh(void)
+{
+    static int countdown = 3;       // first read a few seconds after start-up (the dock is looked for meanwhile)
+    if (--countdown > 0) {
+        return;
+    }
+    countdown = BATTERY_REFRESH_S;
+    bool critical = false;
+    int lit = app_battery_sections(&critical);
+    if (lit == 0) {
+        lv_obj_add_flag(s_battery, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_battery_tip, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    // Sections from the left (the tip is on the right); almost empty: the first one only, in red
+    for (int i = 0; i < APP_BATTERY_SECTIONS; i++) {
+        bool on = critical ? (i == 0) : (i < lit);
+        lv_obj_set_style_bg_color(s_battery_cells[i], lv_color_hex(on ? (critical ? BATTERY_RED : BATTERY_GREEN) :
+                                  COLOR_OFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    lv_obj_clear_flag(s_battery, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_battery_tip, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void battery_create(lv_obj_t *parent)
+{
+    s_battery = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_battery);
+    lv_obj_set_size(s_battery, BATTERY_W, BATTERY_H);
+    lv_obj_set_style_border_width(s_battery, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(s_battery, lv_color_hex(COLOR_DATE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_radius(s_battery, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_all(s_battery, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_column(s_battery, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_flex_flow(s_battery, LV_FLEX_FLOW_ROW);
+    lv_obj_clear_flag(s_battery, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(s_battery, LV_ALIGN_BOTTOM_RIGHT, BATTERY_RIGHT_X, BATTERY_BOTTOM_Y);
+    for (int i = 0; i < APP_BATTERY_SECTIONS; i++) {
+        s_battery_cells[i] = lv_obj_create(s_battery);
+        lv_obj_remove_style_all(s_battery_cells[i]);
+        lv_obj_set_flex_grow(s_battery_cells[i], 1);
+        lv_obj_set_height(s_battery_cells[i], lv_pct(100));
+        lv_obj_set_style_bg_opa(s_battery_cells[i], LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(s_battery_cells[i], lv_color_hex(COLOR_OFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_radius(s_battery_cells[i], 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    s_battery_tip = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_battery_tip);
+    lv_obj_set_size(s_battery_tip, BATTERY_TIP_W, BATTERY_H / 2);
+    lv_obj_set_style_bg_opa(s_battery_tip, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(s_battery_tip, lv_color_hex(COLOR_DATE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_radius(s_battery_tip, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align_to(s_battery_tip, s_battery, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+    lv_obj_add_flag(s_battery, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_battery_tip, LV_OBJ_FLAG_HIDDEN);
+}
+
 static void clock_refresh(lv_timer_t *timer)
 {
     volume_refresh();
     wifi_refresh();
+    battery_refresh();
 
     time_t now = time(NULL);
     struct tm t;
@@ -422,6 +497,9 @@ void app_clock_create(lv_obj_t *parent, const char *const weekdays[7])
     lv_obj_set_size(s_wifi, WIFI_W, WIFI_H);
     lv_obj_align(s_wifi, LV_ALIGN_BOTTOM_RIGHT, WIFI_RIGHT_X, WIFI_BOTTOM_Y);
     lv_obj_add_event_cb(s_wifi, wifi_event_cb, LV_EVENT_DRAW_MAIN, NULL);
+
+    // The battery of the BOX-3-SENSOR dock, under the Wi-Fi
+    battery_create(parent);
 
     clock_refresh(NULL);
     lv_timer_create(clock_refresh, 1000, NULL);

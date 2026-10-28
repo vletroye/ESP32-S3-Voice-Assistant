@@ -210,7 +210,8 @@ speed.
 | `deepseek/deepseek-v4.1-flash-1017` (default) | OpenRouter | $0.02 / $1 | | expected fast | depends on the model | `reasoning.effort` `low` |
 | `moonshotai/kimi-k3.1-pro` (default) | OpenRouter | $2 / $10 | | | depends on the model | `reasoning.effort` `low` |
 | `minimax/minimax-m3.1-flash` (default) | OpenRouter | $0.10 / $0.55 | | | depends on the model | `reasoning.effort` `low` |
-| `grok-4.7` | xAI | $2 / $6 | $2.60 + reasoning | not measured | reasons (effort kept `low`) | `reasoning_effort` `low` |
+| `grok-4.7` | xAI | $2 / $6 | $2.60 + reasoning | not measured | reasons (cannot be disabled: effort kept `low`) | `reasoning_effort` `low` |
+| `grok-4.20-0309-non-reasoning` | xAI | $1.25 / $2.50 | $1.50 | not measured | none | no `reasoning_effort` (`-`) |
 
 How to read this table:
 
@@ -455,8 +456,8 @@ Tap the gear icon on the home screen:
 - **Modèle / Model**: the model answering the questions (see the table above), numbered as in the voice
   command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra,
   7 Gemini 3.5 Flash-Lite, 8 Gemini 3.8 Flash, 9 Gemini 4 Argon, then the OpenRouter models from 10 (10 DeepSeek
-  V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default), 13 Grok 4.7 (xAI), then the free ones (14
-  to 20 with the defaults; numbers up to 13 can be said, the others are chosen by name).
+  V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default), 13 Grok 4.7 and 14 Grok 4.20 rapide (xAI),
+  then the free ones (15 to 21 with the defaults; numbers up to 13 can be said, the others are chosen by name).
 - **Voix / Voice**: the OpenAI voice reading the answers: Marin, Cedar (both recommended by OpenAI), Alloy,
   Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
   session reconnects (~2 s) and the new voice introduces itself.
@@ -1079,6 +1080,9 @@ community (no key, no account), played through the speaker. Asked by voice, or f
   out) and a gain (-12 to +6 dB, moving slowly) brings every station to `Radio_level` (-16 dBFS by default).
 - **Treble**: `Radio_treble` (-6 dB by default) softens the treble of the small speaker; changed live from the
   radio screen.
+- **The sleeping robot listens too**: while a radio plays (or is only suspended by a conversation), the robot of the
+  sleep screen wears headphones (a headband and two ear cups that bounce with its head), its eyes smile ("^ ^") and
+  notes (♫ ♪) take the place of its "z z", with the same fading. Drawn with LVGL objects (no image added).
 - **Sound**: the I2S bus, shared with the microphones, stays at 16 kHz: the music is mixed to mono and filtered
   below 7 kHz (the speaker is mono and small anyway).
 

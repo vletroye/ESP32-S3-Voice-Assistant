@@ -23,6 +23,7 @@ LV_FONT_DECLARE(ui_font_Latin14);
 LV_FONT_DECLARE(ui_font_Latin16);
 LV_FONT_DECLARE(ui_font_Latin20);
 LV_FONT_DECLARE(ui_font_Radio28);
+LV_FONT_DECLARE(ui_font_Note22);
 
 /* Symbols of ui_font_Radio28 */
 #define SYM_HEART_EMPTY     "\xE2\x99\xA1"      /* U+2661 */
@@ -63,6 +64,114 @@ static radio_station_t *s_favorites = NULL;     /* as shown in the list (PSRAM) 
 static int s_favorite_count = -1;
 static char s_shown_url[RADIO_URL_SIZE];        /* the current station highlighted in the list */
 static char s_shown_station[RADIO_NAME_SIZE + 140];
+
+/*
+ * ---------- the sleeping robot listening to the radio ----------
+ * While a radio plays, the robot of the sleep screen wears headphones (a headband over its head and two ear cups,
+ * children of the head: they bounce with it), its eyes smile ("^ ^", instead of half closed), and notes take the
+ * place of its "z z" (the same fading animation: the notes are the background symbols of their containers).
+ * The head is a disc of ~50 px radius in the middle of its 119 x 119 image.
+ */
+#define MUSIC_PHONES_COLOR      0x2B3350        /* dark blue, as the screen of the eyes */
+#define MUSIC_PHONES_EDGE       0x4F86FF        /* the robot's blue glow */
+#define MUSIC_EYES_COLOR        0xF8FCF8        /* as its eyes */
+#define MUSIC_NOTES_COLOR       0xDDE9FF
+#define MUSIC_NOTE_BIG          "\xE2\x99\xAB"  /* U+266B */
+#define MUSIC_NOTE_SMALL        "\xE2\x99\xAA"  /* U+266A */
+
+static lv_obj_t *s_phones[3];       /* headband, left and right ear cups */
+static lv_obj_t *s_happy_eyes[2];
+static const void *s_z_big = NULL;
+static const void *s_z_small = NULL;
+static bool s_music = false;
+
+static lv_obj_t *ear_cup(lv_align_t align, lv_coord_t x)
+{
+    lv_obj_t *cup = lv_obj_create(ui_ImageSleepBody);
+    lv_obj_remove_style_all(cup);
+    lv_obj_set_size(cup, 15, 36);
+    lv_obj_set_style_radius(cup, 7, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(cup, lv_color_hex(MUSIC_PHONES_COLOR), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(cup, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(cup, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(cup, lv_color_hex(MUSIC_PHONES_EDGE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(cup, align, x, 2);
+    lv_obj_clear_flag(cup, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    return cup;
+}
+
+static lv_obj_t *band_arc(lv_obj_t *parent, lv_coord_t size, lv_coord_t width, uint16_t start, uint16_t end,
+                          uint32_t color)
+{
+    lv_obj_t *arc = lv_arc_create(parent);
+    lv_obj_remove_style_all(arc);
+    lv_obj_set_size(arc, size, size);
+    lv_arc_set_bg_angles(arc, start, end);
+    lv_arc_set_angles(arc, start, end);
+    lv_obj_set_style_arc_width(arc, width, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(arc, lv_color_hex(color), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_rounded(arc, true, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE);
+    return arc;
+}
+
+static void music_robot_create(void)
+{
+    // Headband: the top of the head, slightly outside it; a blue line along it
+    s_phones[0] = band_arc(ui_ImageSleepBody, 114, 7, 195, 345, MUSIC_PHONES_COLOR);
+    lv_obj_align(s_phones[0], LV_ALIGN_CENTER, -1, 2);
+    lv_obj_t *line = band_arc(s_phones[0], 114, 2, 197, 343, MUSIC_PHONES_EDGE);
+    lv_obj_center(line);
+    s_phones[1] = ear_cup(LV_ALIGN_LEFT_MID, 2);
+    s_phones[2] = ear_cup(LV_ALIGN_RIGHT_MID, -4);
+    // Smiling eyes, in the screen of the eyes
+    for (int i = 0; i < 2; i++) {
+        s_happy_eyes[i] = band_arc(ui_Image3, 14, 3, 200, 340, MUSIC_EYES_COLOR);
+        lv_obj_align(s_happy_eyes[i], LV_ALIGN_CENTER, i ? 9 : -9, 4);
+    }
+    s_z_big = lv_obj_get_style_bg_img_src(ui_ContainerBigZ, LV_PART_MAIN);
+    s_z_small = lv_obj_get_style_bg_img_src(ui_ContainerSmallZ, LV_PART_MAIN);
+    for (int i = 0; i < 3; i++) {
+        lv_obj_add_flag(s_phones[i], LV_OBJ_FLAG_HIDDEN);
+    }
+    for (int i = 0; i < 2; i++) {
+        lv_obj_add_flag(s_happy_eyes[i], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void z_or_note(lv_obj_t *z, const void *image, const char *note, bool music)
+{
+    lv_obj_set_style_bg_img_src(z, music ? (const void *)note : image, LV_PART_MAIN | LV_STATE_DEFAULT);
+    if (music) {
+        // A symbol as background image is drawn with the text font and the text colour of its object
+        lv_obj_set_style_text_font(z, &ui_font_Note22, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(z, lv_color_hex(MUSIC_NOTES_COLOR), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_size(z, 28, 28);     // the note is taller than the z
+    }
+}
+
+static void music_robot_show(bool music)
+{
+    if (music == s_music || !s_phones[0]) {
+        return;
+    }
+    s_music = music;
+    for (int i = 0; i < 3; i++) {
+        music ? lv_obj_clear_flag(s_phones[i], LV_OBJ_FLAG_HIDDEN) : lv_obj_add_flag(s_phones[i], LV_OBJ_FLAG_HIDDEN);
+    }
+    for (int i = 0; i < 2; i++) {
+        music ? lv_obj_clear_flag(s_happy_eyes[i], LV_OBJ_FLAG_HIDDEN) :
+                lv_obj_add_flag(s_happy_eyes[i], LV_OBJ_FLAG_HIDDEN);
+    }
+    music ? lv_obj_add_flag(ui_ImageSleepEye, LV_OBJ_FLAG_HIDDEN) : lv_obj_clear_flag(ui_ImageSleepEye, LV_OBJ_FLAG_HIDDEN);
+    z_or_note(ui_ContainerBigZ, s_z_big, MUSIC_NOTE_BIG, music);
+    z_or_note(ui_ContainerSmallZ, s_z_small, MUSIC_NOTE_SMALL, music);
+    if (!music) {
+        lv_obj_set_size(ui_ContainerBigZ, 27, 22);      // their sizes of the generated screen
+        lv_obj_set_size(ui_ContainerSmallZ, 23, 17);
+    }
+    ESP_LOGI(TAG, "Sleeping robot %s", music ? "listening to the radio" : "asleep");
+}
 
 /* ---------- actions ---------- */
 
@@ -315,6 +424,9 @@ static void screen_refresh(void)
 
 static void refresh_cb(lv_timer_t *timer)
 {
+    // Suspended by the conversation, the radio plays again afterwards: the robot keeps its headphones (no sleeping
+    // robot shown for an instant between the wake word and the listening screen)
+    music_robot_show(radio_state() == RADIO_PLAYING || radio_state() == RADIO_SUSPENDED);
     if (!s_screen || lv_scr_act() != s_screen) {
         return;
     }
@@ -349,6 +461,7 @@ void ui_radio_init(void)
     lv_obj_align(zone, LV_ALIGN_BOTTOM_LEFT, 6, 0);
     lv_obj_add_flag(zone, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(zone, open_cb, LV_EVENT_CLICKED, NULL);
+    music_robot_create();
     lv_timer_create(refresh_cb, RADIO_UI_REFRESH_MS, NULL);
 }
 

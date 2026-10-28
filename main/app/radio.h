@@ -20,7 +20,7 @@ extern "C" {
 #define RADIO_NAME_SIZE     64
 #define RADIO_URL_SIZE      256
 #define RADIO_UUID_SIZE     40
-#define RADIO_LIST_MAX      20      /* stations of a list (a search, the favourites) */
+#define RADIO_LIST_MAX      30      /* stations of a list (a search, the favourites) */
 
 /* A station: its name (said and shown), its stream, its Radio-Browser id ("" when not from it) */
 typedef struct {
@@ -61,7 +61,8 @@ radio_station_t radio_station(void);
  *  the speaker is free (~100 ms). */
 void radio_suspend(void);
 
-/** The assistant went back to sleep: a suspended radio plays again. Does not wait. */
+/** The assistant went back to sleep (the sleep screen is shown): a radio suspended by the conversation plays
+ *  again. A wake word heard after (radio_suspend) wins. Does not wait. */
 void radio_on_sleep(void);
 
 /** Stopped by the user ("stop"): silent until radio_resume(). Waits until the speaker is free. */

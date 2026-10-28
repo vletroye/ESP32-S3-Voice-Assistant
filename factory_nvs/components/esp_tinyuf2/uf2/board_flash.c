@@ -127,6 +127,15 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "COUNTRY TXT", 12);
         PRINTF("%s shown as COUNTRY.TXT", t->path);
     }
+    // Favourite radios (RADIO.TXT)
+    FILE *radio = fopen(PHRASES_DIR "/radio.txt", "r");
+    if (radio) {
+        fclose(radio);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/radio.txt", sizeof(t->path));
+        memcpy(t->fat_name, "RADIO   TXT", 12);
+        PRINTF("%s shown as RADIO.TXT", t->path);
+    }
     // CONFIG.INI saved by the "restore" icon of the Settings screen, when there is one
     FILE *backup = fopen(PHRASES_DIR "/config.bkp", "r");
     if (backup) {

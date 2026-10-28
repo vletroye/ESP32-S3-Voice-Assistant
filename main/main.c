@@ -48,6 +48,7 @@
 #include "country.h"
 #include "radio.h"
 #include "radio_browser.h"
+#include "radio_favorites.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -443,7 +444,7 @@ void assistant_request_restore(bool factory)
 /* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
 static const char *const s_user_files[] = {
     "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "speed.txt", "log.txt",
-    "costs.json", "costs.tmp", "costs.txt",
+    "costs.json", "costs.tmp", "costs.txt", "radio.txt", "radio.txt.tmp",
 };
 
 /* Languages whose files are given with the firmware: a soft reset restores them; those of a language added by the
@@ -803,6 +804,8 @@ void app_main()
     }
     // The countries known by voice (COUNTRY.TXT), a column for each language offered
     country_init();
+    // The favourite radios (RADIO.TXT), made with its header when missing
+    radio_favorites_init();
     // The models offered (AGENTS.INI), then the free OpenRouter ones of the last list read (the live one is read
     // once a day, below): before the Settings screen lists them
     llm_load_models();

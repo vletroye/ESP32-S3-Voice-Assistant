@@ -12,6 +12,7 @@
 #include <strings.h>
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "app_lang.h"
 #include "app_memory.h"
 #include "llm.h"
@@ -26,6 +27,7 @@
 #include "country.h"
 #include "radio.h"
 #include "radio_browser.h"
+#include "radio_favorites.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -58,6 +60,9 @@ static PHRASE_LIST(s_radio_previous);
 static PHRASE_LIST(s_radio_stop);
 static PHRASE_LIST(s_radio_resume);
 static PHRASE_LIST(s_radio_what);
+static PHRASE_LIST(s_radio_fav_add);
+static PHRASE_LIST(s_radio_fav_remove);
+static PHRASE_LIST(s_radio_favorites);
 /* "Quels sont les modèles les plus rapides ?" (before s_list_models: "quels sont les modèles ...") */
 static PHRASE_LIST(s_fastest_models);
 static PHRASE_LIST(s_change_model);
@@ -987,7 +992,8 @@ void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
         &s_goodbyes, &s_list_models, &s_test_models, &s_fastest_models, &s_radio_station, &s_radio_music,
-        &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
+        &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
+        &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
         &s_new_conversation, &s_edit_config, &s_restart, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
     };
@@ -1070,6 +1076,21 @@ static voice_cmd_t radio_search(const char *name, const char *tag, const char *c
     return radio_reply(reply, lang->radio_playing, first);
 }
 
+/* The favourites played from the index-th ("suivante" moves in them) */
+static voice_cmd_t radio_play_favorite(int index, char **reply)
+{
+    radio_station_t *list = heap_caps_calloc(RADIO_LIST_MAX, sizeof(radio_station_t), MALLOC_CAP_SPIRAM);
+    int n = list ? radio_favorites_list(list, RADIO_LIST_MAX) : 0;
+    if (n == 0) {
+        free(list);
+        *reply = reply_dup(app_lang_get()->radio_fav_none);
+        return VOICE_CMD_ANSWERED;
+    }
+    radio_play_list(list, n, index < n ? index : 0);
+    free(list);
+    return radio_reply(reply, app_lang_get()->radio_playing, radio_station_name());
+}
+
 /* The radio commands; VOICE_CMD_NONE when the text is not one of them */
 static voice_cmd_t radio_command(const char *norm, char **reply)
 {
@@ -1100,7 +1121,11 @@ static voice_cmd_t radio_command(const char *norm, char **reply)
         }
         return radio_search(NULL, tag, has_country ? country : NULL, rest, reply);
     }
-    // "Joue la radio Nostalgie"; alone: the last station again
+    // "Joue mes favoris": the favourites, from the first one
+    if (starts_with(norm, phrases_of(&s_radio_favorites), &len) && radio_alone(norm + len + (norm[len] == ' '))) {
+        return radio_play_favorite(0, reply);
+    }
+    // "Joue la radio Nostalgie": a favourite of that name first, else searched; alone: the last station again
     if (starts_with(norm, phrases_of(&s_radio_station), &len)) {
         const char *rest = norm + len + (norm[len] == ' ');
         if (radio_alone(rest)) {
@@ -1109,6 +1134,10 @@ static voice_cmd_t radio_command(const char *norm, char **reply)
             }
             *reply = reply_dup(lang->radio_ask);
             return VOICE_CMD_ANSWERED;
+        }
+        int favorite = radio_favorites_find(rest);
+        if (favorite >= 0) {
+            return radio_play_favorite(favorite, reply);
         }
         return radio_search(rest, NULL, NULL, rest, reply);
     }
@@ -1137,6 +1166,24 @@ static voice_cmd_t radio_command(const char *norm, char **reply)
     if (starts_with(norm, phrases_of(&s_radio_resume), &len) && radio_alone(norm + len + (norm[len] == ' '))) {
         radio_resume();
         return radio_reply(reply, lang->radio_playing, radio_station_name());
+    }
+    if (starts_with(norm, phrases_of(&s_radio_fav_add), &len) && radio_alone(norm + len + (norm[len] == ' '))) {
+        radio_station_t station = radio_station();
+        if (radio_favorites_contains(&station)) {
+            return radio_reply(reply, lang->radio_fav_already, station.name);
+        }
+        if (!radio_favorites_add(&station)) {
+            *reply = reply_dup(lang->radio_fav_full);
+            return VOICE_CMD_RADIO;
+        }
+        return radio_reply(reply, lang->radio_fav_added, station.name);
+    }
+    if (starts_with(norm, phrases_of(&s_radio_fav_remove), &len) && radio_alone(norm + len + (norm[len] == ' '))) {
+        radio_station_t station = radio_station();
+        if (!radio_favorites_remove(&station)) {
+            return radio_reply(reply, lang->radio_fav_not, station.name);
+        }
+        return radio_reply(reply, lang->radio_fav_removed, station.name);
     }
     if (starts_with(norm, phrases_of(&s_radio_what), &len)) {
         char title[128];

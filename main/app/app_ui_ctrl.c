@@ -1074,7 +1074,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         hide_panel[2] = ui_PanelReply;
         lv_obj_clear_flag(ui_ImageListenSettings, LV_OBJ_FLAG_HIDDEN);
         listen_label_set_text(" ");
-        // Back to sleep: a radio suspended by the conversation plays again
+        // The assistant sleeps: a radio suspended by the conversation plays again
         radio_on_sleep();
         break;
     case UI_CTRL_PANEL_LISTEN:

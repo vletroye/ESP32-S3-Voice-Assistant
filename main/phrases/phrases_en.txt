@@ -53,6 +53,21 @@ turn off the (radio|music)
 [s_radio_resume]
 (resume|restart|turn the radio back on) [the (radio|music)]
 
+[s_radio_fav_add]
+# Radio: the current station added to the favourites (RADIO.TXT)
+(add|put) (this|the) (radio|station) (to|in|into) [my ](favourites|favorites)
+(add|put) it (to|in|into) [my ](favourites|favorites)
+
+[s_radio_fav_remove]
+remove (this|the) (radio|station) from [my ](favourites|favorites)
+remove it from [my ](favourites|favorites)
+
+[s_radio_favorites]
+# Radio: the favourites, one after the other ("next")
+play my (favourites|favorites)
+play my favo[u]rite (radio|station)[s]
+play one of my favo[u]rite (radios|stations)
+
 [s_radio_what]
 # Radio: the station and the title being played
 what s playing

@@ -123,6 +123,14 @@ radio_none = Aucune radio n'est en cours.
 radio_what = Vous écoutez %s.
 radio_what_title = Vous écoutez %s : %s.
 
+# Favourite radios (RADIO.TXT): %s the station
+radio_fav_added = %s est dans vos favoris.
+radio_fav_already = %s est déjà dans vos favoris.
+radio_fav_removed = %s n'est plus dans vos favoris.
+radio_fav_not = %s n'est pas dans vos favoris.
+radio_fav_none = Vous n'avez pas encore de radio favorite. Pendant qu'une radio joue, dites : ajoute cette radio aux favoris.
+radio_fav_full = Votre liste de favoris est pleine. Retirez-en une d'abord.
+
 # Genres said ("joue du jazz", "mets de la musique classique") and the tag of Radio-Browser they stand for:
 # words/other words: tag, ... (a genre not listed is searched as said)
 radio_genres = classique/musique classique: classical, jazz: jazz, rock: rock, pop: pop, variété/variete/variétés/varietes: pop, chanson française/chanson francaise/chanson: chanson, électro/electro/électronique/electronique: electronic, techno: techno, house: house, dance: dance, rap/hip hop: hip-hop, rnb/r and b: rnb, reggae: reggae, métal/metal: metal, blues: blues, soul: soul, funk: funk, country: country, disco: disco, lounge: lounge, chill/chill out/détente/detente/calme/relaxante/zen: chillout, lofi/lo fi: lofi, ambient: ambient, années 60/sixties: 60s, années 70/seventies: 70s, années 80/eighties: 80s, années 90/nineties: 90s, années 2000: 2000s, oldies/rétro/retro/vieux tubes: oldies, latino/latine/latin: latin, salsa: salsa, gospel: gospel, opéra/opera: opera, baroque: baroque, piano: piano, enfants/comptines: kids, noël/noel: christmas, actualités/actualites/infos/info/information: news, sport/sports: sports, talk/débat/debat: talk, musique du monde/world: world, celtique: celtic, flamenco: flamenco, bossa nova/bossa: bossa nova

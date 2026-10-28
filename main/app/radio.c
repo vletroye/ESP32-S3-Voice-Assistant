@@ -26,6 +26,7 @@
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
+#include "esp_crt_bundle.h"
 #include "esp_audio_simple_dec.h"
 #include "esp_mp3_dec.h"
 #include "esp_aac_dec.h"
@@ -149,6 +150,7 @@ static bool net_stream(void)
         .buffer_size = RADIO_CHUNK,
         .user_agent = RADIO_USER_AGENT,
         .event_handler = http_event,
+        .crt_bundle_attach = esp_crt_bundle_attach,     // https: a favourite added by hand (searches keep http)
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
@@ -433,7 +435,8 @@ typedef struct {
     int count;
     int blocks;             /* blocks measured (not silent) since the start */
     float loudness;         /* mean square, smoothed */
-    float gain;             /* linear, applied */
+    float gain;             /* linear, applied: moves to gain_target sample by sample (no step, no click) */
+    float gain_target;
     float target_ms, silence_ms, gain_min, gain_max;
     uint32_t fade_out;      /* samples played since the fade-out began */
     volatile bool faded_out;    /* silent: the playback can leave */
@@ -451,6 +454,7 @@ static void level_reset(void)
 {
     memset(&s_level, 0, sizeof(s_level));
     s_level.gain = 1.0f;
+    s_level.gain_target = 1.0f;
     s_level.target_ms = dbfs_to_ms(RADIO_LEVEL_DBFS);
     s_level.silence_ms = dbfs_to_ms(RADIO_SILENCE_DBFS);
     s_level.gain_min = powf(10.0f, RADIO_GAIN_MIN_DB / 20.0f);
@@ -479,7 +483,7 @@ static inline int32_t level_apply(int32_t sample)
             l->blocks++;
             float target = sqrtf(l->target_ms / l->loudness);
             target = target < l->gain_min ? l->gain_min : (target > l->gain_max ? l->gain_max : target);
-            l->gain += (fast ? 0.5f : 0.05f) * (target - l->gain);
+            l->gain_target += (fast ? 0.5f : 0.05f) * (target - l->gain_target);
             if (l->blocks == 3 * 20) {      // after 3 s of sound
                 float dbfs, gain_db;
                 level_read(&dbfs, &gain_db);
@@ -487,6 +491,7 @@ static inline int32_t level_apply(int32_t sample)
             }
         }
     }
+    l->gain += (l->gain_target - l->gain) * (1.0f / RADIO_LEVEL_BLOCK);
     float v = x * l->gain;
     if (l->fade < RADIO_FADE_SAMPLES) {
         float t = (float)l->fade++ / RADIO_FADE_SAMPLES;

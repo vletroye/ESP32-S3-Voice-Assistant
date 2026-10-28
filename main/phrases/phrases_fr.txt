@@ -58,6 +58,20 @@ stop (la|cette) (radio|musique)
 [s_radio_resume]
 (remets|relance|rallume|reprends) la (radio|musique)
 
+[s_radio_fav_add]
+# Radio : la station en cours ajoutée aux favoris (RADIO.TXT)
+(ajoute|mets|garde) (cette|la) (radio|station) (aux|dans les|dans mes|en) favori[s]
+(ajoute|mets) (la|là) (aux|dans les|dans mes|en) favori[s]
+
+[s_radio_fav_remove]
+(retire|enlève|enleve|supprime) (cette|la) (radio|station) (des|de mes) favori[s]
+(retire|enlève|enleve|supprime) (la|là) (des|de mes) favori[s]
+
+[s_radio_favorites]
+# Radio : les favoris, l'un après l'autre (« suivante »)
+(joue|mets|lance) [moi ]mes favori[s]
+(joue|mets|lance) [moi ](mes|une de mes) radio[s] (préférée[s]|preferee[s]|favorite[s])
+
 [s_radio_what]
 # Radio : la station et le titre en cours
 (quelle|c est quelle) (radio|station)[ est ce]

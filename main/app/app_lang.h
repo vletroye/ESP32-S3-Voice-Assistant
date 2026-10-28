@@ -81,6 +81,12 @@ typedef struct {
     const char *radio_what;         /* %s: station */
     const char *radio_what_title;   /* %s: station, %s: title */
     const char *radio_genres;       /* "classique/musique classique: classical, ...": words said -> Radio-Browser tag */
+    const char *radio_fav_added;    /* %s: station */
+    const char *radio_fav_already;  /* %s: station */
+    const char *radio_fav_removed;  /* %s: station */
+    const char *radio_fav_not;      /* %s: station */
+    const char *radio_fav_none;
+    const char *radio_fav_full;
     char decimal_mark;              /* ',' or '.' */
     const char *second_one;         /* "seconde", below second_one_below_ms */
     const char *seconds;

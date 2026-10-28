@@ -411,21 +411,24 @@ static int find_model_name(const char *norm)
  * Model (1-based, in llm_models) said in the text: its name, else its number among the models of the
  * provider (all models for LLM_PROVIDER_COUNT); 0 if none
  */
+/* Number said in the answer to a numbered list ("un" alone, "2", "le deuxième"); 0 if none */
+static int said_number(const char *norm)
+{
+    for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
+        if (strcmp(norm, *one) == 0) {
+            return 1;
+        }
+    }
+    return search_number(norm, false, VOICE_NUMBERS_MAX);
+}
+
 static int find_model(const char *norm, llm_provider_t provider)
 {
     int named = find_model_name(norm);
     if (named) {
         return named;
     }
-    int number = 0;
-    for (const char *const *one = phrases_of(&s_one_alone); *one && !number; one++) {
-        if (strcmp(norm, *one) == 0) {
-            number = 1;
-        }
-    }
-    if (!number) {
-        number = search_number(norm, false, VOICE_NUMBERS_MAX);
-    }
+    int number = said_number(norm);
     for (size_t i = 0; i < llm_model_count && number; i++) {
         if (model_listed(i, provider) && --number == 0) {
             return (int)i + 1;
@@ -537,12 +540,54 @@ static voice_cmd_t ask_model(llm_provider_t provider, char **reply)
     return VOICE_CMD_ANSWERED;
 }
 
-/* "Anthropic, OpenAI ou Google ?" (a model may also be named directly in the answer) */
+/* The providers offered (those with models in AGENTS.INI), in the order of llm_provider_t: numbered from 1 */
+static size_t providers_offered(llm_provider_t offered[LLM_PROVIDER_COUNT])
+{
+    size_t count = 0;
+    for (int p = 0; p < LLM_PROVIDER_COUNT; p++) {
+        if (model_count((llm_provider_t)p) > 0) {
+            offered[count++] = (llm_provider_t)p;
+        }
+    }
+    return count;
+}
+
+/* "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI. ...": the text of LANG_<CODE>.TXT, then the providers */
+static char *provider_list(const char *text)
+{
+    llm_provider_t offered[LLM_PROVIDER_COUNT];
+    size_t count = providers_offered(offered);
+    char *out = malloc(CMD_REPLY_SIZE);
+    if (!out) {
+        return reply_dup(text);
+    }
+    strlcpy(out, text, CMD_REPLY_SIZE);
+    for (size_t i = 0; i < count; i++) {
+        size_t n = strlen(out);
+        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s.", (unsigned)(i + 1), s_providers[offered[i]].name);
+    }
+    return out;
+}
+
+/* Provider said in the answer: its name ("Google", "Gemini"), else its number in the list; LLM_PROVIDER_COUNT if none */
+static llm_provider_t find_provider_answer(const char *norm)
+{
+    llm_provider_t provider = find_provider(norm);
+    if (provider != LLM_PROVIDER_COUNT) {
+        return provider;
+    }
+    llm_provider_t offered[LLM_PROVIDER_COUNT];
+    size_t count = providers_offered(offered);
+    int number = said_number(norm);
+    return (number >= 1 && (size_t)number <= count) ? offered[number - 1] : LLM_PROVIDER_COUNT;
+}
+
+/* "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI. ..." (a model may also be named directly in the answer) */
 static voice_cmd_t ask_provider(char **reply)
 {
     s_asked = ASKED_PROVIDER;
     s_asked_us = esp_timer_get_time();
-    *reply = reply_dup(app_lang_get()->provider_ask);
+    *reply = provider_list(app_lang_get()->provider_ask);
     return VOICE_CMD_ANSWERED;
 }
 
@@ -878,11 +923,11 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         if (find_model_name(norm)) {
             return choose_model(norm, LLM_PROVIDER_COUNT, reply);
         }
-        llm_provider_t provider = find_provider(norm);
+        llm_provider_t provider = find_provider_answer(norm);
         if (provider == LLM_PROVIDER_COUNT) {
             s_asked = ASKED_PROVIDER;   // asked again
             s_asked_us = esp_timer_get_time();
-            *reply = reply_dup(app_lang_get()->provider_unknown);
+            *reply = provider_list(app_lang_get()->provider_unknown);
             return VOICE_CMD_ANSWERED;
         }
         return ask_model(provider, reply);

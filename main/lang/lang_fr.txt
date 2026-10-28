@@ -102,9 +102,9 @@ second_one = seconde
 seconds = secondes
 second_one_below_ms = 1950
 
-# "change de modèle": which provider first
-provider_ask = Quel fournisseur voulez-vous : Anthropic, OpenAI, Google, OpenRouter ou xAI ?
-provider_unknown = Je n'ai pas compris. Dites Anthropic, OpenAI, Google, OpenRouter ou xAI.
+# "change de modèle": which provider first; the providers offered follow, numbered (" 1, Anthropic. 2, OpenAI. ...")
+provider_ask = Quel fournisseur voulez-vous :
+provider_unknown = Je n'ai pas compris. Dites le numéro ou le nom du fournisseur :
 
 # %s: provider ("Anthropic"), its numbered models follow
 model_ask_intro = Voici les modèles proposés par %s.

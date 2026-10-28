@@ -222,6 +222,12 @@ esp_err_t settings_read_parameter_from_nvs(void)
         g_sys_param.openrouter_key[0] = '\0';
     }
 
+    // xAI (optional): its key, for the Grok models of AGENTS.INI
+    len = sizeof(g_sys_param.xai_key);
+    if (nvs_get_str(my_handle, "XAI_key", g_sys_param.xai_key, &len) != ESP_OK) {
+        g_sys_param.xai_key[0] = '\0';
+    }
+
     // Read the scrolling speed of the answer (optional)
     char speed[8] = {0};
     len = sizeof(speed);
@@ -403,6 +409,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     str_trim(g_sys_param.claude_key);
     str_trim(g_sys_param.gemini_key);
     str_trim(g_sys_param.openrouter_key);
+    str_trim(g_sys_param.xai_key);
     str_trim(g_sys_param.chat_model);
 
     ESP_LOGI(TAG, "stored ssid:%s", g_sys_param.ssid);
@@ -415,9 +422,10 @@ esp_err_t settings_read_parameter_from_nvs(void)
              g_sys_param.memory ? (int)strlen(g_sys_param.memory) : 0);
     ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s, %s", g_sys_param.lang, g_sys_param.scroll_cps,
              g_sys_param.scroll_smooth ? "smooth" : "line by line");
-    ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars), Gemini key: (%d chars), OpenRouter key: (%d chars)",
-             g_sys_param.chat_model, (int)strlen(g_sys_param.claude_key), (int)strlen(g_sys_param.gemini_key),
-             (int)strlen(g_sys_param.openrouter_key));
+    ESP_LOGI(TAG, "chat model:%s, Claude key: (%d chars), Gemini key: (%d chars), OpenRouter key: (%d chars), "
+             "xAI key: (%d chars)", g_sys_param.chat_model, (int)strlen(g_sys_param.claude_key),
+             (int)strlen(g_sys_param.gemini_key), (int)strlen(g_sys_param.openrouter_key),
+             (int)strlen(g_sys_param.xai_key));
     return ESP_OK;
 
 err:
@@ -435,7 +443,7 @@ sys_param_t *settings_get_parameter(void)
 
 /* Kept by the soft reset: Wi-Fi, API keys, Homey, PERSONA.TXT, MEMORY.TXT, comments of CONFIG.INI */
 static const char *const s_kept_keys[] = {
-    "ssid", "password", "ChatGPT_key", "Base_url", "Claude_key", "Gemini_key", "OpenRouter_key",
+    "ssid", "password", "ChatGPT_key", "Base_url", "Claude_key", "Gemini_key", "OpenRouter_key", "XAI_key",
     "Homey_url", "Homey_key", "Persona", "Memory", "Config_layout",
 };
 

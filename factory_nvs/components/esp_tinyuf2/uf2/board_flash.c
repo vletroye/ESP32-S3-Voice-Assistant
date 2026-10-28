@@ -451,7 +451,7 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
 static const char *const s_ini_key_order[] = {
     "Base_url", "Chat_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Languages", "Country",
     "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "Confirm_off", "OpenRouter_key",
-    "OpenRouter_free", "Free_models",
+    "OpenRouter_free", "Free_models", "XAI_key",
     "Screen_off_s", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Currency",
 };
 

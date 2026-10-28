@@ -313,6 +313,7 @@ static const struct {
     [LLM_PROVIDER_GEMINI] = { "Google", { "google", "gougle", "gemini", "gémini", "jemini", NULL } },
     [LLM_PROVIDER_OPENROUTER] = { "OpenRouter", { "openrouter", "open router", "open routeur", "openrouteur",
                                                   "open rooter", NULL } },
+    [LLM_PROVIDER_XAI] = { "xAI", { "xai", "x ai", "ix ai", "grok", "grock", "groc", "groque" } },
 };
 
 /* Provider named in the text, LLM_PROVIDER_COUNT if none */
@@ -360,6 +361,7 @@ static const struct {
     { "gemini-3.5-flash-lite", { "flash light", "flashlight", "flash lait", NULL } },
     { "gemini-3.8-flash", { "flache", "flasch", NULL } },
     { "gemini-4-argon", { "argonne", "argone", NULL } },
+    { "grok-4.7", { "grock", "groc", "groque", NULL } },
 };
 
 /* Model number (1-based, in llm_models) named in the text by a word of its name ("sonnet"); 0 if none */
@@ -409,21 +411,24 @@ static int find_model_name(const char *norm)
  * Model (1-based, in llm_models) said in the text: its name, else its number among the models of the
  * provider (all models for LLM_PROVIDER_COUNT); 0 if none
  */
+/* Number said in the answer to a numbered list ("un" alone, "2", "le deuxième"); 0 if none */
+static int said_number(const char *norm)
+{
+    for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
+        if (strcmp(norm, *one) == 0) {
+            return 1;
+        }
+    }
+    return search_number(norm, false, VOICE_NUMBERS_MAX);
+}
+
 static int find_model(const char *norm, llm_provider_t provider)
 {
     int named = find_model_name(norm);
     if (named) {
         return named;
     }
-    int number = 0;
-    for (const char *const *one = phrases_of(&s_one_alone); *one && !number; one++) {
-        if (strcmp(norm, *one) == 0) {
-            number = 1;
-        }
-    }
-    if (!number) {
-        number = search_number(norm, false, VOICE_NUMBERS_MAX);
-    }
+    int number = said_number(norm);
     for (size_t i = 0; i < llm_model_count && number; i++) {
         if (model_listed(i, provider) && --number == 0) {
             return (int)i + 1;
@@ -525,37 +530,12 @@ static char *models_by_provider(void)
     return out;
 }
 
-/* The models of the provider, numbered, then "which one?" (answered within CMD_ANSWER_TIMEOUT_US) */
-static voice_cmd_t ask_model(llm_provider_t provider, char **reply)
-{
-    s_listed_provider = provider;
-    s_asked = ASKED_MODEL;
-    s_asked_us = esp_timer_get_time();
-    *reply = model_list(provider);
-    return VOICE_CMD_ANSWERED;
-}
-
-/* "Anthropic, OpenAI ou Google ?" (a model may also be named directly in the answer) */
-static voice_cmd_t ask_provider(char **reply)
-{
-    s_asked = ASKED_PROVIDER;
-    s_asked_us = esp_timer_get_time();
-    *reply = reply_dup(app_lang_get()->provider_ask);
-    return VOICE_CMD_ANSWERED;
-}
-
-/* Numbers count within the models of the provider (all models for LLM_PROVIDER_COUNT) */
-static voice_cmd_t choose_model(const char *norm, llm_provider_t provider, char **reply)
+/* Model `number` (1-based, in llm_models) saved and used at once: "Très bien, j'utilise maintenant ..." */
+static voice_cmd_t use_model(int number, llm_provider_t provider, char **reply)
 {
     const app_lang_t *lang = app_lang_get();
-    int number = find_model(norm, provider);
-    char *text = NULL;
-    if (number == 0) {
-        asprintf(&text, lang->model_unknown, model_count(provider));
-        *reply = text ? text : reply_dup("");
-        return VOICE_CMD_ANSWERED;
-    }
     const llm_model_t *model = &llm_models[number - 1];
+    char *text = NULL;
     if (strcmp(model->id, settings_get_parameter()->chat_model) == 0) {
         asprintf(&text, lang->model_already, model->label);
         *reply = text ? text : reply_dup("");
@@ -571,6 +551,90 @@ static voice_cmd_t choose_model(const char *norm, llm_provider_t provider, char 
     asprintf(&text, lang->model_switched, model->label);
     *reply = text ? text : reply_dup("");
     return VOICE_CMD_ANSWERED;
+}
+
+/*
+ * The models of the provider, numbered, then "which one?" (answered within CMD_ANSWER_TIMEOUT_US); a provider
+ * with a single model: that one, without asking
+ */
+static voice_cmd_t ask_model(llm_provider_t provider, char **reply)
+{
+    if (model_count(provider) == 1) {
+        for (size_t i = 0; i < llm_model_count; i++) {
+            if (model_listed(i, provider)) {
+                return use_model((int)i + 1, provider, reply);
+            }
+        }
+    }
+    s_listed_provider = provider;
+    s_asked = ASKED_MODEL;
+    s_asked_us = esp_timer_get_time();
+    *reply = model_list(provider);
+    return VOICE_CMD_ANSWERED;
+}
+
+/* The providers offered (those with models in AGENTS.INI), in the order of llm_provider_t: numbered from 1 */
+static size_t providers_offered(llm_provider_t offered[LLM_PROVIDER_COUNT])
+{
+    size_t count = 0;
+    for (int p = 0; p < LLM_PROVIDER_COUNT; p++) {
+        if (model_count((llm_provider_t)p) > 0) {
+            offered[count++] = (llm_provider_t)p;
+        }
+    }
+    return count;
+}
+
+/* "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI. ...": the %s of the text of LANG_<CODE>.TXT is the
+ * numbered list of the providers offered */
+static char *provider_list(const char *format)
+{
+    llm_provider_t offered[LLM_PROVIDER_COUNT];
+    size_t count = providers_offered(offered);
+    char list[160] = "";
+    for (size_t i = 0; i < count; i++) {
+        size_t n = strlen(list);
+        snprintf(list + n, sizeof(list) - n, "%s%u, %s.", i ? " " : "", (unsigned)(i + 1),
+                 s_providers[offered[i]].name);
+    }
+    char *text = NULL;
+    asprintf(&text, format, list);
+    return text ? text : reply_dup("");
+}
+
+/* Provider said in the answer: its name ("Google", "Gemini"), else its number in the list; LLM_PROVIDER_COUNT if none */
+static llm_provider_t find_provider_answer(const char *norm)
+{
+    llm_provider_t provider = find_provider(norm);
+    if (provider != LLM_PROVIDER_COUNT) {
+        return provider;
+    }
+    llm_provider_t offered[LLM_PROVIDER_COUNT];
+    size_t count = providers_offered(offered);
+    int number = said_number(norm);
+    return (number >= 1 && (size_t)number <= count) ? offered[number - 1] : LLM_PROVIDER_COUNT;
+}
+
+/* "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI. ..." (a model may also be named directly in the answer) */
+static voice_cmd_t ask_provider(char **reply)
+{
+    s_asked = ASKED_PROVIDER;
+    s_asked_us = esp_timer_get_time();
+    *reply = provider_list(app_lang_get()->provider_ask);
+    return VOICE_CMD_ANSWERED;
+}
+
+/* Numbers count within the models of the provider (all models for LLM_PROVIDER_COUNT) */
+static voice_cmd_t choose_model(const char *norm, llm_provider_t provider, char **reply)
+{
+    int number = find_model(norm, provider);
+    if (number == 0) {
+        char *text = NULL;
+        asprintf(&text, app_lang_get()->model_unknown, model_count(provider));
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_ANSWERED;
+    }
+    return use_model(number, provider, reply);
 }
 
 /* ---------- voice ---------- */
@@ -876,11 +940,11 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         if (find_model_name(norm)) {
             return choose_model(norm, LLM_PROVIDER_COUNT, reply);
         }
-        llm_provider_t provider = find_provider(norm);
+        llm_provider_t provider = find_provider_answer(norm);
         if (provider == LLM_PROVIDER_COUNT) {
             s_asked = ASKED_PROVIDER;   // asked again
             s_asked_us = esp_timer_get_time();
-            *reply = reply_dup(app_lang_get()->provider_unknown);
+            *reply = provider_list(app_lang_get()->provider_unknown);
             return VOICE_CMD_ANSWERED;
         }
         return ask_model(provider, reply);

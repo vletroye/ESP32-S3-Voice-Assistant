@@ -20,6 +20,7 @@
 #include "openai_chat.h"
 #include "gemini_chat.h"
 #include "openrouter_chat.h"
+#include "xai_chat.h"
 #include "tools.h"
 
 static const char *TAG = "llm";
@@ -69,6 +70,7 @@ static const struct {
     { "openai", LLM_PROVIDER_OPENAI },
     { "google", LLM_PROVIDER_GEMINI },
     { "openrouter", LLM_PROVIDER_OPENROUTER },
+    { "xai", LLM_PROVIDER_XAI },
 };
 
 /* Without the blanks around it (in place) */
@@ -523,6 +525,7 @@ void llm_load_models(void)
         add_missing_section(text, FREE_EXCLUDE_SECTION);
         add_missing_section(text, SPEECH_SECTION);
         add_missing_section(text, PER_CALL_SECTION);
+        add_missing_section(text, "xai");          // Grok models, offered since xAI is supported
         rewrite_agents(NULL);
     }
     free(text);
@@ -671,6 +674,7 @@ static char *s_openai_key = NULL;
 static char *s_openai_url = NULL;
 static char *s_gemini_key = NULL;
 static char *s_openrouter_key = NULL;
+static char *s_xai_key = NULL;
 static char *s_system = NULL;
 static bool s_ready = false;
 static char s_model[64];
@@ -694,13 +698,16 @@ llm_provider_t llm_provider_of(const char *model)
     if (strncmp(model, "gemini-", 7) == 0) {
         return LLM_PROVIDER_GEMINI;
     }
+    if (strncmp(model, "grok-", 5) == 0) {
+        return LLM_PROVIDER_XAI;
+    }
     return LLM_PROVIDER_CLAUDE;
 }
 
 const char *llm_provider_name(llm_provider_t provider)
 {
     return provider == LLM_PROVIDER_OPENAI ? "GPT" : provider == LLM_PROVIDER_GEMINI ? "Gemini" :
-           provider == LLM_PROVIDER_OPENROUTER ? "OpenRouter" : "Claude";
+           provider == LLM_PROVIDER_OPENROUTER ? "OpenRouter" : provider == LLM_PROVIDER_XAI ? "Grok" : "Claude";
 }
 
 /* Effort of a listed model; "low" for a model only known from CONFIG.INI (accepted by every recent model) */
@@ -718,7 +725,8 @@ static const cJSON *history_get(void)
 {
     return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_history() :
            s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_history() :
-           s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_history() : claude_client_history();
+           s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_history() :
+           s_provider == LLM_PROVIDER_XAI ? xai_chat_history() : claude_client_history();
 }
 
 /* Give a conversation (taken over) to the client of the current provider */
@@ -730,6 +738,8 @@ static void history_set(cJSON *messages)
         gemini_chat_set_history(messages);
     } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
         openrouter_chat_set_history(messages);
+    } else if (s_provider == LLM_PROVIDER_XAI) {
+        xai_chat_set_history(messages);
     } else {
         claude_client_set_history(messages);
     }
@@ -829,6 +839,13 @@ static esp_err_t client_init(const char *model, bool tools)
         } else {
             ret = openrouter_chat_init(s_openrouter_key, model, s_system, effort_of(model));
         }
+    } else if (s_provider == LLM_PROVIDER_XAI) {
+        if (s_xai_key[0] == '\0') {
+            ESP_LOGW(TAG, "No XAI_key configured for %s", model);
+            ret = ESP_ERR_INVALID_ARG;
+        } else {
+            ret = xai_chat_init(s_xai_key, model, s_system, effort_of(model));
+        }
     } else if (s_claude_key[0] == '\0') {
         ESP_LOGW(TAG, "No Claude_key configured for %s", model);
         ret = ESP_ERR_INVALID_ARG;
@@ -842,7 +859,8 @@ static esp_err_t client_init(const char *model, bool tools)
 }
 
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
-                   const char *gemini_key, const char *openrouter_key, const char *system_prompt)
+                   const char *gemini_key, const char *openrouter_key, const char *xai_key,
+                   const char *system_prompt)
 {
     // Called again when the model is changed at run time: wait for an answer being generated
     if (s_lock) {
@@ -853,6 +871,7 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
     keep(&s_openai_url, openai_base_url);
     keep(&s_gemini_key, gemini_key);
     keep(&s_openrouter_key, openrouter_key);
+    keep(&s_xai_key, xai_key);
     keep(&s_system, system_prompt);
     s_provider = llm_provider_of(model);
     esp_err_t ret = client_init(model, true);
@@ -883,6 +902,8 @@ void llm_set_system_prompt(const char *system_prompt)
         gemini_chat_set_instructions(system_prompt);
     } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
         openrouter_chat_set_instructions(system_prompt);
+    } else if (s_provider == LLM_PROVIDER_XAI) {
+        xai_chat_set_instructions(system_prompt);
     } else {
         claude_client_set_system(system_prompt);
     }
@@ -921,6 +942,7 @@ static llm_error_t client_stream(const char *text, llm_text_cb_t on_text, void *
     return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_stream(text, on_text, ctx, full_text)
            : s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_stream(text, on_text, ctx, full_text)
            : s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_stream(text, on_text, ctx, full_text)
+           : s_provider == LLM_PROVIDER_XAI ? xai_chat_stream(text, on_text, ctx, full_text)
            : claude_client_stream(text, on_text, ctx, full_text);
 }
 
@@ -983,6 +1005,8 @@ void llm_prewarm(void)
         gemini_chat_prewarm();
     } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
         openrouter_chat_prewarm();
+    } else if (s_provider == LLM_PROVIDER_XAI) {
+        xai_chat_prewarm();
     } else {
         claude_client_prewarm();
     }
@@ -1000,6 +1024,8 @@ void llm_reset(void)
         gemini_chat_reset();
     } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
         openrouter_chat_reset();
+    } else if (s_provider == LLM_PROVIDER_XAI) {
+        xai_chat_reset();
     } else {
         claude_client_reset();
     }

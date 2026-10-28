@@ -650,13 +650,23 @@ void assistant_listen_end(void)
 
     // "Change la langue" / "change de modèle" (then the answer), "parle anglais", "utilise le modèle 3":
     // answered and applied here, without restarting
-    // PHASE 0 (radio test): "test radio" plays FIP (MP3, http), until the wake word
+    // TEMPORARY (radio phase 1, replaced by the voice commands of phase 3): "test radio" plays FIP, "stop radio"
+    // pauses it, "reprends la radio" resumes it
     char radio_norm[64];
     app_text_normalize(text, radio_norm, sizeof(radio_norm));
-    if (strncmp(radio_norm, "test radio", 10) == 0) {
-        ESP_LOGI(TAG, "Radio test");
+    bool radio_test = strncmp(radio_norm, "test radio", 10) == 0;
+    bool radio_pause_test = strncmp(radio_norm, "stop radio", 10) == 0;
+    bool radio_resume_test = strncmp(radio_norm, "reprends la radio", 17) == 0;
+    if (radio_test || radio_pause_test || radio_resume_test) {
+        ESP_LOGI(TAG, "Radio test: %s", radio_norm);
+        if (radio_test) {
+            radio_play("FIP", "http://icecast.radiofrance.fr/fip-midfi.mp3");
+        } else if (radio_pause_test) {
+            radio_pause();
+        } else {
+            radio_resume();
+        }
         ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
-        radio_play("http://icecast.radiofrance.fr/fip-midfi.mp3");
         goto err;
     }
 

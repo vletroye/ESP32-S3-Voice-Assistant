@@ -3,17 +3,19 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Internet radio. Two tasks, kept from the first stream on (their stacks are in PSRAM):
- * - the network task reads the stream over HTTP into a ring buffer in PSRAM (some seconds of audio, so that the
- *   network may stall without the speaker running dry);
- * - the playback task decodes it (MP3 or AAC, esp_audio_codec), low-pass filters and resamples it to 16 kHz stereo
- *   (the I2S bus, shared with the microphones, stays at 16 kHz) and writes it to the speaker.
- * Phase 0: the decoding and resampling times, the underruns and the internal RAM are logged every 10 s.
+ * Internet radio. A network task, kept from the first station on (its stack in PSRAM), runs the sessions: it reads
+ * the stream over HTTP into a ring buffer in PSRAM (some seconds of audio, so that the network may stall without
+ * the speaker running dry), takes the ICY metadata out of it (the title being played), and reconnects when the
+ * stream drops. For each stream, a playback task (its stack in internal RAM: the decoder is much slower with a
+ * stack in PSRAM; given back as soon as the radio stops, a conversation needing it) decodes it (MP3 or AAC,
+ * esp_audio_codec), mixes it to mono, low-pass filters and resamples it to 16 kHz (the I2S bus, shared with the
+ * microphones, stays at 16 kHz), softens its treble and writes it to the speaker.
  */
 
 #include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include "freertos/FreeRTOS.h"
@@ -25,8 +27,7 @@
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_audio_simple_dec.h"
-#include "esp_audio_simple_dec_default.h"
-#include "esp_audio_dec_default.h"
+#include "esp_mp3_dec.h"
 #include "esp_aac_dec.h"
 #include "bsp_board.h"
 #include "settings.h"
@@ -41,10 +42,18 @@
 #define RADIO_OUT_RATE          16000
 #define RADIO_FIR_TAPS          31
 #define RADIO_CUTOFF_HZ         7000.0f         /* below the 8 kHz of the 16 kHz output */
-#define RADIO_STATS_US          (10 * 1000000)
+#define RADIO_STATS_US          (60 * 1000000)
 #define RADIO_HTTP_TIMEOUT_MS   5000
 #define RADIO_REDIRECTS_MAX     5
 #define RADIO_TREBLE_HZ         3000.0f         /* treble shelf: above this frequency */
+#define RADIO_RETRIES           3               /* reconnections after the stream dropped */
+#define RADIO_RETRY_DELAY_MS    2000
+#define RADIO_STABLE_US         (30 * 1000000)  /* a stream played this long resets the reconnections */
+#define RADIO_PLAY_STACK        4096
+#define RADIO_SPEAKER_WAIT_MS   500             /* the playback task leaves within a decoded frame (~100 ms) */
+#define RADIO_NAME_SIZE         64
+#define RADIO_TITLE_SIZE        128
+#define RADIO_META_MAX          255
 
 static const char *TAG = "radio";
 
@@ -55,28 +64,76 @@ typedef enum {
 
 static RingbufHandle_t s_ring = NULL;
 static TaskHandle_t s_net_task = NULL;
-static TaskHandle_t s_play_task = NULL;
 static char s_url[512];
+static char s_name[RADIO_NAME_SIZE];
+static char s_title[RADIO_TITLE_SIZE];
+static portMUX_TYPE s_title_lock = portMUX_INITIALIZER_UNLOCKED;
 static char s_content_type[64];
+static char s_icy_name[RADIO_NAME_SIZE];
+static volatile int s_icy_metaint = 0;
 static volatile radio_format_t s_format = FORMAT_MP3;
-static volatile bool s_stop = true;
-static volatile bool s_net_busy = false;
-static volatile bool s_play_busy = false;
-static volatile bool s_net_ended = false;
+static volatile radio_state_t s_state = RADIO_OFF;
+static volatile bool s_stop = true;             /* the stream being read and played stops */
+static volatile bool s_play_busy = false;       /* the playback task is writing to the speaker */
+static volatile bool s_net_ended = false;       /* nothing more will come into the ring buffer */
 
 /* ---------- network ---------- */
 
 static esp_err_t http_event(esp_http_client_event_t *evt)
 {
-    if (evt->event_id == HTTP_EVENT_ON_HEADER && strcasecmp(evt->header_key, "Content-Type") == 0) {
+    if (evt->event_id != HTTP_EVENT_ON_HEADER) {
+        return ESP_OK;
+    }
+    if (strcasecmp(evt->header_key, "Content-Type") == 0) {
         strlcpy(s_content_type, evt->header_value, sizeof(s_content_type));
+    } else if (strcasecmp(evt->header_key, "icy-metaint") == 0) {
+        s_icy_metaint = atoi(evt->header_value);
+    } else if (strcasecmp(evt->header_key, "icy-name") == 0) {
+        strlcpy(s_icy_name, evt->header_value, sizeof(s_icy_name));
     }
     return ESP_OK;
 }
 
-static void net_stream(void)
+/* Into the ring buffer, waiting while it is full (the speaker sets the pace); false when stopped */
+static bool ring_put(const char *data, size_t len)
+{
+    while (len && !s_stop) {
+        if (xRingbufferSend(s_ring, data, len, pdMS_TO_TICKS(200)) == pdTRUE) {
+            return true;
+        }
+    }
+    return !s_stop;
+}
+
+/* "StreamTitle='Artist - Title';StreamUrl='...';": the title kept */
+static void icy_metadata(const char *meta)
+{
+    const char *start = strstr(meta, "StreamTitle='");
+    if (!start) {
+        return;
+    }
+    start += strlen("StreamTitle='");
+    const char *end = strstr(start, "';");
+    size_t len = end ? (size_t)(end - start) : strlen(start);
+    char title[RADIO_TITLE_SIZE];
+    snprintf(title, sizeof(title), "%.*s", (int)len, start);
+    taskENTER_CRITICAL(&s_title_lock);
+    bool changed = strcmp(title, s_title) != 0;
+    if (changed) {
+        strlcpy(s_title, title, sizeof(s_title));
+    }
+    taskEXIT_CRITICAL(&s_title_lock);
+    if (changed) {
+        ESP_LOGI(TAG, "Now playing: %s", title);
+    }
+}
+
+/* The stream into the ring buffer until it ends or s_stop; true when audio was received */
+static bool net_stream(void)
 {
     s_content_type[0] = '\0';
+    s_icy_name[0] = '\0';
+    s_icy_metaint = 0;
     esp_http_client_config_t config = {
         .url = s_url,
         .timeout_ms = RADIO_HTTP_TIMEOUT_MS,
@@ -86,8 +143,9 @@ static void net_stream(void)
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
-        return;
+        return false;
     }
+    esp_http_client_set_header(client, "Icy-MetaData", "1");
     int status = 0;
     for (int redirects = 0; redirects <= RADIO_REDIRECTS_MAX && !s_stop; redirects++) {
         if (esp_http_client_open(client, 0) != ESP_OK) {
@@ -104,37 +162,140 @@ static void net_stream(void)
         break;
     }
     if (status != 200) {
-        ESP_LOGE(TAG, "HTTP %d for %s", status, s_url);
+        if (status) {
+            ESP_LOGE(TAG, "HTTP %d for %s", status, s_url);
+        }
         esp_http_client_cleanup(client);
-        return;
+        return false;
     }
     s_format = (strcasestr(s_content_type, "aac") || strcasestr(s_content_type, "mp4")) ? FORMAT_AAC : FORMAT_MP3;
-    ESP_LOGI(TAG, "Stream: %s (%s)", s_content_type[0] ? s_content_type : "no type",
-             s_format == FORMAT_AAC ? "AAC" : "MP3");
+    int metaint = s_icy_metaint;
+    ESP_LOGI(TAG, "Stream: %s (%s)%s%s, metadata every %d bytes", s_content_type[0] ? s_content_type : "no type",
+             s_format == FORMAT_AAC ? "AAC" : "MP3", s_icy_name[0] ? ", " : "", s_icy_name, metaint);
+    if (!s_name[0] && s_icy_name[0]) {
+        strlcpy(s_name, s_icy_name, sizeof(s_name));
+    }
+
+    // The ICY metadata (a length byte, then length x 16 bytes, every metaint bytes of audio) is taken out
     char *chunk = heap_caps_malloc(RADIO_CHUNK, MALLOC_CAP_SPIRAM);
-    while (chunk && !s_stop) {
+    char *meta = heap_caps_malloc(RADIO_META_MAX + 1, MALLOC_CAP_SPIRAM);
+    int to_meta = metaint;      // audio bytes before the next metadata
+    int meta_left = -1;         // -1: audio; -2: the length byte comes next; else metadata bytes still to read
+    int meta_len = 0;
+    bool received = false;
+    while (chunk && meta && !s_stop) {
         int n = esp_http_client_read(client, chunk, RADIO_CHUNK);
         if (n <= 0) {
             ESP_LOGW(TAG, "Stream ended (%d)", n);
             break;
         }
-        // Waits while the buffer is full (the speaker sets the pace), checking for a stop
-        while (!s_stop && xRingbufferSend(s_ring, chunk, n, pdMS_TO_TICKS(200)) != pdTRUE) {
+        received = true;
+        for (int i = 0; i < n && !s_stop;) {
+            if (metaint <= 0) {
+                ring_put(chunk + i, n - i);
+                i = n;
+            } else if (meta_left == -1) {
+                int part = (n - i) < to_meta ? (n - i) : to_meta;
+                ring_put(chunk + i, part);
+                i += part;
+                to_meta -= part;
+                if (to_meta == 0) {
+                    meta_left = -2;
+                }
+            } else if (meta_left == -2) {
+                meta_left = (unsigned char)chunk[i++] * 16;
+                meta_len = 0;
+                if (meta_left == 0) {
+                    meta_left = -1;
+                    to_meta = metaint;
+                }
+            } else {
+                int part = (n - i) < meta_left ? (n - i) : meta_left;
+                int keep = (meta_len + part) > RADIO_META_MAX ? RADIO_META_MAX - meta_len : part;
+                memcpy(meta + meta_len, chunk + i, keep);
+                meta_len += keep;
+                i += part;
+                meta_left -= part;
+                if (meta_left == 0) {
+                    meta[meta_len] = '\0';
+                    icy_metadata(meta);
+                    meta_left = -1;
+                    to_meta = metaint;
+                }
+            }
         }
     }
     free(chunk);
+    free(meta);
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
+    return received;
+}
+
+static void play_task(void *arg);
+
+static bool wait_speaker_free(int ms)
+{
+    for (int i = 0; i < ms / 10 && s_play_busy; i++) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return !s_play_busy;
+}
+
+/* A session: the stream played until stopped (suspend, pause, another station); reconnected when it drops */
+static void net_session(void)
+{
+    int failures = 0;
+    while (s_state == RADIO_PLAYING) {
+        // The previous playback has left the speaker, and what it left in the buffer is dropped
+        wait_speaker_free(2000);
+        size_t got = 0;
+        void *item;
+        while ((item = xRingbufferReceiveUpTo(s_ring, &got, 0, RADIO_RING_SIZE)) != NULL) {
+            vRingbufferReturnItem(s_ring, item);
+        }
+        taskENTER_CRITICAL(&s_title_lock);
+        s_title[0] = '\0';
+        taskEXIT_CRITICAL(&s_title_lock);
+        s_net_ended = false;
+        s_stop = false;
+        ESP_LOGI(TAG, "Playing %s: %s (internal RAM free %u)", s_name[0] ? s_name : "?", s_url,
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        s_play_busy = true;
+        if (xTaskCreatePinnedToCore(play_task, "radio_play", RADIO_PLAY_STACK, NULL, 5, NULL, 1) != pdPASS) {
+            ESP_LOGE(TAG, "No memory for the playback task");
+            s_play_busy = false;
+            s_state = RADIO_OFF;
+            return;
+        }
+        int64_t start = esp_timer_get_time();
+        bool received = net_stream();
+        s_net_ended = true;
+        if (s_stop) {
+            return;     // stopped on purpose: the caller set the new state
+        }
+        // The stream dropped (or never came): the playback ends with the buffer, then it is tried again
+        wait_speaker_free(RADIO_RING_SIZE / 16 * 2);    // what was buffered is played
+        if (received && esp_timer_get_time() - start > RADIO_STABLE_US) {
+            failures = 0;
+        }
+        if (++failures > RADIO_RETRIES) {
+            ESP_LOGE(TAG, "%s could not be played", s_name[0] ? s_name : s_url);
+            s_state = RADIO_OFF;
+            return;
+        }
+        ESP_LOGW(TAG, "Reconnecting (%d/%d)", failures, RADIO_RETRIES);
+        for (int i = 0; i < RADIO_RETRY_DELAY_MS / 100 && s_state == RADIO_PLAYING; i++) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
 }
 
 static void net_task(void *arg)
 {
     while (true) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        s_net_busy = true;
-        net_stream();
-        s_net_ended = true;
-        s_net_busy = false;
+        net_session();
     }
 }
 
@@ -388,7 +549,7 @@ static void play_stream(void)
                 break;      // more data needed
             }
         }
-        // Phase 0 measures
+        // Measures, once a minute
         size_t internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
         min_internal = internal < min_internal ? internal : min_internal;
         int64_t now = esp_timer_get_time();
@@ -410,15 +571,11 @@ done:
     free(pcm16k);
 }
 
-/* Created for each stream: its stack is in internal RAM (the decoder is much slower with a stack in PSRAM), and
- * given back as soon as the radio stops (a conversation needs it) */
-#define RADIO_PLAY_STACK        6144
-
+/* Created for each stream by the session (stack in internal RAM), deleted at its end */
 static void play_task(void *arg)
 {
     play_stream();
     ESP_LOGI(TAG, "Playback stopped (stack left %u bytes)", (unsigned)uxTaskGetStackHighWaterMark(NULL));
-    s_play_task = NULL;
     s_play_busy = false;
     vTaskDelete(NULL);
 }
@@ -430,8 +587,9 @@ static bool radio_init(void)
     if (s_ring) {
         return true;
     }
-    esp_audio_dec_register_default();
-    esp_audio_simple_dec_register_default();
+    // MP3 and AAC (HE-AAC included) only: the other decoders of the component are not linked
+    esp_mp3_dec_register();
+    esp_aac_dec_register();
     radio_set_treble(settings_get_parameter()->radio_treble);
     s_ring = xRingbufferCreateWithCaps(RADIO_RING_SIZE, RINGBUF_TYPE_BYTEBUF, MALLOC_CAP_SPIRAM);
     if (!s_ring ||
@@ -442,45 +600,92 @@ static bool radio_init(void)
     return true;
 }
 
-void radio_stop(void)
+/* The stream stops (the session task sees it), the speaker is free once the playback task left */
+static void stream_stop(void)
 {
     s_stop = true;
-    // The speaker is free once the playback task left its loop (a decoded frame at most, ~100 ms)
-    for (int i = 0; i < 40 && s_play_busy; i++) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+    if (!wait_speaker_free(RADIO_SPEAKER_WAIT_MS)) {
+        ESP_LOGW(TAG, "The playback did not stop in %d ms", RADIO_SPEAKER_WAIT_MS);
     }
+}
+
+static void session_start(void)
+{
+    s_state = RADIO_PLAYING;
+    s_stop = true;              // the stream being played, if any, ends: the session task starts the new one
+    xTaskNotifyGive(s_net_task);
+}
+
+void radio_play(const char *name, const char *url)
+{
+    if (!url || !url[0] || !radio_init()) {
+        return;
+    }
+    stream_stop();
+    strlcpy(s_name, name ? name : "", sizeof(s_name));
+    strlcpy(s_url, url, sizeof(s_url));
+    session_start();
+}
+
+void radio_suspend(void)
+{
+    if (s_state == RADIO_PLAYING) {
+        s_state = RADIO_SUSPENDED;
+        ESP_LOGI(TAG, "Suspended");
+    }
+    if (s_ring) {
+        stream_stop();
+    }
+}
+
+void radio_on_sleep(void)
+{
+    if (s_state == RADIO_SUSPENDED) {
+        ESP_LOGI(TAG, "Resumed (the assistant sleeps)");
+        session_start();
+    }
+}
+
+void radio_pause(void)
+{
+    if (s_state == RADIO_PLAYING || s_state == RADIO_SUSPENDED) {
+        s_state = RADIO_PAUSED;
+        ESP_LOGI(TAG, "Paused");
+    }
+    if (s_ring) {
+        stream_stop();
+    }
+}
+
+bool radio_resume(void)
+{
+    if (!s_url[0] || !radio_init()) {
+        return false;
+    }
+    if (s_state != RADIO_PLAYING) {
+        session_start();
+    }
+    return true;
+}
+
+radio_state_t radio_state(void)
+{
+    return s_state;
 }
 
 bool radio_playing(void)
 {
-    return !s_stop && s_play_busy;
+    return s_state == RADIO_PLAYING;
 }
 
-void radio_play(const char *url)
+const char *radio_station_name(void)
 {
-    if (!radio_init()) {
-        return;
-    }
-    radio_stop();
-    // The network task may still be waiting on the previous stream (HTTP timeout)
-    for (int i = 0; i < (RADIO_HTTP_TIMEOUT_MS / 10 + 100) && s_net_busy; i++) {
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    // What is left of the previous stream is dropped
-    size_t got = 0;
-    void *item;
-    while ((item = xRingbufferReceiveUpTo(s_ring, &got, 0, RADIO_RING_SIZE)) != NULL) {
-        vRingbufferReturnItem(s_ring, item);
-    }
-    strlcpy(s_url, url, sizeof(s_url));
-    s_net_ended = false;
-    s_stop = false;
-    ESP_LOGI(TAG, "Playing %s (internal RAM free %u)", s_url, (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-    xTaskNotifyGive(s_net_task);
-    s_play_busy = true;
-    if (xTaskCreatePinnedToCore(play_task, "radio_play", RADIO_PLAY_STACK, NULL, 5, &s_play_task, 1) != pdPASS) {
-        ESP_LOGE(TAG, "No memory for the playback task");
-        s_play_busy = false;
-        s_stop = true;
-    }
+    return s_name;
+}
+
+void radio_title(char *buf, size_t size)
+{
+    taskENTER_CRITICAL(&s_title_lock);
+    strlcpy(buf, s_title, size);
+    taskEXIT_CRITICAL(&s_title_lock);
 }

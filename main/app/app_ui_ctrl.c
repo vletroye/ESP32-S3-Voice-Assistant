@@ -24,6 +24,7 @@
 #include "settings.h"
 #include "assistant.h"
 #include "costs.h"
+#include "radio.h"
 #include "bsp/esp-bsp.h"
 
 #include "ui_helpers.h"
@@ -1073,6 +1074,8 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         hide_panel[2] = ui_PanelReply;
         lv_obj_clear_flag(ui_ImageListenSettings, LV_OBJ_FLAG_HIDDEN);
         listen_label_set_text(" ");
+        // Back to sleep: a radio suspended by the conversation plays again
+        radio_on_sleep();
         break;
     case UI_CTRL_PANEL_LISTEN:
         if (current_panel == UI_CTRL_PANEL_SLEEP) {

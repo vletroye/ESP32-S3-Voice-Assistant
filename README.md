@@ -66,6 +66,8 @@ which has been largely rewritten.
   outline of the full bar, filled from the bottom with the volume; speaker icon and percentage below it, all
   centred under the Settings icon) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out when
   disconnected), in the same style.
+- **Model in use**, while listening and thinking ("J'écoute…", "Entendu…", "Je réfléchis…"): the icon of its
+  provider and its name (as in `AGENTS.INI`) at the bottom left, right under the text.
 - **Screen off when nobody is there** (with the ESP32-S3-BOX-3-SENSOR dock): its presence radar switches the
   screen off after `Screen_off_s` seconds without presence (10 by default) while the assistant sleeps on its
   clock, and on again when someone comes, at the wake word or at a touch. It closes like an iris (a black ring

@@ -45,9 +45,16 @@ LV_FONT_DECLARE(ui_font_Latin20);
 #define REPLY_SCROLL_TIMER_INTERVAL_MS  (100)
 /* Fraction of the visible height kept above the line being read */
 #define REPLY_SCROLL_LEAD_DIV           (3)
-/* Text under the robot (listening / thinking): lines shown, bottom position (from the screen bottom) */
+/* Model in use under the robot (listening / thinking): provider icon (20 x 21) and model name, at the bottom left */
+#define MODEL_ROW_LEFT_X                (8)
+#define MODEL_ROW_BOTTOM_Y              (-2)
+#define MODEL_ROW_HEIGHT                (21)
+#define MODEL_ROW_GAP_X                 (6)
+#define MODEL_ROW_COLOR                 0xB9CCF5
+/* Text under the robot (listening / thinking): lines shown, bottom position (from the screen bottom), right above
+ * the model in use */
 #define LISTEN_TEXT_LINES               (2)
-#define LISTEN_TEXT_BOTTOM_Y            (-8)
+#define LISTEN_TEXT_BOTTOM_Y            (MODEL_ROW_BOTTOM_Y - MODEL_ROW_HEIGHT)
 /* The robot is raised to leave room for these lines */
 #define ROBOT_RAISE_PX                  (10)
 
@@ -627,6 +634,75 @@ static void cost_label_clicked_cb(lv_event_t *e)
     lv_scr_load(s_cost_screen);
 }
 
+/* ---------- Model in use: provider icon and model name at the bottom left, while listening and thinking ---------- */
+
+static const void *logo_image(ui_ctrl_logo_t logo)
+{
+    return logo == UI_CTRL_LOGO_WEB ? (const void *)&ui_img_reply_web :
+           logo == UI_CTRL_LOGO_LOCAL ? (const void *)&ui_img_reply_local :
+           logo == UI_CTRL_LOGO_CLAUDE ? (const void *)&ui_img_reply_claude :
+           logo == UI_CTRL_LOGO_GEMINI ? (const void *)&ui_img_reply_gemini :
+           logo == UI_CTRL_LOGO_OPENROUTER ? (const void *)&ui_img_reply_openrouter :
+           logo == UI_CTRL_LOGO_XAI ? (const void *)&ui_img_reply_xai :
+           (const void *)&ui_img_reply_chatgpt_logo_png;
+}
+
+static ui_ctrl_logo_t provider_logo(llm_provider_t provider)
+{
+    return provider == LLM_PROVIDER_OPENAI ? UI_CTRL_LOGO_OPENAI :
+           provider == LLM_PROVIDER_GEMINI ? UI_CTRL_LOGO_GEMINI :
+           provider == LLM_PROVIDER_OPENROUTER ? UI_CTRL_LOGO_OPENROUTER :
+           provider == LLM_PROVIDER_XAI ? UI_CTRL_LOGO_XAI : UI_CTRL_LOGO_CLAUDE;
+}
+
+static lv_obj_t *s_model_icon = NULL;
+static lv_obj_t *s_model_name = NULL;
+
+static void model_row_create(void)
+{
+    s_model_icon = lv_img_create(ui_ScreenListen);
+    lv_img_set_src(s_model_icon, logo_image(UI_CTRL_LOGO_CLAUDE));
+    lv_obj_align(s_model_icon, LV_ALIGN_BOTTOM_LEFT, MODEL_ROW_LEFT_X, MODEL_ROW_BOTTOM_Y);
+    lv_obj_clear_flag(s_model_icon, LV_OBJ_FLAG_CLICKABLE);
+
+    s_model_name = lv_label_create(ui_ScreenListen);
+    lv_obj_set_style_text_font(s_model_name, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_model_name, lv_color_hex(MODEL_ROW_COLOR), LV_PART_MAIN | LV_STATE_DEFAULT);
+    // A long name (free OpenRouter models) ends with "..." rather than leaving the screen
+    lv_label_set_long_mode(s_model_name, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(s_model_name, 320 - MODEL_ROW_LEFT_X - 20 - MODEL_ROW_GAP_X - MODEL_ROW_LEFT_X);
+    lv_obj_align_to(s_model_name, s_model_icon, LV_ALIGN_OUT_RIGHT_MID, MODEL_ROW_GAP_X, 0);
+    lv_label_set_text(s_model_name, "");
+
+    lv_obj_add_flag(s_model_icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_model_name, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* Shown with the model in use (its name in AGENTS.INI, else its id), or hidden */
+static void model_row_show(bool shown)
+{
+    if (!s_model_icon) {
+        return;
+    }
+    if (!shown) {
+        lv_obj_add_flag(s_model_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_model_name, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    const char *id = settings_get_parameter()->chat_model;
+    const char *name = id;
+    for (size_t i = 0; i < llm_model_count; i++) {
+        if (strcmp(llm_models[i].id, id) == 0) {
+            name = llm_models[i].label;
+            break;
+        }
+    }
+    lv_img_set_src(s_model_icon, logo_image(provider_logo(llm_provider())));
+    lv_label_set_text(s_model_name, name);
+    lv_obj_clear_flag(s_model_icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_model_name, LV_OBJ_FLAG_HIDDEN);
+}
+
 static void cost_label_create(void)
 {
     s_cost_label = lv_label_create(ui_ScreenListen);
@@ -660,6 +736,7 @@ void ui_ctrl_init(void)
     app_clock_create(ui_PanelSleep, app_lang_get()->weekdays);
     app_clock_show(settings_get_parameter()->show_clock);
     cost_label_create();
+    model_row_create();
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
@@ -916,6 +993,8 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
     }
 
     current_panel = panel;
+    // The model in use: shown while listening, "Entendu", "Je réfléchis"
+    model_row_show(panel == UI_CTRL_PANEL_LISTEN || panel == UI_CTRL_PANEL_GET);
     // The costs: shown while asleep, listening, "Entendu", "Je réfléchis"; hidden over the answer
     if (s_cost_label) {
         if (panel != UI_CTRL_PANEL_REPLY) {
@@ -1084,15 +1163,8 @@ void ui_sleep_show_animation(void)
 
 void ui_ctrl_reply_set_logo(ui_ctrl_logo_t logo)
 {
-    const void *src = logo == UI_CTRL_LOGO_WEB ? (const void *)&ui_img_reply_web :
-                      logo == UI_CTRL_LOGO_LOCAL ? (const void *)&ui_img_reply_local :
-                      logo == UI_CTRL_LOGO_CLAUDE ? (const void *)&ui_img_reply_claude :
-                      logo == UI_CTRL_LOGO_GEMINI ? (const void *)&ui_img_reply_gemini :
-                      logo == UI_CTRL_LOGO_OPENROUTER ? (const void *)&ui_img_reply_openrouter :
-                      logo == UI_CTRL_LOGO_XAI ? (const void *)&ui_img_reply_xai :
-                      (const void *)&ui_img_reply_chatgpt_logo_png;
     bsp_display_lock(0);
-    lv_img_set_src(ui_ImageReplyLogo, src);
+    lv_img_set_src(ui_ImageReplyLogo, logo_image(logo));
     bsp_display_unlock();
 }
 

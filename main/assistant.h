@@ -49,6 +49,9 @@ void assistant_request_restore(bool factory);
 /** Restart in configuration mode, done by the main task (conversation, volume and costs saved first) */
 void assistant_request_config(void);
 
+/** Double tap while "J'écoute" / "Je réfléchis": dropped, back to sleep (from the LVGL task) */
+void assistant_cancel(void);
+
 /** Model test: show a text as the answer (not spoken), scrolled to its last line */
 void assistant_show(const char *text);
 

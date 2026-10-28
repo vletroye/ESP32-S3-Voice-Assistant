@@ -70,6 +70,9 @@ typedef struct {
 esp_err_t app_sr_start(bool record_en);
 esp_err_t app_sr_stop(void);
 esp_err_t app_sr_get_result(sr_result_t *result, TickType_t xTicksToWait);
+/** The listening session ends as if nobody had spoken (double tap while "J'écoute") */
+void app_sr_cancel(void);
+
 esp_err_t app_sr_start_once(void);
 
 /**

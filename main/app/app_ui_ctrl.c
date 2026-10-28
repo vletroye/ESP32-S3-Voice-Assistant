@@ -105,6 +105,19 @@ static void robot_raise(lv_obj_t *obj)
 /* Two taps within this delay on the answer stop it and listen again */
 #define DOUBLE_TAP_MS                   (400)
 
+/* Double tap while listening ("J'écoute") or thinking ("Je réfléchis"): dropped, back to sleep */
+static void cancel_double_tap_cb(lv_event_t *e)
+{
+    static int64_t last_tap_us = 0;
+    int64_t now = esp_timer_get_time();
+    if (now - last_tap_us <= DOUBLE_TAP_MS * 1000LL) {
+        last_tap_us = 0;
+        assistant_cancel();
+    } else {
+        last_tap_us = now;
+    }
+}
+
 /* Double tap on the answer: same as the wake word (the reply stops, the assistant listens) */
 static void reply_double_tap_cb(lv_event_t *e)
 {
@@ -918,6 +931,9 @@ void ui_ctrl_init(void)
     ui_radio_init();
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
+    // While listening or thinking: a double tap drops it, back to sleep
+    lv_obj_add_event_cb(ui_PanelListen, cancel_double_tap_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(ui_PanelGet, cancel_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
 
     scroll_timer_handle = lv_timer_create(reply_content_scroll_timer_handler, REPLY_SCROLL_TIMER_INTERVAL_MS, NULL);

@@ -60,6 +60,8 @@ static const char *TAG = "app_sr";
 static const esp_afe_sr_iface_t *afe_handle = NULL;
 static srmodel_list_t *models = NULL;
 static volatile bool manul_detect_flag = false;
+/* Double tap while listening: the session ends as if nobody had spoken */
+static volatile bool s_cancel_listen = false;
 /* Non-zero: the pending manual session is a follow-up that must hear speech within this delay */
 static volatile uint32_t s_followup_window_ms = 0;
 
@@ -202,7 +204,12 @@ static void audio_detect_task(void *arg)
                 }
             }
 
-            bool no_speech = !speech_seen && elapsed_ms >= no_speech_timeout_ms;
+            bool no_speech = (!speech_seen && elapsed_ms >= no_speech_timeout_ms) || s_cancel_listen;
+            if (s_cancel_listen) {
+                s_cancel_listen = false;
+                speech_seen = false;
+                ESP_LOGI(TAG, "listening cancelled");
+            }
             bool speech_ended = speech_seen && (SR_SILENCE_END_FRAMES == frame_keep) && (VAD_SILENCE == res->vad_state);
             if (no_speech || speech_ended) {
                 ESP_LOGI(TAG, "listen end after %" PRIu32 " ms: speech %" PRIu32 " ms, max volume %.1f dBFS%s",
@@ -352,6 +359,11 @@ esp_err_t app_sr_get_result(sr_result_t *result, TickType_t xTicksToWait)
     ESP_RETURN_ON_FALSE(NULL != g_sr_data, ESP_ERR_INVALID_STATE, TAG, "SR is not running");
     xQueueReceive(g_sr_data->result_que, result, xTicksToWait);
     return ESP_OK;
+}
+
+void app_sr_cancel(void)
+{
+    s_cancel_listen = true;
 }
 
 esp_err_t app_sr_start_once(void)

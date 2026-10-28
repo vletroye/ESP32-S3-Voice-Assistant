@@ -977,6 +977,23 @@ llm_error_t llm_probe(const llm_model_t *model, const char *question, llm_stats_
     return err;
 }
 
+static volatile bool s_cancelled = false;
+
+void llm_cancel(void)
+{
+    s_cancelled = true;
+}
+
+void llm_cancel_clear(void)
+{
+    s_cancelled = false;
+}
+
+bool llm_cancelled(void)
+{
+    return s_cancelled;
+}
+
 llm_error_t llm_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
 {
     if (full_text) {

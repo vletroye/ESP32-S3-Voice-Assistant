@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "esp_log.h"
+#include "llm.h"
 #include "esp_check.h"
 #include "esp_timer.h"
 #include "esp_http_client.h"
@@ -388,7 +389,7 @@ llm_error_t gemini_chat_stream(const char *text, llm_text_cb_t on_text, void *ct
     }
 
     /* The last event carries finishReason; the body ends right after it */
-    while ((n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
+    while (!llm_cancelled() && (n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
         llm_sse_feed(&st.sse, chunk, n);
     }
     if (st.error == LLM_OK && !st.done) {

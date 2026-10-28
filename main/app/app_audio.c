@@ -31,6 +31,7 @@
 #include "tts_stream.h"
 #include "esp_heap_caps.h"
 #include "radio.h"
+#include "llm.h"
 
 static const char *TAG = "app_audio";
 
@@ -313,7 +314,7 @@ void sr_handler_task(void *pvParam)
             }
         }
 #endif
-        if (ESP_MN_STATE_TIMEOUT == result.state && result.no_speech && stt_stream_has_text()) {
+        if (ESP_MN_STATE_TIMEOUT == result.state && result.no_speech && stt_stream_has_text() && !llm_cancelled()) {
             // The local VAD missed it (e.g. a very short question), but the transcription heard words
             ESP_LOGI(TAG, "No speech detected locally, but the transcription has text: answering");
             result.no_speech = false;

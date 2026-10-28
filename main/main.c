@@ -81,6 +81,8 @@ static volatile bool s_restart_after_reply = false;
 static volatile bool s_restart_requested = false;
 /* "Teste les modèles": the test starts once its announcement has been spoken */
 static volatile bool s_test_after_reply = false;
+/* Double tap while listening or thinking: what is under way is dropped (assistant_cancel) */
+static volatile bool s_cancelled = false;
 /* A radio command was answered: back to sleep after the reply (the radio plays then), without listening again */
 static volatile bool s_sleep_after_local = false;
 /* The reply is the one of a voice command handled here (not of the model): Sleep_after_cmd applies */
@@ -140,6 +142,9 @@ static void speak_message(const char *message);
 static void on_llm_text(const char *delta, void *ctx)
 {
     reply_view_t *v = (reply_view_t *)ctx;
+    if (s_cancelled) {
+        return;     // dropped: nothing shown nor spoken
+    }
     if (delta == NULL) {
         // A tool runs (web search...): speak what was written so far, even a short "Je regarde.", but take
         // this waiting sentence off the screen, which keeps only the answer
@@ -596,8 +601,21 @@ void assistant_set_model(const char *model)
 }
 
 /* Start of a listening session (wake word, touch or follow-up). Called from app_audio.c */
+/* Double tap while "J'écoute" / "Je réfléchis": what is under way is dropped, the assistant goes back to sleep */
+void assistant_cancel(void)
+{
+    ESP_LOGI(TAG, "Cancelled by a double tap");
+    s_cancelled = true;
+    app_sr_cancel();        // listening: ended as without speech
+    llm_cancel();           // thinking: the answer's stream is left
+    tts_stream_cancel();
+    ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
+}
+
 void assistant_listen_start(void)
 {
+    s_cancelled = false;
+    llm_cancel_clear();
     // The transcript is not shown while the user speaks: the question appears above the answer
     stt_stream_start(NULL);
 }
@@ -628,6 +646,11 @@ void assistant_listen_end(void)
     t_start = esp_timer_get_time();
     char *text = stt_stream_finish(STT_FINAL_TIMEOUT_MS);
     ESP_LOGI(TAG, "[timing] final transcript %lld ms after the end of speech", elapsed_ms(t_start));
+    if (s_cancelled) {
+        ESP_LOGI(TAG, "Question dropped (cancelled)");
+        free(text);
+        return;
+    }
     if (NULL == text) {
         speak_message(app_lang_get()->stt_error);
         return;
@@ -715,9 +738,18 @@ void assistant_listen_end(void)
                            llm_provider() == LLM_PROVIDER_OPENROUTER ? UI_CTRL_LOGO_OPENROUTER :
                            llm_provider() == LLM_PROVIDER_XAI ? UI_CTRL_LOGO_XAI : UI_CTRL_LOGO_CLAUDE);
     char *question = with_current_time(text);
-    llm_error_t llm_err = llm_stream(question ? question : text, on_llm_text, &view, &response);
+    llm_error_t llm_err = s_cancelled ? LLM_ERR_OTHER : llm_stream(question ? question : text, on_llm_text, &view,
+                                                                  &response);
     free(question);
     ESP_LOGI(TAG, "[timing] chat (%s, streamed): %lld ms", llm_provider_name(llm_provider()), elapsed_ms(t_start));
+    if (s_cancelled) {
+        // Double tap while thinking: nothing shown nor spoken (the assistant already sleeps)
+        ESP_LOGI(TAG, "Answer dropped (cancelled)");
+        sentence_splitter_discard(&s_splitter);
+        tts_stream_cancel();
+        free(view.text);
+        goto err;
+    }
 
     if (llm_err == LLM_OK) {
         sentence_splitter_finish(&s_splitter);

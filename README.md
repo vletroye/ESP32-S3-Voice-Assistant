@@ -138,7 +138,8 @@ which has been largely rewritten.
    transcript arrives (0.7 to 1.2 s), then "Je réfléchis …" until the answer starts; the answer is shown and spoken.
 3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP"
    (not after a volume change, which sends it back to sleep).
-4. To interrupt an answer, say "Bonjour ESP" again or **double-tap** the screen: it stops and listens.
+4. To interrupt an answer, say "Bonjour ESP" again or **double-tap** the screen: it stops and listens. A double tap
+   while "J'écoute …" or "Je réfléchis …" is shown drops the question: back to sleep, nothing said.
 5. Without speech, it goes back to sleep (no API call is made for silence).
 6. Saying just "**Au revoir**" (or another closing phrase, see below) sends it back to sleep at once, without
    an answer and without listening again, and clears the saved conversation: the next one starts afresh.
@@ -1032,6 +1033,9 @@ No fixed wording: Claude decides when to use a tool.
 
 - Touch the screen while asleep: wakes the assistant up, like "Bonjour ESP".
 - Double-tap during an answer: interrupts it and listens.
+- Double-tap while listening ("J'écoute …") or thinking ("Entendu …", "Je réfléchis …"): the question is dropped
+  and the assistant goes back to sleep, saying nothing. While listening, the session ends as without speech; while
+  thinking, the answer's stream is left at once (every client reads `llm_cancelled()` and closes its connection).
 
 ## Radio
 

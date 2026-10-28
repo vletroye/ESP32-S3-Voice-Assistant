@@ -177,6 +177,13 @@ llm_provider_t llm_provider(void);
  */
 llm_error_t llm_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text);
 
+/** The answer being streamed is dropped (double tap while "Je réfléchis"): the clients leave their stream at once,
+ *  closing the connection; llm_stream() then returns an error, which the caller ignores. Cleared by
+ *  llm_cancel_clear() (start of a listening session). */
+void llm_cancel(void);
+void llm_cancel_clear(void);
+bool llm_cancelled(void);
+
 /** Open the HTTPS connection in advance (blocking, ~1 s when not already open) */
 void llm_prewarm(void);
 

@@ -45,6 +45,7 @@
 #include "model_test.h"
 #include "costs.h"
 #include "persona.h"
+#include "country.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -63,6 +64,8 @@ static int64_t s_reply_t0 = 0;
  * nothing has been heard or played for this long, i.e. after the follow-up listening, not during it
  */
 #define SAVE_AFTER_SILENCE_MS           1000
+/* A language added to Languages: its message stays this long before the configuration mode */
+#define NEW_LANGUAGE_MESSAGE_MS         6000
 /* Homey's tools were added */
 static bool homey_loaded = false;
 /* From the start of an answer until it has been spoken or interrupted (no flash write meanwhile) */
@@ -350,11 +353,15 @@ static char *build_system_prompt(void)
 {
     const app_lang_t *lang = app_lang_get();
     const char *notes = app_memory_notes();
-    // "Lieu de l'utilisateur : Evere, BE." (country and town from CONFIG.INI or "change mon pays / ma ville")
-    char where[64] = "";
+    // "Lieu de l'utilisateur : Evere, Belgique." (country and town from CONFIG.INI or "change mon pays / ma ville";
+    // the country named in the language in use, COUNTRY.TXT)
+    char where[160] = "";
     char location[256] = "";
-    snprintf(where, sizeof(where), "%s%s%s", sys_param->city, sys_param->city[0] && sys_param->country[0] ? ", " : "",
-             sys_param->country);
+    char country[64] = "";
+    if (sys_param->country[0]) {
+        country_name(sys_param->country, country, sizeof(country));
+    }
+    snprintf(where, sizeof(where), "%s%s%s", sys_param->city, sys_param->city[0] && country[0] ? ", " : "", country);
     if (where[0]) {
         snprintf(location, sizeof(location), lang->location_line, where);
     }
@@ -431,8 +438,32 @@ void assistant_request_restore(bool factory)
 /* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
 static const char *const s_user_files[] = {
     "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "speed.txt", "log.txt",
-    "costs.json", "costs.tmp", "costs.txt", "persona_fr.txt", "persona_en.txt",
+    "costs.json", "costs.tmp", "costs.txt",
 };
+
+/* Languages whose files are given with the firmware: a soft reset restores them; those of a language added by the
+ * user (its translation) are kept */
+static const char *const s_firmware_languages[] = { "fr", "en" };
+
+/* "phrases_de.txt" is a file of a language (prefix "phrases_", "lang_" or "persona_"), of the firmware's ones? */
+static bool language_file(const char *name, bool *firmware, bool *persona)
+{
+    static const char *const prefixes[] = { "phrases_", "lang_", "persona_" };
+    size_t len = strlen(name);
+    for (size_t p = 0; p < sizeof(prefixes) / sizeof(prefixes[0]); p++) {
+        size_t n = strlen(prefixes[p]);
+        if (strncmp(name, prefixes[p], n) == 0 && len > n + 4 && strcmp(name + len - 4, ".txt") == 0) {
+            *firmware = false;
+            for (size_t i = 0; i < sizeof(s_firmware_languages) / sizeof(s_firmware_languages[0]); i++) {
+                *firmware |= (len - n - 4 == strlen(s_firmware_languages[i]) &&
+                              strncmp(name + n, s_firmware_languages[i], len - n - 4) == 0);
+            }
+            *persona = (p == 2);
+            return true;
+        }
+    }
+    return false;
+}
 
 /*
  * The files of the configuration drive given with the firmware, removed: installed again at start-up; with
@@ -443,13 +474,15 @@ static void remove_firmware_files(bool factory)
     DIR *dir = opendir("/spiffs");
     struct dirent *e;
     while (dir && (e = readdir(dir)) != NULL) {
-        size_t len = strlen(e->d_name);
-        bool phrases = strncmp(e->d_name, "phrases_", 8) == 0 && len > 4 && strcmp(e->d_name + len - 4, ".txt") == 0;
+        // Soft reset: the phrase and text files of the firmware's languages (the persona is the user's); factory
+        // reset: every file of every language
+        bool firmware = false, persona = false;
+        bool language = language_file(e->d_name, &firmware, &persona);
         bool user_file = false;
         for (size_t i = 0; factory && i < sizeof(s_user_files) / sizeof(s_user_files[0]); i++) {
             user_file |= (strcmp(e->d_name, s_user_files[i]) == 0);
         }
-        if (phrases || user_file || strcmp(e->d_name, "agents.ini") == 0) {
+        if ((language && (factory || (firmware && !persona))) || user_file || strcmp(e->d_name, "agents.ini") == 0) {
             char path[300];
             snprintf(path, sizeof(path), "/spiffs/%s", e->d_name);
             ESP_LOGI(TAG, "%s %s", remove(path) == 0 ? "Removed" : "Could not remove", path);
@@ -457,6 +490,15 @@ static void remove_firmware_files(bool factory)
     }
     if (dir) {
         closedir(dir);
+    }
+    // The countries: removed by the factory reset; by the soft reset, kept aside so that the columns of the
+    // languages added are taken back into the firmware's file
+    remove(COUNTRY_OLD_FILE);
+    if (factory) {
+        ESP_LOGI(TAG, "%s %s", remove(COUNTRY_FILE) == 0 ? "Removed" : "Could not remove", COUNTRY_FILE);
+    } else {
+        ESP_LOGI(TAG, "%s %s", rename(COUNTRY_FILE, COUNTRY_OLD_FILE) == 0 ? "Kept aside" : "Could not keep aside",
+                 COUNTRY_FILE);
     }
 }
 
@@ -712,9 +754,25 @@ void app_main()
     ESP_ERROR_CHECK(ret);
     ESP_ERROR_CHECK(settings_read_parameter_from_nvs());
     sys_param = settings_get_parameter();
-    app_lang_set(sys_param->lang);
 
     bsp_spiffs_mount();
+    // The languages offered (Languages of CONFIG.INI), then the texts of the language (LANG_<CODE>.TXT on SPIFFS)
+    app_lang_init(sys_param->languages);
+    app_lang_set(sys_param->lang);
+    // Languages added to Languages of CONFIG.INI: their files, made from the English ones, then the configuration
+    // mode to translate them (once the screen is up)
+    char new_languages[96] = "";
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        bool made = app_lang_create(app_lang_code(i), app_lang_name(i));
+        made |= phrases_create(app_lang_code(i), app_lang_name(i));
+        made |= persona_create(app_lang_code(i), app_lang_name(i));
+        if (made) {
+            snprintf(new_languages + strlen(new_languages), sizeof(new_languages) - strlen(new_languages), "%s%s",
+                     new_languages[0] ? ", " : "", app_lang_name(i));
+        }
+    }
+    // The countries known by voice (COUNTRY.TXT), a column for each language offered
+    country_init();
     // The models offered (AGENTS.INI), then the free OpenRouter ones of the last list read (the live one is read
     // once a day, below): before the Settings screen lists them
     llm_load_models();
@@ -745,6 +803,14 @@ void app_main()
     // Screen off when nobody is there (radar of the BOX-3-SENSOR dock, if present)
     app_presence_init(sys_param->screen_off_s);
     ui_ctrl_init();
+    if (new_languages[0]) {
+        char message[256];
+        snprintf(message, sizeof(message), app_lang_get()->language_added, new_languages);
+        ESP_LOGW(TAG, "%s", message);
+        ui_ctrl_show_message(message);
+        vTaskDelay(pdMS_TO_TICKS(NEW_LANGUAGE_MESSAGE_MS));
+        settings_factory_reset();       // configuration mode: the files show up on the PC
+    }
     app_network_start();
 
     ESP_LOGI(TAG, "speech recognition start");

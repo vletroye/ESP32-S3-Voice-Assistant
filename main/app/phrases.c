@@ -207,7 +207,7 @@ int phrases_expand(const char *pattern, char **out, int max)
 /* ---------- phrase files ---------- */
 
 #define PHRASES_FILE_FORMAT     "/spiffs/phrases_%s.txt"
-#define PHRASES_FILE_MAX        8192    /* as on the configuration drive */
+#define PHRASES_FILE_MAX        16384   /* as on the configuration drive */
 #define PHRASES_FALLBACK_LANG   "en"
 /* Patterns of one list, at most */
 #define PATTERNS_PER_LIST_MAX   64
@@ -248,7 +248,7 @@ static char *read_file(const char *path)
     if (!f) {
         return NULL;
     }
-    char *text = malloc(PHRASES_FILE_MAX);
+    char *text = heap_caps_malloc(PHRASES_FILE_MAX, MALLOC_CAP_SPIRAM);
     size_t n = text ? fread(text, 1, PHRASES_FILE_MAX - 1, f) : 0;
     fclose(f);
     if (text) {
@@ -329,6 +329,32 @@ static void add_missing_sections(const char *code, const char *path, const char 
         }
         return;
     }
+}
+
+bool phrases_create(const char *code, const char *name)
+{
+    char path[48];
+    snprintf(path, sizeof(path), PHRASES_FILE_FORMAT, code);
+    FILE *f = fopen(path, "r");
+    if (f) {
+        fclose(f);
+        return false;
+    }
+    for (size_t i = 0; i < sizeof(s_defaults) / sizeof(s_defaults[0]); i++) {
+        if (strcasecmp(code, s_defaults[i].code) == 0) {
+            return false;   // given with the firmware (installed when missing)
+        }
+    }
+    f = fopen(path, "w");
+    if (!f) {
+        return false;
+    }
+    fprintf(f, "# %s (%s): new language, made from the English phrases. Translate the patterns below (keep the\n"
+            "# [s_...] section names). Until then, they are the English ones.\n\n", name, code);
+    fwrite(s_default_en_start, 1, (size_t)(s_default_en_end - s_default_en_start) - 1, f);
+    fclose(f);
+    ESP_LOGI(TAG, "%s made for %s", path, name);
+    return true;
 }
 
 void phrases_init(void)

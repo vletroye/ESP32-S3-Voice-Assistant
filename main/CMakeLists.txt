@@ -27,6 +27,11 @@ idf_component_register(
         # Who the assistant is, per language (PERSO_FR.TXT...), installed on SPIFFS when missing (main/app/persona.c)
         "persona/persona_fr.txt"
         "persona/persona_en.txt"
+        # Texts of the assistant, per language (LANG_FR.TXT...), installed on SPIFFS when missing (main/app/app_lang.c)
+        "lang/lang_fr.txt"
+        "lang/lang_en.txt"
+        # Countries known by voice, names per language (COUNTRY.TXT), installed on SPIFFS when missing (main/app/country.c)
+        "lang/country.txt"
 )
 
 set(MV_UF2_BIN_EXE ${COMPONENT_PATH}/generateuf2.py)

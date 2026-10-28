@@ -5,7 +5,8 @@ saying "**Bonjour ESP**", ask your question, and **Claude** (or **GPT**, **Gemin
 Everything is streamed (transcription, answer, speech synthesis): the answer starts playing about
 **2.5 s** after the end of the question.
 
-French is the default language; English is available from the Settings screen.
+French is the default language; English is available from the Settings screen, and other languages can be
+added from `CONFIG.INI` (see [Languages](#languages-lang_xxtxt-and-adding-a-language)).
 
 The project started from Espressif's [`chatgpt_demo`](https://github.com/espressif/esp-box) (ESP-IDF),
 which has been largely rewritten.
@@ -29,6 +30,9 @@ which has been largely rewritten.
   the web search favours local results, and Claude uses this place for news, weather and local questions.
 - **Persona, per language**: who the assistant is (identity, personality, instructions) and the style of its
   voice, edited in `PERSO_FR.TXT` / `PERSO_EN.TXT` from the PC.
+- **Languages in files**: every text of the device (screen, spoken messages, model instructions, errors) is in
+  `LANG_FR.TXT` / `LANG_EN.TXT`; adding `DE:Deutsch` to `Languages` in `CONFIG.INI` creates the German files from
+  the English ones, ready to be translated. Country names per language in `COUNTRY.TXT`.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
@@ -307,7 +311,8 @@ Main modules of the assistant (`main/app/`):
 | `llm_sse.c` | Server-sent events parser shared by both clients |
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
 | `tts_stream.c` | Speech synthesis (OpenAI Realtime), voice change at run time, resampling and I2S playback |
-| `app_lang.c` | UI texts, model and voice instructions, error messages (fr / en) |
+| `app_lang.c` | Texts of the device per language (`main/lang/lang_<code>.txt`, installed on SPIFFS as `LANG_<CODE>.TXT`): UI texts, model instructions, error messages; languages offered (`Languages`), files of a language added |
+| `country.c` | Countries known by voice and their names per language (`main/lang/country.txt`, `COUNTRY.TXT`) |
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
@@ -350,7 +355,8 @@ idf.py -p COMx flash monitor
 
 Tap the gear icon on the home screen:
 
-- **Langue / Language**: Français or English (interface, transcription, answers and voice).
+- **Langue / Language**: the languages of `Languages` in `CONFIG.INI`, Français and English by default
+  (interface, transcription, answers and voice).
 - **Modèle / Model**: the model answering the questions (see the table above), numbered as in the voice
   command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra,
   7 Gemini 3.5 Flash-Lite, 8 Gemini 3.8 Flash, 9 Gemini 4 Argon, then the OpenRouter models from 10 (10 DeepSeek
@@ -371,15 +377,16 @@ Tapping one stops the countdown and asks for a confirmation:
 
 - **Soft reset** (circular arrows): the settings of `CONFIG.INI` go back to their defaults (language, model,
   voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`, `Base_url`,
-  `Claude_key`, `Gemini_key`, `OpenRouter_key`) and Homey (`Homey_url`, `Homey_key`); `PERSO_FR.TXT`,
-  `PERSO_EN.TXT`, `MEMORY.TXT`
-  and the comments of `CONFIG.INI` are kept. `VOICE_FR.TXT`, `VOICE_EN.TXT` and `AGENTS.INI` are replaced by the
-  versions of the firmware (your changes to them are lost). Then the device restarts. This is how phrases or
-  models added to the firmware reach a device whose files already exist (only missing sections are added
-  otherwise).
+  `Claude_key`, `Gemini_key`, `OpenRouter_key`) and Homey (`Homey_url`, `Homey_key`); the `PERSO_<XX>.TXT`
+  files, `MEMORY.TXT`
+  and the comments of `CONFIG.INI` are kept. `VOICE_FR.TXT`, `VOICE_EN.TXT`, `LANG_FR.TXT`, `LANG_EN.TXT`,
+  `COUNTRY.TXT` and `AGENTS.INI` are replaced by the versions of the firmware (your changes to them are lost);
+  the files of a language you added (`LANG_DE.TXT`, `VOICE_DE.TXT`…) and its column of `COUNTRY.TXT` are kept.
+  Then the device restarts. This is how phrases, texts or models added to the firmware reach a device whose files
+  already exist (only missing sections and keys are added otherwise).
 - **Factory reset** (bin, red): **everything** goes back to the firmware's state: every setting is erased (Wi-Fi,
-  API keys, Homey, `MEMORY.TXT`, comments of `CONFIG.INI`), as well as the phrase files, `PERSO_FR.TXT`,
-  `PERSO_EN.TXT`,
+  API keys, Homey, `MEMORY.TXT`, comments of `CONFIG.INI`), as well as the files of every language (`VOICE_`,
+  `LANG_`, `PERSO_<XX>.TXT`, those of the languages added too), `COUNTRY.TXT`,
   `AGENTS.INI`, the saved conversation, the places of the weather and the list of free models. Before that,
   `CONFIG.INI` is saved as **`CONFIG.BKP`** (on SPIFFS, shown on the configuration drive), with `MEMORY.TXT`,
   `PERSO_FR.TXT` and `PERSO_EN.TXT` at its end as comments; this backup is only replaced when `CONFIG.INI` differs from the firmware's,
@@ -408,6 +415,7 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 | `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
+| `Languages` | Languages offered (Settings screen, voice): `CODE:name` separated by commas, the code being the 2-letter ISO 639-1 code the transcription expects. A language added here gets its files at the next start (see [Languages](#languages-lang_xxtxt-and-adding-a-language)) | `FR:Français, EN:English` |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
 | `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
@@ -467,6 +475,56 @@ its models go into the `[openrouter]` section of `AGENTS.INI`.
 `VOICE_FR.TXT` and `VOICE_EN.TXT` hold the phrases of the voice commands (see
 [Writing voice phrases](#writing-voice-phrases-patterns)); they are stored on SPIFFS, not in NVS.
 
+### Languages: `LANG_<XX>.TXT` and adding a language
+
+Every text of the device is in one file per language, **`LANG_FR.TXT`** and **`LANG_EN.TXT`** on the drive
+(`main/lang/`, installed on SPIFFS when missing or emptied): the screen texts, the spoken messages, the technical
+part of the model instructions, the error messages, the names of the days and months, and the words of the voice
+commands that are lists (`language_names`: how each language is called; `numbers`: "premier, deux…").
+
+```ini
+listening = J'écoute ...
+sorry = Désolé, je n'ai pas compris.
+country_confirm = Confirmes-tu que tu veux changer ton pays en %s ?
+language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl: néerlandais/hollandais
+```
+
+- One `key = text` per line; `\n` is a line break; a text with spaces at its start or end, or empty, is written
+  between quotes; lists are separated by commas; `#` lines are comments.
+- Keep the `%s`, `%d`, `%02d`… of each text in the same order: a text that differs is ignored (the firmware's
+  English text is used, and the log says so). A missing key also takes the English text; a key added by a newer
+  firmware is appended to the file at start-up, with its comment.
+- Only the language in use is read (another one when the language changes, or when a voice command names it);
+  each one read stays in PSRAM.
+
+**Adding a language**: add it to `Languages` in `CONFIG.INI`, e.g. `Languages = FR:Français, EN:English,
+DE:Deutsch`, then press Restart. At start-up the device creates `LANG_DE.TXT`, `VOICE_DE.TXT` and `PERSO_DE.TXT`
+from the English files (with a header asking to translate them), shows "Nouvelle langue « Deutsch » : ses fichiers
+ont été créés en anglais…" and switches to the configuration mode: translate the three files on the drive, then
+press Restart. Deutsch is then offered in the Settings screen and by voice ("parle allemand", once `de:
+allemand` is in `language_names` of `LANG_FR.TXT`, which it already is for German, Dutch, Spanish, Italian and
+Portuguese). Until translated, the texts and the persona are the English ones (the `[identity]` of the persona
+says in which language the assistant answers); the transcription already uses the new language. Up to 12 languages; the code must have 2 letters (a longer one is left out, with a warning in the log).
+
+**`COUNTRY.TXT`**: the countries known by voice ("change mon pays"), one per line, with their names in the
+languages of the first line:
+
+```ini
+EN, FR, DE, NL, ES, IT
+BE: Belgium, Belgique, Belgien, België, Bélgica, Belgio
+NL: Netherlands/Holland, Pays-Bas/Hollande, Niederlande/Holland, Nederland/Holland, Países Bajos/Holanda, Paesi Bassi/Olanda
+```
+
+- The code is the ISO 3166-1 one (the web search needs it); other names follow the name, separated by `/`; the
+  first one is the name said by the assistant, and the one given to the model ("Lieu de l'utilisateur : Evere,
+  Belgique").
+- A country is recognised by its names in the language in use and in English, or by its code said alone; when
+  several names match, the longest wins. An empty name takes the English one.
+- A language of `Languages` without a column gets an empty one at the end of the file.
+
+The text files of the drive (`VOICE_`, `LANG_`, `PERSO_<XX>.TXT`, `COUNTRY.TXT`…) can hold up to 16,383
+characters each.
+
 `MEMORY.TXT` holds the notes of the long-term memory, one per line (`- note (25/10/26)`): you can correct or
 delete them there.
 
@@ -495,6 +553,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | Option | Default | Role |
 | --- | --- | --- |
 | `CONFIG_ASSISTANT_LANGUAGE` | `fr` | Language when `Language` is not set |
+| `CONFIG_ASSISTANT_LANGUAGES` | `FR:Français, EN:English` | Languages offered when `Languages` is not set |
 | `CONFIG_ASSISTANT_CHAT_MODEL` | `claude-haiku-5-5` | Model when `Chat_model` is not set |
 | `CONFIG_ASSISTANT_STT_MODEL` | `gpt-live-transcribe` | Transcription model |
 | `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
@@ -573,12 +632,12 @@ writes either (`(é|e)diter` works too).
 
 **Which phrases are recognised**
 
-- Only the files of the languages of `app_lang.c` are read, and a list takes the phrases of the **current
+- Only the files of the languages of `Languages` are read, and a list takes the phrases of the **current
   language** only: in French, "change the model" is no longer a command (it goes to the model).
 - Exception: `s_change_lang` takes the phrases of **every** language, so that "change la langue" and "change the
   language" always work.
 - A section missing in the current language's file is taken from the English file (with a warning in the log); an
-  empty section disables the command in that language. A language of `app_lang.c` without a file uses English.
+  empty section disables the command in that language. A language without a file uses English.
 
 **Where the files are**
 
@@ -586,7 +645,7 @@ writes either (`(é|e)diter` works too).
   or emptied is installed as `/spiffs/phrases_<code>.txt`; the files of SPIFFS are then read (a few KB, kept in
   RAM).
 - In configuration mode they appear on the drive as **`VOICE_FR.TXT`** and **`VOICE_EN.TXT`** (one per
-  `phrases_<code>.txt` found on SPIFFS, at most 4; up to 8,191 characters each): edit them, wait a few seconds,
+  `phrases_<code>.txt` found on SPIFFS; up to 16,383 characters each): edit them, wait a few seconds,
   press **Restart**. Comments are kept. To go back to the version of the firmware, empty the file (or use the
   soft reset icon of the Configuration screen, which does it for all of them).
 - On a device already set up, the file on SPIFFS (possibly edited) is kept: a **section added** by a newer
@@ -700,8 +759,9 @@ instructions.
 | Change the town (asks "Quelle est ta ville ?") | change ma ville · changer ma ville · change de ville · changer de ville · change la ville | change my city · change the city · change my town |
 | Answer | the name ("Belgique", "j'habite à Evere"…) | the name ("Belgium", "I live in Evere"…) |
 
-The country must be one of about 40 known countries (Europe, North America, French-speaking Africa…, list in
-`voice_cmd.c`), as the web search needs its 2-letter code; the town is kept as said.
+The country must be one of the countries of `COUNTRY.TXT` (about 40 by default: Europe, North America,
+French-speaking Africa…; see [Languages](#languages-lang_xxtxt-and-adding-a-language)), as the web search needs
+its 2-letter code; the town is kept as said.
 
 ### Long-term memory
 

@@ -14,7 +14,7 @@
 #include "persona.h"
 
 #define PERSONA_FILE_FORMAT     "/spiffs/persona_%s.txt"
-#define PERSONA_FILE_MAX        8192    /* as on the configuration drive */
+#define PERSONA_FILE_MAX        16384   /* as on the configuration drive */
 #define PERSONA_FALLBACK_LANG   "en"
 
 static const char *TAG = "persona";
@@ -174,6 +174,30 @@ static bool install(const char *code, const char *path, const char *old_persona)
     fclose(f);
     ESP_LOGI(TAG, "Installed %s%s", path, moved ? " (with the personality of PERSONA.TXT)" : "");
     return moved;
+}
+
+bool persona_create(const char *code, const char *name)
+{
+    char path[48];
+    snprintf(path, sizeof(path), PERSONA_FILE_FORMAT, code);
+    FILE *f = fopen(path, "r");
+    if (f) {
+        fclose(f);
+        return false;
+    }
+    if (default_text(code)) {
+        return false;   // given with the firmware (installed when missing)
+    }
+    f = fopen(path, "w");
+    if (!f) {
+        return false;
+    }
+    fprintf(f, "# %s (%s): new language, made from the English file. Translate the sections below (an identity\n"
+            "# saying it speaks %s, for instance). Until then, they are the English ones.\n\n", name, code, name);
+    fputs(default_text("en"), f);
+    fclose(f);
+    ESP_LOGI(TAG, "%s made for %s", path, name);
+    return true;
 }
 
 bool persona_init(const char *lang_code, const char *old_persona)

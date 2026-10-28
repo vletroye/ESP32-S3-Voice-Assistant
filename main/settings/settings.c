@@ -267,6 +267,12 @@ esp_err_t settings_read_parameter_from_nvs(void)
     g_sys_param.sleep_after_cmd = strcasecmp(after_cmd, "on") == 0 || strcasecmp(after_cmd, "true") == 0 ||
                                   strcasecmp(after_cmd, "yes") == 0 || strcmp(after_cmd, "1") == 0;
 
+    // Languages offered (Settings screen, "change la langue"): "FR:Français, EN:English"
+    len = sizeof(g_sys_param.languages);
+    if (nvs_get_str(my_handle, "Languages", g_sys_param.languages, &len) != ESP_OK || len <= 1) {
+        strlcpy(g_sys_param.languages, CONFIG_ASSISTANT_LANGUAGES, sizeof(g_sys_param.languages));
+    }
+
     // Currency of the prices of AGENTS.INI and of the costs (no conversion)
     len = sizeof(g_sys_param.currency);
     if (nvs_get_str(my_handle, "Currency", g_sys_param.currency, &len) != ESP_OK || len <= 1) {
@@ -452,6 +458,7 @@ static const struct {
 } s_default_values[] = {
     { "Base_url", CONFIG_ASSISTANT_OPENAI_URL },
     { "Language", CONFIG_ASSISTANT_LANGUAGE },
+    { "Languages", CONFIG_ASSISTANT_LANGUAGES },
     { "Chat_model", CONFIG_ASSISTANT_CHAT_MODEL },
     { "Voice", CONFIG_ASSISTANT_TTS_VOICE },
     { "Scroll_speed", STR(CONFIG_ASSISTANT_REPLY_SCROLL_CPS) },

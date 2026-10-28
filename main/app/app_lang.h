@@ -13,6 +13,9 @@ extern "C" {
 #endif
 
 #define LANG_CODE_SIZE 8
+/* Languages offered, at most (Languages of CONFIG.INI) */
+#define LANG_MAX       12
+#define LANG_NAME_SIZE 24
 
 typedef struct {
     const char *code;            /* ISO-639-1 code passed to the transcription API */
@@ -44,6 +47,11 @@ typedef struct {
     const char *models_next;        /* next providers: %s provider, %s its models */
     const char *models_free;        /* %s: the free OpenRouter models */
     const char *and_word;           /* before the last name of a list: " et " */
+    const char *language_added;     /* %s: a language added to Languages, before the configuration mode */
+    /* How this language calls the languages, said to change ("de: allemand, nl: néerlandais/hollandais") */
+    const char *language_names;
+    /* Numbers 1, 2, 3... as said to choose a model or a voice ("premier/première, deux/deuxième, ...") */
+    const char *numbers;
     const char *test_question;      /* "teste les modèles": the question asked to every model */
     const char *test_start;         /* %d: number of models */
     const char *test_running;
@@ -137,9 +145,23 @@ void app_lang_set(const char *code);
 
 const app_lang_t *app_lang_get(void);
 
-/** Languages with texts (their phrase files are read too): count, and code of each ("fr", "en") */
+/**
+ * @brief The languages offered, from Languages of CONFIG.INI ("FR:Français, EN:English"); before app_lang_set().
+ *        Without a valid one, French and English.
+ */
+void app_lang_init(const char *languages);
+
+/** Languages offered (their files are read too): count, code of each ("fr", "en"), name ("Français") */
 size_t app_lang_count(void);
 const char *app_lang_code(size_t index);
+const char *app_lang_name(size_t index);
+
+/**
+ * @brief The file of a language added to Languages of CONFIG.INI, made from the English one of the firmware (to be
+ *        translated) when it does not exist yet
+ * @return true when it was made
+ */
+bool app_lang_create(const char *code, const char *name);
 
 /** Texts of a supported language (e.g. to confirm a change in the new language), NULL if not supported */
 const app_lang_t *app_lang_find(const char *code);

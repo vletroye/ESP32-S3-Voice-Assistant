@@ -31,6 +31,13 @@ typedef enum {
  */
 bool persona_init(const char *lang_code, const char *old_persona);
 
+/**
+ * @brief The file of a language added to Languages of CONFIG.INI, made from the English one of the firmware (to be
+ *        translated) when it does not exist yet
+ * @return true when it was made
+ */
+bool persona_create(const char *code, const char *name);
+
 /** Read the file of a language (the English one for a language without its own file) */
 void persona_load(const char *lang_code);
 

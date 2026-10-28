@@ -593,6 +593,8 @@ static void ui_ctrl_localize(void)
     lv_obj_set_scrollbar_mode(ui_LabelListenSpeak, LV_SCROLLBAR_MODE_OFF);
     lv_obj_clear_flag(ui_LabelListenSpeak, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_text_font(ui_LabelReplyQuestion, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    // One line exactly: a label lower than the font's line scrolls a short question vertically
+    lv_obj_set_height(ui_LabelReplyQuestion, lv_font_get_line_height(&ui_font_Latin20));
     lv_obj_set_style_text_font(ui_LabelReplyContent, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
     settings_screen_setup();
     ui_ctrl_apply_texts();
@@ -1208,6 +1210,30 @@ void ui_ctrl_reply_show_end(const char *text)
     bsp_display_unlock();
 }
 
+/*
+ * The question above the answer always scrolls horizontally: a short one gets spaces after it until it is wider
+ * than the label (the circular scroll only runs for a text wider than its label)
+ */
+static void question_set_text(const char *text)
+{
+    const lv_font_t *font = lv_obj_get_style_text_font(ui_LabelReplyQuestion, LV_PART_MAIN);
+    lv_point_t size;
+    lv_txt_get_size(&size, text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    lv_coord_t width = lv_obj_get_style_width(ui_LabelReplyQuestion, LV_PART_MAIN);   // set (205), even before a layout
+    lv_coord_t space = lv_font_get_glyph_width(font, ' ', ' ');
+    size_t spaces = (size.x > width || space <= 0) ? 0 : (size_t)((width - size.x) / space + 2);
+    char *padded = malloc(strlen(text) + spaces + 1);
+    if (!padded) {
+        lv_label_set_text(ui_LabelReplyQuestion, text);
+        return;
+    }
+    strcpy(padded, text);
+    memset(padded + strlen(text), ' ', spaces);
+    padded[strlen(text) + spaces] = '\0';
+    lv_label_set_text(ui_LabelReplyQuestion, padded);
+    free(padded);
+}
+
 void ui_ctrl_label_show_text(ui_ctrl_label_t label, const char *text)
 {
     bsp_display_lock(0);
@@ -1220,7 +1246,7 @@ void ui_ctrl_label_show_text(ui_ctrl_label_t label, const char *text)
             break;
         case UI_CTRL_LABEL_REPLY_QUESTION:
             ESP_LOGD(TAG, "update reply question");
-            lv_label_set_text(ui_LabelReplyQuestion, text);
+            question_set_text(text);
             break;
         case UI_CTRL_LABEL_REPLY_CONTENT:
             ESP_LOGD(TAG, "update reply content");

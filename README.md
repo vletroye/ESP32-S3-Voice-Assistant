@@ -83,14 +83,14 @@ which has been largely rewritten.
 
 ```mermaid
 flowchart LR
-    MIC[ES7210 mics<br/>16 kHz] --> AFE[ESP-SR AFE<br/>source separation, VAD]
-    AFE --> WN[WakeNet<br/>Bonjour ESP]
-    AFE -->|audio 16→24 kHz| STT[OpenAI Realtime<br/>gpt-live-transcribe<br/>permanent WebSocket]
-    STT -->|transcript| LLM[Anthropic, OpenAI, OpenRouter, Google or xAI Messages API<br/>SSE streaming]
-    LLM -->|text| SPL[Sentence<br/>splitter]
-    SPL --> TTS[OpenAI Realtime<br/>gpt-realtime-2.1-mini<br/>permanent WebSocket]
-    TTS -->|PCM 24→16 kHz| BUF[Audio buffer<br/>PSRAM]
-    BUF --> SPK[I2S / ES8311<br/>speaker]
+    MIC["<b>Mics</b><br/>ES7210<br/>16 kHz"] --> AFE["<b>AFE</b><br/>ESP-SR<br/>source separation, VAD"]
+    AFE --> WN["<b>Wake word</b><br/>WakeNet<br/>Bonjour ESP"]
+    AFE -->|audio 16→24 kHz| STT["<b>STT</b><br/>OpenAI Realtime<br/>gpt-live-transcribe<br/>permanent WebSocket"]
+    STT -->|transcript| LLM["<b>LLM</b><br/>Anthropic, OpenAI, Google,<br/>OpenRouter or xAI<br/>SSE streaming"]
+    LLM -->|text| SPL["<b>Splitter</b><br/>sentence by sentence"]
+    SPL --> TTS["<b>TTS</b><br/>OpenAI Realtime<br/>gpt-realtime-2.1-mini<br/>permanent WebSocket"]
+    TTS -->|PCM 24→16 kHz| BUF["<b>Buffer</b><br/>audio in PSRAM"]
+    BUF --> SPK["<b>Speaker</b><br/>I2S / ES8311"]
 ```
 
 | Stage | Service | Details |

@@ -90,6 +90,8 @@ static volatile int s_pending_index = -1;
 /* The assistant listens or speaks (from radio_suspend() to radio_on_sleep()): a station asked meanwhile ("joue du
  * jazz", "suivante") plays once it sleeps again, after its spoken reply */
 static volatile bool s_awake = false;
+/* A station asked during the conversation: played once the assistant sleeps, even with Radio_resume = off */
+static volatile bool s_start_on_sleep = false;
 
 /* ---------- network ---------- */
 
@@ -425,14 +427,13 @@ static inline int32_t treble_apply(int32_t sample)
  * - a fade-in at each start (a station, a resumption): from silence to the full level in RADIO_FADE_MS, along a
  *   square curve (soft at first, then faster), which sounds natural;
  * - the stations brought to a common level: the mean square of the sound (blocks of 50 ms, silences left out) is
- *   smoothed over ~3 s and a gain aims at RADIO_LEVEL_DBFS, between RADIO_GAIN_MIN_DB and RADIO_GAIN_MAX_DB,
+ *   smoothed over ~3 s and a gain aims at Radio_level (CONFIG.INI), between RADIO_GAIN_MIN_DB and RADIO_GAIN_MAX_DB,
  *   moving slowly (no pumping on the music); fast during the fade-in, which hides it. Peaks pushed over the top
  *   by a gain are softened before the hard clip.
  * The volume of the codec (Volume, "parle plus fort") still applies on top.
  */
 #define RADIO_FADE_MS           2000
 #define RADIO_FADE_SAMPLES      (RADIO_OUT_RATE * RADIO_FADE_MS / 1000)
-#define RADIO_LEVEL_DBFS        (-16.0f)
 #define RADIO_GAIN_MIN_DB       (-12.0f)
 #define RADIO_GAIN_MAX_DB       6.0f
 #define RADIO_SILENCE_DBFS      (-45.0f)        /* quieter blocks are not measured */
@@ -468,7 +469,7 @@ static void level_reset(void)
     memset(&s_level, 0, sizeof(s_level));
     s_level.gain = 1.0f;
     s_level.gain_target = 1.0f;
-    s_level.target_ms = dbfs_to_ms(RADIO_LEVEL_DBFS);
+    s_level.target_ms = dbfs_to_ms((float)settings_get_parameter()->radio_level);     // Radio_level
     s_level.silence_ms = dbfs_to_ms(RADIO_SILENCE_DBFS);
     s_level.gain_min = powf(10.0f, RADIO_GAIN_MIN_DB / 20.0f);
     s_level.gain_max = powf(10.0f, RADIO_GAIN_MAX_DB / 20.0f);
@@ -807,6 +808,7 @@ static void session_start(void)
 {
     if (s_awake) {
         s_state = RADIO_SUSPENDED;  // played by radio_on_sleep()
+        s_start_on_sleep = true;
         return;
     }
     s_state = RADIO_PLAYING;
@@ -905,6 +907,7 @@ void radio_suspend(void)
 {
     s_awake = true;
     if (s_state == RADIO_PLAYING) {
+        s_start_on_sleep = false;   // interrupted: played again afterwards only with Radio_resume = on
         s_state = RADIO_SUSPENDED;
         ESP_LOGI(TAG, "Suspended");
     }
@@ -916,6 +919,13 @@ void radio_suspend(void)
 void radio_on_sleep(void)
 {
     s_awake = false;
+    bool asked = s_start_on_sleep;
+    s_start_on_sleep = false;
+    if (s_state == RADIO_SUSPENDED && !asked && !settings_get_parameter()->radio_resume) {
+        s_state = RADIO_PAUSED;     // Radio_resume = off: "remets la radio" plays it again
+        ESP_LOGI(TAG, "Not resumed (Radio_resume = off)");
+        return;
+    }
     if (s_state == RADIO_SUSPENDED) {
         ESP_LOGI(TAG, "Resumed (the assistant sleeps)");
         session_start();

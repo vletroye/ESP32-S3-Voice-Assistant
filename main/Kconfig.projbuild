@@ -79,6 +79,22 @@ menu "Example Configuration"
             The prices of AGENTS.INI are given in this currency (no conversion); the costs (COSTS.TXT, screen)
             are shown in it. Default of Currency in CONFIG.INI, which takes precedence.
 
+    config ASSISTANT_RADIO_RESUME
+        string "Radio: resumed after a conversation (on or off)"
+        default "on"
+        help
+            on: a radio interrupted by the wake word plays again when the assistant goes back to sleep; off: it
+            stays stopped ("remets la radio" plays it again). A station asked during the conversation plays
+            anyway. Default of Radio_resume in CONFIG.INI, which takes precedence.
+
+    config ASSISTANT_RADIO_LEVEL
+        int "Radio: level the stations are brought to (dBFS)"
+        default -16
+        range -30 -6
+        help
+            Mean level every station is brought to (the gain goes from -12 to +6 dB), in dBFS: higher is louder.
+            Default of Radio_level in CONFIG.INI, which takes precedence.
+
     config ASSISTANT_RADIO_TREBLE
         int "Radio: treble, in dB (negative: softer)"
         default -6

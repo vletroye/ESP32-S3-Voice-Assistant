@@ -40,6 +40,8 @@ typedef struct {
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     int screen_off_s;                 /* Screen off after this long without presence (radar dock), 0: never. */
     int radio_treble;                 /* Treble of the radio, in dB (-12..6; negative: softer, 0: unchanged). */
+    bool radio_resume;                /* A radio interrupted by a conversation plays again afterwards. */
+    int radio_level;                  /* Level the radio stations are brought to, in dBFS (-30..-6). */
     bool show_clock;                  /* Time and date shown while the assistant sleeps. */
     bool sleep_after_cmd;             /* Back to sleep after a voice command handled locally (no follow-up). */
     char languages[160];              /* Languages offered: "FR:Français, EN:English" */

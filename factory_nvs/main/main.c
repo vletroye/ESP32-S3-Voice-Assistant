@@ -216,6 +216,10 @@ void app_main(void)
         // Treble of the radio, in dB (negative: softer)
         snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_RADIO_TREBLE);
         nvs_init_str_if_missing("Radio_treble", number);
+        // Radio resumed after a conversation (on / off), and the level its stations are brought to (dBFS)
+        nvs_init_str_if_missing("Radio_resume", CONFIG_ASSISTANT_RADIO_RESUME);
+        snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_RADIO_LEVEL);
+        nvs_init_str_if_missing("Radio_level", number);
         // Time and date on the sleep screen (on / off)
         nvs_init_str_if_missing("Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK);
         // After a voice command handled locally: back to sleep (on) or listening again (off)

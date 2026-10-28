@@ -524,7 +524,8 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
   seconds). Be patient: wait until the copy is really finished (Windows' progress window closed, or the drive
   ejected) before pressing **Restart**, or the file may be cut, and its texts lost.
 
-**Adding a language**: add it to `Languages` in `CONFIG.INI`, e.g. `Languages = FR:Français, EN:English,
+**Adding a language** (step by step: [Adding a new language](#adding-a-new-language-step-by-step)): add it to
+`Languages` in `CONFIG.INI`, e.g. `Languages = FR:Français, EN:English,
 DE:Deutsch`, then press Restart. At start-up the device creates `LANG_DE.TXT`, `VOICE_DE.TXT` and `PERSO_DE.TXT`
 from the English files (with a header asking to translate them), shows "Nouvelle langue « Deutsch » : ses fichiers
 ont été créés en anglais…" and switches to the configuration mode: translate the three files on the drive, then
@@ -581,6 +582,112 @@ delay the write.
 `Chat_model` replaces the former `Claude_model` key: its value is kept when the configuration mode first
 starts with this version. Spaces and line breaks pasted by mistake around the values are ignored. Keys are
 stored in plain text in the device's NVS and never appear in the logs (only their length is shown).
+
+### Adding a new language, step by step
+
+The example adds German (`DE`); the same steps work for any language whose letters the screen can show (see
+[Languages supported on screen](#languages-lang_xxtxt-and-adding-a-language): Latin-1, Latin Extended-A, Greek).
+Nothing has to be built or flashed: everything is done in the files of the configuration drive.
+
+**1. Declare the language in `CONFIG.INI`**
+
+- Enter the configuration mode (Settings → folder-and-gear icon → OK, or say "édite la config"), open `CONFIG.INI`
+  on the drive and add the language to `Languages`:
+
+  ```ini
+  Languages = FR:Français, EN:English, DE:Deutsch
+  ```
+
+- The code is the **2-letter ISO 639-1** code (`de`, `nl`, `pl`, `el`…): the transcription is told this code, so
+  it must be a real one. A longer code is left out (warning in the log). The name after `:` is the one shown in the
+  Settings screen: write it in its own language ("Deutsch", "Polski", "Ελληνικά").
+- Up to 12 languages. Their order is the order of the Settings screen and of the numbered list read by "change la
+  langue".
+- Save, **wait until the copy is finished**, then press **Restart**.
+
+**2. The device makes the files of the language**
+
+At start-up, for a language of `Languages` that has no files yet, the device:
+
+- creates **`LANG_DE.TXT`**, **`VOICE_DE.TXT`** and **`PERSO_DE.TXT`**, copies of the English files, with a header
+  asking to translate them;
+- adds an empty `DE` column at the end of **`COUNTRY.TXT`** (if the file has none: German already has one);
+- shows "Nouvelle langue « Deutsch » : ses fichiers ont été créés en anglais…", then restarts in configuration
+  mode: the new files show up on the drive.
+
+Until they are translated, the language works with English texts: the transcription is already German, but the
+persona (and so the answers) and the spoken messages are English.
+
+**3. Translate `LANG_DE.TXT`** (texts of the device: screen, spoken messages, model instructions, errors)
+
+- Translate the text after `=` on each line; **never change the keys** (left of `=`).
+- Keep the **`%s`, `%d`, `%02d`… in the same number and order** as in English. A text lacking its last ones gets
+  them added at its end in `[TO DO: %s]` at the next start; a text with other conversions is replaced by the
+  English one. In both cases a screen lists the keys to correct.
+- `\n` is a line break. A text starting or ending with spaces, or empty, is written between quotes
+  (`and_word = " und "`).
+- Lists are separated by commas and must keep their number of items: `weekdays` (7, Sunday first, short, shown
+  under the clock: `SO, MO, DI, MI, DO, FR, SA`), `weekdays_long` (7, Sunday first), `months` (12).
+- Lines needing care:
+  - `language_names`: how German names the languages, said to change language: `code: name/other name, …` in
+    lower case, e.g. `de: deutsch, fr: französisch/franzoesisch, en: englisch, nl: niederländisch/holländisch`.
+    Write every language of `Languages`: its first name is the one read in the numbered list ("1, französisch").
+  - `numbers`: the numbers 1 to 13 as said to choose a model, a voice or a language, alternatives separated by
+    `/`: `eins/erste/ersten, zwei/zweite/zweiten, drei/dritte/dritten, …`.
+  - `decimal_mark` (`,` or `.`), `second_one` / `seconds`, and `second_one_below_ms` (below this time, "1,2
+    seconds" takes the singular; `0` if the language always uses the plural).
+  - `lang_already`, `lang_switched`: they name **this** language ("Ich spreche schon Deutsch.").
+  - `system_prompt`, `tts_instructions`, `location_line`, `home_line`, `memory_header`, `now_format`: given to the
+    models; translate them faithfully, they rule how the device works (no Markdown, date in brackets…).
+- Lines that start with `[TODO: ` are texts added in English after a firmware update: translate them and remove
+  the `[TODO: ` and `]`.
+
+**4. Translate `VOICE_DE.TXT`** (phrases of the voice commands)
+
+- One section per command (`[s_change_lang]`, `[s_goodbyes]`, `[s_yes]`…), one pattern per line; keep the section
+  names. Patterns: `[optional part]`, `(choice|choice)`, e.g. `wechsle (die|deine) sprache` (see
+  [Writing voice phrases](#writing-voice-phrases-patterns)).
+- Write the phrases as the transcription writes them: in lower case is enough (the case is ignored), with the
+  accents of the language.
+- A section left out takes the English phrases; an **empty** section disables the command in German.
+- Sections needing care: `[s_lang_shortcut]` (the start of "sprich Deutsch", followed by a language name),
+  `[s_answer_prefix]` (words before an answer: "ich wohne in"), `[s_yes]` / `[s_no]`, `[s_courtesy]` (words allowed
+  after a short answer: "bitte"), `[s_one_alone]` ("eins" said alone means 1), `[s_goodbyes]` (back to sleep).
+
+**5. Translate `PERSO_DE.TXT`** (who the assistant is)
+
+- Keep the section names **in English or French**: `[identity]`, `[personality]`, `[instructions]`, `[voice]`
+  (a German `[Identität]` would be ignored).
+- `[identity]` must say that the assistant **speaks German** ("Du bist ein Sprachassistent namens ESP, der Deutsch
+  spricht."): it decides the language of the answers.
+- `[voice]`: accent, tone and pace of the speech synthesis ("Sprich Deutsch mit hochdeutscher Aussprache…").
+
+**6. Complete the other files**
+
+- **`COUNTRY.TXT`**: fill the `DE` column (country names in German, other names after `/`). An empty name takes
+  the English one.
+- **`LANG_FR.TXT`, `LANG_EN.TXT`** (and the other languages): add the new language to their `language_names`, so
+  that it can be named from them ("parle allemand", "speak German"). French and English already know `de`, `es`,
+  `it`, `nl` and `pt`; for another language add e.g. `pl: polonais` / `pl: polish`. Without it, the language can
+  still be named by its name in `Languages` ("Polski").
+
+**7. Restart and check**
+
+- Save each file and **wait until the copy is finished** (a `LANG_` file is large: tens of seconds), then press
+  **Restart**.
+- Choose the language in the Settings screen, or say "parle allemand" / "speak German" / "change la langue" then
+  its number.
+- At start-up and at each change of language, the files are checked: a screen names the texts added in English or
+  whose `%s` differ (**Skip** to go on, **Config** to correct them).
+- The logs (`app_lang`, `phrases`, `persona`) list what was read, added or left out.
+
+**What stays the same in every language** (not yet in the language files): the wake word ("Hi ESP" / "Bonjour
+ESP", fixed by the ESP-SR model), the pronunciations of the providers, models and voices recognised by voice, the
+texts of `COSTS.TXT` (French or English), the subtitle credits filtered from the transcription (French and
+English), and the abbreviations that do not end a sentence (French).
+
+**Removing a language**: remove it from `Languages`. Its files stay on the drive (and are kept by the soft reset);
+the factory reset erases them.
 
 ### At build time: `sdkconfig.defaults` / `idf.py menuconfig`
 

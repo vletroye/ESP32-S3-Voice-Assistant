@@ -102,9 +102,9 @@ second_one = second
 seconds = seconds
 second_one_below_ms = 0
 
-# "change de modèle": which provider first; the providers offered follow, numbered (" 1, Anthropic. 2, OpenAI. ...")
-provider_ask = Which provider do you want:
-provider_unknown = I didn't understand. Say the number or the name of the provider:
+# "change de modèle": which provider first; %s: the providers that have models, numbered ("1, Anthropic. 2, OpenAI. ...")
+provider_ask = Which provider do you want: %s
+provider_unknown = I didn't understand. Say the number or the name of the provider: %s
 
 # %s: provider ("Anthropic"), its numbered models follow
 model_ask_intro = Here are the models from %s.

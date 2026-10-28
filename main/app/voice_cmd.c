@@ -530,9 +530,42 @@ static char *models_by_provider(void)
     return out;
 }
 
-/* The models of the provider, numbered, then "which one?" (answered within CMD_ANSWER_TIMEOUT_US) */
+/* Model `number` (1-based, in llm_models) saved and used at once: "Très bien, j'utilise maintenant ..." */
+static voice_cmd_t use_model(int number, llm_provider_t provider, char **reply)
+{
+    const app_lang_t *lang = app_lang_get();
+    const llm_model_t *model = &llm_models[number - 1];
+    char *text = NULL;
+    if (strcmp(model->id, settings_get_parameter()->chat_model) == 0) {
+        asprintf(&text, lang->model_already, model->label);
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_ANSWERED;
+    }
+    if (settings_save_str("Chat_model", model->id) != ESP_OK) {
+        asprintf(&text, lang->model_unknown, model_count(provider));
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_ANSWERED;
+    }
+    ESP_LOGI(TAG, "model %s saved", model->id);
+    assistant_set_model(model->id);
+    asprintf(&text, lang->model_switched, model->label);
+    *reply = text ? text : reply_dup("");
+    return VOICE_CMD_ANSWERED;
+}
+
+/*
+ * The models of the provider, numbered, then "which one?" (answered within CMD_ANSWER_TIMEOUT_US); a provider
+ * with a single model: that one, without asking
+ */
 static voice_cmd_t ask_model(llm_provider_t provider, char **reply)
 {
+    if (model_count(provider) == 1) {
+        for (size_t i = 0; i < llm_model_count; i++) {
+            if (model_listed(i, provider)) {
+                return use_model((int)i + 1, provider, reply);
+            }
+        }
+    }
     s_listed_provider = provider;
     s_asked = ASKED_MODEL;
     s_asked_us = esp_timer_get_time();
@@ -552,21 +585,21 @@ static size_t providers_offered(llm_provider_t offered[LLM_PROVIDER_COUNT])
     return count;
 }
 
-/* "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI. ...": the text of LANG_<CODE>.TXT, then the providers */
-static char *provider_list(const char *text)
+/* "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI. ...": the %s of the text of LANG_<CODE>.TXT is the
+ * numbered list of the providers offered */
+static char *provider_list(const char *format)
 {
     llm_provider_t offered[LLM_PROVIDER_COUNT];
     size_t count = providers_offered(offered);
-    char *out = malloc(CMD_REPLY_SIZE);
-    if (!out) {
-        return reply_dup(text);
-    }
-    strlcpy(out, text, CMD_REPLY_SIZE);
+    char list[160] = "";
     for (size_t i = 0; i < count; i++) {
-        size_t n = strlen(out);
-        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s.", (unsigned)(i + 1), s_providers[offered[i]].name);
+        size_t n = strlen(list);
+        snprintf(list + n, sizeof(list) - n, "%s%u, %s.", i ? " " : "", (unsigned)(i + 1),
+                 s_providers[offered[i]].name);
     }
-    return out;
+    char *text = NULL;
+    asprintf(&text, format, list);
+    return text ? text : reply_dup("");
 }
 
 /* Provider said in the answer: its name ("Google", "Gemini"), else its number in the list; LLM_PROVIDER_COUNT if none */
@@ -594,30 +627,14 @@ static voice_cmd_t ask_provider(char **reply)
 /* Numbers count within the models of the provider (all models for LLM_PROVIDER_COUNT) */
 static voice_cmd_t choose_model(const char *norm, llm_provider_t provider, char **reply)
 {
-    const app_lang_t *lang = app_lang_get();
     int number = find_model(norm, provider);
-    char *text = NULL;
     if (number == 0) {
-        asprintf(&text, lang->model_unknown, model_count(provider));
+        char *text = NULL;
+        asprintf(&text, app_lang_get()->model_unknown, model_count(provider));
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
-    const llm_model_t *model = &llm_models[number - 1];
-    if (strcmp(model->id, settings_get_parameter()->chat_model) == 0) {
-        asprintf(&text, lang->model_already, model->label);
-        *reply = text ? text : reply_dup("");
-        return VOICE_CMD_ANSWERED;
-    }
-    if (settings_save_str("Chat_model", model->id) != ESP_OK) {
-        asprintf(&text, lang->model_unknown, model_count(provider));
-        *reply = text ? text : reply_dup("");
-        return VOICE_CMD_ANSWERED;
-    }
-    ESP_LOGI(TAG, "model %s saved", model->id);
-    assistant_set_model(model->id);
-    asprintf(&text, lang->model_switched, model->label);
-    *reply = text ? text : reply_dup("");
-    return VOICE_CMD_ANSWERED;
+    return use_model(number, provider, reply);
 }
 
 /* ---------- voice ---------- */

@@ -49,6 +49,9 @@ bool ui_ctrl_screen_can_sleep(void);
 /** Leave the listening / answer panels (sleep) and show the Settings screen */
 void ui_ctrl_open_settings(void);
 
+/** A message over every screen (no button): before a restart */
+void ui_ctrl_show_message(const char *text);
+
 /** Show or hide the time and the date of the sleep screen */
 void ui_ctrl_show_clock(bool shown);
 

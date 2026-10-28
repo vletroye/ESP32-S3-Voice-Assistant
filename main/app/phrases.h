@@ -28,7 +28,7 @@ extern "C" {
 #endif
 
 /* Languages read from app_lang.c, at most */
-#define PHRASES_LANG_MAX    4
+#define PHRASES_LANG_MAX    12      /* LANG_MAX of app_lang.h */
 
 typedef struct {
     const char *name;           /* its section in the phrase files: the name of the variable */
@@ -47,6 +47,13 @@ typedef struct {
  *        in internal RAM (flash access).
  */
 void phrases_init(void);
+
+/**
+ * @brief The file of a language added to Languages of CONFIG.INI, made from the English one of the firmware (to be
+ *        translated) when it does not exist yet
+ * @return true when it was made
+ */
+bool phrases_create(const char *code, const char *name);
 
 /**
  * @brief The phrases of a list in the current language (or in all of them), made at the first call.

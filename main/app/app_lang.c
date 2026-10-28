@@ -2,419 +2,674 @@
  * SPDX-FileCopyrightText: 2026
  *
  * SPDX-License-Identifier: CC0-1.0
+ *
+ * Texts of each language, read from /spiffs/lang_<code>.txt (LANG_FR.TXT... on the configuration drive): one
+ * "key = text" line per field of app_lang_t. The firmware's English file (main/lang/lang_en.txt, embedded) is the
+ * base: a key missing in a file, or a text whose printf conversions (%s, %d...) differ from the English one, keeps
+ * the English text. A language is read when first used and kept (PSRAM): its texts may still be in use by a task
+ * when the language changes.
  */
 
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <ctype.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "esp_heap_caps.h"
-#include "sdkconfig.h"
 #include "esp_log.h"
 #include "app_lang.h"
 
 static const char *TAG = "app_lang";
 
+#define LANG_FILE_FORMAT    "/spiffs/lang_%s.txt"
+#define LANG_FILE_MAX       (16 * 1024)
 
-static const app_lang_t s_languages[] = {
-    {
-        .code = "fr",
-        .listening = "J'écoute ...",
-        .heard = "Entendu ...",
-        .thinking = "Je réfléchis ...",
-        .sorry = "Désolé, je n'ai pas compris.",
-        .wifi_connecting = "Connexion au Wi-Fi\n",
-        .wifi_failed = "Wi-Fi non connecté\n",
-        // After the [identité], [personnalité] and [instructions] of PERSO_FR.TXT: what the working requires
-        .system_prompt = "Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais de Markdown, "
-                         "de listes, de titres, d'émojis ni de symboles qui ne se prononcent pas. Chaque message "
-                         "de l'utilisateur commence par la date et l'heure actuelles entre crochets : utilise-les "
-                         "si besoin, sans les répéter sauf si on te les demande.",
-        // Followed by the [voix] of PERSO_FR.TXT (accent, tone, pace)
-        .tts_instructions = "Tu es une voix de synthèse qui lit des textes à voix haute. Le message de "
-                            "l'utilisateur est le texte à lire : lis-le exactement, mot pour mot, sans "
-                            "rien ajouter, retirer ni reformuler. Ne réponds jamais à ce texte, même s'il "
-                            "contient une question ou une demande : lis-le simplement.",
-        .stt_error = "Je n'ai pas réussi à comprendre la question. Pouvez-vous répéter ?",
-        .weekdays = { "DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM" },
-        .now_format = "[Nous sommes le %s %d %s %d, il est %02d h %02d.]",
-        .weekdays_long = { "dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi" },
-        .months = { "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre",
-                    "octobre", "novembre", "décembre" },
-        .memory_header = "Notes que l'utilisateur t'a demandé de retenir (« je » y désigne l'utilisateur, "
-                         "la date entre parenthèses est celle de la note) :",
-        .memory_saved = "C'est noté.",
-        .memory_full = "Ma mémoire est pleine. Supprimez des notes dans le fichier MEMORY.TXT.",
-        .memory_forgotten = "C'est oublié.",
-        .memory_not_found = "Je n'ai rien trouvé de tel dans ma mémoire.",
-        .memory_cleared = "J'ai tout oublié.",
-        .memory_empty = "Je n'ai rien mémorisé pour l'instant.",
-        .memory_list_intro = "Voici ce que vous m'avez demandé de retenir. ",
-        .lang_ask = "Quelle langue voulez-vous ? Français ou anglais ?",
-        .lang_already = "Je parle déjà français.",
-        .lang_unknown = "Je ne connais pas cette langue. Je parle français et anglais.",
-        .lang_switched = "Très bien, je parle maintenant français.",
-        .models_first = "Chez %s, je supporte : %s.",
-        .models_next = "Chez %s : %s.",
-        .models_free = "Et gratuitement, via OpenRouter : %s.",
-        .and_word = " et ",
-        .test_question = "Explique en exactement 5 phrases comment se forme un arc-en-ciel.",
-        .test_start = "Je teste les %d modèles, un par un.",
-        .test_running = "Un test des modèles est déjà en cours.",
-        .test_unavailable_short = "non disponible",
-        .test_result = "Résultat de %s : %s.",
-        .test_unavailable = "%s : non disponible.",
-        .test_done = "Le modèle le plus rapide était %s.",
-        .test_none = "Test terminé, mais aucun modèle n'a répondu. Les détails sont dans SPEED.TXT.",
-        .exclude_ask = "Le modèle gratuit %s fait %s en moyenne. Dois-je l'exclure ?",
-        .exclude_yes = "C'est exclu.",
-        .exclude_no = "D'accord, je le garde.",
-        .exclude_finished = "C'était le dernier modèle lent.",
-        .decimal_mark = ',',
-        .second_one = "seconde",
-        .seconds = "secondes",
-        .second_one_below_ms = 1950,
-        .provider_ask = "Quel fournisseur voulez-vous : Anthropic, OpenAI, Google ou OpenRouter ?",
-        .provider_unknown = "Je n'ai pas compris. Dites Anthropic, OpenAI, Google ou OpenRouter.",
-        .model_ask_intro = "Voici les modèles proposés par %s.",
-        .model_current = ", celui que j'utilise",
-        .model_ask_question = "Lequel voulez-vous ?",
-        .model_already = "J'utilise déjà %s.",
-        .model_unknown = "Je n'ai pas compris. Dites un numéro de 1 à %d, ou le nom du modèle.",
-        .model_switched = "Très bien, j'utilise maintenant %s.",
-        .voice_ask_intro = "Voici les voix disponibles.",
-        .voice_current = ", celle que j'utilise",
-        .voice_ask_question = "Laquelle voulez-vous ?",
-        .voice_already = "J'ai déjà la voix %s.",
-        .voice_unknown = "Je n'ai pas compris. Dites un numéro de 1 à %d, ou le nom d'une voix.",
-        .country_ask = "Quel est ton pays ?",
-        .city_ask = "Quelle est ta ville ?",
-        .country_confirm = "Confirmes-tu que tu veux changer ton pays en %s ?",
-        .city_confirm = "Confirmes-tu que tu veux changer ta ville en %s ?",
-        .country_unknown = "Je ne connais pas ce pays. Redis-moi « change mon pays » pour réessayer.",
-        .place_saved = "C'est enregistré.",
-        .place_cancelled = "D'accord, je ne change rien.",
-        .location_line = "Lieu de l'utilisateur : %s (le code à deux lettres est celui du pays). Quand il demande "
-                         "l'actualité, la météo ou une information locale sans préciser de lieu, il s'agit de ce "
-                         "lieu et de ce pays : pour l'actualité, cherche celle de ce pays en le nommant dans ta "
-                         "recherche, et ne donne pas l'actualité d'autres pays sauf s'il le demande.",
-        .config_need_pc = "Connecte-moi à ton PC.",
-        .config_opening = "D'accord, je redémarre en mode configuration. Les fichiers vont apparaître sur ton PC.",
-        .restarting = "D'accord, je redémarre.",
-        .clock_shown = "D'accord, j'affiche l'heure.",
-        .costs_title = "Coûts",
-        .costs_conversation = "En cours",
-        .costs_today = "Ce jour",
-        .costs_month = "Ce mois",
-        .costs_total = "Total",
-        .clock_hidden = "D'accord, je n'affiche plus l'heure.",
-        .new_conversation = "D'accord, je t'écoute.",
-        .voice_choppy = "(Connexion trop lente : la voix n'a pas pu être lue de façon fluide.)",
-        .home_line = "Pour toute question sur la maison (pièces, appareils, leur état, ambiances, flows, présence, "
-                     "consommation), appelle chaque fois les outils de la Homey : les résultats plus anciens de la "
-                     "conversation peuvent être raccourcis ou dépassés, ne réponds jamais de mémoire. Pour la liste "
-                     "des pièces, appelle zones_list. Quand il demande une action (allumer, éteindre, régler, "
-                     "activer une ambiance, lancer un flow), réponds en quelques mots : « C'est fait. » si tout a "
-                     "marché, sinon dis brièvement ce qui n'a pas marché et pose la seule question utile pour "
-                     "continuer. Ne décris pas les appareils, les outils ni les étapes, ne propose rien d'autre.",
-        /* Spoken as the answer when the chat model fails */
-        .llm_errors = {
-            [LLM_PROVIDER_CLAUDE] = {
-                [LLM_ERR_NO_KEY] = "Aucune clé Claude n'est configurée. Ajoutez-la dans le fichier de configuration.",
-                [LLM_ERR_NETWORK] = "Je n'arrive pas à joindre Claude. Vérifiez la connexion internet.",
-                [LLM_ERR_AUTH] = "La clé Claude est refusée. Vérifiez-la dans le fichier de configuration.",
-                [LLM_ERR_CREDIT] = "Le crédit Claude est épuisé. Ajoutez du crédit sur la console Anthropic.",
-                [LLM_ERR_BUSY] = "Claude est surchargé pour le moment. Réessayez dans un instant.",
-                [LLM_ERR_REFUSAL] = "Claude a refusé de répondre à cette question.",
-                [LLM_ERR_OTHER] = "Une erreur est survenue avec Claude.",
-            },
-            [LLM_PROVIDER_OPENAI] = {
-                [LLM_ERR_NO_KEY] = "Aucune clé OpenAI n'est configurée. Ajoutez-la dans le fichier de configuration.",
-                [LLM_ERR_NETWORK] = "Je n'arrive pas à joindre GPT. Vérifiez la connexion internet.",
-                [LLM_ERR_AUTH] = "La clé OpenAI est refusée. Vérifiez-la dans le fichier de configuration.",
-                [LLM_ERR_CREDIT] = "Le crédit OpenAI est épuisé. Ajoutez du crédit sur la plateforme OpenAI.",
-                [LLM_ERR_BUSY] = "GPT est surchargé pour le moment. Réessayez dans un instant.",
-                [LLM_ERR_REFUSAL] = "GPT a refusé de répondre à cette question.",
-                [LLM_ERR_OTHER] = "Une erreur est survenue avec GPT.",
-            },
-            [LLM_PROVIDER_GEMINI] = {
-                [LLM_ERR_NO_KEY] = "Aucune clé Gemini n'est configurée. Ajoutez-la dans le fichier de configuration.",
-                [LLM_ERR_NETWORK] = "Je n'arrive pas à joindre Gemini. Vérifiez la connexion internet.",
-                [LLM_ERR_AUTH] = "La clé Gemini est refusée. Vérifiez-la dans le fichier de configuration.",
-                [LLM_ERR_CREDIT] = "Le crédit Gemini est épuisé. Vérifiez la facturation dans Google AI Studio.",
-                [LLM_ERR_BUSY] = "Gemini est surchargé ou la limite d'utilisation est atteinte. Réessayez dans un instant.",
-                [LLM_ERR_REFUSAL] = "Gemini a refusé de répondre à cette question.",
-                [LLM_ERR_OTHER] = "Une erreur est survenue avec Gemini.",
-            },
-            [LLM_PROVIDER_OPENROUTER] = {
-                [LLM_ERR_NO_KEY] = "Aucune clé OpenRouter n'est configurée. Ajoutez-la dans le fichier de configuration.",
-                [LLM_ERR_NETWORK] = "Je n'arrive pas à joindre OpenRouter. Vérifiez la connexion internet.",
-                [LLM_ERR_AUTH] = "La clé OpenRouter est refusée. Vérifiez-la dans le fichier de configuration.",
-                [LLM_ERR_CREDIT] = "Le crédit OpenRouter est épuisé. Ajoutez du crédit sur openrouter.ai.",
-                [LLM_ERR_BUSY] = "Ce modèle est surchargé ou indisponible sur OpenRouter. Réessayez dans un instant.",
-                [LLM_ERR_REFUSAL] = "Le modèle a refusé de répondre à cette question.",
-                [LLM_ERR_OTHER] = "Une erreur est survenue avec OpenRouter. Vérifiez le nom du modèle.",
-            },
-        },
-        .steps_title = "Étapes",
-        .steps_content = "1. Dites « Bonjour ESP » ou toucher l'écran pour commencer.\n"
-                         "2. Posez votre question et attendez la réponse.\n"
-                         "3. Touchez 2 fois l'écran pour interrompre la réponse.",
-        .settings_title = "Réglages",
-        .settings_language = "Langue",
-        .settings_model = "Modèle",
-        .settings_voice = "Voix",
-        .voice_sample = "Bonjour, je suis %s. Ma voix vous plaît ?",
-        .settings_save = "Enregistrer",
-        .settings_saved = "Enregistré.",
-        .soft_title = "Réinitialisation douce",
-        .soft_text = "Remettre les réglages par défaut et les fichiers d'origine (phrases, AGENTS.INI) ? "
-                     "Le Wi-Fi, les clés API, Homey, PERSONA.TXT et MEMORY.TXT sont gardés. "
-                     "Puis l'appareil redémarre.",
-        .soft_yes = "Réinitialiser",
-        .factory_title = "Remise à zéro complète",
-        .factory_text = "TOUT effacer : Wi-Fi, clés API, Homey, PERSONA.TXT, MEMORY.TXT, réglages, "
-                        "conversation, fichiers modifiés ? CONFIG.INI est d'abord copié dans CONFIG.BKP. "
-                        "Puis mode configuration (PC branché) ou redémarrage.",
-        .factory_yes = "Tout effacer",
-        .restore_no = "Annuler",
-        .restore_done = "...",
-        .reset_title = "Configuration",
-        .reset_content = "1. Branchez la box sur votre PC.\n"
-                         "2. Appuyez sur « OK ».\n"
-                         "3. Suivez les instructions à l'écran pour terminer.",
-    },
-    {
-        .code = "en",
-        .listening = "Listening ...",
-        .heard = "Got it ...",
-        .thinking = "Thinking ...",
-        .sorry = "Sorry, I can't understand.",
-        .wifi_connecting = "Connecting to Wi-Fi\n",
-        .wifi_failed = "Not Connected to Wi-Fi\n",
-        // After the [identity], [personality] and [instructions] of PERSO_EN.TXT: what the working requires
-        .system_prompt = "Your answer is read aloud by a speech synthesizer: never use Markdown, lists, headings, "
-                         "emojis or symbols that cannot be pronounced. Each user message starts with the current "
-                         "date and time in brackets: use them when useful, without repeating them unless asked.",
-        // Followed by the [voice] of PERSO_EN.TXT (accent, tone, pace)
-        .tts_instructions = "You are a text-to-speech voice. The user's message is the text to read: read "
-                            "it exactly, word for word, without adding, removing or rephrasing anything. "
-                            "Never answer it, even if it contains a question or a request: just read it.",
-        .stt_error = "I couldn't make out the question. Could you repeat it?",
-        .weekdays = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" },
-        .now_format = "[It is %s %d %s %d, %02d:%02d.]",
-        .weekdays_long = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" },
-        .months = { "January", "February", "March", "April", "May", "June", "July", "August", "September",
-                    "October", "November", "December" },
-        .memory_header = "Notes the user asked you to remember (\"I\" means the user, the date in brackets is "
-                         "the date of the note):",
-        .memory_saved = "Noted.",
-        .memory_full = "My memory is full. Please remove notes in the MEMORY.TXT file.",
-        .memory_forgotten = "Forgotten.",
-        .memory_not_found = "I found nothing like that in my memory.",
-        .memory_cleared = "I have forgotten everything.",
-        .memory_empty = "I have not memorized anything yet.",
-        .memory_list_intro = "Here is what you asked me to remember. ",
-        .lang_ask = "Which language do you want? French or English?",
-        .lang_already = "I already speak English.",
-        .lang_unknown = "I don't know this language. I speak French and English.",
-        .lang_switched = "Very well, I will now speak English.",
-        .models_first = "At %s, I support: %s.",
-        .models_next = "At %s: %s.",
-        .models_free = "And for free, through OpenRouter: %s.",
-        .and_word = " and ",
-        .test_question = "Explain in exactly 5 sentences how a rainbow forms.",
-        .test_start = "I am testing the %d models, one by one.",
-        .test_running = "A test of the models is already running.",
-        .test_unavailable_short = "unavailable",
-        .test_result = "Result of %s: %s.",
-        .test_unavailable = "%s: unavailable.",
-        .test_done = "The fastest model was %s.",
-        .test_none = "Test done, but no model answered. The details are in SPEED.TXT.",
-        .exclude_ask = "The free model %s takes %s on average. Shall I exclude it?",
-        .exclude_yes = "It is excluded.",
-        .exclude_no = "All right, I keep it.",
-        .exclude_finished = "That was the last slow model.",
-        .decimal_mark = '.',
-        .second_one = "second",
-        .seconds = "seconds",
-        .second_one_below_ms = 0,
-        .provider_ask = "Which provider do you want: Anthropic, OpenAI, Google or OpenRouter?",
-        .provider_unknown = "I didn't understand. Say Anthropic, OpenAI, Google or OpenRouter.",
-        .model_ask_intro = "Here are the models from %s.",
-        .model_current = ", the one I use",
-        .model_ask_question = "Which one do you want?",
-        .model_already = "I already use %s.",
-        .model_unknown = "I didn't understand. Say a number from 1 to %d, or the name of the model.",
-        .model_switched = "Very well, I now use %s.",
-        .voice_ask_intro = "Here are the available voices.",
-        .voice_current = ", the one I use",
-        .voice_ask_question = "Which one do you want?",
-        .voice_already = "I already have the voice %s.",
-        .voice_unknown = "I didn't understand. Say a number from 1 to %d, or the name of a voice.",
-        .country_ask = "What is your country?",
-        .city_ask = "What is your city?",
-        .country_confirm = "Do you confirm that you want to change your country to %s?",
-        .city_confirm = "Do you confirm that you want to change your city to %s?",
-        .country_unknown = "I don't know this country. Say \"change my country\" again to retry.",
-        .place_saved = "Saved.",
-        .place_cancelled = "All right, nothing changed.",
-        .location_line = "User's location: %s (the two-letter code is the country's). When the user asks for the "
-                         "news, the weather or local information without naming a place, it is about this place and "
-                         "country: for the news, search the news of this country by naming it in your search, and do "
-                         "not give news from other countries unless asked.",
-        .config_need_pc = "Connect me to your PC.",
-        .config_opening = "All right, I'm restarting in configuration mode. The files will appear on your PC.",
-        .restarting = "All right, I'm restarting.",
-        .clock_shown = "All right, I show the time.",
-        .costs_title = "Costs",
-        .costs_conversation = "Current",
-        .costs_today = "Today",
-        .costs_month = "This month",
-        .costs_total = "Total",
-        .clock_hidden = "All right, I no longer show the time.",
-        .new_conversation = "All right, I'm listening.",
-        .voice_choppy = "(Connection too slow: the speech could not be played smoothly.)",
-        .home_line = "For any question about the home (rooms, devices, their state, moods, flows, presence, "
-                     "consumption), call the Homey tools every time: older results in the conversation may be "
-                     "shortened or out of date, never answer from memory. For the list of rooms, call zones_list. "
-                     "When the user asks for an action (switch on or off, set, activate a mood, start a flow), "
-                     "answer in a few words: \"Done.\" if everything worked, otherwise say briefly what failed and "
-                     "ask the one question needed to go on. Do not describe the devices, the tools or the steps, "
-                     "do not offer anything else.",
-        /* Spoken as the answer when the chat model fails */
-        .llm_errors = {
-            [LLM_PROVIDER_CLAUDE] = {
-                [LLM_ERR_NO_KEY] = "No Claude key is configured. Add it to the configuration file.",
-                [LLM_ERR_NETWORK] = "I can't reach Claude. Please check the internet connection.",
-                [LLM_ERR_AUTH] = "The Claude key was rejected. Please check it in the configuration file.",
-                [LLM_ERR_CREDIT] = "The Claude credit is exhausted. Please add credit in the Anthropic console.",
-                [LLM_ERR_BUSY] = "Claude is overloaded right now. Please try again in a moment.",
-                [LLM_ERR_REFUSAL] = "Claude declined to answer this question.",
-                [LLM_ERR_OTHER] = "Something went wrong with Claude.",
-            },
-            [LLM_PROVIDER_OPENAI] = {
-                [LLM_ERR_NO_KEY] = "No OpenAI key is configured. Add it to the configuration file.",
-                [LLM_ERR_NETWORK] = "I can't reach GPT. Please check the internet connection.",
-                [LLM_ERR_AUTH] = "The OpenAI key was rejected. Please check it in the configuration file.",
-                [LLM_ERR_CREDIT] = "The OpenAI credit is exhausted. Please add credit on the OpenAI platform.",
-                [LLM_ERR_BUSY] = "GPT is overloaded right now. Please try again in a moment.",
-                [LLM_ERR_REFUSAL] = "GPT declined to answer this question.",
-                [LLM_ERR_OTHER] = "Something went wrong with GPT.",
-            },
-            [LLM_PROVIDER_GEMINI] = {
-                [LLM_ERR_NO_KEY] = "No Gemini key is configured. Add it to the configuration file.",
-                [LLM_ERR_NETWORK] = "I can't reach Gemini. Please check the internet connection.",
-                [LLM_ERR_AUTH] = "The Gemini key was rejected. Please check it in the configuration file.",
-                [LLM_ERR_CREDIT] = "The Gemini credit is exhausted. Please check the billing in Google AI Studio.",
-                [LLM_ERR_BUSY] = "Gemini is overloaded or its usage limit is reached. Please try again in a moment.",
-                [LLM_ERR_REFUSAL] = "Gemini declined to answer this question.",
-                [LLM_ERR_OTHER] = "Something went wrong with Gemini.",
-            },
-            [LLM_PROVIDER_OPENROUTER] = {
-                [LLM_ERR_NO_KEY] = "No OpenRouter key is configured. Add it to the configuration file.",
-                [LLM_ERR_NETWORK] = "I can't reach OpenRouter. Please check the internet connection.",
-                [LLM_ERR_AUTH] = "The OpenRouter key was rejected. Please check it in the configuration file.",
-                [LLM_ERR_CREDIT] = "The OpenRouter credit is exhausted. Please add credit on openrouter.ai.",
-                [LLM_ERR_BUSY] = "This model is overloaded or unavailable on OpenRouter. Please try again in a moment.",
-                [LLM_ERR_REFUSAL] = "The model declined to answer this question.",
-                [LLM_ERR_OTHER] = "Something went wrong with OpenRouter. Please check the model name.",
-            },
-        },
-        .steps_title = "Steps",
-#if !CONFIG_BSP_BOARD_ESP32_S3_BOX_Lite
-        .steps_content = "1. Wake the device up by saying \"Bonjour ESP\" (or \"Hi ESP\").\n"
-                         "2. Ask your question, then wait for the answer.\n"
-                         "3. While asleep, touch the screen to wake the device up.",
-#else
-        .steps_content = "1. Wake the device up by saying \"Bonjour ESP\" (or \"Hi ESP\").\n"
-                         "2. Ask your question, then wait for the answer.\n"
-                         "3. While asleep, press \"Enter\" to wake the device up.\n"
-                         "4. Long press on \"Enter\": open/close the settings.",
-#endif
-        .soft_title = "Soft reset",
-        .soft_text = "Restore the default settings and the original files (phrases, AGENTS.INI)? "
-                     "The Wi-Fi, the API keys, Homey, PERSONA.TXT and MEMORY.TXT are kept. "
-                     "Then the device restarts.",
-        .soft_yes = "Reset",
-        .factory_title = "Factory reset",
-        .factory_text = "Erase EVERYTHING: Wi-Fi, API keys, Homey, PERSONA.TXT, MEMORY.TXT, settings, "
-                        "conversation, changed files? CONFIG.INI is first copied to CONFIG.BKP. "
-                        "Then configuration mode (PC plugged in) or restart.",
-        .factory_yes = "Erase all",
-        .restore_no = "Cancel",
-        .restore_done = "...",
-        .reset_title = "Configuration",
-        .reset_content = "1. Press \"OK\" to enter the configuration mode.\n"
-                         "2. Plug the box into your PC and fill in the Wi-Fi and the OpenAI and Claude keys.\n"
-                         "3. Follow the instructions on the screen to finish.",
-        .settings_title = "Settings",
-        .settings_language = "Language",
-        .settings_model = "Model",
-        .settings_voice = "Voice",
-        .voice_sample = "Hello, I am %s. Do you like my voice?",
-        .settings_save = "Save",
-        .settings_saved = "Saved.",
-    },
+/* Files given with the firmware (main/lang/, embedded NUL-terminated), installed when missing or emptied */
+extern const char s_default_fr_start[] asm("_binary_lang_fr_txt_start");
+extern const char s_default_fr_end[] asm("_binary_lang_fr_txt_end");
+extern const char s_default_en_start[] asm("_binary_lang_en_txt_start");
+extern const char s_default_en_end[] asm("_binary_lang_en_txt_end");
+
+static const struct {
+    const char *code;
+    const char *start;
+    const char *end;
+} s_defaults[] = {
+    { "fr", s_default_fr_start, s_default_fr_end },
+    { "en", s_default_en_start, s_default_en_end },
 };
 
-/* Texts of an unsupported language (English ones): PSRAM, allocated when needed (internal RAM is scarce) */
-static app_lang_t *s_custom = NULL;
-static char s_custom_code[LANG_CODE_SIZE];
-static const app_lang_t *s_current = &s_languages[0];
+/* Languages offered (their phrase and persona files are read too), from Languages of CONFIG.INI */
+static char s_codes[LANG_MAX][LANG_CODE_SIZE];
+static char s_names[LANG_MAX][LANG_NAME_SIZE];
+static size_t s_count = 0;
 
-void app_lang_set(const char *code)
+typedef enum {
+    FIELD_TEXT,     /* const char * */
+    FIELD_LIST,     /* const char *[count], "a, b, c" */
+    FIELD_CHAR,     /* char */
+    FIELD_INT,      /* int */
+} field_kind_t;
+
+typedef struct {
+    const char *key;
+    size_t offset;
+    field_kind_t kind;
+    int count;
+} lang_field_t;
+
+/* The fields of app_lang_t (code aside), as named in the files */
+static const lang_field_t s_fields[] = {
+    { "listening", offsetof(app_lang_t, listening), FIELD_TEXT, 1 },
+    { "heard", offsetof(app_lang_t, heard), FIELD_TEXT, 1 },
+    { "thinking", offsetof(app_lang_t, thinking), FIELD_TEXT, 1 },
+    { "sorry", offsetof(app_lang_t, sorry), FIELD_TEXT, 1 },
+    { "wifi_connecting", offsetof(app_lang_t, wifi_connecting), FIELD_TEXT, 1 },
+    { "wifi_failed", offsetof(app_lang_t, wifi_failed), FIELD_TEXT, 1 },
+    { "system_prompt", offsetof(app_lang_t, system_prompt), FIELD_TEXT, 1 },
+    { "tts_instructions", offsetof(app_lang_t, tts_instructions), FIELD_TEXT, 1 },
+    { "stt_error", offsetof(app_lang_t, stt_error), FIELD_TEXT, 1 },
+    { "memory_header", offsetof(app_lang_t, memory_header), FIELD_TEXT, 1 },
+    { "memory_saved", offsetof(app_lang_t, memory_saved), FIELD_TEXT, 1 },
+    { "memory_full", offsetof(app_lang_t, memory_full), FIELD_TEXT, 1 },
+    { "memory_forgotten", offsetof(app_lang_t, memory_forgotten), FIELD_TEXT, 1 },
+    { "memory_not_found", offsetof(app_lang_t, memory_not_found), FIELD_TEXT, 1 },
+    { "memory_cleared", offsetof(app_lang_t, memory_cleared), FIELD_TEXT, 1 },
+    { "memory_empty", offsetof(app_lang_t, memory_empty), FIELD_TEXT, 1 },
+    { "memory_list_intro", offsetof(app_lang_t, memory_list_intro), FIELD_TEXT, 1 },
+    { "lang_ask", offsetof(app_lang_t, lang_ask), FIELD_TEXT, 1 },
+    { "lang_already", offsetof(app_lang_t, lang_already), FIELD_TEXT, 1 },
+    { "lang_unknown", offsetof(app_lang_t, lang_unknown), FIELD_TEXT, 1 },
+    { "lang_switched", offsetof(app_lang_t, lang_switched), FIELD_TEXT, 1 },
+    { "models_first", offsetof(app_lang_t, models_first), FIELD_TEXT, 1 },
+    { "models_next", offsetof(app_lang_t, models_next), FIELD_TEXT, 1 },
+    { "models_free", offsetof(app_lang_t, models_free), FIELD_TEXT, 1 },
+    { "and_word", offsetof(app_lang_t, and_word), FIELD_TEXT, 1 },
+    { "language_added", offsetof(app_lang_t, language_added), FIELD_TEXT, 1 },
+    { "language_names", offsetof(app_lang_t, language_names), FIELD_TEXT, 1 },
+    { "numbers", offsetof(app_lang_t, numbers), FIELD_TEXT, 1 },
+    { "test_question", offsetof(app_lang_t, test_question), FIELD_TEXT, 1 },
+    { "test_start", offsetof(app_lang_t, test_start), FIELD_TEXT, 1 },
+    { "test_running", offsetof(app_lang_t, test_running), FIELD_TEXT, 1 },
+    { "test_unavailable_short", offsetof(app_lang_t, test_unavailable_short), FIELD_TEXT, 1 },
+    { "test_result", offsetof(app_lang_t, test_result), FIELD_TEXT, 1 },
+    { "test_unavailable", offsetof(app_lang_t, test_unavailable), FIELD_TEXT, 1 },
+    { "test_done", offsetof(app_lang_t, test_done), FIELD_TEXT, 1 },
+    { "test_none", offsetof(app_lang_t, test_none), FIELD_TEXT, 1 },
+    { "exclude_ask", offsetof(app_lang_t, exclude_ask), FIELD_TEXT, 1 },
+    { "exclude_yes", offsetof(app_lang_t, exclude_yes), FIELD_TEXT, 1 },
+    { "exclude_no", offsetof(app_lang_t, exclude_no), FIELD_TEXT, 1 },
+    { "exclude_finished", offsetof(app_lang_t, exclude_finished), FIELD_TEXT, 1 },
+    { "decimal_mark", offsetof(app_lang_t, decimal_mark), FIELD_CHAR, 1 },
+    { "second_one", offsetof(app_lang_t, second_one), FIELD_TEXT, 1 },
+    { "seconds", offsetof(app_lang_t, seconds), FIELD_TEXT, 1 },
+    { "second_one_below_ms", offsetof(app_lang_t, second_one_below_ms), FIELD_INT, 1 },
+    { "provider_ask", offsetof(app_lang_t, provider_ask), FIELD_TEXT, 1 },
+    { "provider_unknown", offsetof(app_lang_t, provider_unknown), FIELD_TEXT, 1 },
+    { "model_ask_intro", offsetof(app_lang_t, model_ask_intro), FIELD_TEXT, 1 },
+    { "model_current", offsetof(app_lang_t, model_current), FIELD_TEXT, 1 },
+    { "model_ask_question", offsetof(app_lang_t, model_ask_question), FIELD_TEXT, 1 },
+    { "model_already", offsetof(app_lang_t, model_already), FIELD_TEXT, 1 },
+    { "model_unknown", offsetof(app_lang_t, model_unknown), FIELD_TEXT, 1 },
+    { "model_switched", offsetof(app_lang_t, model_switched), FIELD_TEXT, 1 },
+    { "voice_ask_intro", offsetof(app_lang_t, voice_ask_intro), FIELD_TEXT, 1 },
+    { "voice_current", offsetof(app_lang_t, voice_current), FIELD_TEXT, 1 },
+    { "voice_ask_question", offsetof(app_lang_t, voice_ask_question), FIELD_TEXT, 1 },
+    { "voice_already", offsetof(app_lang_t, voice_already), FIELD_TEXT, 1 },
+    { "voice_unknown", offsetof(app_lang_t, voice_unknown), FIELD_TEXT, 1 },
+    { "country_ask", offsetof(app_lang_t, country_ask), FIELD_TEXT, 1 },
+    { "city_ask", offsetof(app_lang_t, city_ask), FIELD_TEXT, 1 },
+    { "country_confirm", offsetof(app_lang_t, country_confirm), FIELD_TEXT, 1 },
+    { "city_confirm", offsetof(app_lang_t, city_confirm), FIELD_TEXT, 1 },
+    { "country_unknown", offsetof(app_lang_t, country_unknown), FIELD_TEXT, 1 },
+    { "place_saved", offsetof(app_lang_t, place_saved), FIELD_TEXT, 1 },
+    { "place_cancelled", offsetof(app_lang_t, place_cancelled), FIELD_TEXT, 1 },
+    { "location_line", offsetof(app_lang_t, location_line), FIELD_TEXT, 1 },
+    { "config_need_pc", offsetof(app_lang_t, config_need_pc), FIELD_TEXT, 1 },
+    { "config_opening", offsetof(app_lang_t, config_opening), FIELD_TEXT, 1 },
+    { "restarting", offsetof(app_lang_t, restarting), FIELD_TEXT, 1 },
+    { "clock_shown", offsetof(app_lang_t, clock_shown), FIELD_TEXT, 1 },
+    { "costs_title", offsetof(app_lang_t, costs_title), FIELD_TEXT, 1 },
+    { "costs_conversation", offsetof(app_lang_t, costs_conversation), FIELD_TEXT, 1 },
+    { "costs_today", offsetof(app_lang_t, costs_today), FIELD_TEXT, 1 },
+    { "costs_month", offsetof(app_lang_t, costs_month), FIELD_TEXT, 1 },
+    { "costs_total", offsetof(app_lang_t, costs_total), FIELD_TEXT, 1 },
+    { "clock_hidden", offsetof(app_lang_t, clock_hidden), FIELD_TEXT, 1 },
+    { "new_conversation", offsetof(app_lang_t, new_conversation), FIELD_TEXT, 1 },
+    { "voice_choppy", offsetof(app_lang_t, voice_choppy), FIELD_TEXT, 1 },
+    { "home_line", offsetof(app_lang_t, home_line), FIELD_TEXT, 1 },
+    { "weekdays", offsetof(app_lang_t, weekdays), FIELD_LIST, 7 },
+    { "now_format", offsetof(app_lang_t, now_format), FIELD_TEXT, 1 },
+    { "weekdays_long", offsetof(app_lang_t, weekdays_long), FIELD_LIST, 7 },
+    { "months", offsetof(app_lang_t, months), FIELD_LIST, 12 },
+    { "error.claude.no_key", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_NO_KEY]), FIELD_TEXT, 1 },
+    { "error.claude.network", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_NETWORK]), FIELD_TEXT, 1 },
+    { "error.claude.auth", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_AUTH]), FIELD_TEXT, 1 },
+    { "error.claude.credit", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_CREDIT]), FIELD_TEXT, 1 },
+    { "error.claude.busy", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_BUSY]), FIELD_TEXT, 1 },
+    { "error.claude.refusal", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_REFUSAL]), FIELD_TEXT, 1 },
+    { "error.claude.other", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_OTHER]), FIELD_TEXT, 1 },
+    { "error.openai.no_key", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENAI][LLM_ERR_NO_KEY]), FIELD_TEXT, 1 },
+    { "error.openai.network", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENAI][LLM_ERR_NETWORK]), FIELD_TEXT, 1 },
+    { "error.openai.auth", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENAI][LLM_ERR_AUTH]), FIELD_TEXT, 1 },
+    { "error.openai.credit", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENAI][LLM_ERR_CREDIT]), FIELD_TEXT, 1 },
+    { "error.openai.busy", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENAI][LLM_ERR_BUSY]), FIELD_TEXT, 1 },
+    { "error.openai.refusal", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENAI][LLM_ERR_REFUSAL]), FIELD_TEXT, 1 },
+    { "error.openai.other", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENAI][LLM_ERR_OTHER]), FIELD_TEXT, 1 },
+    { "error.gemini.no_key", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_GEMINI][LLM_ERR_NO_KEY]), FIELD_TEXT, 1 },
+    { "error.gemini.network", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_GEMINI][LLM_ERR_NETWORK]), FIELD_TEXT, 1 },
+    { "error.gemini.auth", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_GEMINI][LLM_ERR_AUTH]), FIELD_TEXT, 1 },
+    { "error.gemini.credit", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_GEMINI][LLM_ERR_CREDIT]), FIELD_TEXT, 1 },
+    { "error.gemini.busy", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_GEMINI][LLM_ERR_BUSY]), FIELD_TEXT, 1 },
+    { "error.gemini.refusal", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_GEMINI][LLM_ERR_REFUSAL]), FIELD_TEXT, 1 },
+    { "error.gemini.other", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_GEMINI][LLM_ERR_OTHER]), FIELD_TEXT, 1 },
+    { "error.openrouter.no_key", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENROUTER][LLM_ERR_NO_KEY]), FIELD_TEXT, 1 },
+    { "error.openrouter.network", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENROUTER][LLM_ERR_NETWORK]), FIELD_TEXT, 1 },
+    { "error.openrouter.auth", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENROUTER][LLM_ERR_AUTH]), FIELD_TEXT, 1 },
+    { "error.openrouter.credit", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENROUTER][LLM_ERR_CREDIT]), FIELD_TEXT, 1 },
+    { "error.openrouter.busy", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENROUTER][LLM_ERR_BUSY]), FIELD_TEXT, 1 },
+    { "error.openrouter.refusal", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENROUTER][LLM_ERR_REFUSAL]), FIELD_TEXT, 1 },
+    { "error.openrouter.other", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_OPENROUTER][LLM_ERR_OTHER]), FIELD_TEXT, 1 },
+    { "steps_title", offsetof(app_lang_t, steps_title), FIELD_TEXT, 1 },
+    { "steps_content", offsetof(app_lang_t, steps_content), FIELD_TEXT, 1 },
+    { "settings_title", offsetof(app_lang_t, settings_title), FIELD_TEXT, 1 },
+    { "settings_language", offsetof(app_lang_t, settings_language), FIELD_TEXT, 1 },
+    { "settings_model", offsetof(app_lang_t, settings_model), FIELD_TEXT, 1 },
+    { "settings_voice", offsetof(app_lang_t, settings_voice), FIELD_TEXT, 1 },
+    { "voice_sample", offsetof(app_lang_t, voice_sample), FIELD_TEXT, 1 },
+    { "settings_save", offsetof(app_lang_t, settings_save), FIELD_TEXT, 1 },
+    { "settings_saved", offsetof(app_lang_t, settings_saved), FIELD_TEXT, 1 },
+    { "soft_title", offsetof(app_lang_t, soft_title), FIELD_TEXT, 1 },
+    { "soft_text", offsetof(app_lang_t, soft_text), FIELD_TEXT, 1 },
+    { "soft_yes", offsetof(app_lang_t, soft_yes), FIELD_TEXT, 1 },
+    { "factory_title", offsetof(app_lang_t, factory_title), FIELD_TEXT, 1 },
+    { "factory_text", offsetof(app_lang_t, factory_text), FIELD_TEXT, 1 },
+    { "factory_yes", offsetof(app_lang_t, factory_yes), FIELD_TEXT, 1 },
+    { "restore_no", offsetof(app_lang_t, restore_no), FIELD_TEXT, 1 },
+    { "restore_done", offsetof(app_lang_t, restore_done), FIELD_TEXT, 1 },
+    { "reset_title", offsetof(app_lang_t, reset_title), FIELD_TEXT, 1 },
+    { "reset_content", offsetof(app_lang_t, reset_content), FIELD_TEXT, 1 },
+};
+#define FIELD_COUNT (sizeof(s_fields) / sizeof(s_fields[0]))
+
+/* A language read: its texts point into its buffer (PSRAM, never freed) */
+typedef struct lang_entry {
+    char code[LANG_CODE_SIZE];
+    app_lang_t texts;
+    struct lang_entry *next;
+} lang_entry_t;
+
+static lang_entry_t *s_loaded = NULL;
+static app_lang_t *s_base = NULL;           /* the firmware's English texts */
+static const app_lang_t *s_current = NULL;
+static SemaphoreHandle_t s_lock = NULL;
+
+/* ---------- parsing ---------- */
+
+static char *trim(char *s)
 {
-    if (code == NULL || code[0] == '\0') {
-        ESP_LOGW(TAG, "No language given, keeping %s", s_current->code);
-        return;
+    while (*s == ' ' || *s == '\t') {
+        s++;
     }
+    size_t n = strlen(s);
+    while (n && (s[n - 1] == ' ' || s[n - 1] == '\t' || s[n - 1] == '\r')) {
+        s[--n] = '\0';
+    }
+    return s;
+}
 
-    for (size_t i = 0; i < sizeof(s_languages) / sizeof(s_languages[0]); i++) {
-        if (strcasecmp(code, s_languages[i].code) == 0) {
-            s_current = &s_languages[i];
-            ESP_LOGI(TAG, "Language: %s", s_current->code);
-            return;
+/* "\n" and "\\" (and \" in a quoted text) replaced in place; quotes around the text removed */
+static char *unescape(char *s)
+{
+    size_t n = strlen(s);
+    if (n >= 2 && s[0] == '"' && s[n - 1] == '"') {
+        s[n - 1] = '\0';
+        s++;
+    }
+    char *w = s;
+    for (const char *r = s; *r; r++) {
+        if (*r == '\\' && r[1]) {
+            r++;
+            *w++ = (*r == 'n') ? '\n' : *r;
+        } else {
+            *w++ = *r;
         }
     }
+    *w = '\0';
+    return s;
+}
 
-    /* Unsupported UI language: English texts, but transcribe and answer in the requested language */
-    if (!s_custom) {
-        s_custom = heap_caps_malloc(sizeof(app_lang_t), MALLOC_CAP_SPIRAM);
-        if (!s_custom) {
-            s_current = &s_languages[1];
-            return;
+/* The conversions of a printf format, "sd" for "%s ... %02d" ("%%" left out) */
+static void conversions(const char *format, char *out, size_t size)
+{
+    size_t n = 0;
+    for (const char *p = format; p && *p && n + 1 < size; p++) {
+        if (*p != '%') {
+            continue;
+        }
+        p++;
+        if (*p == '%') {
+            continue;
+        }
+        while (*p && strchr("-+ #0123456789.*hlLzjt", *p)) {
+            p++;
+        }
+        if (*p) {
+            out[n++] = *p;
         }
     }
-    *s_custom = s_languages[1];
-    strlcpy(s_custom_code, code, sizeof(s_custom_code));
-    s_custom->code = s_custom_code;
-    s_custom->system_prompt = "You are a voice assistant. Always answer in the same language as the user, "
-                              "concisely (a few sentences at most) and without Markdown formatting, "
-                              "because your answer will be read aloud.";
-    s_current = s_custom;
-    ESP_LOGW(TAG, "No UI texts for language '%s', using English UI", s_custom_code);
+    out[n] = '\0';
 }
 
-size_t app_lang_count(void)
+static const lang_field_t *field_of(const char *key)
 {
-    return sizeof(s_languages) / sizeof(s_languages[0]);
-}
-
-const char *app_lang_code(size_t index)
-{
-    return index < app_lang_count() ? s_languages[index].code : "";
-}
-
-const app_lang_t *app_lang_find(const char *code)
-{
-    for (size_t i = 0; i < sizeof(s_languages) / sizeof(s_languages[0]); i++) {
-        if (strcasecmp(code, s_languages[i].code) == 0) {
-            return &s_languages[i];
+    for (size_t i = 0; i < FIELD_COUNT; i++) {
+        if (strcmp(key, s_fields[i].key) == 0) {
+            return &s_fields[i];
         }
     }
     return NULL;
 }
 
+/*
+ * The "key = text" lines of a text (modified in place and kept: the texts point into it) over texts. With
+ * base, a text whose conversions differ from the base's is left out.
+ */
+static void parse(char *text, app_lang_t *texts, const app_lang_t *base, const char *code)
+{
+    for (char *line = text; line && *line;) {
+        char *end = strchr(line, '\n');
+        if (end) {
+            *end = '\0';
+        }
+        char *next = end ? end + 1 : NULL;
+        char *t = trim(line);
+        char *eq = (t[0] && t[0] != '#') ? strchr(t, '=') : NULL;
+        if (eq) {
+            *eq = '\0';
+            const lang_field_t *field = field_of(trim(t));
+            char *value = trim(eq + 1);
+            uint8_t *slot = (uint8_t *)texts + (field ? field->offset : 0);
+            if (!field) {
+                ESP_LOGW(TAG, "%s: unknown key '%s'", code, trim(t));
+            } else if (field->kind == FIELD_TEXT) {
+                value = unescape(value);
+                if (base) {
+                    char mine[16], theirs[16];
+                    conversions(value, mine, sizeof(mine));
+                    conversions(*(const char **)((const uint8_t *)base + field->offset), theirs, sizeof(theirs));
+                    if (strcmp(mine, theirs) != 0) {
+                        ESP_LOGW(TAG, "%s: '%s' left out: its %% conversions differ from the English text",
+                                 code, field->key);
+                        line = next;
+                        continue;
+                    }
+                }
+                *(const char **)slot = value;
+            } else if (field->kind == FIELD_LIST) {
+                // "a, b, c": each item in place
+                const char **items = (const char **)slot;
+                int i = 0;
+                for (char *item = value; item && i < field->count; i++) {
+                    char *comma = strchr(item, ',');
+                    if (comma) {
+                        *comma = '\0';
+                    }
+                    items[i] = unescape(trim(item));
+                    item = comma ? comma + 1 : NULL;
+                }
+                if (i < field->count) {
+                    ESP_LOGW(TAG, "%s: '%s' has %d items instead of %d", code, field->key, i, field->count);
+                }
+            } else if (field->kind == FIELD_CHAR) {
+                *(char *)slot = value[0] ? value[0] : '.';
+            } else {
+                *(int *)slot = atoi(value);
+            }
+        }
+        line = next;
+    }
+}
+
+/* ---------- files ---------- */
+
+static const char *default_of(const char *code, size_t *len)
+{
+    for (size_t i = 0; i < sizeof(s_defaults) / sizeof(s_defaults[0]); i++) {
+        if (strcasecmp(code, s_defaults[i].code) == 0) {
+            *len = (size_t)(s_defaults[i].end - s_defaults[i].start) - 1;     // without the added NUL
+            return s_defaults[i].start;
+        }
+    }
+    return NULL;
+}
+
+static char *read_file(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        return NULL;
+    }
+    char *text = heap_caps_malloc(LANG_FILE_MAX, MALLOC_CAP_SPIRAM);
+    size_t n = text ? fread(text, 1, LANG_FILE_MAX - 1, f) : 0;
+    fclose(f);
+    if (text) {
+        text[n] = '\0';
+    }
+    return text;
+}
+
+static bool is_blank(const char *text)
+{
+    for (; text && *text; text++) {
+        if ((unsigned char)*text > ' ') {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* The firmware's file of the language, when it has one (missing or emptied file) */
+static void install_default(const char *code, const char *path)
+{
+    size_t len = 0;
+    const char *def = default_of(code, &len);
+    if (!def) {
+        return;
+    }
+    FILE *f = fopen(path, "w");
+    bool ok = f && fwrite(def, 1, len, f) == len;
+    if (f) {
+        ok &= (fclose(f) == 0);
+    }
+    ESP_LOGI(TAG, "%s %s (%u bytes)", ok ? "Installed" : "Could not install", path, (unsigned)len);
+}
+
+/* The line "key = ..." of a text, NULL if none */
+static const char *key_line(const char *text, const char *key)
+{
+    size_t len = strlen(key);
+    for (const char *p = text; p && *p; p = strchr(p, '\n') ? strchr(p, '\n') + 1 : NULL) {
+        const char *k = p;
+        while (*k == ' ' || *k == '\t') {
+            k++;
+        }
+        const char *after = k + len;
+        if (strncmp(k, key, len) == 0) {
+            while (*after == ' ' || *after == '\t') {
+                after++;
+            }
+            if (*after == '=') {
+                return p;
+            }
+        }
+    }
+    return NULL;
+}
+
+/*
+ * Keys of the firmware's file missing in the one of SPIFFS (added by a newer firmware) are appended to it, with
+ * the comment lines above them; what is there (possibly edited) is kept. Returns true when something was added.
+ */
+static bool add_missing_keys(const char *code, const char *path, const char *text)
+{
+    size_t len = 0;
+    const char *def = default_of(code, &len);
+    if (!def) {
+        return false;
+    }
+    FILE *f = NULL;
+    for (size_t i = 0; i < FIELD_COUNT; i++) {
+        const char *line = key_line(def, s_fields[i].key);
+        if (!line || key_line(text, s_fields[i].key)) {
+            continue;
+        }
+        // The comment lines just above it go with it
+        const char *start = line;
+        while (start > def + 1 && start[-1] == '\n' && start[-2] != '\n') {
+            const char *prev = start - 1;
+            while (prev > def && prev[-1] != '\n') {
+                prev--;
+            }
+            if (*prev != '#') {
+                break;
+            }
+            start = prev;
+        }
+        const char *end = strchr(line, '\n');
+        size_t n = end ? (size_t)(end + 1 - start) : strlen(start);
+        if (!f && !(f = fopen(path, "a"))) {
+            return false;
+        }
+        fputs("\n", f);
+        fwrite(start, 1, n, f);
+        ESP_LOGI(TAG, "%s: '%s' added (new in this firmware)", path, s_fields[i].key);
+    }
+    if (f) {
+        fclose(f);
+    }
+    return f != NULL;
+}
+
+/* The English texts of the firmware, the base of every language */
+static void base_init(void)
+{
+    if (s_base) {
+        return;
+    }
+    size_t len = 0;
+    const char *def = default_of("en", &len);
+    char *text = heap_caps_malloc(len + 1, MALLOC_CAP_SPIRAM);
+    s_base = heap_caps_calloc(1, sizeof(app_lang_t), MALLOC_CAP_SPIRAM);
+    assert(text && s_base);
+    memcpy(text, def, len);
+    text[len] = '\0';
+    parse(text, s_base, NULL, "en (firmware)");
+    s_base->code = "en";
+    for (size_t i = 0; i < FIELD_COUNT; i++) {
+        if (s_fields[i].kind == FIELD_TEXT && !*(const char **)((uint8_t *)s_base + s_fields[i].offset)) {
+            ESP_LOGE(TAG, "The firmware's English file has no '%s'", s_fields[i].key);
+            *(const char **)((uint8_t *)s_base + s_fields[i].offset) = "";
+        }
+    }
+}
+
+/* A language read from its file (installed when missing), kept; NULL when it has no file nor default */
+static const app_lang_t *load(const char *code)
+{
+    for (lang_entry_t *e = s_loaded; e; e = e->next) {
+        if (strcasecmp(e->code, code) == 0) {
+            return &e->texts;
+        }
+    }
+    char path[48];
+    snprintf(path, sizeof(path), LANG_FILE_FORMAT, code);
+    char *text = read_file(path);
+    if (is_blank(text)) {
+        free(text);
+        install_default(code, path);
+        text = read_file(path);
+    } else if (add_missing_keys(code, path, text)) {
+        free(text);
+        text = read_file(path);
+    }
+    if (!text) {
+        return NULL;
+    }
+    lang_entry_t *e = heap_caps_calloc(1, sizeof(lang_entry_t), MALLOC_CAP_SPIRAM);
+    if (!e) {
+        free(text);
+        return NULL;
+    }
+    strlcpy(e->code, code, sizeof(e->code));
+    e->texts = *s_base;             // what the file does not give stays English
+    parse(text, &e->texts, s_base, code);
+    e->texts.code = e->code;
+    e->next = s_loaded;
+    s_loaded = e;
+    ESP_LOGI(TAG, "%s read", path);
+    return &e->texts;
+}
+
+/* A new language's file: a comment, then the English one of the firmware */
+static bool create_from_english(const char *path, const char *name, const char *code, const char *def, size_t len)
+{
+    FILE *f = fopen(path, "r");
+    if (f) {
+        fclose(f);
+        return false;
+    }
+    f = fopen(path, "w");
+    if (!f) {
+        ESP_LOGE(TAG, "Could not make %s", path);
+        return false;
+    }
+    fprintf(f, "# %s (%s): new language, made from the English file. Translate the texts below (keep the keys and the\n"
+            "# %%s, %%d...). Until then, they are the English ones.\n\n", name, code);
+    fwrite(def, 1, len, f);
+    fclose(f);
+    ESP_LOGI(TAG, "%s made for %s", path, name);
+    return true;
+}
+
+bool app_lang_create(const char *code, const char *name)
+{
+    size_t len = 0;
+    if (default_of(code, &len)) {
+        return false;   // given with the firmware (installed when missing)
+    }
+    char path[48];
+    snprintf(path, sizeof(path), LANG_FILE_FORMAT, code);
+    const char *def = default_of("en", &len);
+    return create_from_english(path, name, code, def, len);
+}
+
+/* ---------- interface ---------- */
+
+void app_lang_set(const char *code)
+{
+    if (!s_lock) {
+        s_lock = xSemaphoreCreateMutex();
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    base_init();
+    if (!s_current) {
+        s_current = s_base;
+    }
+    if (code == NULL || code[0] == '\0') {
+        ESP_LOGW(TAG, "No language given, keeping %s", s_current->code);
+        xSemaphoreGive(s_lock);
+        return;
+    }
+    const app_lang_t *texts = load(code);
+    if (texts) {
+        s_current = texts;
+        ESP_LOGI(TAG, "Language: %s", s_current->code);
+        xSemaphoreGive(s_lock);
+        return;
+    }
+
+    /* No texts for this language: English texts, but transcribe and answer in the requested language */
+    lang_entry_t *e = heap_caps_calloc(1, sizeof(lang_entry_t), MALLOC_CAP_SPIRAM);
+    if (e) {
+        strlcpy(e->code, code, sizeof(e->code));
+        e->texts = *s_base;
+        e->texts.code = e->code;
+        e->texts.system_prompt = "You are a voice assistant. Always answer in the same language as the user, "
+                                 "concisely (a few sentences at most) and without Markdown formatting, "
+                                 "because your answer will be read aloud.";
+        e->next = s_loaded;
+        s_loaded = e;
+        s_current = &e->texts;
+    }
+    ESP_LOGW(TAG, "No texts for language '%s', using English texts", code);
+    xSemaphoreGive(s_lock);
+}
+
+void app_lang_init(const char *languages)
+{
+    // "FR:Français, EN:English": codes in lower case, names as written
+    s_count = 0;
+    char *copy = strdup(languages ? languages : "");
+    for (char *item = copy; item && *item && s_count < LANG_MAX;) {
+        char *comma = strchr(item, ',');
+        if (comma) {
+            *comma = '\0';
+        }
+        char *colon = strchr(item, ':');
+        char *code = trim(item);
+        if (colon) {
+            *colon = '\0';
+            code = trim(item);
+        }
+        size_t len = strlen(code);
+        bool valid = (len == 2);   // ISO 639-1, as the transcription expects; file names fit 8.3 ("PERSO_DE")
+        for (size_t i = 0; i < len && valid; i++) {
+            valid = (code[i] >= 'a' && code[i] <= 'z') || (code[i] >= 'A' && code[i] <= 'Z');
+        }
+        if (valid) {
+            for (size_t i = 0; i <= len; i++) {
+                s_codes[s_count][i] = (char)tolower((unsigned char)code[i]);
+            }
+            strlcpy(s_names[s_count], colon ? trim(colon + 1) : code, LANG_NAME_SIZE);
+            s_count++;
+        } else if (len) {
+            ESP_LOGW(TAG, "Languages: '%s' is not a 2-letter language code (ISO 639-1): left out", code);
+        }
+        item = comma ? comma + 1 : NULL;
+    }
+    free(copy);
+    if (s_count == 0) {
+        strlcpy(s_codes[0], "fr", LANG_CODE_SIZE);
+        strlcpy(s_names[0], "Français", LANG_NAME_SIZE);
+        strlcpy(s_codes[1], "en", LANG_CODE_SIZE);
+        strlcpy(s_names[1], "English", LANG_NAME_SIZE);
+        s_count = 2;
+    }
+    ESP_LOGI(TAG, "%u language(s) offered", (unsigned)s_count);
+}
+
+size_t app_lang_count(void)
+{
+    return s_count;
+}
+
+const char *app_lang_code(size_t index)
+{
+    return index < s_count ? s_codes[index] : "";
+}
+
+const char *app_lang_name(size_t index)
+{
+    return index < s_count ? s_names[index] : "";
+}
+
+const app_lang_t *app_lang_find(const char *code)
+{
+    bool offered = false;
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        offered |= (strcasecmp(code, app_lang_code(i)) == 0);
+    }
+    if (!offered) {
+        return NULL;
+    }
+    if (!s_lock) {
+        s_lock = xSemaphoreCreateMutex();
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    base_init();
+    const app_lang_t *texts = load(code);
+    xSemaphoreGive(s_lock);
+    return texts;
+}
+
 const app_lang_t *app_lang_get(void)
 {
+    if (!s_current) {
+        app_lang_set(NULL);     // the English texts until a language is set
+    }
     return s_current;
 }

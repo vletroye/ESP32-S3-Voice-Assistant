@@ -98,6 +98,7 @@ const char *board_flash_text_fat_name(int text)
 #define PHRASES_DIR     "/spiffs"
 #define PHRASES_PREFIX  "phrases_"
 #define PERSONA_PREFIX  "persona_"
+#define LANG_PREFIX     "lang_"
 #define PHRASES_SUFFIX  ".txt"
 
 static void phrase_files_find(void)
@@ -116,6 +117,15 @@ static void phrase_files_find(void)
         strlcpy(t->path, PHRASES_DIR "/agents.ini", sizeof(t->path));
         memcpy(t->fat_name, "AGENTS  INI", 12);
         PRINTF("%s shown as AGENTS.INI", t->path);
+    }
+    // Countries known by voice, their names per language (COUNTRY.TXT)
+    FILE *country = fopen(PHRASES_DIR "/country.txt", "r");
+    if (country) {
+        fclose(country);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/country.txt", sizeof(t->path));
+        memcpy(t->fat_name, "COUNTRY TXT", 12);
+        PRINTF("%s shown as COUNTRY.TXT", t->path);
     }
     // CONFIG.INI saved by the "restore" icon of the Settings screen, when there is one
     FILE *backup = fopen(PHRASES_DIR "/config.bkp", "r");
@@ -146,10 +156,12 @@ static void phrase_files_find(void)
     }
     struct dirent *e;
     while ((e = readdir(dir)) != NULL && slot < UF2_TEXT_COUNT) {
-        // phrases_<code>.txt as VOICE_<CODE>.TXT, persona_<code>.txt as PERSO_<CODE>.TXT
+        // phrases_<code>.txt as VOICE_<CODE>.TXT, persona_<code>.txt as PERSO_<CODE>.TXT, lang_<code>.txt as
+        // LANG_<CODE>.TXT
         size_t len = strlen(e->d_name);
         const char *prefix = strncmp(e->d_name, PHRASES_PREFIX, strlen(PHRASES_PREFIX)) == 0 ? PHRASES_PREFIX :
-                             strncmp(e->d_name, PERSONA_PREFIX, strlen(PERSONA_PREFIX)) == 0 ? PERSONA_PREFIX : NULL;
+                             strncmp(e->d_name, PERSONA_PREFIX, strlen(PERSONA_PREFIX)) == 0 ? PERSONA_PREFIX :
+                             strncmp(e->d_name, LANG_PREFIX, strlen(LANG_PREFIX)) == 0 ? LANG_PREFIX : NULL;
         size_t code_len = prefix ? len - strlen(prefix) - strlen(PHRASES_SUFFIX) : 0;
         if (!prefix || len <= strlen(prefix) + strlen(PHRASES_SUFFIX) || code_len > 3 ||
                 strcmp(e->d_name + len - strlen(PHRASES_SUFFIX), PHRASES_SUFFIX) != 0) {
@@ -157,13 +169,14 @@ static void phrase_files_find(void)
         }
         text_file_t *t = &s_text_files[slot++];
         snprintf(t->path, sizeof(t->path), PHRASES_DIR "/%s", e->d_name);
-        // "VOICE_" or "PERSO_" + code (upper case) padded to 8, then "TXT"
+        // "VOICE_", "PERSO_" or "LANG_" + code (upper case), 8 characters at most, padded, then "TXT"
         char base[9];
-        strlcpy(base, strcmp(prefix, PHRASES_PREFIX) == 0 ? "VOICE_" : "PERSO_", sizeof(base));
-        for (size_t i = 0; i < code_len && 6 + i < 8; i++) {
-            base[6 + i] = toupper((unsigned char)e->d_name[strlen(prefix) + i]);
+        strlcpy(base, strcmp(prefix, PHRASES_PREFIX) == 0 ? "VOICE_" :
+                strcmp(prefix, PERSONA_PREFIX) == 0 ? "PERSO_" : "LANG_", sizeof(base));
+        for (size_t i = 0, b = strlen(base); i < code_len && b < 8; i++, b++) {
+            base[b] = toupper((unsigned char)e->d_name[strlen(prefix) + i]);
+            base[b + 1] = '\0';
         }
-        base[6 + (code_len < 2 ? code_len : 2)] = '\0';
         snprintf(t->fat_name, sizeof(t->fat_name), "%-8.8sTXT", base);
         PRINTF("%s shown as %.8s.TXT", t->path, t->fat_name);
     }
@@ -436,7 +449,7 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
 
 /* [Voice assistant] Order of the keys in CONFIG.INI (when not set by the file as last written); others follow */
 static const char *const s_ini_key_order[] = {
-    "Base_url", "Chat_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Country",
+    "Base_url", "Chat_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Languages", "Country",
     "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "Confirm_off", "OpenRouter_key",
     "OpenRouter_free", "Free_models",
     "Screen_off_s", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Currency",

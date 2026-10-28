@@ -123,10 +123,21 @@ static void listen_label_set_text(const char *text)
 #define SETTINGS_RESTART_DELAY_MS       1000
 #define SETTINGS_OPTIONS_SIZE           1024    /* up to 22 models */
 
-/* Languages offered, in the order of the dropdown */
-static const char *const s_settings_languages[] = { "fr", "en" };
 
 static lv_obj_t *s_model_dropdown = NULL;
+
+/* Position of a language in the dropdown (Languages of CONFIG.INI); English, or the first, when not offered */
+static uint16_t settings_language_index(const char *code)
+{
+    uint16_t found = 0;
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        if (strcasecmp(code, app_lang_code(i)) == 0) {
+            return (uint16_t)i;
+        }
+        found = strcasecmp(app_lang_code(i), "en") == 0 ? (uint16_t)i : found;
+    }
+    return found;
+}
 static lv_obj_t *s_save_btn = NULL;
 /* Selections matching the stored settings */
 static uint16_t s_lang_stored = 0;
@@ -180,10 +191,10 @@ static void settings_save_clicked_cb(lv_event_t *e)
 {
     esp_err_t ret = ESP_OK;
     uint16_t lang = lv_dropdown_get_selected(ui_DropdownSettingsRegion);
-    if (lang != s_lang_stored && lang < sizeof(s_settings_languages) / sizeof(s_settings_languages[0])) {
-        ret = settings_save_str("Language", s_settings_languages[lang]);
+    if (lang != s_lang_stored && lang < app_lang_count()) {
+        ret = settings_save_str("Language", app_lang_code(lang));
         if (ret == ESP_OK) {
-            assistant_request_language(s_settings_languages[lang]);
+            assistant_request_language(app_lang_code(lang));
         }
     }
     // The entry after the listed models is a model set in CONFIG.INI: already the stored one
@@ -333,14 +344,15 @@ static void settings_screen_setup(void)
     lv_obj_set_style_pad_column(ui_PanelSettingsRegion, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_left(ui_PanelSettingsRegion, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_width(ui_DropdownSettingsRegion, lv_pct(40));
-    uint16_t lang_selected = 1;   // English UI for other languages
-    for (uint16_t i = 0; i < sizeof(s_settings_languages) / sizeof(s_settings_languages[0]); i++) {
-        if (strcasecmp(param->lang, s_settings_languages[i]) == 0) {
-            lang_selected = i;
-        }
-    }
+    uint16_t lang_selected = settings_language_index(param->lang);
     s_lang_stored = lang_selected;
-    settings_dropdown_setup(ui_DropdownSettingsRegion, "Français\nEnglish", lang_selected, settings_changed_cb);
+    // The languages offered (Languages of CONFIG.INI), by their names
+    char *languages = dropdown_options();
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        strlcat(languages, i ? "\n" : "", SETTINGS_OPTIONS_SIZE);
+        strlcat(languages, app_lang_name(i), SETTINGS_OPTIONS_SIZE);
+    }
+    settings_dropdown_setup(ui_DropdownSettingsRegion, languages, lang_selected, settings_changed_cb);
 
     // Model row: the listed models, plus the current one if it was set in CONFIG.INI and is not listed
     s_model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
@@ -407,12 +419,7 @@ void ui_ctrl_settings_sync(void)
 {
     bsp_display_lock(0);
     const sys_param_t *param = settings_get_parameter();
-    uint16_t lang_selected = 1;   // English UI for other languages
-    for (uint16_t i = 0; i < sizeof(s_settings_languages) / sizeof(s_settings_languages[0]); i++) {
-        if (strcasecmp(param->lang, s_settings_languages[i]) == 0) {
-            lang_selected = i;
-        }
-    }
+    uint16_t lang_selected = settings_language_index(param->lang);
     s_lang_stored = lang_selected;
     lv_dropdown_set_selected(ui_DropdownSettingsRegion, lang_selected);
     for (size_t i = 0; i < llm_model_count; i++) {
@@ -428,6 +435,16 @@ void ui_ctrl_settings_sync(void)
         }
     }
     lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+    bsp_display_unlock();
+}
+
+void ui_ctrl_show_message(const char *text)
+{
+    bsp_display_lock(0);
+    lv_obj_t *box = lv_msgbox_create(NULL, NULL, text, NULL, false);
+    lv_obj_set_width(box, 290);
+    lv_obj_set_style_text_font(lv_msgbox_get_text(box), &ui_font_Latin16, LV_PART_MAIN);
+    lv_obj_center(box);
     bsp_display_unlock();
 }
 

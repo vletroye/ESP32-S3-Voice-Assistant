@@ -23,6 +23,7 @@
 #include "app_ui_ctrl.h"
 #include "driver/usb_serial_jtag.h"
 #include "model_test.h"
+#include "country.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -42,7 +43,8 @@ static const char *TAG = "voice_cmd";
 /* Said alone, they send the assistant back to sleep without an answer */
 static PHRASE_LIST(s_goodbyes);
 static PHRASE_LIST_ALL_LANGUAGES(s_change_lang);
-static PHRASE_LIST(s_lang_shortcut);
+/* In every language: the change is often said in the language wanted ("parle français" while in English) */
+static PHRASE_LIST_ALL_LANGUAGES(s_lang_shortcut);
 static PHRASE_LIST(s_list_models);
 static PHRASE_LIST(s_test_models);
 static PHRASE_LIST(s_change_model);
@@ -64,86 +66,11 @@ static PHRASE_LIST(s_answer_prefix);
 static PHRASE_LIST(s_yes);
 static PHRASE_LIST(s_no);
 
-/*
- * Countries known by voice: ISO 3166-1 alpha-2 code (the web search needs it), French and English names,
- * other names they may be called by
- */
-static const struct {
-    const char *code;
-    const char *fr;
-    const char *en;
-    const char *other;
-} s_countries[] = {
-    { "BE", "Belgique", "Belgium", NULL },
-    { "FR", "France", "France", NULL },
-    { "LU", "Luxembourg", "Luxembourg", NULL },
-    { "CH", "Suisse", "Switzerland", NULL },
-    { "NL", "Pays-Bas", "Netherlands", "hollande" },
-    { "DE", "Allemagne", "Germany", NULL },
-    { "AT", "Autriche", "Austria", NULL },
-    { "IT", "Italie", "Italy", NULL },
-    { "ES", "Espagne", "Spain", NULL },
-    { "PT", "Portugal", "Portugal", NULL },
-    { "GB", "Royaume-Uni", "United Kingdom", "angleterre" },
-    { "IE", "Irlande", "Ireland", NULL },
-    { "DK", "Danemark", "Denmark", NULL },
-    { "SE", "Suède", "Sweden", NULL },
-    { "NO", "Norvège", "Norway", NULL },
-    { "FI", "Finlande", "Finland", NULL },
-    { "PL", "Pologne", "Poland", NULL },
-    { "CZ", "Tchéquie", "Czech Republic", "république tchèque" },
-    { "GR", "Grèce", "Greece", NULL },
-    { "HU", "Hongrie", "Hungary", NULL },
-    { "RO", "Roumanie", "Romania", NULL },
-    { "MC", "Monaco", "Monaco", NULL },
-    { "CA", "Canada", "Canada", "québec" },
-    { "US", "États-Unis", "United States", "amérique" },
-    { "MX", "Mexique", "Mexico", NULL },
-    { "BR", "Brésil", "Brazil", NULL },
-    { "AR", "Argentine", "Argentina", NULL },
-    { "MA", "Maroc", "Morocco", NULL },
-    { "DZ", "Algérie", "Algeria", NULL },
-    { "TN", "Tunisie", "Tunisia", NULL },
-    { "SN", "Sénégal", "Senegal", NULL },
-    { "CI", "Côte d'Ivoire", "Ivory Coast", NULL },
-    { "CM", "Cameroun", "Cameroon", NULL },
-    { "CD", "République démocratique du Congo", "DR Congo", "congo" },
-    { "MG", "Madagascar", "Madagascar", NULL },
-    { "JP", "Japon", "Japan", NULL },
-    { "CN", "Chine", "China", NULL },
-    { "IN", "Inde", "India", NULL },
-    { "AU", "Australie", "Australia", NULL },
-    { "NZ", "Nouvelle-Zélande", "New Zealand", NULL },
-};
-
 /* Words allowed after the answer of a shortcut ("parle anglais s'il te plaît", "modèle 3 please") */
 static PHRASE_LIST(s_courtesy);
 
-/* Languages offered, with the names they may be called by (in both languages, transcription variants) */
-static const struct {
-    const char *code;
-    const char *names[6];
-} s_languages[] = {
-    { "fr", { "français", "francais", "french", NULL } },
-    { "en", { "anglais", "english", "inglish", "l anglais", "angle", NULL } },     /* "angle": heard for "anglais" */
-};
-
-/* Numbers 1..13 as said (digits, French and English words, ordinals); "un"/"une" are articles, see find_model() */
-static const char *const s_numbers[][7] = {
-    { "1", "premier", "première", "one", "first", NULL, NULL },
-    { "2", "deux", "deuxième", "second", "seconde", "two", NULL },
-    { "3", "trois", "troisième", "three", "third", NULL, NULL },
-    { "4", "quatre", "quatrième", "four", "fourth", NULL, NULL },
-    { "5", "cinq", "cinquième", "five", "fifth", NULL, NULL },
-    { "6", "six", "sixième", "sixth", NULL, NULL, NULL },
-    { "7", "sept", "septième", "seven", "seventh", NULL, NULL },
-    { "8", "huit", "huitième", "eight", "eighth", NULL, NULL },
-    { "9", "neuf", "neuvième", "nine", "ninth", NULL, NULL },
-    { "10", "dix", "dixième", "ten", "tenth", NULL, NULL },
-    { "11", "onze", "onzième", "eleven", "eleventh", NULL, NULL },
-    { "12", "douze", "douzième", "twelve", "twelfth", NULL, NULL },
-    { "13", "treize", "treizième", "thirteen", "thirteenth", NULL, NULL },
-};
+/* Numbers 1..VOICE_NUMBERS_MAX as said: digits, and the words of LANG_<CODE>.TXT (numbers) */
+#define VOICE_NUMBERS_MAX   13
 
 typedef enum {
     ASKED_NOTHING,
@@ -206,28 +133,146 @@ static char *reply_dup(const char *text)
 
 /* ---------- language ---------- */
 
-static const char *find_language(const char *norm)
+/*
+ * The words of a list "a/b, c/d, ..." or "code: a/b, code: c" one by one (normalized, as said): each with its
+ * item (0, 1...) and its code ("" without). Stops when found() returns true.
+ */
+typedef bool (*word_found_t)(const char *word, int item, const char *code, void *ctx);
+
+static bool each_word(const char *list, word_found_t found, void *ctx)
 {
-    for (size_t i = 0; i < sizeof(s_languages) / sizeof(s_languages[0]); i++) {
-        for (const char *const *name = s_languages[i].names; *name; name++) {
-            if (has_word(norm, *name)) {
-                return s_languages[i].code;
+    char *copy = strdup(list ? list : "");
+    int item = 0;
+    bool stop = false;
+    for (char *entry = copy; entry && *entry && !stop; item++) {
+        char *comma = strchr(entry, ',');
+        if (comma) {
+            *comma = '\0';
+        }
+        char *colon = strchr(entry, ':');
+        char code[LANG_CODE_SIZE] = "";
+        char *words = entry;
+        if (colon) {
+            *colon = '\0';
+            char norm_code[LANG_CODE_SIZE * 2];
+            app_text_normalize(entry, norm_code, sizeof(norm_code));
+            strlcpy(code, norm_code, sizeof(code));
+            words = colon + 1;
+        }
+        for (char *word = words; word && *word && !stop;) {
+            char *slash = strchr(word, '/');
+            if (slash) {
+                *slash = '\0';
             }
+            char norm[CMD_NORM_SIZE];
+            app_text_normalize(word, norm, sizeof(norm));
+            stop = norm[0] && found(norm, item, code, ctx);
+            word = slash ? slash + 1 : NULL;
+        }
+        entry = comma ? comma + 1 : NULL;
+    }
+    free(copy);
+    return stop;
+}
+
+/* A language offered named in the sentence: by its name in Languages ("Deutsch"), or as any language offered calls
+ * it (language_names of their LANG_<CODE>.TXT, the language in use first); its code, NULL if none */
+typedef struct {
+    const char *norm;
+    bool only;              /* the whole rest is the name ("parle allemand s'il te plaît") */
+    const char *code;
+} language_search_t;
+
+static bool offered(const char *code)
+{
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        if (strcasecmp(code, app_lang_code(i)) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool language_word_found(const char *word, int item, const char *code, void *ctx)
+{
+    language_search_t *search = (language_search_t *)ctx;
+    if (!code[0] || !offered(code) || !(search->only ? is_only(search->norm, word) : has_word(search->norm, word))) {
+        return false;
+    }
+    search->code = app_lang_code(0);
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        search->code = strcasecmp(code, app_lang_code(i)) == 0 ? app_lang_code(i) : search->code;
+    }
+    return true;
+}
+
+static const char *search_language(const char *norm, bool only)
+{
+    language_search_t search = { norm, only, NULL };
+    // Their own names (Languages of CONFIG.INI)
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        char name[CMD_NORM_SIZE];
+        app_text_normalize(app_lang_name(i), name, sizeof(name));
+        if (name[0] && (only ? is_only(norm, name) : has_word(norm, name))) {
+            return app_lang_code(i);
+        }
+    }
+    if (each_word(app_lang_get()->language_names, language_word_found, &search)) {
+        return search.code;
+    }
+    for (size_t i = 0; i < app_lang_count(); i++) {
+        const app_lang_t *other = app_lang_find(app_lang_code(i));
+        if (other && each_word(other->language_names, language_word_found, &search)) {
+            return search.code;
         }
     }
     return NULL;
 }
 
+static const char *find_language(const char *norm)
+{
+    return search_language(norm, false);
+}
+
 static bool is_language_only(const char *rest)
 {
-    for (size_t i = 0; i < sizeof(s_languages) / sizeof(s_languages[0]); i++) {
-        for (const char *const *name = s_languages[i].names; *name; name++) {
-            if (is_only(rest, *name)) {
-                return true;
-            }
+    return search_language(rest, true) != NULL;
+}
+
+/* A number said (1..max): digits, or the words of the language in use or of English; 0 if none */
+typedef struct {
+    const char *norm;
+    bool only;
+    int max;
+    int number;
+} number_search_t;
+
+static bool number_word_found(const char *word, int item, const char *code, void *ctx)
+{
+    number_search_t *search = (number_search_t *)ctx;
+    if (item >= search->max || !(search->only ? is_only(search->norm, word) : has_word(search->norm, word))) {
+        return false;
+    }
+    search->number = item + 1;
+    return true;
+}
+
+static int search_number(const char *norm, bool only, int max)
+{
+    max = max < VOICE_NUMBERS_MAX ? max : VOICE_NUMBERS_MAX;
+    for (int n = 1; n <= max; n++) {
+        char digits[4];
+        snprintf(digits, sizeof(digits), "%d", n);
+        if (only ? is_only(norm, digits) : has_word(norm, digits)) {
+            return n;
         }
     }
-    return false;
+    number_search_t search = { norm, only, max, 0 };
+    const app_lang_t *english = app_lang_find("en");
+    if (!each_word(app_lang_get()->numbers, number_word_found, &search) && english) {
+        each_word(english->numbers, number_word_found, &search);
+    }
+    return search.number;
 }
 
 static voice_cmd_t choose_language(const char *norm, char **reply)
@@ -376,13 +421,8 @@ static int find_model(const char *norm, llm_provider_t provider)
             number = 1;
         }
     }
-    for (size_t i = 0; i < sizeof(s_numbers) / sizeof(s_numbers[0]) && !number; i++) {
-        for (size_t j = 0; j < sizeof(s_numbers[0]) / sizeof(s_numbers[0][0]) && s_numbers[i][j]; j++) {
-            if (has_word(norm, s_numbers[i][j])) {
-                number = (int)i + 1;
-                break;
-            }
-        }
+    if (!number) {
+        number = search_number(norm, false, VOICE_NUMBERS_MAX);
     }
     for (size_t i = 0; i < llm_model_count && number; i++) {
         if (model_listed(i, provider) && --number == 0) {
@@ -397,14 +437,7 @@ static bool is_model_only(const char *rest)
     if (strcmp(rest, "un") == 0 || strcmp(rest, "une") == 0) {
         return true;
     }
-    for (size_t i = 0; i < sizeof(s_numbers) / sizeof(s_numbers[0]); i++) {
-        for (size_t j = 0; j < sizeof(s_numbers[0]) / sizeof(s_numbers[0][0]) && s_numbers[i][j]; j++) {
-            if (is_only(rest, s_numbers[i][j])) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return search_number(rest, true, VOICE_NUMBERS_MAX) > 0;
 }
 
 /* "Voici les modèles proposés par Anthropic. 1, Haiku, celui que j'utilise. 2, Sonnet. ... Dites son numéro." */
@@ -581,14 +614,7 @@ static int find_voice(const char *norm)
             return 1;
         }
     }
-    for (size_t i = 0; i < sizeof(s_numbers) / sizeof(s_numbers[0]) && i < tts_voice_count; i++) {
-        for (size_t j = 0; j < sizeof(s_numbers[0]) / sizeof(s_numbers[0][0]) && s_numbers[i][j]; j++) {
-            if (has_word(norm, s_numbers[i][j])) {
-                return (int)i + 1;
-            }
-        }
-    }
-    return 0;
+    return search_number(norm, false, (int)tts_voice_count);
 }
 
 /* After "prends la voix": only a voice name or a number ("la voix est trop forte" is not a command) */
@@ -672,30 +698,6 @@ static voice_cmd_t choose_voice(const char *norm, char **reply)
 /* ---------- dispatch ---------- */
 
 /* ---------- country and town ---------- */
-
-/* Name of a country in the current language */
-static const char *country_name(size_t i)
-{
-    return strcasecmp(app_lang_get()->code, "fr") == 0 ? s_countries[i].fr : s_countries[i].en;
-}
-
-static int find_country(const char *norm)
-{
-    for (size_t i = 0; i < sizeof(s_countries) / sizeof(s_countries[0]); i++) {
-        const char *names[] = { s_countries[i].fr, s_countries[i].en, s_countries[i].other };
-        for (size_t j = 0; j < 3; j++) {
-            char name[48];
-            if (!names[j]) {
-                continue;
-            }
-            app_text_normalize(names[j], name, sizeof(name));
-            if (has_word(norm, name)) {
-                return (int)i;
-            }
-        }
-    }
-    return -1;
-}
 
 /* The answer without "j'habite à", "c'est" ... and without the final punctuation: "Evere" */
 static void answer_text(const char *text, const char *norm, char *out, size_t size)
@@ -890,13 +892,15 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         return choose_voice(norm, reply);
     }
     if (recent && asked == ASKED_COUNTRY) {
-        int i = find_country(norm);
-        if (i < 0) {
+        char code[3];
+        if (!country_find(norm, code, sizeof(code))) {
             *reply = reply_dup(app_lang_get()->country_unknown);
             return VOICE_CMD_ANSWERED;
         }
-        strlcpy(s_pending, s_countries[i].code, sizeof(s_pending));
-        return ask_confirmation(CONFIRM_COUNTRY, app_lang_get()->country_confirm, country_name(i), reply);
+        char name[64];
+        strlcpy(s_pending, code, sizeof(s_pending));
+        country_name(code, name, sizeof(name));
+        return ask_confirmation(CONFIRM_COUNTRY, app_lang_get()->country_confirm, name, reply);
     }
     if (recent && asked == ASKED_CITY) {
         answer_text(text, norm, s_pending, sizeof(s_pending));

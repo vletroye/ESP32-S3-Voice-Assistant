@@ -1,0 +1,52 @@
+# Countries known by voice ("change mon pays", "change my country"): file COUNTRY.TXT of the configuration drive.
+# The first line gives the languages of the columns. Then one country per line: its ISO 3166-1 code (2 letters,
+# the web search needs it), ":", then its names in the order of the columns, separated by commas. Other names
+# a country may be called by follow its name, separated by "/" ("Netherlands/Holland"): the first one is the
+# name said by the assistant. A name left empty takes the English one.
+# A country is recognized by its names in the language in use and in English, or by its code alone.
+# A language added to Languages of CONFIG.INI gets an empty column at the end. A soft reset restores this file
+# but keeps the columns of the languages added. Emptied file: back to its original version.
+# Lines starting with # are comments.
+
+EN, FR, DE, NL, ES, IT
+
+BE: Belgium, Belgique, Belgien, België, Bélgica, Belgio
+FR: France, France, Frankreich, Frankrijk, Francia, Francia
+LU: Luxembourg, Luxembourg, Luxemburg, Luxemburg, Luxemburgo, Lussemburgo
+CH: Switzerland, Suisse, Schweiz, Zwitserland, Suiza, Svizzera
+NL: Netherlands/Holland, Pays-Bas/Hollande, Niederlande/Holland, Nederland/Holland, Países Bajos/Holanda, Paesi Bassi/Olanda
+DE: Germany, Allemagne, Deutschland, Duitsland, Alemania, Germania
+AT: Austria, Autriche, Österreich, Oostenrijk, Austria, Austria
+IT: Italy, Italie, Italien, Italië, Italia, Italia
+ES: Spain, Espagne, Spanien, Spanje, España, Spagna
+PT: Portugal, Portugal, Portugal, Portugal, Portugal, Portogallo
+GB: United Kingdom/England/Great Britain, Royaume-Uni/Angleterre/Grande-Bretagne, Vereinigtes Königreich/England/Großbritannien, Verenigd Koninkrijk/Engeland/Groot-Brittannië, Reino Unido/Inglaterra, Regno Unito/Inghilterra
+IE: Ireland, Irlande, Irland, Ierland, Irlanda, Irlanda
+DK: Denmark, Danemark, Dänemark, Denemarken, Dinamarca, Danimarca
+SE: Sweden, Suède, Schweden, Zweden, Suecia, Svezia
+NO: Norway, Norvège, Norwegen, Noorwegen, Noruega, Norvegia
+FI: Finland, Finlande, Finnland, Finland, Finlandia, Finlandia
+PL: Poland, Pologne, Polen, Polen, Polonia, Polonia
+CZ: Czech Republic/Czechia, Tchéquie/République tchèque, Tschechien, Tsjechië, Chequia/República Checa, Cechia/Repubblica Ceca
+GR: Greece, Grèce, Griechenland, Griekenland, Grecia, Grecia
+HU: Hungary, Hongrie, Ungarn, Hongarije, Hungría, Ungheria
+RO: Romania, Roumanie, Rumänien, Roemenië, Rumanía, Romania
+MC: Monaco, Monaco, Monaco, Monaco, Mónaco, Monaco
+CA: Canada, Canada/Québec, Kanada, Canada, Canadá, Canada
+US: United States/America/USA, États-Unis/Amérique, Vereinigte Staaten/Amerika/USA, Verenigde Staten/Amerika, Estados Unidos, Stati Uniti/America
+MX: Mexico, Mexique, Mexiko, Mexico, México, Messico
+BR: Brazil, Brésil, Brasilien, Brazilië, Brasil, Brasile
+AR: Argentina, Argentine, Argentinien, Argentinië, Argentina, Argentina
+MA: Morocco, Maroc, Marokko, Marokko, Marruecos, Marocco
+DZ: Algeria, Algérie, Algerien, Algerije, Argelia, Algeria
+TN: Tunisia, Tunisie, Tunesien, Tunesië, Túnez, Tunisia
+SN: Senegal, Sénégal, Senegal, Senegal, Senegal, Senegal
+CI: Ivory Coast, Côte d'Ivoire, Elfenbeinküste, Ivoorkust, Costa de Marfil, Costa d'Avorio
+CM: Cameroon, Cameroun, Kamerun, Kameroen, Camerún, Camerun
+CD: DR Congo/Congo, République démocratique du Congo/Congo, Demokratische Republik Kongo/Kongo, Democratische Republiek Congo/Congo, República Democrática del Congo/Congo, Repubblica Democratica del Congo/Congo
+MG: Madagascar, Madagascar, Madagaskar, Madagaskar, Madagascar, Madagascar
+JP: Japan, Japon, Japan, Japan, Japón, Giappone
+CN: China, Chine, China, China, China, Cina
+IN: India, Inde, Indien, India, India, India
+AU: Australia, Australie, Australien, Australië, Australia, Australia
+NZ: New Zealand, Nouvelle-Zélande, Neuseeland, Nieuw-Zeeland, Nueva Zelanda, Nuova Zelanda

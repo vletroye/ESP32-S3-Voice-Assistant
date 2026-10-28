@@ -10,6 +10,8 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_log.h"
+/* Default values of CONFIG.INI: the assistant's (generated from its sdkconfig, main/CMakeLists.txt) */
+#include "assistant_defaults.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "esp_tinyuf2.h"
@@ -215,6 +217,8 @@ void app_main(void)
         nvs_init_str_if_missing("Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD);
         // Currency of the prices of AGENTS.INI and of the costs (COSTS.TXT)
         nvs_init_str_if_missing("Currency", CONFIG_ASSISTANT_CURRENCY);
+        // Languages offered: "FR:Français, EN:English" (a language added gets its files at the next start)
+        nvs_init_str_if_missing("Languages", CONFIG_ASSISTANT_LANGUAGES);
         // Silence after which the question is considered finished (same default as ASSISTANT_END_OF_SPEECH_MS)
         snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_END_OF_SPEECH_MS);
         nvs_init_str_if_missing("End_speech_ms", number);

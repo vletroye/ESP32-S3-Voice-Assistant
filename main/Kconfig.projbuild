@@ -16,6 +16,14 @@ menu "Example Configuration"
             answers and the on-screen texts. Overridden by the "Language" key of the
             device configuration (CONFIG.INI) when present.
 
+    config ASSISTANT_LANGUAGES
+        string "Languages offered (code:name, comma-separated)"
+        default "FR:Français, EN:English"
+        help
+            The languages of the Settings screen and of "change la langue". Each one has its files on the
+            configuration drive (LANG_<CODE>.TXT, VOICE_<CODE>.TXT, PERSO_<CODE>.TXT), made from the English
+            ones when a language is added. Default of Languages in CONFIG.INI, which takes precedence.
+
     config ASSISTANT_CHAT_MODEL
         string "Default chat model"
         default "claude-haiku-5-5"

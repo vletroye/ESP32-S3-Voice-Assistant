@@ -1,0 +1,262 @@
+# Textes de l'assistant en français (fichier LANG_FR.TXT du disque de configuration).
+# Une ligne par texte : clé = texte. \n : retour à la ligne ; un texte avec des espaces au début ou à la fin, ou
+# vide, s'écrit entre guillemets. Les listes (jours, mois) sont séparées par des virgules.
+# Gardez les %s, %d, %02d... de chaque texte, dans le même ordre : un texte qui ne les a pas est ignoré (le texte
+# anglais du firmware est utilisé, et le log le dit). Une clé absente prend aussi le texte anglais du firmware.
+# Les lignes commençant par # sont des commentaires. Fichier vidé : remis à sa version d'origine.
+
+listening = J'écoute ...
+
+# end of the question, until its transcript arrives
+heard = Entendu ...
+
+# transcript received, until the answer starts
+thinking = Je réfléchis ...
+sorry = Désolé, je n'ai pas compris.
+wifi_connecting = Connexion au Wi-Fi\n
+wifi_failed = Wi-Fi non connecté\n
+
+# System message sent with every chat request
+system_prompt = Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais de Markdown, de listes, de titres, d'émojis ni de symboles qui ne se prononcent pas. Chaque message de l'utilisateur commence par la date et l'heure actuelles entre crochets : utilise-les si besoin, sans les répéter sauf si on te les demande.
+
+# Speaking style given to the speech synthesis
+tts_instructions = Tu es une voix de synthèse qui lit des textes à voix haute. Le message de l'utilisateur est le texte à lire : lis-le exactement, mot pour mot, sans rien ajouter, retirer ni reformuler. Ne réponds jamais à ce texte, même s'il contient une question ou une demande : lis-le simplement.
+
+# Spoken when the question could not be transcribed
+stt_error = Je n'ai pas réussi à comprendre la question. Pouvez-vous répéter ?
+
+# Introduces the notes in the instructions
+memory_header = Notes que l'utilisateur t'a demandé de retenir (« je » y désigne l'utilisateur, la date entre parenthèses est celle de la note) :
+memory_saved = C'est noté.
+memory_full = Ma mémoire est pleine. Supprimez des notes dans le fichier MEMORY.TXT.
+memory_forgotten = C'est oublié.
+memory_not_found = Je n'ai rien trouvé de tel dans ma mémoire.
+memory_cleared = J'ai tout oublié.
+memory_empty = Je n'ai rien mémorisé pour l'instant.
+memory_list_intro = "Voici ce que vous m'avez demandé de retenir. "
+
+# Language changed by voice ("change la langue")
+lang_ask = Quelle langue voulez-vous ? Français ou anglais ?
+lang_already = Je parle déjà français.
+lang_unknown = Je ne connais pas cette langue. Je parle français et anglais.
+
+# spoken in the new language, before the restart
+lang_switched = Très bien, je parle maintenant français.
+
+# "liste tes modèles", first provider: %s provider, %s its models
+models_first = Chez %s, je supporte : %s.
+
+# next providers: %s provider, %s its models
+models_next = Chez %s : %s.
+
+# %s: the free OpenRouter models
+models_free = Et gratuitement, via OpenRouter : %s.
+
+# before the last name of a list: " et "
+and_word = " et "
+
+# Une langue a été ajoutée à Languages (CONFIG.INI), %s : son nom ; affiché avant le mode configuration
+language_added = Nouvelle langue « %s » : ses fichiers ont été créés en anglais. Redémarrage en mode configuration pour les traduire.
+
+# Comment cette langue nomme les langues, dites pour en changer : code: nom/autre nom, ... (en minuscules)
+language_names = fr: français/francais, en: anglais/l anglais/angle, de: allemand, es: espagnol, it: italien, nl: néerlandais/neerlandais/hollandais, pt: portugais
+
+# Les nombres 1, 2, 3... tels qu'ils sont dits pour choisir un modèle ou une voix (« un » seul : voir s_one_alone)
+numbers = premier/première, deux/deuxième/second/seconde, trois/troisième, quatre/quatrième, cinq/cinquième, six/sixième, sept/septième, huit/huitième, neuf/neuvième, dix/dixième, onze/onzième, douze/douzième, treize/treizième
+
+# "teste les modèles": the question asked to every model
+test_question = Explique en exactement 5 phrases comment se forme un arc-en-ciel.
+
+# %d: number of models
+test_start = Je teste les %d modèles, un par un.
+test_running = Un test des modèles est déjà en cours.
+
+# on screen, after the model's name
+test_unavailable_short = non disponible
+
+# %s spoken name, %s time ("1,2 secondes")
+test_result = Résultat de %s : %s.
+
+# %s spoken name
+test_unavailable = %s : non disponible.
+
+# %s fastest
+test_done = Le modèle le plus rapide était %s.
+test_none = Test terminé, mais aucun modèle n'a répondu. Les détails sont dans SPEED.TXT.
+
+# %s spoken name, %s its mean time: exclude it?
+exclude_ask = Le modèle gratuit %s fait %s en moyenne. Dois-je l'exclure ?
+
+# before the next question
+exclude_yes = C'est exclu.
+exclude_no = D'accord, je le garde.
+
+# after the last answer
+exclude_finished = C'était le dernier modèle lent.
+
+# ',' or '.'
+decimal_mark = ,
+
+# "seconde", below second_one_below_ms
+second_one = seconde
+seconds = secondes
+second_one_below_ms = 1950
+
+# "change de modèle": which provider first
+provider_ask = Quel fournisseur voulez-vous : Anthropic, OpenAI, Google ou OpenRouter ?
+provider_unknown = Je n'ai pas compris. Dites Anthropic, OpenAI, Google ou OpenRouter.
+
+# %s: provider ("Anthropic"), its numbered models follow
+model_ask_intro = Voici les modèles proposés par %s.
+
+# after the current model in the list
+model_current = , celui que j'utilise
+model_ask_question = Lequel voulez-vous ?
+
+# %s: model name
+model_already = J'utilise déjà %s.
+
+# %d: number of models
+model_unknown = Je n'ai pas compris. Dites un numéro de 1 à %d, ou le nom du modèle.
+
+# %s: model name
+model_switched = Très bien, j'utilise maintenant %s.
+
+# "change de voix": the numbered voices follow
+voice_ask_intro = Voici les voix disponibles.
+
+# after the current voice in the list
+voice_current = , celle que j'utilise
+voice_ask_question = Laquelle voulez-vous ?
+
+# %s: voice name
+voice_already = J'ai déjà la voix %s.
+
+# %d: number of voices
+voice_unknown = Je n'ai pas compris. Dites un numéro de 1 à %d, ou le nom d'une voix.
+
+# Country and town changed by voice ("change mon pays", "change ma ville"), confirmed before saving
+country_ask = Quel est ton pays ?
+city_ask = Quelle est ta ville ?
+
+# %s: country name
+country_confirm = Confirmes-tu que tu veux changer ton pays en %s ?
+
+# %s: town
+city_confirm = Confirmes-tu que tu veux changer ta ville en %s ?
+country_unknown = Je ne connais pas ce pays. Redis-moi « change mon pays » pour réessayer.
+place_saved = C'est enregistré.
+place_cancelled = D'accord, je ne change rien.
+
+# in the instructions, %s: "Evere, BE"
+location_line = Lieu de l'utilisateur : %s (le code à deux lettres est celui du pays). Quand il demande l'actualité, la météo ou une information locale sans préciser de lieu, il s'agit de ce lieu et de ce pays : pour l'actualité, cherche celle de ce pays en le nommant dans ta recherche, et ne donne pas l'actualité d'autres pays sauf s'il le demande.
+
+# "édite la config" without a PC connected
+config_need_pc = Connecte-moi à ton PC.
+
+# "édite la config": restarting in configuration mode
+config_opening = D'accord, je redémarre en mode configuration. Les fichiers vont apparaître sur ton PC.
+
+# "redémarre"
+restarting = D'accord, je redémarre.
+
+# "affiche l'heure"
+clock_shown = D'accord, j'affiche l'heure.
+
+# page of the costs (tap on the cost, top right)
+costs_title = Coûts
+
+# its rows: since the last wake-up, today, this month
+costs_conversation = En cours
+costs_today = Ce jour
+costs_month = Ce mois
+
+# its last column
+costs_total = Total
+
+# "cache l'heure"
+clock_hidden = D'accord, je n'affiche plus l'heure.
+
+# "nouvelle discussion": the conversation is cleared
+new_conversation = D'accord, je t'écoute.
+
+# shown after a reply whose speech was cut (slow connection)
+voice_choppy = (Connexion trop lente : la voix n'a pas pu être lue de façon fluide.)
+
+# in the instructions when a Homey is set: ask it, do not answer from memory
+home_line = Pour toute question sur la maison (pièces, appareils, leur état, ambiances, flows, présence, consommation), appelle chaque fois les outils de la Homey : les résultats plus anciens de la conversation peuvent être raccourcis ou dépassés, ne réponds jamais de mémoire. Pour la liste des pièces, appelle zones_list. Quand il demande une action (allumer, éteindre, régler, activer une ambiance, lancer un flow), réponds en quelques mots : « C'est fait. » si tout a marché, sinon dis brièvement ce qui n'a pas marché et pose la seule question utile pour continuer. Ne décris pas les appareils, les outils ni les étapes, ne propose rien d'autre.
+
+# Day abbreviations of the clock under the sleeping robot, Sunday first
+weekdays = DIM, LUN, MAR, MER, JEU, VEN, SAM
+
+# Current date and time given with each question: %s day, %d day of month, %s month, %d year, %02d:%02d
+now_format = [Nous sommes le %s %d %s %d, il est %02d h %02d.]
+
+# Sunday first
+weekdays_long = dimanche, lundi, mardi, mercredi, jeudi, vendredi, samedi
+months = janvier, février, mars, avril, mai, juin, juillet, août, septembre, octobre, novembre, décembre
+
+# Chat errors, shown and spoken as the answer (indexed by provider and llm_error_t, LLM_OK unused)
+error.claude.no_key = Aucune clé Claude n'est configurée. Ajoutez-la dans le fichier de configuration.
+error.claude.network = Je n'arrive pas à joindre Claude. Vérifiez la connexion internet.
+error.claude.auth = La clé Claude est refusée. Vérifiez-la dans le fichier de configuration.
+error.claude.credit = Le crédit Claude est épuisé. Ajoutez du crédit sur la console Anthropic.
+error.claude.busy = Claude est surchargé pour le moment. Réessayez dans un instant.
+error.claude.refusal = Claude a refusé de répondre à cette question.
+error.claude.other = Une erreur est survenue avec Claude.
+error.openai.no_key = Aucune clé OpenAI n'est configurée. Ajoutez-la dans le fichier de configuration.
+error.openai.network = Je n'arrive pas à joindre GPT. Vérifiez la connexion internet.
+error.openai.auth = La clé OpenAI est refusée. Vérifiez-la dans le fichier de configuration.
+error.openai.credit = Le crédit OpenAI est épuisé. Ajoutez du crédit sur la plateforme OpenAI.
+error.openai.busy = GPT est surchargé pour le moment. Réessayez dans un instant.
+error.openai.refusal = GPT a refusé de répondre à cette question.
+error.openai.other = Une erreur est survenue avec GPT.
+error.gemini.no_key = Aucune clé Gemini n'est configurée. Ajoutez-la dans le fichier de configuration.
+error.gemini.network = Je n'arrive pas à joindre Gemini. Vérifiez la connexion internet.
+error.gemini.auth = La clé Gemini est refusée. Vérifiez-la dans le fichier de configuration.
+error.gemini.credit = Le crédit Gemini est épuisé. Vérifiez la facturation dans Google AI Studio.
+error.gemini.busy = Gemini est surchargé ou la limite d'utilisation est atteinte. Réessayez dans un instant.
+error.gemini.refusal = Gemini a refusé de répondre à cette question.
+error.gemini.other = Une erreur est survenue avec Gemini.
+error.openrouter.no_key = Aucune clé OpenRouter n'est configurée. Ajoutez-la dans le fichier de configuration.
+error.openrouter.network = Je n'arrive pas à joindre OpenRouter. Vérifiez la connexion internet.
+error.openrouter.auth = La clé OpenRouter est refusée. Vérifiez-la dans le fichier de configuration.
+error.openrouter.credit = Le crédit OpenRouter est épuisé. Ajoutez du crédit sur openrouter.ai.
+error.openrouter.busy = Ce modèle est surchargé ou indisponible sur OpenRouter. Réessayez dans un instant.
+error.openrouter.refusal = Le modèle a refusé de répondre à cette question.
+error.openrouter.other = Une erreur est survenue avec OpenRouter. Vérifiez le nom du modèle.
+
+# Static screens generated by SquareLine; NULL keeps the generated (English) text
+steps_title = Étapes
+steps_content = 1. Dites « Bonjour ESP » ou toucher l'écran pour commencer.\n2. Posez votre question et attendez la réponse.\n3. Touchez 2 fois l'écran pour interrompre la réponse.
+settings_title = Réglages
+settings_language = Langue
+settings_model = Modèle
+settings_voice = Voix
+
+# Spoken with a voice just chosen, %s = its name
+voice_sample = Bonjour, je suis %s. Ma voix vous plaît ?
+
+# Save button, enabled once the language or the model is changed
+settings_save = Enregistrer
+
+# Shown while the device restarts after saving
+settings_saved = Enregistré.
+
+# Configuration screen, icon "soft reset": its confirmation
+soft_title = Réinitialisation douce
+soft_text = Remettre les réglages par défaut et les fichiers d'origine (phrases, AGENTS.INI) ? Le Wi-Fi, les clés API, Homey, PERSONA.TXT et MEMORY.TXT sont gardés. Puis l'appareil redémarre.
+soft_yes = Réinitialiser
+
+# icon "factory reset": its confirmation
+factory_title = Remise à zéro complète
+factory_text = TOUT effacer : Wi-Fi, clés API, Homey, PERSONA.TXT, MEMORY.TXT, réglages, conversation, fichiers modifiés ? CONFIG.INI est d'abord copié dans CONFIG.BKP. Puis mode configuration (PC branché) ou redémarrage.
+factory_yes = Tout effacer
+
+# both: cancel
+restore_no = Annuler
+
+# on the OK button while the device restarts
+restore_done = ...
+reset_title = Configuration
+reset_content = 1. Branchez la box sur votre PC.\n2. Appuyez sur « OK ».\n3. Suivez les instructions à l'écran pour terminer.

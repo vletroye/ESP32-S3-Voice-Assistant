@@ -32,6 +32,7 @@
 #include "bsp_board.h"
 #include "settings.h"
 #include "radio.h"
+#include "radio_browser.h"
 
 #define RADIO_USER_AGENT        "ESP32-S3-Voice-Assistant/1.0"
 #define RADIO_RING_SIZE         (128 * 1024)    /* 8 s at 128 kbit/s */
@@ -51,7 +52,6 @@
 #define RADIO_STABLE_US         (30 * 1000000)  /* a stream played this long resets the reconnections */
 #define RADIO_PLAY_STACK        4096
 #define RADIO_SPEAKER_WAIT_MS   500             /* the playback task leaves within a decoded frame (~100 ms) */
-#define RADIO_NAME_SIZE         64
 #define RADIO_TITLE_SIZE        128
 #define RADIO_META_MAX          255
 
@@ -64,8 +64,13 @@ typedef enum {
 
 static RingbufHandle_t s_ring = NULL;
 static TaskHandle_t s_net_task = NULL;
-static char s_url[512];
+/* The list played (a search, the favourites, or one station) and the current station of it */
+static radio_station_t *s_list = NULL;          /* PSRAM, RADIO_LIST_MAX */
+static volatile int s_list_count = 0;
+static volatile int s_list_index = 0;
+static char s_url[RADIO_URL_SIZE];
 static char s_name[RADIO_NAME_SIZE];
+static char s_uuid[RADIO_UUID_SIZE];
 static char s_title[RADIO_TITLE_SIZE];
 static portMUX_TYPE s_title_lock = portMUX_INITIALIZER_UNLOCKED;
 static char s_content_type[64];
@@ -242,11 +247,27 @@ static bool wait_speaker_free(int ms)
     return !s_play_busy;
 }
 
-/* A session: the stream played until stopped (suspend, pause, another station); reconnected when it drops */
+static void set_current(int index);
+
+/*
+ * A session: the stream played until stopped (suspend, pause, another station); reconnected when it drops. A
+ * station of a list that gives no audio at all is skipped: the next one is played.
+ */
 static void net_session(void)
 {
     int failures = 0;
+    int skipped = 0;
+    char clicked[RADIO_UUID_SIZE] = "";
     while (s_state == RADIO_PLAYING) {
+        // A listen counted by Radio-Browser, once per station played
+        if (s_uuid[0] && strcmp(clicked, s_uuid) != 0) {
+            strlcpy(clicked, s_uuid, sizeof(clicked));
+            radio_browser_click(s_uuid);
+            // (s_stop is still set by the request that started this session: only a pause or a suspension ends it)
+            if (s_state != RADIO_PLAYING) {
+                return;
+            }
+        }
         // The previous playback has left the speaker, and what it left in the buffer is dropped
         wait_speaker_free(2000);
         size_t got = 0;
@@ -278,6 +299,14 @@ static void net_session(void)
         wait_speaker_free(RADIO_RING_SIZE / 16 * 2);    // what was buffered is played
         if (received && esp_timer_get_time() - start > RADIO_STABLE_US) {
             failures = 0;
+        }
+        if (!received && s_list_count > 1 && skipped < s_list_count - 1) {
+            // Nothing from this station: the next one of the list
+            skipped++;
+            ESP_LOGW(TAG, "%s gives no audio: skipped", s_name[0] ? s_name : s_url);
+            set_current((s_list_index + 1) % s_list_count);
+            failures = 0;
+            continue;
         }
         if (++failures > RADIO_RETRIES) {
             ESP_LOGE(TAG, "%s could not be played", s_name[0] ? s_name : s_url);
@@ -587,6 +616,10 @@ static bool radio_init(void)
     if (s_ring) {
         return true;
     }
+    s_list = heap_caps_calloc(RADIO_LIST_MAX, sizeof(radio_station_t), MALLOC_CAP_SPIRAM);
+    if (!s_list) {
+        return false;
+    }
     // MP3 and AAC (HE-AAC included) only: the other decoders of the component are not linked
     esp_mp3_dec_register();
     esp_aac_dec_register();
@@ -616,15 +649,78 @@ static void session_start(void)
     xTaskNotifyGive(s_net_task);
 }
 
-void radio_play(const char *name, const char *url)
+/* The station index of the list becomes the current one */
+static void set_current(int index)
 {
-    if (!url || !url[0] || !radio_init()) {
+    s_list_index = index;
+    strlcpy(s_name, s_list[index].name, sizeof(s_name));
+    strlcpy(s_url, s_list[index].url, sizeof(s_url));
+    strlcpy(s_uuid, s_list[index].uuid, sizeof(s_uuid));
+}
+
+void radio_play_list(const radio_station_t *list, int count, int start)
+{
+    if (!list || count <= 0 || !radio_init()) {
         return;
     }
     stream_stop();
-    strlcpy(s_name, name ? name : "", sizeof(s_name));
-    strlcpy(s_url, url, sizeof(s_url));
+    count = count > RADIO_LIST_MAX ? RADIO_LIST_MAX : count;
+    memcpy(s_list, list, count * sizeof(radio_station_t));
+    s_list_count = count;
+    set_current(start >= 0 && start < count ? start : 0);
     session_start();
+}
+
+void radio_play(const char *name, const char *url)
+{
+    if (!url || !url[0]) {
+        return;
+    }
+    radio_station_t station = { 0 };
+    strlcpy(station.name, name ? name : "", sizeof(station.name));
+    strlcpy(station.url, url, sizeof(station.url));
+    radio_play_list(&station, 1, 0);
+}
+
+static bool move(int delta)
+{
+    int index = s_list_index + delta;
+    if (!s_list || index < 0 || index >= s_list_count) {
+        return false;
+    }
+    stream_stop();
+    set_current(index);
+    session_start();
+    return true;
+}
+
+bool radio_next(void)
+{
+    return move(1);
+}
+
+bool radio_previous(void)
+{
+    return move(-1);
+}
+
+int radio_list_index(void)
+{
+    return s_list_index;
+}
+
+int radio_list_count(void)
+{
+    return s_list_count;
+}
+
+radio_station_t radio_station(void)
+{
+    radio_station_t station = { 0 };
+    strlcpy(station.name, s_name, sizeof(station.name));
+    strlcpy(station.url, s_url, sizeof(station.url));
+    strlcpy(station.uuid, s_uuid, sizeof(station.uuid));
+    return station;
 }
 
 void radio_suspend(void)

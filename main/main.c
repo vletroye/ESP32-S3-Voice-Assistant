@@ -47,6 +47,7 @@
 #include "persona.h"
 #include "country.h"
 #include "radio.h"
+#include "radio_browser.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -654,15 +655,46 @@ void assistant_listen_end(void)
     // pauses it, "reprends la radio" resumes it
     char radio_norm[64];
     app_text_normalize(text, radio_norm, sizeof(radio_norm));
+    // (phase 2: "radio genre jazz", "radio pays italie", "radio nom nostalgie", "radio suivante", "radio précédente")
     bool radio_test = strncmp(radio_norm, "test radio", 10) == 0;
     bool radio_pause_test = strncmp(radio_norm, "stop radio", 10) == 0;
     bool radio_resume_test = strncmp(radio_norm, "reprends la radio", 17) == 0;
-    if (radio_test || radio_pause_test || radio_resume_test) {
+    bool radio_search_test = strncmp(radio_norm, "radio genre ", 12) == 0 || strncmp(radio_norm, "radio pays ", 11) == 0 ||
+                             strncmp(radio_norm, "radio nom ", 10) == 0;
+    bool radio_next_test = strncmp(radio_norm, "radio suivante", 14) == 0;
+    bool radio_previous_test = strncmp(radio_norm, "radio précédente", 17) == 0 ||
+                               strncmp(radio_norm, "radio precedente", 16) == 0;
+    if (radio_test || radio_pause_test || radio_resume_test || radio_search_test || radio_next_test ||
+        radio_previous_test) {
         ESP_LOGI(TAG, "Radio test: %s", radio_norm);
         if (radio_test) {
             radio_play("FIP", "http://icecast.radiofrance.fr/fip-midfi.mp3");
         } else if (radio_pause_test) {
             radio_pause();
+        } else if (radio_next_test) {
+            radio_next();
+        } else if (radio_previous_test) {
+            radio_previous();
+        } else if (radio_search_test) {
+            radio_station_t *found = heap_caps_calloc(RADIO_BROWSER_MAX, sizeof(radio_station_t), MALLOC_CAP_SPIRAM);
+            const char *what = strchr(radio_norm + 6, ' ') + 1;
+            int n = 0;
+            if (found && strncmp(radio_norm, "radio genre ", 12) == 0) {
+                n = radio_browser_search(NULL, what, NULL, found, RADIO_BROWSER_MAX);
+            } else if (found && strncmp(radio_norm, "radio nom ", 10) == 0) {
+                n = radio_browser_search(what, NULL, NULL, found, RADIO_BROWSER_MAX);
+            } else if (found) {
+                char code[3];
+                if (country_find(what, code, sizeof(code))) {
+                    n = radio_browser_search(NULL, NULL, code, found, RADIO_BROWSER_MAX);
+                } else {
+                    ESP_LOGW(TAG, "Radio test: country \"%s\" unknown", what);
+                }
+            }
+            if (n > 0) {
+                radio_play_list(found, n, 0);
+            }
+            free(found);
         } else {
             radio_resume();
         }

@@ -17,6 +17,18 @@
 extern "C" {
 #endif
 
+#define RADIO_NAME_SIZE     64
+#define RADIO_URL_SIZE      256
+#define RADIO_UUID_SIZE     40
+#define RADIO_LIST_MAX      20      /* stations of a list (a search, the favourites) */
+
+/* A station: its name (said and shown), its stream, its Radio-Browser id ("" when not from it) */
+typedef struct {
+    char name[RADIO_NAME_SIZE];
+    char url[RADIO_URL_SIZE];
+    char uuid[RADIO_UUID_SIZE];
+} radio_station_t;
+
 typedef enum {
     RADIO_OFF,          /* no station, or it could not be played */
     RADIO_PLAYING,      /* playing (or connecting) */
@@ -26,6 +38,23 @@ typedef enum {
 
 /** Play this station (its name as said and shown, its stream URL); the one playing is replaced. Does not wait. */
 void radio_play(const char *name, const char *url);
+
+/**
+ * @brief Play a list of stations (copied), from station start; "suivante" / "précédente" move in it, and a
+ *        station that cannot be reached is skipped (the next one is played). Does not wait.
+ */
+void radio_play_list(const radio_station_t *list, int count, int start);
+
+/** The next / previous station of the list (played); false at its end / start */
+bool radio_next(void);
+bool radio_previous(void);
+
+/** The current station's position in the list (0-based) and the list's size */
+int radio_list_index(void);
+int radio_list_count(void);
+
+/** The current station ({0} without one) */
+radio_station_t radio_station(void);
 
 /** The assistant needs the speaker (wake word, touch, speech): the radio stops until radio_on_sleep(). Waits until
  *  the speaker is free (~100 ms). */

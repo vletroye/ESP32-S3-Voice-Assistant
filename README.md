@@ -67,7 +67,9 @@ which has been largely rewritten.
   centred under the Settings icon) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out when
   disconnected), in the same style.
 - **Model in use**, while listening and thinking ("J'écoute…", "Entendu…", "Je réfléchis…"): the icon of its
-  provider and its name (as in `AGENTS.INI`) at the bottom left, right under the text.
+  provider and its name (as in `AGENTS.INI`) at the bottom left, right under the text. The provider's icon is also
+  shown on the **robot's forehead** (asleep, listening, thinking), above the screen of its eyes, which it follows
+  when the robot looks aside (`HEAD_LOGO_GAP_Y`, `HEAD_LOGO_X` in `app_ui_ctrl.c`).
 - **Screen off when nobody is there** (with the ESP32-S3-BOX-3-SENSOR dock): its presence radar switches the
   screen off after `Screen_off_s` seconds without presence (10 by default) while the assistant sleeps on its
   clock, and on again when someone comes, at the wake word or at a touch. It closes like an iris (a black ring

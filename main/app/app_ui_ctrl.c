@@ -51,6 +51,11 @@ LV_FONT_DECLARE(ui_font_Latin20);
 #define MODEL_ROW_HEIGHT                (21)
 #define MODEL_ROW_GAP_X                 (6)
 #define MODEL_ROW_COLOR                 0xB9CCF5
+/* Provider icon on the robot's forehead: gap above the screen of the eyes (60 x 34), which it follows when the
+ * robot looks aside while listening */
+#define HEAD_LOGO_GAP_Y                 (20)
+/* and its shift to the right of their centre (negative: to the left) */
+#define HEAD_LOGO_X                     (-5)
 /* Text under the robot (listening / thinking): lines shown, bottom position (from the screen bottom), right above
  * the model in use */
 #define LISTEN_TEXT_LINES               (2)
@@ -657,6 +662,47 @@ static ui_ctrl_logo_t provider_logo(llm_provider_t provider)
 
 static lv_obj_t *s_model_icon = NULL;
 static lv_obj_t *s_model_name = NULL;
+/* The same icon on the forehead of the robot asleep, listening and thinking: children of the screens of the eyes,
+ * drawn above them (outside their area), so that they follow their moves with the head */
+static lv_obj_t *s_head_icons[3] = { NULL };
+
+/*
+ * The area redrawn when a screen of the eyes moves: its own, plus this margin, which must reach the top of the icon
+ * drawn above it (else the icon leaves its old pixels behind)
+ */
+static void eye_screen_ext_draw_cb(lv_event_t *e)
+{
+    lv_coord_t *size = lv_event_get_param(e);
+    lv_coord_t needed = HEAD_LOGO_GAP_Y + 21;   // the icons are 20 x 21
+    if (*size < needed) {
+        *size = needed;
+    }
+}
+
+static void head_icons_create(void)
+{
+    lv_obj_t *eye_screens[3] = { ui_Image3, ui_ImageListenEyeScreen, ui_ImageGetEyeScreen };
+    for (size_t i = 0; i < 3; i++) {
+        lv_obj_add_flag(eye_screens[i], LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+        lv_obj_add_event_cb(eye_screens[i], eye_screen_ext_draw_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, NULL);
+        lv_obj_refresh_ext_draw_size(eye_screens[i]);
+        s_head_icons[i] = lv_img_create(eye_screens[i]);
+        lv_img_set_src(s_head_icons[i], logo_image(provider_logo(llm_provider())));
+        lv_obj_align(s_head_icons[i], LV_ALIGN_OUT_TOP_MID, HEAD_LOGO_X, -HEAD_LOGO_GAP_Y);
+        lv_obj_clear_flag(s_head_icons[i], LV_OBJ_FLAG_CLICKABLE);
+    }
+}
+
+/* The icon of the provider in use, on the foreheads */
+static void head_icons_refresh(void)
+{
+    const void *src = logo_image(provider_logo(llm_provider()));
+    for (size_t i = 0; i < 3; i++) {
+        if (s_head_icons[i] && lv_img_get_src(s_head_icons[i]) != src) {
+            lv_img_set_src(s_head_icons[i], src);
+        }
+    }
+}
 
 static void model_row_create(void)
 {
@@ -737,6 +783,7 @@ void ui_ctrl_init(void)
     app_clock_show(settings_get_parameter()->show_clock);
     cost_label_create();
     model_row_create();
+    head_icons_create();
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
@@ -995,6 +1042,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
     current_panel = panel;
     // The model in use: shown while listening, "Entendu", "Je réfléchis"
     model_row_show(panel == UI_CTRL_PANEL_LISTEN || panel == UI_CTRL_PANEL_GET);
+    head_icons_refresh();
     // The costs: shown while asleep, listening, "Entendu", "Je réfléchis"; hidden over the answer
     if (s_cost_label) {
         if (panel != UI_CTRL_PANEL_REPLY) {

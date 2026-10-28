@@ -82,7 +82,7 @@ extern char *_ini_file_dummy;
  * short for them, and the phrase files of the voice commands, stored on SPIFFS (/spiffs/phrases_<code>.txt,
  * shown as VOICE_<CODE>.TXT; one per language found there, at most UF2_PHRASE_FILES_MAX).
  */
-#define CFG_UF2_TEXT_FILE_SIZE       16384   /* LANG_<CODE>.TXT is about 13 KB */
+#define CFG_UF2_TEXT_FILE_SIZE       32768   /* LANG_<CODE>.TXT is about 18 KB (in PSRAM, 2 buffers per file) */
 #define CFG_UF2_TEXT_MAX_LEN         3999    /* NVS-stored files */
 #define UF2_TEXT_MEMORY              0
 #define UF2_TEXT_PHRASES             1       /* first file of SPIFFS */

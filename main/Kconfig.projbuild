@@ -87,6 +87,14 @@ menu "Example Configuration"
             stays stopped ("remets la radio" plays it again). A station asked during the conversation plays
             anyway. Default of Radio_resume in CONFIG.INI, which takes precedence.
 
+    config ASSISTANT_READ_LISTS
+        string "Lists of the voice commands read aloud (on or off)"
+        default "off"
+        help
+            off: in the replies listing languages, providers, models or voices, the reading stops at the "::"
+            of the LANG text (shown as ":"), the list is only shown; on: the list is read too. Default of
+            Read_lists in CONFIG.INI, which takes precedence.
+
     config ASSISTANT_RADIO_LEVEL
         int "Radio: level the stations are brought to (dBFS)"
         default -16

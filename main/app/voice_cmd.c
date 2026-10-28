@@ -524,27 +524,30 @@ static bool is_model_only(const char *rest)
     return search_number(rest, true, VOICE_NUMBERS_MAX) > 0;
 }
 
-/* "Voici les modèles proposés par Anthropic. 1, Haiku, celui que j'utilise. 2, Sonnet. ... Dites son numéro." */
+/* "Quel modèle de Anthropic voulez-vous utiliser : 1, Haiku, celui que j'utilise. 2, Sonnet. ..." */
 static char *model_list(llm_provider_t provider)
 {
     const app_lang_t *lang = app_lang_get();
     const char *current = settings_get_parameter()->chat_model;
     char *out = malloc(CMD_REPLY_SIZE);
-    if (!out) {
+    char *list = calloc(1, CMD_REPLY_SIZE);
+    if (!out || !list) {
+        free(out);
+        free(list);
         return NULL;
     }
-    snprintf(out, CMD_REPLY_SIZE, lang->model_ask_intro, s_providers[provider].name);
     unsigned number = 0;
     for (size_t i = 0; i < llm_model_count; i++) {
         if (!model_listed(i, provider)) {
             continue;
         }
-        size_t n = strlen(out);
-        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", ++number, llm_models[i].spoken,
+        size_t n = strlen(list);
+        snprintf(list + n, CMD_REPLY_SIZE - n, "%s%u, %s%s.", number ? " " : "", number + 1, llm_models[i].spoken,
                  strcmp(llm_models[i].id, current) == 0 ? lang->model_current : "");
+        number++;
     }
-    strlcat(out, " ", CMD_REPLY_SIZE);
-    strlcat(out, lang->model_ask_question, CMD_REPLY_SIZE);
+    snprintf(out, CMD_REPLY_SIZE, lang->model_ask_intro, s_providers[provider].name, list);
+    free(list);
     return out;
 }
 
@@ -799,7 +802,7 @@ static char *voice_list(void)
         snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", (unsigned)(i + 1), name,
                  strcmp(tts_voices[i], current) == 0 ? lang->voice_current : "");
     }
-    strlcat(out, " ", CMD_REPLY_SIZE);
+    strlcat(out, VOICE_CMD_LIST_END " ", CMD_REPLY_SIZE);
     strlcat(out, lang->voice_ask_question, CMD_REPLY_SIZE);
     return out;
 }

@@ -45,6 +45,12 @@ typedef enum {
  */
 voice_cmd_t voice_cmd_handle(const char *text, char **reply);
 
+/*
+ * In a reply, the end of a list followed by a question ("... 3, Opus.<here> Lequel voulez-vous ?"): the reading
+ * stopped at the "::" of the LANG text (Read_lists = off) starts again there. Never shown.
+ */
+#define VOICE_CMD_LIST_END      "\x1E"
+
 /** The whole transcript is a closing phrase ("au revoir", "bonne nuit"): back to sleep, conversation cleared */
 bool voice_cmd_is_goodbye(const char *text);
 

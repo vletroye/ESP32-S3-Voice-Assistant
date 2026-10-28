@@ -99,9 +99,8 @@ typedef struct {
     int second_one_below_ms;
     const char *provider_ask;       /* "change de modèle": which provider first */
     const char *provider_unknown;
-    const char *model_ask_intro;    /* %s: provider ("Anthropic"), its numbered models follow */
+    const char *model_ask_intro;    /* %s: provider ("Anthropic"), %s: its numbered models */
     const char *model_current;      /* after the current model in the list */
-    const char *model_ask_question;
     const char *model_already;      /* %s: model name */
     const char *model_unknown;      /* %d: number of models */
     const char *model_switched;     /* %s: model name */

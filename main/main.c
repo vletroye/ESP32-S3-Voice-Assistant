@@ -62,6 +62,9 @@ static sys_param_t *sys_param = NULL;
 static sentence_splitter_t s_splitter;
 /* End of transcription, to measure the time to the first spoken audio */
 static int64_t s_reply_t0 = 0;
+/* Time to read what the reply shows but does not say (a list after "::"), in ms: the listen panel waits for it */
+static uint32_t s_unread_ms = 0;
+#define UNREAD_MAX_MS   20000
 /*
  * Flash writes pause the tasks running from flash (microphone feed included): the conversation is saved once
  * nothing has been heard or played for this long, i.e. after the follow-up listening, not during it
@@ -270,7 +273,11 @@ static void on_reply_audio(tts_event_t event)
 #if CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS > 0
     if (!tools_sleep_after_reply()) {
         // Keep listening so that the conversation can continue without the wake word
-        app_sr_start_followup(CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS);
+        // A list shown but not read: listened to already, the reply stays shown while it is read
+        if (s_unread_ms > 0) {
+            ESP_LOGI(TAG, "Listening, the reply stays shown %u ms to read its list", (unsigned)s_unread_ms);
+        }
+        app_sr_start_followup(CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS + s_unread_ms, s_unread_ms);
         return;
     }
 #endif
@@ -339,21 +346,67 @@ static void reply_begin(void)
     s_reply_active = true;
     s_reply_local_cmd = false;
     s_reply_goodbye = false;
+    s_unread_ms = 0;
     tts_stream_begin(on_reply_audio);
+}
+
+/*
+ * A "::" or ".." of the LANG texts comes before a list ("Quel fournisseur voulez-vous :: 1, Anthropic. 2, OpenAI."):
+ * shown as ":" or ".", and with Read_lists = off the list after it is not read, up to the end of the reply or
+ * VOICE_CMD_LIST_END (a question follows). "..." stays an ellipsis. shown and spoken: as long as the message.
+ */
+static void list_reply_texts(const char *message, char *shown, char *spoken)
+{
+    bool silent = false;
+    for (const char *p = message; *p; p++) {
+        bool colons = (p[0] == ':' && p[1] == ':');
+        bool dots = (p[0] == '.' && p[1] == '.' && p[2] != '.' && (p == message || p[-1] != '.'));
+        if (colons || dots) {
+            *shown++ = *p;
+            if (!silent) {
+                *spoken++ = *p;
+            }
+            silent = !sys_param->read_lists;
+            p++;
+        } else if (*p == VOICE_CMD_LIST_END[0]) {
+            silent = false;
+        } else {
+            *shown++ = *p;
+            if (!silent) {
+                *spoken++ = *p;
+            }
+        }
+    }
+    *shown = '\0';
+    *spoken = '\0';
 }
 
 /* Show and speak a message as the reply (errors, memory commands), sentence by sentence */
 static void speak_message(const char *message)
 {
+    size_t size = strlen(message) + 1;
+    char *shown = malloc(size);
+    char *spoken = malloc(size);
+    if (shown && spoken) {
+        list_reply_texts(message, shown, spoken);
+    }
     ui_ctrl_reply_set_logo(UI_CTRL_LOGO_LOCAL);
-    ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_CONTENT, message);
+    ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_CONTENT, shown && spoken ? shown : message);
     ui_ctrl_show_panel(UI_CTRL_PANEL_REPLY, 0);
     s_reply_t0 = esp_timer_get_time();
     reply_begin();
+    if (shown && spoken) {
+        // The characters not said, read at the scrolling speed of the answers (Scroll_speed)
+        size_t unread = strlen(shown) - strlen(spoken);
+        s_unread_ms = unread * 1000 / (sys_param->scroll_cps > 0 ? sys_param->scroll_cps : 16);
+        s_unread_ms = s_unread_ms > UNREAD_MAX_MS ? UNREAD_MAX_MS : s_unread_ms;
+    }
     sentence_splitter_init(&s_splitter, on_sentence, NULL);
-    sentence_splitter_feed(&s_splitter, message);
+    sentence_splitter_feed(&s_splitter, shown && spoken ? spoken : message);
     sentence_splitter_finish(&s_splitter);
     tts_stream_end();
+    free(shown);
+    free(spoken);
 }
 
 /*

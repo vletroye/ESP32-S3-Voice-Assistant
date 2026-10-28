@@ -64,6 +64,7 @@ static volatile bool manul_detect_flag = false;
 static volatile bool s_cancel_listen = false;
 /* Non-zero: the pending manual session is a follow-up that must hear speech within this delay */
 static volatile uint32_t s_followup_window_ms = 0;
+static volatile uint32_t s_followup_panel_delay_ms = 0;
 
 sr_data_t *g_sr_data = NULL;
 
@@ -127,6 +128,7 @@ static void audio_detect_task(void *arg)
     TickType_t listen_start = 0;
     uint32_t no_speech_timeout_ms = SR_NO_SPEECH_TIMEOUT_MS;
     uint32_t vad_ignore_ms = SR_VAD_IGNORE_WAKE_MS;
+    uint32_t panel_delay_ms = 0;    // follow-up: the listen panel shown after it (0: shown already)
     esp_afe_sr_data_t *afe_data = arg;
     const uint32_t frame_ms = afe_handle->get_fetch_chunksize(afe_data) * 1000 / afe_handle->get_samp_rate(afe_data);
     ESP_LOGI(TAG, "fetch frame: %" PRIu32 " ms", frame_ms);
@@ -157,12 +159,15 @@ static void audio_detect_task(void *arg)
             listen_start = xTaskGetTickCount();
             no_speech_timeout_ms = SR_NO_SPEECH_TIMEOUT_MS;
             vad_ignore_ms = SR_VAD_IGNORE_WAKE_MS;
+            panel_delay_ms = 0;
             if (manul_detect_flag) {
                 bool followup = (s_followup_window_ms > 0);
                 if (followup) {
                     no_speech_timeout_ms = s_followup_window_ms;
                     vad_ignore_ms = SR_VAD_IGNORE_FOLLOWUP_MS;
+                    panel_delay_ms = s_followup_panel_delay_ms;
                     s_followup_window_ms = 0;
+                    s_followup_panel_delay_ms = 0;
                 }
                 manul_detect_flag = false;
                 sr_result_t result = {
@@ -170,6 +175,7 @@ static void audio_detect_task(void *arg)
                     .state = ESP_MN_STATE_DETECTING,
                     .command_id = 0,
                     .followup = followup,
+                    .listen_panel_later = (panel_delay_ms > 0),
                 };
                 xQueueSend(g_sr_data->result_que, &result, 0);
             }
@@ -202,6 +208,14 @@ static void audio_detect_task(void *arg)
                     speech_seen = true;
                     ESP_LOGI(TAG, "speech detected after %" PRIu32 " ms (volume %.1f dBFS)", elapsed_ms, res->data_volume);
                 }
+            }
+
+            if (panel_delay_ms > 0 && (speech_seen || elapsed_ms >= panel_delay_ms)) {
+                // The text shown is read (or the user answers already): the listen panel now
+                panel_delay_ms = 0;
+                sr_result_t result = { .wakenet_mode = WAKENET_NO_DETECT, .state = ESP_MN_STATE_DETECTING,
+                                       .show_listen = true };
+                xQueueSend(g_sr_data->result_que, &result, 0);
             }
 
             bool no_speech = (!speech_seen && elapsed_ms >= no_speech_timeout_ms) || s_cancel_listen;
@@ -370,14 +384,16 @@ esp_err_t app_sr_start_once(void)
 {
     ESP_RETURN_ON_FALSE(NULL != g_sr_data, ESP_ERR_INVALID_STATE, TAG, "SR is not running");
     s_followup_window_ms = 0;
+    s_followup_panel_delay_ms = 0;
     manul_detect_flag = true;
     return ESP_OK;
 }
 
-esp_err_t app_sr_start_followup(uint32_t window_ms)
+esp_err_t app_sr_start_followup(uint32_t window_ms, uint32_t panel_delay_ms)
 {
     ESP_RETURN_ON_FALSE(NULL != g_sr_data, ESP_ERR_INVALID_STATE, TAG, "SR is not running");
     ESP_RETURN_ON_FALSE(window_ms > 0, ESP_ERR_INVALID_ARG, TAG, "Follow-up window must be > 0");
+    s_followup_panel_delay_ms = panel_delay_ms;
     s_followup_window_ms = window_ms;
     manul_detect_flag = true;
     return ESP_OK;

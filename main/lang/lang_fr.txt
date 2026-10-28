@@ -3,6 +3,8 @@
 # vide, s'écrit entre guillemets. Les listes (jours, mois) sont séparées par des virgules.
 # Gardez les %s, %d, %02d... de chaque texte, dans le même ordre : un texte qui ne les a pas est ignoré (le texte
 # anglais du firmware est utilisé, et le log le dit). Une clé absente prend aussi le texte anglais du firmware.
+# Un "::" s'affiche ":", un ".." s'affiche "." ; avec Read_lists = off (CONFIG.INI), la liste qui les suit n'est pas
+# lue, seulement affichée.
 # Les lignes commençant par # sont des commentaires. Fichier vidé : remis à sa version d'origine.
 
 listening = J'écoute ...
@@ -37,9 +39,9 @@ memory_list_intro = "Voici ce que vous m'avez demandé de retenir. "
 
 # Language changed by voice ("change la langue")
 # %s: the languages offered (Languages of CONFIG.INI), numbered: "1, français. 2, anglais. ..."
-lang_ask = Quelle langue voulez-vous ? %s
+lang_ask = Quelle langue voulez-vous :: %s
 lang_already = Je parle déjà français.
-lang_unknown = Je ne connais pas cette langue. Dites le numéro ou le nom d'une langue : %s
+lang_unknown = Je ne connais pas cette langue. Dites le numéro ou le nom d'une langue :: %s
 
 # spoken in the new language, before the restart
 lang_switched = Très bien, je parle maintenant français.
@@ -151,15 +153,14 @@ seconds = secondes
 second_one_below_ms = 1950
 
 # "change de modèle": which provider first; %s: the providers that have models, numbered ("1, Anthropic. 2, OpenAI. ...")
-provider_ask = Quel fournisseur voulez-vous : %s
-provider_unknown = Je n'ai pas compris. Dites le numéro ou le nom du fournisseur : %s
+provider_ask = Quel fournisseur voulez-vous :: %s
+provider_unknown = Je n'ai pas compris. Dites le numéro ou le nom du fournisseur :: %s
 
-# %s: provider ("Anthropic"), its numbered models follow
-model_ask_intro = Voici les modèles proposés par %s.
+# %s: provider ("Anthropic"), %s: its numbered models ("1, Haiku, celui que j'utilise. 2, Sonnet.")
+model_ask_intro = Quel modèle de %s voulez-vous utiliser :: %s
 
 # after the current model in the list
 model_current = , celui que j'utilise
-model_ask_question = Lequel voulez-vous ?
 
 # %s: model name
 model_already = J'utilise déjà %s.
@@ -171,7 +172,7 @@ model_unknown = Je n'ai pas compris. Dites un numéro de 1 à %d, ou le nom du m
 model_switched = Très bien, j'utilise maintenant %s.
 
 # "change de voix": the numbered voices follow
-voice_ask_intro = Voici les voix disponibles.
+voice_ask_intro = Voici les voix disponibles ::
 
 # after the current voice in the list
 voice_current = , celle que j'utilise

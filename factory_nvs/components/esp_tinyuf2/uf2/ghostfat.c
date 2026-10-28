@@ -420,14 +420,28 @@ static void directory_written(const uint8_t *data)
     const DirEntry *d = (const DirEntry *)(const void *)data;
     for (size_t e = 0; e < DIRENTRIES_PER_SECTOR; e++, d++) {
         uint8_t first = (uint8_t)d->name[0];
-        if (first == 0x00 || first == 0xE5 || d->attrs == 0x0F || (d->attrs & 0x08) || d->startCluster < 2) {
-            continue;   // free, deleted, long name part, volume label, or empty file
+        if (first == 0x00 || first == 0xE5 || d->attrs == 0x0F || (d->attrs & 0x08) ||
+                (d->startCluster < 2 && d->size != 0)) {
+            continue;   // free, deleted, long name part, volume label, or no cluster
         }
         for (uint32_t fid = FID_INI; fid <= FID_TEXT_LAST; fid++) {
             if (memcmp(d->name, info[fid].name, 11) != 0) {
                 continue;
             }
             int i = fid - FID_INI;
+            if (d->size == 0 && fid == FID_INI) {
+                continue;   // CONFIG.INI emptied: nothing to save
+            }
+            if (d->size == 0) {
+                // Emptied (no cluster any more): saved empty, the assistant installs the original file again
+                s_where[i].known = false;
+                char *dummy = text_dummy(fid);
+                if (dummy) {
+                    dummy[0] = '\0';
+                }
+                text_commit(fid);
+                continue;
+            }
             uint32_t first_sector = (uint32_t)(d->startCluster - 2) * BPB_SECTORS_PER_CLUSTER;
             if (s_where[i].known && s_where[i].first_sector == first_sector && s_where[i].size == d->size) {
                 continue;

@@ -26,7 +26,7 @@
 static const char *TAG = "app_lang";
 
 #define LANG_FILE_FORMAT    "/spiffs/lang_%s.txt"
-#define LANG_FILE_MAX       (16 * 1024)
+#define LANG_FILE_MAX       (32 * 1024)     /* as on the configuration drive */
 
 /* Files given with the firmware (main/lang/, embedded NUL-terminated), installed when missing or emptied */
 extern const char s_default_fr_start[] asm("_binary_lang_fr_txt_start");
@@ -139,7 +139,6 @@ static const lang_field_t s_fields[] = {
     { "provider_unknown", offsetof(app_lang_t, provider_unknown), FIELD_TEXT, 1 },
     { "model_ask_intro", offsetof(app_lang_t, model_ask_intro), FIELD_TEXT, 1 },
     { "model_current", offsetof(app_lang_t, model_current), FIELD_TEXT, 1 },
-    { "model_ask_question", offsetof(app_lang_t, model_ask_question), FIELD_TEXT, 1 },
     { "model_already", offsetof(app_lang_t, model_already), FIELD_TEXT, 1 },
     { "model_unknown", offsetof(app_lang_t, model_unknown), FIELD_TEXT, 1 },
     { "model_switched", offsetof(app_lang_t, model_switched), FIELD_TEXT, 1 },
@@ -456,6 +455,9 @@ static char *read_file(const char *path)
     fclose(f);
     if (text) {
         text[n] = '\0';
+        if (n == LANG_FILE_MAX - 1) {
+            ESP_LOGW(TAG, "%s: cut at %d bytes (the end is ignored)", path, LANG_FILE_MAX - 1);
+        }
     }
     return text;
 }
@@ -665,7 +667,8 @@ static const app_lang_t *load(const char *code)
         free(text);
         install_default(code, path);
         text = read_file(path);
-    } else if (add_missing_keys(code, path, text, &english)) {
+    } else if (strlen(text) < LANG_FILE_MAX - 1 && add_missing_keys(code, path, text, &english)) {
+        // (a file cut by read_file would get the keys of its end again at every start-up)
         free(text);
         text = read_file(path);
     }

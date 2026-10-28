@@ -40,6 +40,9 @@ typedef struct {
     int command_id;
     bool followup;   /* WAKENET_DETECTED: session continues the conversation (no wake word) */
     bool no_speech;  /* ESP_MN_STATE_TIMEOUT: nobody spoke, nothing to send */
+    bool listen_panel_later;    /* WAKENET_DETECTED: the reply stays shown (text to read), show_listen comes later */
+    bool show_listen;           /* listening for a while already: time to show the listen panel (speech heard, or
+                                   the reading time is over) */
 } sr_result_t;
 
 typedef enum {
@@ -78,9 +81,11 @@ esp_err_t app_sr_start_once(void);
 /**
  * @brief Listen again without wake word to continue the conversation.
  *
- * The session is dropped (no request sent) if no speech is heard within window_ms.
+ * The session is dropped (no request sent) if no speech is heard within window_ms. With panel_delay_ms, the
+ * listening starts at once but the reply stays shown that long (a list shown, not read, is being read): the listen
+ * panel comes after it, or as soon as speech is heard.
  */
-esp_err_t app_sr_start_followup(uint32_t window_ms);
+esp_err_t app_sr_start_followup(uint32_t window_ms, uint32_t panel_delay_ms);
 
 #ifdef __cplusplus
 }

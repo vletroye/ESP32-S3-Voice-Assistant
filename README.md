@@ -82,6 +82,10 @@ which has been largely rewritten.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
+- **Lists shown, not read** (`Read_lists = off`, the default): the replies offering languages, providers, models or
+  voices say their question and show the list without reading it. The assistant listens at once, but the reply
+  stays on screen for the time it takes to read the list (its characters at `Scroll_speed`, at most 20 s): the
+  listen screen comes after it, or as soon as you answer ("trois").
 - **Conversation memory**: the last 6 to 12 exchanges are kept across sleep and restarts (saved to flash in
   `/spiffs/history.json` once the assistant is back to sleep, never during an exchange), so you can ask later "what
   were we talking about?". Saying "Au revoir" ends the conversation and clears it; "Nouvelle discussion", "J'ai une
@@ -521,9 +525,10 @@ USB drive named "ESP-BOX" holding these files:
 
 - Edit a file, save it, **wait until the copy is finished** (Windows may delay the write; a `LANG_` file takes
   tens of seconds), then press **Restart** (bottom right of the screen).
-- The text files of SPIFFS can hold up to 16,383 characters each, `CONFIG.INI` 4,096 and `MEMORY.TXT` about
+- The text files of SPIFFS can hold up to 32,767 characters each, `CONFIG.INI` 4,096 and `MEMORY.TXT` about
   3,900. The drive shows up to 64 files of SPIFFS (12 languages × 3 files, plus the others above).
-- An emptied file of SPIFFS given with the firmware is installed again at the next start; keys or sections added
+- An emptied file of SPIFFS given with the firmware (0 bytes: no cluster left, which the drive notices too) is
+  installed again at the next start; keys or sections added
   by a newer firmware are appended to the existing files, which are otherwise kept as edited.
 
 ### `CONFIG.INI`: settings and API keys
@@ -557,6 +562,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Free_models` | How many free OpenRouter models are offered (1 to 15), the most recent ones, besides Free (auto); see the exclusions of `AGENTS.INI` | `6` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
+| `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio"). A station asked during the conversation plays anyway | `on` |
@@ -642,6 +648,10 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
 - One `key = text` per line; `\n` is a line break; a text with spaces at its start or end, or empty, is written
   between quotes; lists are separated by commas; `#` lines are comments.
 - Keep the `%s`, `%d`, `%02d`… of each text in the same order.
+- **`::` and `..` stop the reading**: shown as a single `:` or `.`; with `Read_lists = off`, what follows (the list)
+  is shown but not read (`provider_ask = Quel fournisseur voulez-vous :: %s`). For the voices, the reading starts
+  again for the question after the list. `...` stays an ellipsis. `model_ask_intro` takes the provider and the
+  numbered list: `Quel modèle de %s voulez-vous utiliser :: %s`.
 - **Checked at start-up and after each change of language** (about 0.1 s), against the firmware's English file,
   the reference:
   - a **missing key** is appended to the file: from the firmware's file of that language when it has one (already
@@ -655,7 +665,7 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
     per language and per start.
 - Only the language in use is read (another one when the language changes, or when a voice command names it);
   each one read stays in PSRAM.
-- **Saving a `LANG_<XX>.TXT` is slow, and that is normal**: at about 12 KB, it is one of the largest files of the
+- **Saving a `LANG_<XX>.TXT` is slow, and that is normal**: at about 18 KB, it is one of the largest files of the
   drive, and Windows writes it to the device's flash in several steps, which can take a while (up to some tens of
   seconds). Be patient: wait until the copy is really finished (Windows' progress window closed, or the drive
   ejected) before pressing **Restart**, or the file may be cut, and its texts lost.
@@ -819,6 +829,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_SHOW_CLOCK` | `on` | Clock on the sleep screen when `Show_clock` is not set |
 | `CONFIG_ASSISTANT_CURRENCY` | `EUR` | Currency when `Currency` is not set |
 | `CONFIG_ASSISTANT_SLEEP_AFTER_CMD` | `off` | Sleep after a local voice command when `Sleep_after_cmd` is not set |
+| `CONFIG_ASSISTANT_READ_LISTS` | `off` | Lists of the voice commands read when `Read_lists` is not set |
 | `CONFIG_ASSISTANT_RADIO_RESUME` | `on` | Radio resumed after a conversation when `Radio_resume` is not set |
 | `CONFIG_ASSISTANT_RADIO_LEVEL` | `-16` | Level of the radio stations when `Radio_level` is not set |
 | `CONFIG_ASSISTANT_RADIO_TREBLE` | `-6` | Treble of the radio when `Radio_treble` is not set |

@@ -329,6 +329,16 @@ esp_err_t settings_read_parameter_from_nvs(void)
     g_sys_param.radio_resume = strcasecmp(resume, "off") != 0 && strcasecmp(resume, "no") != 0 &&
                                strcmp(resume, "0") != 0;
 
+    // Lists of the voice commands read aloud (Read_lists = on / off)
+    char read_lists[8] = {0};
+    len = sizeof(read_lists);
+    if (nvs_get_str(my_handle, "Read_lists", read_lists, &len) != ESP_OK) {
+        strlcpy(read_lists, CONFIG_ASSISTANT_READ_LISTS, sizeof(read_lists));
+    }
+    str_trim(read_lists);
+    g_sys_param.read_lists = strcasecmp(read_lists, "on") == 0 || strcasecmp(read_lists, "yes") == 0 ||
+                             strcmp(read_lists, "1") == 0;
+
     // Level the radio stations are brought to, in dBFS (-30..-6)
     char level[8] = {0};
     len = sizeof(level);
@@ -504,6 +514,7 @@ static const struct {
     { "Confirm_off", CONFIG_ASSISTANT_CONFIRM_OFF },
     { "Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK },
     { "Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD },
+    { "Read_lists", CONFIG_ASSISTANT_READ_LISTS },
     { "Currency", CONFIG_ASSISTANT_CURRENCY },
     { "Volume", STR(CONFIG_VOLUME_LEVEL) },
     { "Screen_off_s", STR(CONFIG_ASSISTANT_SCREEN_OFF_S) },

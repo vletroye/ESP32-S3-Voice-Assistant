@@ -224,6 +224,8 @@ void app_main(void)
         nvs_init_str_if_missing("Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK);
         // After a voice command handled locally: back to sleep (on) or listening again (off)
         nvs_init_str_if_missing("Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD);
+        // Lists of the voice commands (languages, providers, models, voices) read aloud (on) or only shown (off)
+        nvs_init_str_if_missing("Read_lists", CONFIG_ASSISTANT_READ_LISTS);
         // Currency of the prices of AGENTS.INI and of the costs (COSTS.TXT)
         nvs_init_str_if_missing("Currency", CONFIG_ASSISTANT_CURRENCY);
         // Languages offered: "FR:Français, EN:English" (a language added gets its files at the next start)

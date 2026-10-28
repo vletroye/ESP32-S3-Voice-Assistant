@@ -26,6 +26,59 @@ passe en
 passe à l
 réponds en
 
+[s_radio_station]
+# Radio : une station par son nom (« joue la radio Nostalgie »), cherchée dans Radio-Browser
+(joue|mets|lance|passe) [moi ]la radio
+(joue|mets|lance|passe) [moi ]la station
+[je veux ](écouter|ecouter) la radio
+
+[s_radio_music]
+# Radio : un genre ou un pays (« joue du jazz », « mets de la musique italienne », « joue du rock anglais »)
+(joue|mets|lance|passe) [moi ][un peu ]de la musique [(de style|du style|style|de genre|genre)]
+joue[ moi] (du|de la|des|de l)
+
+[s_radio_next]
+# Radio : la station suivante de la liste (seulement quand une radio est en cours ou suspendue)
+suivante
+[la ](radio|station) suivante
+(joue|mets|passe à|passe a) la [(radio|station) ]suivante
+
+[s_radio_previous]
+précédente
+precedente
+[la ](radio|station) (précédente|precedente)
+(joue|mets|reviens à|reviens a|retourne à|retourne a) la [(radio|station) ](précédente|precedente)
+
+[s_radio_stop]
+# Radio : arrêtée, sans reprise à la mise en veille (seulement quand une radio est en cours ou suspendue)
+stop
+stop (la|cette) (radio|musique)
+(arrête|arrete|coupe|éteins|eteins) (la|cette) (radio|musique)
+
+[s_radio_resume]
+(remets|relance|rallume|reprends) la (radio|musique)
+
+[s_radio_fav_add]
+# Radio : la station en cours ajoutée aux favoris (RADIO.TXT)
+(ajoute|mets|garde) (cette|la) (radio|station) (aux|dans les|dans mes|en) favori[s]
+(ajoute|mets) (la|là) (aux|dans les|dans mes|en) favori[s]
+
+[s_radio_fav_remove]
+(retire|enlève|enleve|supprime) (cette|la) (radio|station) (des|de mes) favori[s]
+(retire|enlève|enleve|supprime) (la|là) (des|de mes) favori[s]
+
+[s_radio_favorites]
+# Radio : les favoris, l'un après l'autre (« suivante »)
+(joue|mets|lance) [moi ]mes favori[s]
+(joue|mets|lance) [moi ](mes|une de mes) radio[s] (préférée[s]|preferee[s]|favorite[s])
+
+[s_radio_what]
+# Radio : la station et le titre en cours
+(quelle|c est quelle) (radio|station)[ est ce]
+qu est ce qui (passe|joue)
+qu est ce qu on (écoute|ecoute)
+(quel est|c est quoi) (ce titre|cette chanson|ce morceau|cette musique)
+
 [s_test_models]
 # Pose la même question à chaque modèle et mesure son temps de réponse (SPEED.TXT, vitesse dans AGENTS.INI)
 test(e) (les|tes) mod(è|e)les

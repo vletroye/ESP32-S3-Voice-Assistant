@@ -33,6 +33,7 @@
 #include "mbedtls/base64.h"
 #include "cJSON.h"
 #include "bsp_board.h"
+#include "radio.h"
 #include "app_wifi.h"
 #include "tts_stream.h"
 
@@ -699,6 +700,8 @@ static void playback_task(void *arg)
         if (n >= sizeof(int16_t)) {
             if (!started) {
                 started = true;
+                // The speaker is needed (a voice sample of the Settings screen may come while the radio plays)
+                radio_suspend();
                 if (s_event_cb) {
                     s_event_cb(TTS_EVENT_FIRST_AUDIO);
                 }

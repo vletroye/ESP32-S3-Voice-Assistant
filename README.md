@@ -19,8 +19,8 @@ which has been largely rewritten.
   - [Typical latencies (measured with Claude Haiku 5.5)](#typical-latencies-measured-with-claude-haiku-55)
 - [Models and costs](#models-and-costs)
   - [Available models](#available-models)
-  - [`AGENTS.INI`: the models offered](#agentsini-the-models-offered)
-  - [Costs: `COSTS.TXT` and the cost on screen](#costs-coststxt-and-the-cost-on-screen)
+  - [AGENTS.INI: the models offered](#agentsini-the-models-offered)
+  - [Costs: COSTS.TXT and the cost on screen](#costs-coststxt-and-the-cost-on-screen)
   - [Model test ("teste les modèles")](#model-test-teste-les-modèles)
 - [Hardware and software](#hardware-and-software)
 - [Repository layout](#repository-layout)
@@ -45,6 +45,11 @@ which has been largely rewritten.
   - [Long-term memory](#long-term-memory)
   - [Free phrases understood by Claude (tools)](#free-phrases-understood-by-claude-tools)
   - [Gestures](#gestures)
+- [Radio](#radio)
+  - [Playing a radio](#playing-a-radio)
+  - [While it plays](#while-it-plays)
+  - [Radio screen](#radio-screen)
+  - [Favourites: `RADIO.TXT`](#favourites-radiotxt)
 - [System sounds](#system-sounds)
 - [Logs and diagnostics](#logs-and-diagnostics)
 - [Design notes](#design-notes)
@@ -119,6 +124,10 @@ which has been largely rewritten.
   being heard. With another dock, the screen stays on.
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**.
 - **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
+- **Internet radio** ([Radio-Browser](https://www.radio-browser.info), free): "joue du jazz", "joue la radio
+  Nostalgie", "joue de la musique italienne", "suivante", "stop", favourites (`RADIO.TXT`) and a radio screen;
+  stopped by the wake word and resumed after the answer, with fades and the same loudness on every station
+  (see [Radio](#radio)).
 
 ## Usage
 
@@ -390,6 +399,10 @@ Main modules of the assistant (`main/app/`):
 | `app_lang.c` | Texts of the device per language (`main/lang/lang_<code>.txt`, installed on SPIFFS as `LANG_<CODE>.TXT`): UI texts, model instructions, error messages; languages offered (`Languages`), files of a language added |
 | `country.c` | Countries known by voice and their names per language (`main/lang/country.txt`, `COUNTRY.TXT`) |
 | `persona.c` | Who the assistant is, per language (`main/persona/persona_<code>.txt`, `PERSO_<XX>.TXT`): identity, personality, instructions, voice |
+| `radio.c` | Radio player: stream read over HTTP into a buffer in PSRAM (ICY titles taken out), MP3 / AAC decoded (`esp_audio_codec`), mixed to mono, resampled to 16 kHz, treble, loudness and fades; suspended and resumed around the conversation; lists of stations (next, previous, skipped when silent) |
+| `radio_browser.c` | Radio-Browser: server chosen from its list, searches by name, tag and country, listens counted |
+| `radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
+| `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
 | `model_test.c` | Model test ("teste les modèles"): same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request |
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
@@ -464,7 +477,7 @@ Tapping one stops the countdown and asks for a confirmation:
   added otherwise).
 - **Factory reset** (bin, red): **everything** goes back to the firmware's state: every setting is erased (Wi-Fi,
   API keys, Homey, `MEMORY.TXT`, comments of `CONFIG.INI`), as well as the files of every language (`VOICE_`,
-  `LANG_`, `PERSO_<XX>.TXT`, those of the languages added too), `COUNTRY.TXT`, `AGENTS.INI`, the saved
+  `LANG_`, `PERSO_<XX>.TXT`, those of the languages added too), `COUNTRY.TXT`, `RADIO.TXT`, `AGENTS.INI`, the saved
   conversation, the places of the weather and the list of free models. Before that, `CONFIG.INI` is saved as
   **`CONFIG.BKP`** (on SPIFFS, shown on the configuration drive), with `MEMORY.TXT`, `PERSO_FR.TXT` and
   `PERSO_EN.TXT` at its end as comments; this backup is only replaced when `CONFIG.INI` differs from the
@@ -493,6 +506,7 @@ USB drive named "ESP-BOX" holding these files:
 | `COUNTRY.TXT` | Countries known by voice, their names per language | SPIFFS | emptied, or soft reset (columns of the languages added kept) |
 | `COSTS.TXT` | Costs counted (written by the device: do not edit) | SPIFFS | factory reset (erased) |
 | `SPEED.TXT` | Results of the model test (written by the device) | SPIFFS | factory reset (erased) |
+| `RADIO.TXT` | Favourite radios (see [Radio](#favourites-radiotxt)) | SPIFFS | kept by the soft reset, factory reset (erased) |
 | `CONFIG.BKP` | `CONFIG.INI` saved before a factory reset | SPIFFS | — |
 
 - Edit a file, save it, **wait until the copy is finished** (Windows may delay the write; a `LANG_` file takes
@@ -535,6 +549,9 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
+| `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio"). A station asked during the conversation plays anyway | `on` |
+| `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
+| `Radio_treble` | Treble of the radio (above about 3 kHz), in dB, from `-12` to `6`: negative softens them on the small speaker, `0` leaves the sound as it is (also changed from the radio screen) | `-6` |
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
 
 **Comments in `CONFIG.INI`**: lines starting with `#` or `;`, and end-of-line comments after a `;` preceded by
@@ -786,6 +803,9 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_SHOW_CLOCK` | `on` | Clock on the sleep screen when `Show_clock` is not set |
 | `CONFIG_ASSISTANT_CURRENCY` | `EUR` | Currency when `Currency` is not set |
 | `CONFIG_ASSISTANT_SLEEP_AFTER_CMD` | `off` | Sleep after a local voice command when `Sleep_after_cmd` is not set |
+| `CONFIG_ASSISTANT_RADIO_RESUME` | `on` | Radio resumed after a conversation when `Radio_resume` is not set |
+| `CONFIG_ASSISTANT_RADIO_LEVEL` | `-16` | Level of the radio stations when `Radio_level` is not set |
+| `CONFIG_ASSISTANT_RADIO_TREBLE` | `-6` | Treble of the radio when `Radio_treble` is not set |
 | `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
 | `CONFIG_ASSISTANT_OPENROUTER_FREE` | `on` | Free OpenRouter models read when `OpenRouter_free` is not set |
@@ -995,6 +1015,7 @@ No fixed wording: Claude decides when to use a tool.
 | Weather | "Quel temps fait-il à Namur ?", "Va-t-il pleuvoir demain ?" (your town: `City` in `CONFIG.INI`, or "change ma ville") |
 | Volume | "Parle plus fort", "Baisse le son", "Mets le volume à 50" (then back to sleep) |
 | Web search | "Quelles sont les dernières nouvelles ?", "Cherche sur internet …" |
+| Radio | "Mets un truc calme pour dîner", "Une radio d'infos belge" (`play_radio`; the usual phrases are handled by the device, see [Radio](#radio)) |
 | Homey | "Allume la lumière du salon", "Éteins tout au rez-de-chaussée", "Active l'ambiance cinéma", "Lance le flow Bonne nuit", "Qui est à la maison ?", "Combien je consomme en ce moment ?" |
 | Date and time | "Quel jour sommes-nous ?", "Dans combien de jours est Noël ?" (no tool: the date comes with each question) |
 
@@ -1002,6 +1023,85 @@ No fixed wording: Claude decides when to use a tool.
 
 - Touch the screen while asleep: wakes the assistant up, like "Bonjour ESP".
 - Double-tap during an answer: interrupts it and listens.
+
+## Radio
+
+Internet radios from [Radio-Browser](https://www.radio-browser.info), the free directory maintained by its
+community (no key, no account), played through the speaker. Asked by voice, or from the **radio screen**.
+
+### Playing a radio
+
+| Action | French | English |
+| --- | --- | --- |
+| A station by its name: a favourite of that name first, else searched (most listened first) | joue / mets / lance la radio Nostalgie · joue la station FIP | play the radio Nostalgie · put on the station FIP |
+| A genre, a country, or both | joue du jazz · mets de la musique classique · joue de la musique italienne · joue du rock anglais | play some jazz · play italian music · play some english rock |
+| The favourites, one after the other | joue mes favoris · joue mes radios préférées | play my favourites · play my favourite stations |
+| Next / previous station of the list (the list loops) | suivante · la radio suivante · passe à la suivante · précédente | next · next station · skip · previous |
+| Stop (not resumed after a conversation) / play again | stop · arrête la radio · coupe la musique / remets la radio · relance la musique | stop · stop the radio / resume the radio |
+| What is playing (station, and the title when the station sends it) | qu'est-ce qui passe · quelle radio est-ce · c'est quoi cette chanson | what's playing · what song is this |
+| Favourites (`RADIO.TXT`) | ajoute cette radio aux favoris · mets-la aux favoris / retire cette radio des favoris | add this radio to my favourites / remove this radio from my favourites |
+
+- The device answers ("Je joue Classic 21.", "Je n'ai trouvé aucune radio pour …") and goes back to sleep at once
+  (no listening window): the radio starts then. "Stop", "suivante", "qu'est-ce qui passe"… are radio commands only
+  while a radio plays or is suspended; otherwise they go to the model as before.
+- **Genres** said in French are turned into the tags of Radio-Browser (mostly English) by `radio_genres` of
+  `LANG_<XX>.TXT` (`classique/musique classique: classical, variété: pop, années 80: 80s…`); a genre not listed is
+  searched as said. **Countries** come from `COUNTRY.TXT`, whose names include the adjectives of nationality
+  (`Italie/italien/italienne`); with a genre and a country giving nothing, the genre alone is searched.
+- With a Claude model, free requests work too ("mets un truc calme pour dîner", "une radio d'infos belge"): Claude
+  calls the `play_radio` tool (name, tag, country), and the radio starts after its short answer.
+- A search keeps up to 20 stations the device can play: MP3 or AAC (HE-AAC included) over **http** (no TLS: the
+  internal RAM stays free for the conversation), not HLS, at most 192 kbit/s, online at the last check, without
+  duplicates. A station that gives no sound is skipped (the next one plays); a stream that drops is reconnected
+  (3 tries). Each station played is counted by Radio-Browser, as its API asks.
+
+### While it plays
+
+- **The wake word stops it**: "Bonjour ESP" (or a touch) fades it out in 0.4 s, the assistant listens and answers,
+  then the radio plays again when the assistant goes back to sleep (`Radio_resume = off`: it stays stopped).
+  "Bonjour ESP" is heard over the music without echo cancellation.
+- **Fades**: each start fades in over 2 s; a change of station (next, previous, a favourite touched) fades the
+  playing one out over 1 s, then the new one in. A real cross-fade would need two streams decoded at once.
+- **Same loudness from one station to the other**: the level of the sound is measured (over ~3 s, silences left
+  out) and a gain (-12 to +6 dB, moving slowly) brings every station to `Radio_level` (-16 dBFS by default).
+- **Treble**: `Radio_treble` (-6 dB by default) softens the treble of the small speaker; changed live from the
+  radio screen.
+- **Sound**: the I2S bus, shared with the microphones, stays at 16 kHz: the music is mixed to mono and filtered
+  below 7 kHz (the speaker is mono and small anyway).
+
+### Radio screen
+
+Opened by a tap on the **volume** of the sleep screen (bottom left); closed by the back arrow, after 60 s without
+a touch, or when the assistant listens.
+
+```
+ ←              Radio
+ ┌──────────────────────────────┐
+ │ Classic 21                   │   the favourites: scrolled, a tap plays one
+ │ Nostalgie New York           │   (the station playing is highlighted)
+ └──────────────────────────────┘
+ Nostalgie New York - Joy, I'm in love   ♥    station and title, heart: favourite or not
+ Volume 70 %                  Treble -6 dB
+ [−] [+]     [⏮] [ ▶ ] [⏭]       [−] [+]
+```
+
+- The heart adds the station to the favourites (full, red) or removes it (empty).
+- ⏮ / ⏭: previous / next station of the list played (a search or the favourites), looping; ▶ / ❚❚ plays or
+  stops (no station yet: the first favourite).
+- Volume -/+ by 10 %; treble -/+ by 2 dB (saved in `Radio_treble`).
+
+### Favourites: `RADIO.TXT`
+
+One station per line, `name | stream URL | Radio-Browser id` (the id is optional), up to 30, on SPIFFS, shown on
+the configuration drive:
+
+```
+Classic 21 | http://exemple.be/classic21.mp3 | <id given by Radio-Browser>
+Ma radio | https://exemple.org/stream.mp3
+```
+
+A radio missing from Radio-Browser can be added by hand (MP3 or AAC; https allowed here). Comments (`#`) are kept
+when the device adds or removes a line. The soft reset keeps the file, the factory reset erases it.
 
 ## System sounds
 
@@ -1095,6 +1195,15 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   ("Tu veux vraiment éteindre la prise du frigo ?"), and after a "oui" calls again with `confirmed: true`
   (removed before the call reaches Homey). A zone call limited to another class ("les lumières du salon") is not
   asked about. Flows and moods that turn plugs off are not checked.
+- **Radio**: a network task (stack in PSRAM) reads the stream into a 128 KB ring buffer in PSRAM (8 s at
+  128 kbit/s), taking the ICY metadata out; a playback task, created for each stream with its stack in internal RAM
+  (the decoder is much slower with a stack in PSRAM) and deleted when the radio stops (a conversation gets that RAM
+  back), decodes it with `esp_audio_codec` 2.6 (only the MP3 and AAC decoders are linked, ~190 KB of flash). The
+  channels are mixed, then a 31-tap low-pass FIR is computed only where an output sample falls (in integers,
+  state in internal RAM), followed by a high-shelf biquad (treble) and the gain (loudness, fades). Measured with a
+  128 kbit/s MP3 at 48 kHz: decoding ~21 % of a core, resampling ~7 %, internal RAM ~20 KB free while playing. A
+  station asked while the assistant listens or speaks is played once it sleeps again; the sleep screen alone
+  resumes it, so that a wake word heard meanwhile always wins.
 - **Web search**: the server tool `web_search_20250305` is added to the request when the model's description
   (read by the prewarm, `GET /v1/models/{model}`) says it is supported. Its results (encrypted page contents)
   are dropped from the history once the answer is complete, so that they are not sent again with every later
@@ -1115,4 +1224,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - Montserrat font (SIL Open Font License), shipped with LVGL, for accented characters (Latin-1 and Latin
   Extended-A); DejaVu Sans (Bitstream Vera license, DejaVu changes in the public domain), shipped with LVGL, for
   Greek.
-- Espressif components (ESP-IDF, ESP-SR, esp-box-3, esp_websocket_client) under their respective licenses.
+- Espressif components (ESP-IDF, ESP-SR, esp-box-3, esp_websocket_client, esp_audio_codec) under their
+  respective licenses.
+- [Radio-Browser](https://www.radio-browser.info): free directory of internet radios (public API).
+- Font Awesome 5 Free (SIL OFL), shipped with LVGL, and DejaVu Sans for the symbols of the radio screen.

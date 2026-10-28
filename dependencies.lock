@@ -229,6 +229,16 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 2.5.5
+  espressif/esp_audio_codec:
+    component_hash: a5b9275af74247e3ce536d16a7080e4d77207a185b63e1bea368eb4d57176c2b
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 2.6.2
   espressif/esp_codec_dev:
     component_hash: 1a3a2e518cd8b52e8796ec393a4050977f8f113599056faf085a02a57e194f86
     dependencies:
@@ -362,10 +372,11 @@ direct_dependencies:
 - espressif/esp-box-3
 - espressif/esp-box-lite
 - espressif/esp-sr
+- espressif/esp_audio_codec
 - espressif/esp_codec_dev
 - espressif/esp_lcd_touch_gt911
 - espressif/esp_lcd_touch_tt21100
 - espressif/esp_websocket_client
-manifest_hash: 5bbf4ec72a2cfc462b736a06a4001780aad2bca261602dfbfc6f540c49852b2a
+manifest_hash: 06597a22acbb6b1491a91d654e19e8f1e1b2764bee0bc281e28308174382f399
 target: esp32s3
 version: 2.0.0

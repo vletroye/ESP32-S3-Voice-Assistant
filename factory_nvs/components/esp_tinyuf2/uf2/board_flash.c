@@ -127,6 +127,15 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "COUNTRY TXT", 12);
         PRINTF("%s shown as COUNTRY.TXT", t->path);
     }
+    // Favourite radios (RADIO.TXT)
+    FILE *radio = fopen(PHRASES_DIR "/radio.txt", "r");
+    if (radio) {
+        fclose(radio);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/radio.txt", sizeof(t->path));
+        memcpy(t->fat_name, "RADIO   TXT", 12);
+        PRINTF("%s shown as RADIO.TXT", t->path);
+    }
     // CONFIG.INI saved by the "restore" icon of the Settings screen, when there is one
     FILE *backup = fopen(PHRASES_DIR "/config.bkp", "r");
     if (backup) {
@@ -452,7 +461,8 @@ static const char *const s_ini_key_order[] = {
     "Base_url", "Chat_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Languages", "Country",
     "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "Confirm_off", "OpenRouter_key",
     "OpenRouter_free", "Free_models", "XAI_key",
-    "Screen_off_s", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Currency",
+    "Screen_off_s", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Currency", "Radio_resume", "Radio_level",
+    "Radio_treble",
 };
 
 /* The keys of s_ini_key_order not written yet (from the layout), in that order */

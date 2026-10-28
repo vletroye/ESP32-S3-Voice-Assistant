@@ -46,6 +46,9 @@
 #include "costs.h"
 #include "persona.h"
 #include "country.h"
+#include "radio.h"
+#include "radio_browser.h"
+#include "radio_favorites.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -78,6 +81,8 @@ static volatile bool s_restart_after_reply = false;
 static volatile bool s_restart_requested = false;
 /* "Teste les modèles": the test starts once its announcement has been spoken */
 static volatile bool s_test_after_reply = false;
+/* A radio command was answered: back to sleep after the reply (the radio plays then), without listening again */
+static volatile bool s_sleep_after_local = false;
 /* The reply is the one of a voice command handled here (not of the model): Sleep_after_cmd applies */
 static volatile bool s_reply_local_cmd = false;
 /* The reply ended with a goodbye ("Au revoir !", "Bonne soirée."): sleep and a new conversation once spoken */
@@ -242,9 +247,10 @@ static void on_reply_audio(tts_event_t event)
         // Reply interrupted by a new listening session (wake word or touch)
         return;
     }
-    if (s_reply_local_cmd && sys_param->sleep_after_cmd && !voice_cmd_waiting_answer()) {
-        // Sleep_after_cmd: a voice command handled here (and asking nothing) does not listen again
-        ESP_LOGI(TAG, "Voice command done, going to sleep (Sleep_after_cmd)");
+    if (s_reply_local_cmd && (sys_param->sleep_after_cmd || s_sleep_after_local) && !voice_cmd_waiting_answer()) {
+        // Sleep_after_cmd, or a radio command: a voice command handled here (and asking nothing) does not listen again
+        s_sleep_after_local = false;
+        ESP_LOGI(TAG, "Voice command done, going to sleep");
         ui_ctrl_reply_set_audio_end_flag(true);
         return;
     }
@@ -438,7 +444,7 @@ void assistant_request_restore(bool factory)
 /* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
 static const char *const s_user_files[] = {
     "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "speed.txt", "log.txt",
-    "costs.json", "costs.tmp", "costs.txt",
+    "costs.json", "costs.tmp", "costs.txt", "radio.txt", "radio.txt.tmp",
 };
 
 /* Languages whose files are given with the firmware: a soft reset restores them; those of a language added by the
@@ -665,6 +671,7 @@ void assistant_listen_end(void)
         s_config_after_reply = (voice_cmd == VOICE_CMD_EDIT_CONFIG);
         s_restart_after_reply = (voice_cmd == VOICE_CMD_RESTART);
         s_test_after_reply = (voice_cmd == VOICE_CMD_TEST_MODELS);
+        s_sleep_after_local = (voice_cmd == VOICE_CMD_RADIO);
         speak_message(cmd_reply ? cmd_reply : "");
         s_reply_local_cmd = true;
         free(cmd_reply);
@@ -797,6 +804,8 @@ void app_main()
     }
     // The countries known by voice (COUNTRY.TXT), a column for each language offered
     country_init();
+    // The favourite radios (RADIO.TXT), made with its header when missing
+    radio_favorites_init();
     // The models offered (AGENTS.INI), then the free OpenRouter ones of the last list read (the live one is read
     // once a day, below): before the Settings screen lists them
     llm_load_models();

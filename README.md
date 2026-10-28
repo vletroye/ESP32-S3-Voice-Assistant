@@ -16,14 +16,15 @@ which has been largely rewritten.
 - Local wake word **"Bonjour ESP"** (or "Hi ESP"), or touch the screen while asleep.
 - **Live transcription** while you speak (streamed to the API, so the question is ready as soon as you stop;
   it is shown above the answer).
-- Answer **streamed** by the chosen model and shown as it arrives, with an icon of the provider (Claude or
-  OpenAI, a globe when the web was searched, a chip when the device answered by itself: memory,
+- Answer **streamed** by the chosen model and shown as it arrives, with an icon of the provider (Claude, OpenAI,
+  Gemini, OpenRouter or xAI, a globe when the web was searched, a chip when the device answered by itself: memory,
   language and model commands, errors) and prefixed with the model id
   (`[claude-haiku-5-5] …`).
 - **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
   (Anthropic), GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI), Gemini 3.5 Flash-Lite, Gemini 3.8 Flash,
-  Gemini 4 Argon (Google), Grok 4.7 (xAI), or up to 6 models through OpenRouter (3 by default, your own list in `CONFIG.INI`);
-  French or English; 10 OpenAI voices. The
+  Gemini 4 Argon (Google), Grok 4.7 (xAI), and models reached through OpenRouter (3 by default, plus free ones),
+  all listed in `AGENTS.INI` (up to 32); the languages of `Languages` (French and English by default); 10 OpenAI
+  voices. The
   language, the model and the voice can also be changed **by voice** ("Change la langue", "Utilise le modèle
   3", "Prends la voix Cedar"); all apply at once, without restarting.
 - **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays", "Change ma ville"):
@@ -245,7 +246,7 @@ comes from the prices of `AGENTS.INI`; the tokens read from the cache are counte
 
 Say "**teste les modèles**" ("test the models"): the assistant announces how many models it tests, then asks
 each model of `AGENTS.INI`, then each free OpenRouter model, **the same question** ("Explique en exactement 5
-phrases comment se forme un arc-en-ciel.", `test_question` in `app_lang.c`), one after the other, **without the
+phrases comment se forme un arc-en-ciel.", `test_question` of `LANG_<XX>.TXT`), one after the other, **without the
 conversation nor tools** but with the same instructions. The model chosen and its conversation are not changed.
 
 - The screen lists the models one line each as they are tested, numbered: "02 Sonnet…" while it is tested, then
@@ -301,7 +302,7 @@ Two firmwares live side by side in flash:
 | Folder | Partition | Role |
 | --- | --- | --- |
 | `main/` (root project) | `factory` (6 MB) | The voice assistant |
-| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `MEMORY.TXT` and the files kept on SPIFFS (`AGENTS.INI`, `VOICE_FR.TXT`, `PERSO_FR.TXT`…) (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `MEMORY.TXT` and the files of SPIFFS, files that can grow when edited, a root directory of 8 sectors (up to 64 files of SPIFFS instead of 15 files in all), and a bound-checked `CONFIG.INI`; the `INFO_UF2.TXT`, `INDEX.HTM` and `CURRENT.UF2` files of TinyUF2 are not shown, no firmware being flashed through the drive) |
+| `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `MEMORY.TXT` and the files kept on SPIFFS (`AGENTS.INI`, `LANG_FR.TXT`, `VOICE_FR.TXT`, `PERSO_FR.TXT`, `COUNTRY.TXT`…) (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `MEMORY.TXT` and the files of SPIFFS, files that can grow when edited, a root directory of 8 sectors (up to 64 files of SPIFFS instead of 15 files in all), and a bound-checked `CONFIG.INI`; the `INFO_UF2.TXT`, `INDEX.HTM` and `CURRENT.UF2` files of TinyUF2 are not shown, no firmware being flashed through the drive) |
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
 | `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep); the conversation (`history.json`) is saved there at run time |
 
@@ -321,11 +322,13 @@ Main modules of the assistant (`main/app/`):
 | `openrouter_free.c` | Free OpenRouter models from its live list (once a day, parsed model by model), kept on SPIFFS |
 | `app_presence.c` | Presence radar (AT581X) of the BOX-3-SENSOR dock: screen off after `Screen_off_s` without presence |
 | `gemini_chat.c` | Gemini client (`streamGenerateContent`, SSE streaming), history kept on the device |
-| `llm_sse.c` | Server-sent events parser shared by both clients |
+| `llm_sse.c` | Server-sent events parser and text buffers shared by the clients |
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
 | `tts_stream.c` | Speech synthesis (OpenAI Realtime), voice change at run time, resampling and I2S playback |
 | `app_lang.c` | Texts of the device per language (`main/lang/lang_<code>.txt`, installed on SPIFFS as `LANG_<CODE>.TXT`): UI texts, model instructions, error messages; languages offered (`Languages`), files of a language added |
 | `country.c` | Countries known by voice and their names per language (`main/lang/country.txt`, `COUNTRY.TXT`) |
+| `persona.c` | Who the assistant is, per language (`main/persona/persona_<code>.txt`, `PERSO_<XX>.TXT`): identity, personality, instructions, voice |
+| `model_test.c` | Model test ("teste les modèles"): same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request |
 | `tools.c` | Tools offered to Claude (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
@@ -335,7 +338,7 @@ Main modules of the assistant (`main/app/`):
 | `app_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, answer scrolling, answer icon, double tap, translations, Settings screen |
-| `images/` | Answer icons (Claude, web globe, chip for local answers) |
+| `images/` | Answer icons (Claude, Gemini, OpenRouter, xAI, web globe, chip for local answers; OpenAI's is in `main/ui/images/`) |
 | `main.c` | Listen → transcribe → answer → speak pipeline |
 
 ## Build and flash
@@ -427,7 +430,7 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
-| `Language` | Assistant language (also set from the Settings screen) | `fr` or `en` |
+| `Language` | Assistant language, one of the codes of `Languages` (also set from the Settings screen or by voice) | `fr`, `en`, `de`… |
 | `Languages` | Languages offered (Settings screen, voice): `CODE:name` separated by commas, the code being the 2-letter ISO 639-1 code the transcription expects. A language added here gets its files at the next start (see [Languages](#languages-lang_xxtxt-and-adding-a-language)) | `FR:Français, EN:English` |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
@@ -449,8 +452,9 @@ the order of the table below (`s_ini_key_order` in `board_flash.c`):
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
 
 The drive also holds **`PERSO_FR.TXT`** and **`PERSO_EN.TXT`**: who the assistant is in each language, given to
-it with every question (Claude, GPT, Gemini and OpenRouter alike). Only the file of the language in use is read
-(again when the language changes); a language without its own file uses the English one.
+it with every question (Claude, GPT, Gemini, Grok and OpenRouter alike). Only the file of the language in use is
+read (again when the language changes); a language added to `Languages` gets its own, made from the English one
+(see [Adding a new language](#adding-a-new-language-step-by-step)).
 
 ```ini
 [identité]
@@ -567,10 +571,10 @@ characters each; the drive shows up to 64 files of SPIFFS (12 languages × 3 fil
 `MEMORY.TXT` holds the notes of the long-term memory, one per line (`- note (25/10/26)`): you can correct or
 delete them there.
 
-Both files follow the same rules: several lines are allowed, up to about 3,900 characters; lines starting with
-`#` are comments: kept in the file, never given to the assistant (an empty file shows a short help in such
-lines). They are stored in the NVS keys `Persona` and `Memory` and read at start-up. The memory commands keep
-the comments too: "oublie que …" never removes a `#` line, "oublie tout" removes the notes and keeps them.
+Several lines are allowed, up to about 3,900 characters; lines starting with `#` are comments: kept in the file,
+never given to the assistant (an empty file shows a short help in such lines). It is stored in the NVS key
+`Memory` (not on SPIFFS) and read at start-up. The memory commands keep the comments too: "oublie que …" never
+removes a `#` line, "oublie tout" removes the notes and keeps them.
 
 **Comments in `CONFIG.INI`**: lines starting with `#` or `;`, and end-of-line comments after a `;` preceded by a space
 (`Volume = 70 ; a bit quieter`), are kept. The file as last saved (up to 3,999 characters) is stored in the NVS
@@ -741,8 +745,9 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 ## Voice commands
 
 Phrases recognised by the device itself. Punctuation and case are ignored ("Au revoir !" works), and hyphens
-and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the phrases of both
-languages; only those of the current language are recognised (except "change la langue"). They are written as
+and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the French and English
+phrases; only those of the language in use are recognised, except "change la langue" and the direct language
+phrases ("parle anglais", "speak French"), recognised in every language of `Languages`. They are written as
 patterns in one file per language (see [Writing voice phrases](#writing-voice-phrases-patterns)).
 
 ### Writing voice phrases (patterns)
@@ -836,8 +841,7 @@ the assistant goes to sleep after saying it (no follow-up listening) and the con
 
 ### New conversation: conversation cleared, without going to sleep
 
-Recognised at the **start** of what is said, in French and in English whatever the language
-(`main/app/voice_cmd.c`). Said alone (or with "s'il te plaît"), the assistant answers "D'accord, je t'écoute."
+Recognised at the **start** of what is said, in the language in use (`main/app/voice_cmd.c`). Said alone (or with "s'il te plaît"), the assistant answers "D'accord, je t'écoute."
 and keeps listening; followed by a question ("J'ai une autre question : quelle est la capitale du Pérou ?"),
 the conversation is cleared and the model answers the question.
 
@@ -850,7 +854,8 @@ the conversation is cleared and the model answers the question.
 
 ### Language, model and voice
 
-Accepted in French and in English whatever the language (`main/app/voice_cmd.c`). Answered on the device; the
+Recognised in the language in use, except "change la langue" and the direct language phrases, recognised in
+every language (`main/app/voice_cmd.c`). Answered on the device; the
 new setting is saved and applied at once, without restarting (the confirmation of a new language is spoken in
 that language, after the speech session has reconnected, ~2 s). Changing the model saves the conversation and
 restores the one of the new model if it was saved last, else starts a new one. A new voice confirms itself with
@@ -867,17 +872,20 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 | Answer to that question (within 30 s): the provider's models are then read, numbered from 1 ("Voici les modèles proposés par Google. 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | its number ("2", "le deuxième") or its name: Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router") · xAI (or "Grok"), or directly a model name ("Sonnet") | the same |
 | Answer to the model question (within 30 s after the list) | its number in that list ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna", "Sol", "Astra", "Flash", "Flash-Lite", "Argon", "DeepSeek", "Kimi", "MiniMax"; transcription variants such as "Sonnette", "Saule", "Flash light" accepted) | its number ("three", "3", "third") or its name |
 | Skip a step | change de modèle pour Google (lists Google's models) · change de modèle pour Sonnet (chooses it) | change model to Google · change model to Sonnet |
-| Change the model directly (numbered over all models, as on the Settings screen; 1 to 10 can be said) | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
+| Change the model directly (numbered over all models, as on the Settings screen; 1 to 13 can be said, the others by name) | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
 | Change the voice (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
 | Answer to that question (within 30 s after the list) | its number (1 to 10: "deux", "2", "dixième"…) or its name ("Cedar", also heard as "Cèdre"; "Corail", "Écho", "Ballade", "Marine"…) | its number or its name |
 | Change the voice directly | prends la voix Cedar · utilise la voix 3 · passe à la voix Coral · mets la voix Sage · choisis la voix 2 · voix numéro 2 · la voix Cedar · change de voix pour Coral | use the voice Cedar · use voice 3 · switch to voice 2 · voice number 2 · voice Cedar |
 
 A direct phrase must contain only the language, the number or the voice name, possibly followed by "s'il te plaît", "please"
 or "maintenant": "parle-moi de l'Angleterre en anglais", "parle plus fort" or "la voix est trop forte" remain
-normal questions. "Un" and "une" mean model 1 only when said alone (elsewhere they are articles). Answers: the confirmation ("Very well,
-I will now speak English.", spoken in the new language), "Je parle déjà français." / "J'utilise
-déjà Claude Haiku 5.5.", or "Je ne connais pas cette langue." / "Je n'ai pas compris. Dites Anthropic, OpenAI ou Google." / "Dites un numéro
-de 1 à 3, ou le nom du modèle.". "Flash" alone is Gemini 3.8 Flash, "Flash-Lite" Gemini 3.5 Flash-Lite.
+normal questions. "Un" and "une" mean model 1 only when said alone (elsewhere they are articles). Answers: the
+confirmation ("Very well, I will now speak English.", spoken in the new language), "Je parle déjà français." /
+"J'utilise déjà Claude Haiku 5.5.", or, when the answer is not understood, the question again with its numbered
+list ("Je ne connais pas cette langue. Dites le numéro ou le nom d'une langue : 1, français. 2, anglais.", "Je
+n'ai pas compris. Dites le numéro ou le nom du fournisseur : 1, Anthropic. 2, OpenAI. …") or "Je n'ai pas compris.
+Dites un numéro de 1 à 3, ou le nom du modèle.". "Flash" alone is Gemini 3.8 Flash, "Flash-Lite" Gemini 3.5
+Flash-Lite.
 
 ### Settings screen, configuration files, restart
 
@@ -910,7 +918,7 @@ its 2-letter code; the town is kept as said.
 
 ### Long-term memory
 
-Accepted in French and in English whatever the language (`main/app/app_memory.c`). "Remember" phrases are
+Recognised in the language in use (`main/app/app_memory.c`). "Remember" phrases are
 followed by what to remember; the other ones are said alone. Answered on the device, without calling the model.
 
 | Action | French | English | Answer |

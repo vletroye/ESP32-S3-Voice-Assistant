@@ -533,7 +533,7 @@ Both files follow the same rules: several lines are allowed, up to about 3,900 c
 lines). They are stored in the NVS keys `Persona` and `Memory` and read at start-up. The memory commands keep
 the comments too: "oublie que …" never removes a `#` line, "oublie tout" removes the notes and keeps them.
 
-**Comments in `CONFIG.INI`**: lines starting with `#` or `;`, and end-of-line comments after ` ;`
+**Comments in `CONFIG.INI`**: lines starting with `#` or `;`, and end-of-line comments after a `;` preceded by a space
 (`Volume = 70 ; a bit quieter`), are kept. The file as last saved (up to 3,999 characters) is stored in the NVS
 key `Config_layout` and rebuilt from it with the current values (a voice or volume changed by voice shows its
 new value next to its comment); keys added by a newer version are appended at the end. The file can hold up to
@@ -630,7 +630,7 @@ apostrophes and hyphens as spaces (`j ai`, `let s`), no punctuation. Spaces doub
 empty part are removed. Add a variant where it is needed, e.g. both `éditer` and `editer` when the transcription
 writes either (`(é|e)diter` works too).
 
-**Which phrases are recognised**
+#### Which phrases are recognised
 
 - Only the files of the languages of `Languages` are read, and a list takes the phrases of the **current
   language** only: in French, "change the model" is no longer a command (it goes to the model).
@@ -639,7 +639,7 @@ writes either (`(é|e)diter` works too).
 - A section missing in the current language's file is taken from the English file (with a warning in the log); an
   empty section disables the command in that language. A language without a file uses English.
 
-**Where the files are**
+#### Where the files are
 
 - The files of `main/phrases/` are built into the firmware. At start-up, each one missing on SPIFFS (first start)
   or emptied is installed as `/spiffs/phrases_<code>.txt`; the files of SPIFFS are then read (a few KB, kept in

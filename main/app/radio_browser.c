@@ -33,8 +33,9 @@
 static const char *TAG = "radio_browser";
 
 /* Used when the list of servers cannot be read */
+/* The servers in service (October 2026: fi1, nl1, at1 are gone) */
 static const char *const s_fallback_servers[] = {
-    "de1.api.radio-browser.info", "de2.api.radio-browser.info", "fi1.api.radio-browser.info",
+    "de1.api.radio-browser.info", "de2.api.radio-browser.info",
 };
 
 static char (*s_servers)[RB_HOST_SIZE] = NULL;     /* PSRAM */

@@ -343,6 +343,158 @@ static void add_missing_sections(const char *code, const char *path, const char 
     }
 }
 
+/* A line of [start, end), its blanks and '\r' trimmed */
+static void trim_line(const char **start, const char **end)
+{
+    while (*start < *end && (**start == ' ' || **start == '\t')) {
+        (*start)++;
+    }
+    while (*end > *start && ((*end)[-1] == '\r' || (*end)[-1] == ' ' || (*end)[-1] == '\t')) {
+        (*end)--;
+    }
+}
+
+/* The block [block, block_end) has this pattern line */
+static bool block_has_line(const char *block, const char *block_end, const char *line, size_t len)
+{
+    for (const char *p = block; p < block_end;) {
+        const char *e = memchr(p, '\n', (size_t)(block_end - p));
+        const char *next = e ? e + 1 : block_end;
+        e = e ? e : block_end;
+        const char *a = p;
+        trim_line(&a, &e);
+        if ((size_t)(e - a) == len && memcmp(a, line, len) == 0) {
+            return true;
+        }
+        p = next;
+    }
+    return false;
+}
+
+/* The body of the section "[name]" of a text (after its header line, up to the next section), NULL if none */
+static const char *section_body(const char *text, const char *text_end, const char *name, size_t name_len,
+                                const char **body_end)
+{
+    for (const char *p = text; p < text_end;) {
+        const char *e = memchr(p, '\n', (size_t)(text_end - p));
+        const char *next = e ? e + 1 : text_end;
+        if (strncmp(p, "[s_", 3) == 0 && (size_t)(text_end - p) > name_len + 1 && memcmp(p + 1, name, name_len) == 0 &&
+                p[name_len + 1] == ']') {
+            const char *end = strstr(next, "\n[s_");
+            *body_end = (end && end < text_end) ? end + 1 : text_end;
+            return next;
+        }
+        p = next;
+    }
+    return NULL;
+}
+
+/*
+ * The patterns of the firmware's file missing in a section of the file of SPIFFS (a section improved by a newer
+ * firmware) are added at its end: the lines there (possibly edited) are kept, and an emptied section (the command
+ * disabled) stays empty. A pattern removed from a non-empty section comes back.
+ */
+static void add_missing_patterns(const char *code, const char *path)
+{
+    const char *def = NULL, *def_end = NULL;
+    for (size_t i = 0; i < sizeof(s_defaults) / sizeof(s_defaults[0]); i++) {
+        if (strcasecmp(code, s_defaults[i].code) == 0) {
+            def = s_defaults[i].start;
+            def_end = s_defaults[i].end - 1;    // without the added NUL
+        }
+    }
+    char *text = def ? read_file(path) : NULL;
+    char *out = text ? heap_caps_malloc(PHRASES_FILE_MAX, MALLOC_CAP_SPIRAM) : NULL;
+    if (!out) {
+        free(text);
+        return;
+    }
+    const char *text_end = text + strlen(text);
+    const char *eol = strchr(text, '\r') ? "\r\n" : "\n";
+    size_t n = 0;
+    int added = 0;
+    bool full = false;
+    for (const char *p = text; p < text_end;) {
+        const char *e = memchr(p, '\n', (size_t)(text_end - p));
+        const char *next = e ? e + 1 : text_end;
+        // A section header ("[s_..."), not a pattern starting with an optional part ("[la ](radio|station)")
+        const char *close = (strncmp(p, "[s_", 3) == 0) ? memchr(p, ']', (size_t)(next - p)) : NULL;
+        if (!close) {
+            // A line outside a section header: as it is
+            if (n + (size_t)(next - p) < PHRASES_FILE_MAX) {
+                memcpy(out + n, p, (size_t)(next - p));
+                n += (size_t)(next - p);
+            }
+            p = next;
+            continue;
+        }
+        // A section: its header and body, the missing patterns after its last non-blank line
+        const char *name = p + 1;
+        size_t name_len = (size_t)(close - name);
+        const char *body_end = strstr(next, "\n[s_");
+        body_end = body_end ? body_end + 1 : text_end;
+        const char *last = next;        // end of the last non-blank line of the body
+        bool has_pattern = false;
+        for (const char *q = next; q < body_end;) {
+            const char *qe = memchr(q, '\n', (size_t)(body_end - q));
+            const char *qn = qe ? qe + 1 : body_end;
+            const char *a = q, *b = qe ? qe : body_end;
+            trim_line(&a, &b);
+            if (a < b) {
+                last = qn;
+                has_pattern |= (*a != '#');
+            }
+            q = qn;
+        }
+        if (n + (size_t)(last - p) < PHRASES_FILE_MAX) {
+            memcpy(out + n, p, (size_t)(last - p));
+            n += (size_t)(last - p);
+        }
+        if (last > p && last[-1] != '\n' && n + 2 < PHRASES_FILE_MAX) {
+            n += (size_t)snprintf(out + n, PHRASES_FILE_MAX - n, "%s", eol);    // last line without its end
+        }
+        const char *def_body_end = NULL;
+        const char *def_body = has_pattern ? section_body(def, def_end, name, name_len, &def_body_end) : NULL;
+        for (const char *q = def_body; q && q < def_body_end;) {
+            const char *qe = memchr(q, '\n', (size_t)(def_body_end - q));
+            const char *qn = qe ? qe + 1 : def_body_end;
+            const char *a = q, *b = qe ? qe : def_body_end;
+            trim_line(&a, &b);
+            if (a < b && *a != '#' && !block_has_line(next, body_end, a, (size_t)(b - a))) {
+                if (n + (size_t)(b - a) + 3 >= PHRASES_FILE_MAX) {
+                    full = true;
+                } else {
+                    memcpy(out + n, a, (size_t)(b - a));
+                    n += (size_t)(b - a);
+                    n += (size_t)snprintf(out + n, PHRASES_FILE_MAX - n, "%s", eol);
+                    ESP_LOGI(TAG, "%s: [%.*s] %.*s added", path, (int)name_len, name, (int)(b - a), a);
+                    added++;
+                }
+            }
+            q = qn;
+        }
+        // The blank lines after the section
+        if (n + (size_t)(body_end - last) < PHRASES_FILE_MAX) {
+            memcpy(out + n, last, (size_t)(body_end - last));
+            n += (size_t)(body_end - last);
+        }
+        p = body_end;
+    }
+    if (full) {
+        ESP_LOGW(TAG, "%s: larger than %d bytes, some patterns of the firmware not added", path, PHRASES_FILE_MAX);
+    }
+    if (added) {
+        FILE *f = fopen(path, "w");
+        bool ok = f && fwrite(out, 1, n, f) == n;
+        if (f) {
+            ok &= (fclose(f) == 0);
+        }
+        ESP_LOGI(TAG, "%s: %d pattern(s) of the firmware added%s", path, added, ok ? "" : ", could not write");
+    }
+    free(out);
+    free(text);
+}
+
 bool phrases_create(const char *code, const char *name)
 {
     char path[48];
@@ -387,6 +539,7 @@ void phrases_init(void)
         } else {
             // Kept as it is (possibly edited); the lists added by a newer firmware are appended
             add_missing_sections(app_lang_code(i), path, text);
+            add_missing_patterns(app_lang_code(i), path);
             free(text);
             text = read_file(path);
         }

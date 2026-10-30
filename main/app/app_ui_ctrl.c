@@ -327,8 +327,8 @@ typedef struct {
     size_t count;
 } settings_speech_t;
 static settings_speech_t s_settings_speech[2] = {
-    { .kind = LLM_SPEECH_TTS },
     { .kind = LLM_SPEECH_STT },
+    { .kind = LLM_SPEECH_TTS },
 };
 
 /* The options of a speech row, the model in use selected (added at the end when it is not listed) */
@@ -569,11 +569,12 @@ static void settings_screen_setup(void)
     s_model_stored = model_selected;
     settings_dropdown_setup(s_model_dropdown, options, model_selected, settings_changed_cb, NULL);
 
-    // Second page: speech and transcription models, then the voice, all applied immediately (no Save button)
-    const char *speech_texts[2] = { lang->settings_tts, lang->settings_stt };
+    // Second page: transcription (STT) and speech (TTS) models, then the voice, all applied immediately (no Save
+    // button); the short labels leave the dropdowns room for the models' names
+    const char *speech_texts[2] = { lang->settings_stt, lang->settings_tts };
     for (size_t i = 0; i < 2; i++) {
         settings_speech_t *row = &s_settings_speech[i];
-        row->dropdown = settings_row_create(speech_texts[i], lv_pct(58));
+        row->dropdown = settings_row_create(speech_texts[i], lv_pct(78));
         row->label = lv_obj_get_child(lv_obj_get_parent(row->dropdown), 0);
         settings_row_add(lv_obj_get_parent(row->dropdown), 1);
         settings_dropdown_setup(row->dropdown, "-", 0, settings_speech_changed_cb, row);
@@ -615,8 +616,8 @@ static void ui_ctrl_apply_texts(void)
     if (s_model_row_label) {
         lv_label_set_text(s_model_row_label, lang->settings_model);
         lv_label_set_text(s_voice_row_label, lang->settings_voice);
-        lv_label_set_text(s_settings_speech[0].label, lang->settings_tts);
-        lv_label_set_text(s_settings_speech[1].label, lang->settings_stt);
+        lv_label_set_text(s_settings_speech[0].label, lang->settings_stt);
+        lv_label_set_text(s_settings_speech[1].label, lang->settings_tts);
         lv_label_set_text(s_save_label, lang->settings_save);
     }
     label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);

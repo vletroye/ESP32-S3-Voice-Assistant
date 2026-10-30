@@ -339,8 +339,8 @@ settings_title = Instellingen
 settings_language = Taal
 settings_model = Model
 settings_voice = Stem
-settings_tts = Spraak
-settings_stt = Transcriptie
+settings_tts = TTS
+settings_stt = STT
 
 # Spoken with a voice just chosen, %s = its name
 voice_sample = Hallo, ik ben %s. Vind je mijn stem mooi?

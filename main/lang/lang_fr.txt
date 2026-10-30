@@ -338,8 +338,8 @@ settings_title = Réglages
 settings_language = Langue
 settings_model = Modèle
 settings_voice = Voix
-settings_tts = Synthèse
-settings_stt = Transcription
+settings_tts = TTS
+settings_stt = STT
 
 # Spoken with a voice just chosen, %s = its name
 voice_sample = Bonjour, je suis %s. Ma voix vous plaît ?

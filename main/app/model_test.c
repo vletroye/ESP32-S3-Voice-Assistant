@@ -7,6 +7,7 @@
  * the end of the answer and its tokens. Kept by model id in MODEL_TIMES_FILE, shown in SPEED.TXT.
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -192,7 +193,7 @@ static void spoken_seconds(char *buf, size_t size, int ms, bool short_unit);
 #define SPEECH_RESULTS_MAX  16
 static struct {
     bool stt;
-    char name[24];
+    char name[48];
     char model[48];
     int first_ms;           /* TTS: first audio; STT: the transcript after all the audio is sent */
     int total_ms;           /* TTS: end of the audio */
@@ -237,6 +238,28 @@ static void speech_line(char *screen, size_t size, const char *name, const char 
     snprintf(screen + from, size - from, "%s%s%s%s", from ? "\n" : "", name, result ? " : " : "…", result ? result : "");
 }
 
+/*
+ * The result of a speech model, said at once and waited for: "Résultat de la synthèse Voxtral : 0,7 seconde."
+ * (the next speech test would cut it). A synthesis is said with its own voice, still set up after its test.
+ */
+static void say_speech_result(int index)
+{
+    const app_lang_t *lang = app_lang_get();
+    char text[160], time_text[32];
+    if (s_speech_results[index].first_ms >= 0) {
+        spoken_seconds(time_text, sizeof(time_text), s_speech_results[index].first_ms, false);
+        snprintf(text, sizeof(text), lang->test_result, s_speech_results[index].name, time_text);
+    } else {
+        snprintf(text, sizeof(text), lang->test_unavailable, s_speech_results[index].name);
+        if ((unsigned char)text[0] < 0x80) {
+            text[0] = toupper((unsigned char)text[0]);     // "La synthèse Voxtral : non disponible."
+        }
+    }
+    assistant_announce_begin();
+    assistant_announce(text);
+    assistant_announce_end();
+}
+
 static void test_speech(char *screen, size_t screen_size)
 {
     const app_lang_t *lang = app_lang_get();
@@ -245,6 +268,10 @@ static void test_speech(char *screen, size_t screen_size)
     size_t samples = 0;
     char name[32], result[32];
     s_speech_result_count = 0;
+    // "Je teste les 30 modèles" said to the end first (a speech test would cut it)
+    for (int i = 0; i < 300 && !tts_stream_is_silent(500); i++) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 
     for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_TTS) && !s_cancel && s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
         const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_TTS, i);
@@ -279,6 +306,9 @@ static void test_speech(char *screen, size_t screen_size)
         }
         speech_line(screen, screen_size, name, ok ? result : lang->test_unavailable_short);
         assistant_show(screen);
+        if (!s_cancel) {
+            say_speech_result(s_speech_result_count - 1);   // with the voice just tested
+        }
     }
     // The speech of the settings again
     assistant_set_tts(NULL);
@@ -312,6 +342,9 @@ static void test_speech(char *screen, size_t screen_size)
         }
         speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : lang->test_unavailable_short);
         assistant_show(screen);
+        if (!s_cancel) {
+            say_speech_result(s_speech_result_count - 1);
+        }
     }
     free(audio);
     // The transcription of the settings again
@@ -391,12 +424,12 @@ static void write_speed_file(const cJSON *times, const char *question)
                 "# (TTS, not played: first = first audio, total = end of the audio), then the audio of the first one\r\n"
                 "# transcribed by each transcription model (STT: first = transcript after all the audio sent,\r\n"
                 "# words = %% of the words of the sentence found)\r\n\r\n");
-        fprintf(f, "%-24s %6s %6s %6s  %-26s  %s\r\n", "name", "first", "total", "words", "status", "model");
+        fprintf(f, "%-32s %6s %6s %6s  %-26s  %s\r\n", "name", "first", "total", "words", "status", "model");
         for (i = 0; i < s_speech_result_count; i++) {
             char b1[12], b2[12], w[8];
             bool ok = s_speech_results[i].first_ms >= 0;
             snprintf(w, sizeof(w), "%d", s_speech_results[i].words);
-            fprintf(f, "%-24.24s %6s %6s %6s  %-26s  %s\r\n", s_speech_results[i].name,
+            fprintf(f, "%-32.32s %6s %6s %6s  %-26s  %s\r\n", s_speech_results[i].name,
                     secs(b1, sizeof(b1), s_speech_results[i].first_ms, ok),
                     secs(b2, sizeof(b2), s_speech_results[i].total_ms, ok && !s_speech_results[i].stt),
                     s_speech_results[i].words >= 0 ? w : "-", s_speech_results[i].status, s_speech_results[i].model);

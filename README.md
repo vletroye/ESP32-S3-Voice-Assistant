@@ -438,7 +438,9 @@ conversation nor tools** but with the same instructions. The model chosen and it
   is measured. The audio of the first one is then given to each model of `[stt]`, at the pace of speech (as from
   the microphone: a realtime model transcribes as the audio comes), and the time from the end of the audio to the
   transcript is measured, with the % of the words of the sentence found. A model without its key is "non
-  disponible". The speech settings in use are restored after; the results are in a second table of `SPEED.TXT`.
+  disponible". Each result is said right after its test ("Résultat de la synthèse Voxtral : 0,7 seconde.", a
+  synthesis with its own voice), before the next one. The speech settings in use are restored after; the results
+  are in a second table of `SPEED.TXT`.
 - Each test costs one short answer of each paid model, and a sentence of each speech model.
 
 ## Hardware and software
@@ -558,11 +560,12 @@ First page:
 
 Second page:
 
-- **Synthèse / Speech**: the speech model, among `[tts]` of `AGENTS.INI` (Mistral's only with a `Mistral_key`).
-  Applied **at once** and saved (`Tts_model`), as with "change de synthèse vocale": the voice list follows its
-  provider and the voice now in use introduces itself.
-- **Transcription**: the transcription model, among `[stt]` of `AGENTS.INI`, applied at once and saved
-  (`Stt_model`), as with "change de transcription".
+- **STT**: the transcription model, among `[stt]` of `AGENTS.INI` (Mistral's only with a `Mistral_key`), applied
+  at once and saved (`Stt_model`), as with "change de transcription".
+- **TTS**: the speech model, among `[tts]` of `AGENTS.INI`. Applied **at once** and saved (`Tts_model`), as with
+  "change de synthèse vocale": the voice list follows its provider and the voice now in use introduces itself.
+- The labels are the short `STT` and `TTS` in every language (`settings_stt`, `settings_tts` of `LANG_<XX>.TXT`),
+  leaving the lists room for the models' names.
 - **Voix / Voice**: the voice reading the answers, among the voices of `[voices]` (`AGENTS.INI`) of the speech
   provider in use that speak the language in use (OpenAI: Marin, Cedar, Alloy…; Mistral in French: Lea, Marie,
   Manon, Camille). Applied **at once**, without Save or restart: the speech session reconnects (~2 s) and the new
@@ -584,8 +587,8 @@ Tapping one stops the countdown and asks for a confirmation:
   `LANG_<XX>.TXT` of the six languages given with the firmware (FR, EN, NL, DE, ES, IT), `COUNTRY.TXT` and
   `AGENTS.INI` are replaced by the versions of the firmware (your changes to them are lost); the files of a
   language you added (`LANG_PT.TXT`, `VOICE_PT.TXT`…) and its column of `COUNTRY.TXT` are kept. Then the device restarts. This is how phrases, texts
-  or models added to the firmware reach a device whose files already exist (only missing sections and keys are
-  added otherwise).
+  or models added to the firmware reach a device whose files already exist (otherwise only the missing keys,
+  sections and voice patterns are added).
 - **Factory reset** (bin, red): **everything** goes back to the firmware's state: every setting is erased (Wi-Fi,
   API keys, Homey, `MEMORY.TXT`, comments of `CONFIG.INI`), as well as the files of every language (`VOICE_`,
   `LANG_`, `PERSO_<XX>.TXT`, those of the languages added too), `COUNTRY.TXT`, `RADIO.TXT`, `AGENTS.INI`, the saved
@@ -627,7 +630,10 @@ USB drive named "ESP-BOX" holding these files:
   (model test speeds, exclusions), so that it is not cut.
 - An emptied file of SPIFFS given with the firmware (0 bytes: no cluster left, which the drive notices too) is
   installed again at the next start; keys or sections added
-  by a newer firmware are appended to the existing files, which are otherwise kept as edited.
+  by a newer firmware are appended to the existing files, which are otherwise kept as edited. In the `VOICE_<XX>.TXT`
+  files, the patterns of the firmware missing in a section are added at its end too (a section improved by a newer
+  firmware): your lines are kept, an emptied section stays empty (the command stays disabled), but a pattern of the
+  firmware you deleted from a non-empty section comes back (the log lists each pattern added).
 
 ### `CONFIG.INI`: settings and API keys
 
@@ -973,7 +979,8 @@ texts of `COSTS.TXT` (French or English), the subtitle credits filtered from the
 English), and the abbreviations that do not end a sentence (French).
 
 **Files of a language given with the firmware on a device that already had them** (a language added by hand
-before the firmware gave it): the files on the drive are kept, only the sections and keys missing are added. To get
+before the firmware gave it): the files on the drive are kept, only the keys, sections and voice patterns missing are
+added. To get
 the firmware's version, empty the file (it is installed again at the next start) or run a soft reset (`VOICE_`
 and `LANG_` files; `PERSO_` files are kept by it: empty them).
 
@@ -1062,6 +1069,8 @@ writes either (`(é|e)diter` works too).
   language" always work.
 - A section missing in the current language's file is taken from the English file (with a warning in the log); an
   empty section disables the command in that language. A language without a file uses English.
+- At start-up, the patterns of the firmware's file missing in a non-empty section of the file of SPIFFS are added
+  at its end (an improved section reaches a device whose file already exists); the patterns there are kept.
 
 #### Where the files are
 

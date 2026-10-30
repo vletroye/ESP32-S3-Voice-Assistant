@@ -203,24 +203,28 @@ settings of the [Quick start](#quick-start).
   few seconds, so a conversation goes on without the wake word.
 - **Choose who answers**: Claude (default), GPT, Gemini, Grok, Mistral, Perplexity (with web search) or many
   models through OpenRouter, free ones included. Change it from the Settings screen or by voice ("change de
-  modèle", "utilise le modèle 3"); the models offered are listed in a file you can edit.
+  modèle" / "change the model", "utilise le modèle 3" / "use model 3"); the models offered are listed in a file you can edit.
 - **Six languages** (French, English, Dutch, German, Spanish, Italian), switched by voice ("parle anglais", "speak
   French") or from the Settings screen; other languages can be added.
 - **Choose the voice**: 10 OpenAI voices, or Mistral's natural voices for each language, with an emotion and a
-  pace if you like ("change de voix", "prends la voix Cedar").
+  pace if you like ("change de voix" / "change the voice", "prends la voix Cedar" / "use the voice Cedar").
 - **It knows things around you**: the date and time, the weather (Open-Meteo), the latest news (web search), your
   country and town for local answers.
 - **Long-term memory**: "Souviens-toi que…" / "Remember that…" stores a note it will use in every answer;
-  "Oublie que…", "Oublie tout", "Dis-moi ce que tu as mémorisé".
-- **Conversation kept** across sleep and restarts; "Au revoir" ends it, "Nouvelle discussion" starts a new one.
-- **Internet radio**: "joue du jazz", "joue la radio Nostalgie", "joue de la musique italienne", "suivante",
-  "stop", favourites, and a radio screen. The radio pauses while you talk to the assistant.
-- **Home automation** with a Homey Pro: "Allume la lumière du salon", "Qui est à la maison ?".
+  "Oublie que…" / "Forget that…", "Oublie tout" / "Forget everything", "Dis-moi ce que tu as mémorisé" /
+  "What do you remember?".
+- **Conversation kept** across sleep and restarts; "Au revoir" / "Goodbye" ends it, "Nouvelle discussion" /
+  "New conversation" starts a new one.
+- **Internet radio**: "joue du jazz" / "play some jazz", "joue la radio Nostalgie" / "play the radio Nostalgie",
+  "joue de la musique italienne" / "play italian music", "suivante" / "next", "stop", favourites, and a radio
+  screen. The radio pauses while you talk to the assistant.
+- **Home automation** with a Homey Pro: "Allume la lumière du salon" / "Turn on the living room light", "Qui est
+  à la maison ?" / "Who is home?".
 - **Clear errors**: a missing credit, a refused key or a network problem is said and shown, for each provider.
 - **Costs on screen**: what the conversation and the day cost, and a detailed page (tap the cost).
 - **Sleep screen** with the time and date, the volume and the Wi-Fi signal; with the BOX-3-SENSOR dock, the
   battery level and a screen that switches off when nobody is there.
-- **Model test**: "teste les modèles" measures how fast each model (and each voice) answers, and says which one is
+- **Model test**: "teste les modèles" / "test the models" measures how fast each model (and each voice) answers, and says which one is
   the fastest.
 
 Every feature in detail: [Features in detail](#features-in-detail).
@@ -274,9 +278,9 @@ First page:
 Second page:
 
 - **STT**: the transcription model, among `[stt]` of `AGENTS.INI` (Mistral's only with a `Mistral_key`), applied
-  at once and saved (`Stt_model`), as with "change de transcription".
+  at once and saved (`Stt_model`), as with "change de transcription" / "change the transcription".
 - **TTS**: the speech model, among `[tts]` of `AGENTS.INI`. Applied **at once** and saved (`Tts_model`), as with
-  "change de synthèse vocale": the voice list follows its provider and the voice now in use introduces itself.
+  "change de synthèse vocale" / "change the speech synthesis": the voice list follows its provider and the voice now in use introduces itself.
 - The labels are the short `STT` and `TTS` in every language (`settings_stt`, `settings_tts` of `LANG_<XX>.TXT`),
   leaving the lists room for the models' names.
 - **Voix / Voice**: the voice reading the answers, among the voices of `[voices]` (`AGENTS.INI`) of the speech
@@ -318,7 +322,7 @@ device starts in configuration mode.
 
 Phrases recognised by the device itself. Punctuation (¿ ¡ « » included) and case are ignored ("Au revoir !" works), and hyphens
 and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the French and English
-phrases; only those of the language in use are recognised, except "change la langue" and the direct language
+phrases; only those of the language in use are recognised, except "change la langue" / "change the language" and the direct language
 phrases ("parle anglais", "speak French"), recognised in every language of `Languages`. They are written as
 patterns in one file per language (see [Writing voice phrases](#writing-voice-phrases-patterns)).
 
@@ -334,90 +338,96 @@ patterns in one file per language (see [Writing voice phrases](#writing-voice-ph
 Recognised only when said **alone**. The French list is used when the assistant is in French, the English one
 in English (section `[s_goodbyes]` of the phrase files, `voice_cmd_is_goodbye()` in `voice_cmd.c`).
 The same list is checked against the **last sentence of each answer** of the model (whole, or its part after the
-last comma: "Avec plaisir, bonne soirée !"): when it is a closing phrase,
+last comma: "Avec plaisir, bonne soirée !" / "My pleasure, have a nice evening!"): when it is a closing phrase,
 the assistant goes to sleep after saying it (no follow-up listening) and the conversation is cleared.
 
 | French | English |
 | --- | --- |
-| au revoir · au revoir ESP | goodbye · good bye · goodbye ESP |
-| bonne nuit · bonne nuit ESP | bye · bye bye · bye ESP |
-| à demain · à plus · ciao | good night |
-| bonne soirée · bonne journée · bonne après-midi | |
+| au revoir · au revoir ESP | goodbye · goodbye ESP |
+| bonne nuit · bonne nuit ESP | good night · good night ESP |
+| à demain · à bientôt · à plus · ciao | bye · bye bye · bye ESP · see you (soon / later / tomorrow) |
+| bonne soirée · bonne journée · bonne après-midi | have a nice / good day · evening · night · afternoon |
 
 #### New conversation: conversation cleared, without going to sleep
 
 Recognised at the **start** of what is said, in the language in use (`main/app/voice_cmd.c`). Said alone (or with
-"s'il te plaît"), the assistant answers "D'accord, je t'écoute." and keeps listening; followed by a question ("J'ai
-une autre question : quelle est la capitale du Pérou ?"), the conversation is cleared and the model answers the
+"s'il te plaît" / "please"), the assistant answers "D'accord, je t'écoute." / "All right, I'm listening." and keeps
+listening; followed by a question ("J'ai une autre question : quelle est la capitale du Pérou ?" / "I have another
+question: what is the capital of Peru?"), the conversation is cleared and the model answers the
 question.
 
 | French | English |
 | --- | --- |
 | démarrons · commençons une nouvelle discussion / conversation · démarre · commence une nouvelle discussion / conversation · on démarre · on commence une nouvelle discussion · nouvelle discussion · nouvelle conversation | let's start a new conversation · start a new conversation · new conversation · new chat |
-| on recommence à zéro · recommençons à zéro | |
+| on recommence à zéro · recommençons à zéro | let's start again from scratch · start over from scratch |
 | j'ai une autre question · une autre question · autre question | I have another question · another question |
 | passons à autre chose · on passe à autre chose · parlons d'autre chose · changeons de sujet · on change de sujet · changement de sujet | let's move on · let's talk about something else · let's change the subject · change of subject |
 
 #### Language, model and voice
 
-Recognised in the language in use, except "change la langue" and the direct language phrases, recognised in
+Recognised in the language in use, except "change la langue" / "change the language" and the direct language phrases, recognised in
 every language (`main/app/voice_cmd.c`). Answered on the device; the
 new setting is saved and applied at once, without restarting (the confirmation of a new language is spoken in
 that language, after the speech session has reconnected, ~2 s). Changing the model saves the conversation and
 restores the one of the new model if it was saved last, else starts a new one. A new voice confirms itself with
-its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); the Settings screen follows.
+its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?" / "Hello, I am Cedar. Do you like my
+voice?"); the Settings screen follows.
 
 | Action | French | English |
 | --- | --- | --- |
-| Change the language (asks "Quelle langue voulez-vous ?" with the languages of `Languages` numbered: "1, français. 2, anglais. 3, allemand."; not understood: asked again) | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
-| Answer to that question (within 30 s after it) | its number ("2", "le deuxième") or its name: français · anglais · "en anglais s'il te plaît"… | the same: "2" · French · English |
+| Change the language (asks "Quelle langue voulez-vous ?" / "Which language do you want?" with the languages of `Languages` numbered: "1, français. 2, anglais. 3, allemand." / "1, French. 2, English. 3, German."; not understood: asked again) | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
+| Answer to that question (within 30 s after it) | its number ("2", "le deuxième") or its name: français · anglais · "en anglais s'il te plaît"… | its number ("2", "the second") or its name: French · English · "in English please"… |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
 | Test the models: same question to each one, time to the first words spoken after each, results in `SPEED.TXT`, speed written to `AGENTS.INI` (see [Model test](#model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
-| The fastest models: the 3 fastest offered, by their mean time over the model tests ("Les modèles les plus rapides sont Haiku (0,8 seconde), Flash-Lite (1,1 seconde) et Luna (1,4 seconde)."); never tested: "Je n'ai pas encore testé les modèles. Veux-tu que je lance un test ?", then "oui" runs the test, "non" does not (section `[s_fastest_models]`) | quels sont les modèles les plus rapides · quel est le modèle le plus rapide · donne-moi / dis-moi les modèles les plus rapides · les modèles les plus rapides | what are the fastest models · which model is the fastest · tell me the fastest models · the fastest models |
-| List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
-| Change the model (asks the provider first, the providers that have models in `AGENTS.INI` numbered (the `%s` of `provider_ask`): "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI. 3, Google. 4, OpenRouter. 5, xAI. 6, Mistral AI. 7, Perplexity."; a provider with a single model is chosen at once, without listing it) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
-| Answer to that question (within 30 s): the provider's models are then listed, numbered from 1 ("Quel modèle de Google voulez-vous utiliser : 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon.") | its number ("2", "le deuxième") or its name: Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router") · xAI (or "Grok") · Mistral AI (or "Mistral") · Perplexity (or "Sonar"), or directly a model name ("Sonnet", "Medium", "Large") | the same |
+| The fastest models: the 3 fastest offered, by their mean time over the model tests ("Les modèles les plus rapides sont Haiku (0,8 seconde)…" / "The fastest models are Haiku (0.8 second)…"); never tested: "Je n'ai pas encore testé les modèles. Veux-tu que je lance un test ?" / "I have not tested the models yet. Do you want me to run a test?", then "oui" / "yes" runs the test, "non" / "no" does not (section `[s_fastest_models]`) | quels sont les modèles les plus rapides · quel est le modèle le plus rapide · donne-moi / dis-moi les modèles les plus rapides · les modèles les plus rapides | what are the fastest models · which model is the fastest · tell me the fastest models · the fastest models |
+| List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …" / "At Anthropic, I support: Haiku, Sonnet and Opus. At OpenAI: …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
+| Change the model (asks the provider first, the providers that have models in `AGENTS.INI` numbered (the `%s` of `provider_ask`): "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI…" / "Which provider do you want: 1, Anthropic. 2, OpenAI…"; a provider with a single model is chosen at once, without listing it) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
+| Answer to that question (within 30 s): the provider's models are then listed, numbered from 1 ("Quel modèle de Google voulez-vous utiliser : 1, Flash-Lite. 2, Flash, celui que j'utilise. 3, Argon." / "Which model of Google do you want to use: 1, Flash-Lite. 2, Flash, the one I use. 3, Argon.") | its number ("2", "le deuxième") or its name: Anthropic (or "Claude") · OpenAI (or "GPT", "ChatGPT") · Google (or "Gemini") · OpenRouter (or "Open router") · xAI (or "Grok") · Mistral AI (or "Mistral") · Perplexity (or "Sonar"), or directly a model name ("Sonnet", "Medium", "Large") | its number ("2", "the second") or its name, as in French |
 | Answer to the model question (within 30 s after the list) | its number in that list ("trois", "3", "le trois", "numéro trois", "troisième") or its name ("Sonnet", "Opus", "Luna", "Sol", "Astra", "Flash", "Flash-Lite", "Argon", "DeepSeek", "Kimi", "MiniMax"; transcription variants such as "Sonnette", "Saule", "Flash light" accepted) | its number ("three", "3", "third") or its name |
 | Skip a step | change de modèle pour Google (lists Google's models) · change de modèle pour Sonnet (chooses it) | change model to Google · change model to Sonnet |
 | Change the model directly (numbered over all models, as on the Settings screen; 1 to 13 can be said, the others by name) | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
-| Change the transcription (lists `[stt]` of `AGENTS.INI` numbered: "Quelle transcription voulez-vous : 1, OpenAI, celle que j'utilise. 2, Voxtral.", then asks which one; answered by its number or spoken name; a missing key is said: "Il manque la clé Mistral…") | change(r) de / la / ta transcription · change(r) de / la / ta reconnaissance vocale · change(r) de / le STT | change (the) transcription · change (the) speech recognition · change (the) STT |
+| Change the transcription (lists `[stt]` of `AGENTS.INI` numbered: "Quelle transcription voulez-vous : 1, OpenAI, celle que j'utilise. 2, Voxtral." / "Which transcription do you want: 1, OpenAI, the one I use. 2, Voxtral.", then asks which one; answered by its number or spoken name; a missing key is said: "Il manque la clé Mistral…" / "The Mistral key is missing…") | change(r) de / la / ta transcription · change(r) de / la / ta reconnaissance vocale · change(r) de / le STT | change (the) transcription · change (the) speech recognition · change (the) STT |
 | Change the speech synthesis (lists `[tts]` the same way; the next answer is spoken with the new one) | change(r) de / la / ta synthèse vocale · change(r) de / le TTS · change(r) de / le / ton moteur de voix | change (the) speech synthesis · change (the) TTS · change (the) voice engine |
-| Change the voice: the voices of `[voices]` (`AGENTS.INI`) of the speech provider in use that speak the language in use, saved in `Voice` (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
-| Answer to that question (within 30 s after the list) | its number (1 to 10: "deux", "2", "dixième"…) or its name ("Cedar", also heard as "Cèdre"; "Corail", "Écho", "Ballade", "Marine"…) | its number or its name |
+| Change the voice: the voices of `[voices]` (`AGENTS.INI`) of the speech provider in use that speak the language in use, saved in `Voice` (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …" / "1, Marin, the one I use. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
+| Answer to that question (within 30 s after the list) | its number (1 to 10: "deux", "2", "dixième"…) or its name ("Cedar", also heard as "Cèdre"; "Corail", "Écho", "Ballade", "Marine"…) | its number ("two", "2", "tenth"…) or its name ("Cedar", "Coral"…) |
 | Change the voice directly | prends la voix Cedar · utilise la voix 3 · passe à la voix Coral · mets la voix Sage · choisis la voix 2 · voix numéro 2 · la voix Cedar · change de voix pour Coral | use the voice Cedar · use voice 3 · switch to voice 2 · voice number 2 · voice Cedar |
 
-A direct phrase must contain only the language, the number or the voice name, possibly followed by "s'il te plaît",
-"please" or "maintenant": "parle-moi de l'Angleterre en anglais", "parle plus fort" or "la voix est trop forte"
-remain normal questions. "Un" and "une" mean model 1 only when said alone (elsewhere they are articles). Answers:
-the confirmation ("Very well, I will now speak English.", spoken in the new language), "Je parle déjà français." /
-"J'utilise déjà Claude Haiku 5.5.", or, when the answer is not understood, the question again with its numbered list
-("Je ne connais pas cette langue. Dites le numéro ou le nom d'une langue : 1, français. 2, anglais.", "Je n'ai pas
-compris. Dites le numéro ou le nom du fournisseur : 1, Anthropic. 2, OpenAI. …") or "Je n'ai pas compris. Dites un
-numéro de 1 à 3, ou le nom du modèle.". "Flash" alone is Gemini 3.8 Flash, "Flash-Lite" Gemini 3.5 Flash-Lite.
+A direct phrase must contain only the language, the number or the voice name, possibly followed by "s'il te plaît"
+/ "please" or "maintenant" / "now": "parle-moi de l'Angleterre en anglais" / "tell me about England in English",
+"parle plus fort" / "speak louder" or "la voix est trop forte" / "the voice is too loud" remain normal questions.
+"Un" and "une" mean model 1 only when said alone (elsewhere they are articles; "one" is always a number). Answers:
+the confirmation ("Très bien, je parle maintenant français." / "Very well, I now speak English.", spoken in the new
+language), "Je parle déjà français." / "I already speak English.", "J'utilise déjà Claude Haiku 5.5." / "I already
+use Claude Haiku 5.5.", or, when the answer is not understood, the question again with its numbered list ("Je ne
+connais pas cette langue. Dites le numéro ou le nom d'une langue : 1, français. 2, anglais." / "I don't know this
+language. Say the number or the name of a language: 1, French. 2, English.") or "Je n'ai pas compris. Dites un numéro
+de 1 à 3, ou le nom du modèle." / "I did not understand. Say a number from 1 to 3, or the name of the model.".
+"Flash" alone is Gemini 3.8 Flash, "Flash-Lite" Gemini 3.5 Flash-Lite.
 
 #### Settings screen, configuration files, restart
 
 | French | English | Effect |
 | --- | --- | --- |
 | ouvre les paramètres · montre les paramètres · affiche les paramètres · ouvre les réglages · montre les réglages · affiche les réglages · va dans les paramètres · va dans les réglages | open the settings · show the settings · open settings · show settings · display the settings · go to the settings | The Settings screen is shown at once, without a spoken reply (no follow-up listening) |
-| affiche / montre / remets / active l'heure · l'horloge · la date et l'heure (alone) | show / display the time · the clock · turn on the clock | The time and date are shown on the sleep screen again ("D'accord, j'affiche l'heure."); saved as `Show_clock = on` |
+| affiche / montre / remets / active l'heure · l'horloge · la date et l'heure (alone) | show / display the time · the clock · turn on the clock | The time and date are shown on the sleep screen again ("D'accord, j'affiche l'heure." / "All right, I show the time."); saved as `Show_clock = on` |
 | cache / masque / enlève / retire / désactive / éteins l'heure · l'horloge · la date et l'heure · n'affiche plus l'heure (alone) | hide the time · the clock · turn off the clock · don't show the time | The time and date are no longer shown on the sleep screen (volume and Wi-Fi stay); saved as `Show_clock = off` |
-| redémarre · redémarre-toi · relance · relance-toi · fais un redémarrage · lance un redémarrage · redémarrage (alone, or with "s'il te plaît") | restart · restart yourself · reboot · reboot yourself (alone, or with "please") | "D'accord, je redémarre.", then the conversation, the volume and the town cache are saved, the speaker is switched off and the device restarts (section `[s_restart]`) |
-| je veux éditer la config / la configuration / les fichiers de config(uration) · édite la config / le config / les fichiers de configuration · je veux modifier la config · modifie la configuration · ouvre la config · ouvre les fichiers de configuration · passe en mode configuration · mode configuration | I want to edit the config · edit the configuration (files) · open the config files · configuration mode | With a PC connected: "D'accord, je redémarre en mode configuration…", the conversation and the volume are saved, then the device restarts in configuration mode (CONFIG.INI, MEMORY.TXT, PERSO_FR.TXT… on a USB drive), as with the folder icon of the Settings screen; press reset to come back. Without a PC (unplugged, charger or power bank): "Connecte-moi à ton PC." |
+| redémarre · redémarre-toi · relance · relance-toi · fais un redémarrage · lance un redémarrage · redémarrage (alone, or with "s'il te plaît") | restart · restart yourself · reboot · reboot yourself (alone, or with "please") | "D'accord, je redémarre." / "All right, I restart.", then the conversation, the volume and the town cache are saved, the speaker is switched off and the device restarts (section `[s_restart]`) |
+| je veux éditer la config / la configuration / les fichiers de config(uration) · édite la config / le config / les fichiers de configuration · je veux modifier la config · modifie la configuration · ouvre la config · ouvre les fichiers de configuration · passe en mode configuration · mode configuration | I want to edit the config · edit the configuration (files) · open the config files · configuration mode | With a PC connected: "D'accord, je redémarre en mode configuration…" / "All right, I restart in configuration mode…", the conversation and the volume are saved, then the device restarts in configuration mode (CONFIG.INI, MEMORY.TXT, PERSO_FR.TXT… on a USB drive), as with the folder icon of the Settings screen; press reset to come back. Without a PC (unplugged, charger or power bank): "Connecte-moi à ton PC." / "Connect me to your PC." |
 
 The PC is detected by the USB start-of-frame packets a host sends every millisecond (`usb_serial_jtag_is_connected()`):
 a charger or a power bank sends none.
 
 #### Country and town
 
-Asked, then confirmed before saving ("Confirmes-tu que tu veux changer ton pays en Belgique ?"): "oui", "yes",
-"d'accord", "ok", "exact"… save it; anything else cancels. Applied at once to the web search and to Claude's
+Asked, then confirmed before saving ("Confirmes-tu que tu veux changer ton pays en Belgique ?" / "Do you confirm
+that you want to change your country to Belgium?"): "oui" / "yes", "d'accord" / "all right", "ok", "exact" /
+"exactly"… save it; anything else cancels. Applied at once to the web search and to Claude's
 instructions.
 
 | Action | French | English |
 | --- | --- | --- |
-| Change the country (asks "Quel est ton pays ?") | change mon pays · changer mon pays · change de pays · changer de pays · change le pays | change my country · change the country |
-| Change the town (asks "Quelle est ta ville ?") | change ma ville · changer ma ville · change de ville · changer de ville · change la ville | change my city · change the city · change my town |
+| Change the country (asks "Quel est ton pays ?" / "What is your country?") | change mon pays · changer mon pays · change de pays · changer de pays · change le pays | change my country · change the country |
+| Change the town (asks "Quelle est ta ville ?" / "What is your town?") | change ma ville · changer ma ville · change de ville · changer de ville · change la ville | change my city · change the city · change my town |
 | Answer | the name ("Belgique", "j'habite à Evere"…) | the name ("Belgium", "I live in Evere"…) |
 
 The country must be one of the countries of `COUNTRY.TXT` (about 40 by default: Europe, North America,
@@ -432,8 +442,8 @@ followed by what to remember; the other ones are said alone. Answered on the dev
 | Action | French | English | Answer |
 | --- | --- | --- | --- |
 | Remember | souviens-toi que … · souviens-toi bien que … · rappelle-toi que … · retiens que … · retiens bien que … · n'oublie pas que … · note que … · mémorise que … | remember that … · please remember that … · don't forget that … · note that … · memorize that … | "C'est noté." / "Noted." |
-| Forget a note | oublie que … · oublie le fait que … | forget that … | "C'est oublié." (the note sharing most words is removed) |
-| Forget everything | oublie tout · efface ta mémoire · efface toute ta mémoire | forget everything | "J'ai tout oublié." |
+| Forget a note | oublie que … · oublie le fait que … | forget that … | "C'est oublié." / "Forgotten." (the note sharing most words is removed) |
+| Forget everything | oublie tout · efface ta mémoire · efface toute ta mémoire | forget everything · erase your memory | "J'ai tout oublié." / "I forgot everything." |
 | List the notes | dis-moi tout ce que tu as mémorisé · dis-moi ce que tu as mémorisé · qu'est-ce que tu as mémorisé · qu'as-tu mémorisé · dis-moi tout ce que tu as retenu · dis-moi ce que tu as retenu · qu'est-ce que tu as retenu | tell me everything you remember · what do you remember · what have you memorized | The notes, read out |
 
 #### Free phrases understood by Claude (tools)
@@ -442,12 +452,12 @@ No fixed wording: Claude decides when to use a tool.
 
 | Tool | Examples |
 | --- | --- |
-| Weather | "Quel temps fait-il à Namur ?", "Va-t-il pleuvoir demain ?" (your town: `City` in `CONFIG.INI`, or "change ma ville") |
-| Volume | "Parle plus fort", "Baisse le son", "Mets le volume à 50" (then back to sleep) |
-| Web search | "Quelles sont les dernières nouvelles ?", "Cherche sur internet …" |
-| Radio | "Mets un truc calme pour dîner", "Une radio d'infos belge" (`play_radio`; the usual phrases are handled by the device, see [Radio](#radio)) |
-| Homey | "Allume la lumière du salon", "Éteins tout au rez-de-chaussée", "Active l'ambiance cinéma", "Lance le flow Bonne nuit", "Qui est à la maison ?", "Combien je consomme en ce moment ?" |
-| Date and time | "Quel jour sommes-nous ?", "Dans combien de jours est Noël ?" (no tool: the date comes with each question) |
+| Weather | "Quel temps fait-il à Namur ?" / "What's the weather in Namur?", "Va-t-il pleuvoir demain ?" / "Will it rain tomorrow?" (your town: `City` in `CONFIG.INI`, or "change ma ville" / "change my town") |
+| Volume | "Parle plus fort" / "Speak louder", "Baisse le son" / "Turn the volume down", "Mets le volume à 50" / "Set the volume to 50" (then back to sleep) |
+| Web search | "Quelles sont les dernières nouvelles ?" / "What are the latest news?", "Cherche sur internet …" / "Search the web for …" |
+| Radio | "Mets un truc calme pour dîner" / "Put something calm on for dinner", "Une radio d'infos belge" / "A Belgian news radio" (`play_radio`; the usual phrases are handled by the device, see [Radio](#radio)) |
+| Homey | "Allume la lumière du salon" / "Turn on the living room light", "Éteins tout au rez-de-chaussée" / "Switch everything off downstairs", "Active l'ambiance cinéma" / "Activate the cinema mood", "Lance le flow Bonne nuit" / "Start the Good night flow", "Qui est à la maison ?" / "Who is home?", "Combien je consomme en ce moment ?" / "How much power am I using right now?" |
+| Date and time | "Quel jour sommes-nous ?" / "What day is it?", "Dans combien de jours est Noël ?" / "How many days until Christmas?" (no tool: the date comes with each question) |
 
 ### Radio
 
@@ -466,14 +476,16 @@ community (no key, no account), played through the speaker. Asked by voice, or f
 | What is playing (station, and the title when the station sends it) | qu'est-ce qui passe · quelle radio est-ce · c'est quoi cette chanson | what's playing · what song is this |
 | Favourites (`RADIO.TXT`) | ajoute cette radio aux favoris · mets-la aux favoris / retire cette radio des favoris | add this radio to my favourites / remove this radio from my favourites |
 
-- The device answers ("Je joue Classic 21.", "Je n'ai trouvé aucune radio pour …") and goes back to sleep at once
-  (no listening window): the radio starts then. "Stop", "suivante", "qu'est-ce qui passe"… are radio commands only
+- The device answers ("Je joue Classic 21." / "Playing Classic 21.", "Je n'ai trouvé aucune radio pour …" / "I found
+  no radio for …") and goes back to sleep at once
+  (no listening window): the radio starts then. "Stop", "suivante" / "next", "qu'est-ce qui passe" / "what's playing"… are radio commands only
   while a radio plays or is suspended; otherwise they go to the model as before.
 - **Genres** said in French are turned into the tags of Radio-Browser (mostly English) by `radio_genres` of
   `LANG_<XX>.TXT` (`classique/musique classique: classical, variété: pop, années 80: 80s…`); a genre not listed is
   searched as said. **Countries** come from `COUNTRY.TXT`, whose names include the adjectives of nationality
   (`Italie/italien/italienne`); with a genre and a country giving nothing, the genre alone is searched.
-- With a Claude model, free requests work too ("mets un truc calme pour dîner", "une radio d'infos belge"): Claude
+- With a Claude model, free requests work too ("mets un truc calme pour dîner" / "put something calm on for dinner", "une radio
+  d'infos belge" / "a Belgian news radio"): Claude
   calls the `play_radio` tool (name, tag, country), and the radio starts after its short answer.
 - A search keeps up to 20 stations the device can play: MP3 or AAC (HE-AAC included) over **http** (no TLS: the
   internal RAM stays free for the conversation), not HLS, at most 192 kbit/s, online at the last check, without
@@ -572,7 +584,7 @@ or by voice. The most useful ones first:
 
 ### Files of the configuration drive
 
-In configuration mode (Settings → folder-and-gear icon → OK, or "édite la config"), the BOX shows up on the PC as a
+In configuration mode (Settings → folder-and-gear icon → OK, or "édite la config" / "edit the config"), the BOX shows up on the PC as a
 USB drive named "ESP-BOX" holding these files:
 
 | File | Content | Stored in | Back to the firmware's version |
@@ -617,9 +629,9 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | Key | Role | Example |
 | --- | --- | --- |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`, `gemini-3.8-flash`… |
-| `Stt_model` | Transcription model, one of `[stt]` of `AGENTS.INI` (also set by voice: "change de transcription"); a Mistral model without `Mistral_key` falls back to OpenAI | `gpt-live-transcribe`, `voxtral-mini-transcribe-realtime-3-0` |
-| `Tts_model` | Speech synthesis model, one of `[tts]` (also set by voice: "change de synthèse vocale"); same fallback | `gpt-realtime-2.1-mini`, `voxtral-mini-tts-3-0` |
-| `Voice` | Voice of the answers: a name of `[voices]` in `AGENTS.INI` (also set from the Settings screen or by voice: "change de voix"). A voice of another speech provider, or that does not speak the language in use: the first one of `[voices]` that does is used (the setting is kept) | `Marin`, `Cedar`, `Lea`… |
+| `Stt_model` | Transcription model, one of `[stt]` of `AGENTS.INI` (also set by voice: "change de transcription" / "change the transcription"); a Mistral model without `Mistral_key` falls back to OpenAI | `gpt-live-transcribe`, `voxtral-mini-transcribe-realtime-3-0` |
+| `Tts_model` | Speech synthesis model, one of `[tts]` (also set by voice: "change de synthèse vocale" / "change the speech synthesis"); same fallback | `gpt-realtime-2.1-mini`, `voxtral-mini-tts-3-0` |
+| `Voice` | Voice of the answers: a name of `[voices]` in `AGENTS.INI` (also set from the Settings screen or by voice: "change de voix" / "change the voice"). A voice of another speech provider, or that does not speak the language in use: the first one of `[voices]` that does is used (the setting is kept) | `Marin`, `Cedar`, `Lea`… |
 | `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
@@ -644,7 +656,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
-| `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio"). A station asked during the conversation plays anyway | `on` |
+| `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
 | `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
 | `Radio_treble` | Treble of the radio (above about 3 kHz), in dB, from `-12` to `6`: negative softens them on the small speaker, `0` leaves the sound as it is (also changed from the radio screen) | `-6` |
 | `End_speech_ms` | Silence, in milliseconds, after which the question is considered finished (300 to 3000). Lower answers sooner but may cut you during a pause; raise it if you are cut off | `900` |
@@ -789,12 +801,12 @@ perplexity:web_search = 0.0022
   The prices of the file given with the firmware are estimates in euros: check them on the providers' pages. A
   line of an older firmware gets the prices of the firmware's file when it has none; a model without prices is
   not counted ("?" in `COSTS.TXT`). The free OpenRouter models cost 0.
-- **`[stt]`** and **`[tts]`**: the transcription and speech synthesis models offered ("change de transcription",
-  "change de synthèse vocale"); the second column is the **provider** (`openai` or `mistral`) instead of the
+- **`[stt]`** and **`[tts]`**: the transcription and speech synthesis models offered ("change de transcription" /
+  "change the transcription", "change de synthèse vocale" / "change the speech synthesis"); the second column is the **provider** (`openai` or `mistral`) instead of the
   reasoning. Prices: transcription in = audio heard (counted as 10 tokens a second), out = text; speech in = text
   read (Mistral: 1 token a character, $13 a million characters), out = audio spoken (OpenAI). An older
   `[speech]` section is still read for its prices.
-- **`[voices]`**: the voices offered ("change de voix", Settings screen): those of the speech provider in use (second
+- **`[voices]`**: the voices offered ("change de voix" / "change the voice", Settings screen): those of the speech provider in use (second
   column of `[tts]`) that speak the language in use. **Name**: unique, said and shown, kept in `Voice` of
   `CONFIG.INI`. **Provider**: `openai` or `mistral`. **Voice id**: as the provider's API names it (OpenAI: `marin`,
   `cedar`…; Mistral: `voice_589`…, listed by `GET https://api.mistral.ai/v1/audio/voices?type=preset`: the
@@ -811,7 +823,7 @@ perplexity:web_search = 0.0022
   Without it, it comes from the name: `disabled` for a Haiku, `between_tools` for a Sonnet, left to the model
   otherwise (Opus cannot turn thinking off).
 - The **section gives the provider**; the models are numbered in the file's order (Settings screen,
-  "utilise le modèle 3"), then the free OpenRouter models are added. A section of an unknown provider is ignored
+  "utilise le modèle 3" / "use model 3"), then the free OpenRouter models are added. A section of an unknown provider is ignored
   (a new provider needs its client in the firmware).
 - The file given with the firmware (`main/agents/agents.ini`) is installed as `/spiffs/agents.ini` at the first
   start, or when it is emptied; it is read at start-up (at most 32 models). In configuration mode it appears on the
@@ -860,10 +872,11 @@ conversation nor tools** but with the same instructions. The model chosen and it
 
 - The screen lists the models one line each as they are tested, numbered: "02 Sonnet…" while it is tested, then
   "02 Sonnet : 1,2 s" (or "non disponible" without key, credit or answer); the last line stays visible. The
-  answers are not spoken, only each result: "Résultat de Sonnet : 1,2 seconde." (queued: the next model is
+  answers are not spoken, only each result: "Résultat de Sonnet : 1,2 seconde." / "Result of Sonnet: 1.2 seconds."
+  (queued: the next model is
   tested meanwhile, the speech of a result using a little of the network while it is measured), then at the end "Le
-  modèle le plus rapide était Flash-Lite."; the list stays 15 s on screen, then the assistant sleeps. Saying
-  "Bonjour ESP" (or a double tap) stops the test after the model being tested.
+  modèle le plus rapide était Flash-Lite." / "The fastest model was Flash-Lite."; the list stays 15 s on screen, then the assistant sleeps. Saying
+  "Bonjour ESP" / "Hi ESP" (or a double tap) stops the test after the model being tested.
 - The time measured is the **time to the first words** of the answer: what you hear, as the assistant speaks as
   soon as the first sentence arrives. It hardly depends on the length of the answer. To compare the models anyway,
   `SPEED.TXT` also gives the time to the end of the answer, its tokens (and the reasoning tokens when the provider
@@ -878,9 +891,10 @@ conversation nor tools** but with the same instructions. The model chosen and it
   models are not in `AGENTS.INI` and do not count. Comments and other lines of the file are kept.
 - Then, for each **free OpenRouter model slower than 5 s on average** or **not available in this test**, the
   assistant asks: "Le modèle gratuit Flint fait 7,2 secondes en moyenne. Dois-je l'exclure ?" / "Le modèle gratuit
-  Flint n'était pas disponible. Dois-je l'exclure ?" (`exclude_ask_unavailable` of `LANG_<XX>.TXT`) and listens.
-  "Oui" adds it to `[openrouter_free_exclude]` of `AGENTS.INI` (with its time, or why it was not available, as a
-  comment), "non" keeps it; then it asks about the next one. The models of the other sections of `AGENTS.INI`
+  Flint n'était pas disponible. Dois-je l'exclure ?" (`exclude_ask_unavailable` of `LANG_<XX>.TXT`; in English "The free model Flint takes 7.2 seconds on average.
+  Should I exclude it?") and listens.
+  "Oui" / "yes" adds it to `[openrouter_free_exclude]` of `AGENTS.INI` (with its time, or why it was not available, as a
+  comment), "non" / "no" keeps it; then it asks about the next one. The models of the other sections of `AGENTS.INI`
   are never excluded. Any other sentence ends the questions (and is answered as usual); the answer can also be given
   within 30 s after "Bonjour ESP". Once answered, the free models offered are chosen again at once: an excluded
   model is replaced by the next most recent one (`MODEL_TEST_SLOW_FREE_MS` in `model_test.c`).
@@ -889,7 +903,8 @@ conversation nor tools** but with the same instructions. The model chosen and it
   is measured. The audio of the first one is then given to each model of `[stt]`, at the pace of speech (as from
   the microphone: a realtime model transcribes as the audio comes), and the time from the end of the audio to the
   transcript is measured, with the % of the words of the sentence found. A model without its key is "non
-  disponible". Each result is said right after its test ("Résultat de la synthèse Voxtral : 0,7 seconde.", a
+  disponible". Each result is said right after its test ("Résultat de la synthèse Voxtral : 0,7 seconde." / "Result of the
+  synthesis Voxtral: 0.7 seconds.", a
   synthesis with its own voice), before the next one. The speech settings in use are restored after; the results
   are in a second table of `SPEED.TXT`.
 - Each test costs one short answer of each paid model, and a sentence of each speech model.
@@ -911,14 +926,14 @@ James    = mistral  | voice_3150 | en        | -       | -
 
 | Column | Meaning |
 | --- | --- |
-| name | Unique: said and shown to choose the voice ("prends la voix Camille"), kept in `Voice` of `CONFIG.INI` |
+| name | Unique: said and shown to choose the voice ("prends la voix Camille" / "use the voice Camille"), kept in `Voice` of `CONFIG.INI` |
 | provider | `openai` or `mistral`: the provider of the speech models of `[tts]` |
 | voice id | The voice as the provider's API names it |
 | languages | 2-letter codes separated by commas (`fr`, `en, nl`), `*` for every language |
 | emotion, pace | `-` for none, else see below |
 
-- **Which voices are offered**: "change de voix" and the Settings screen list the voices of the speech provider in
-  use ("change de synthèse vocale") that speak the language in use: with Voxtral in French, Lea, Marie, Manon and
+- **Which voices are offered**: "change de voix" / "change the voice" and the Settings screen list the voices of
+  the speech provider in use ("change de synthèse vocale" / "change the speech synthesis") that speak the language in use: with Voxtral in French, Lea, Marie, Manon and
   Camille; with OpenAI, its 10 voices (they speak every language). The list follows a change of provider or of
   language.
 - **The voice used**: the one named in `Voice`. If it is of another provider, or does not speak the language in
@@ -990,7 +1005,7 @@ delete them there.
 
 Several lines are allowed, up to about 3,900 characters; lines starting with `#` are comments: kept in the file,
 never given to the assistant (an empty file shows a short help in such lines). It is stored in the NVS key
-`Memory` (not on SPIFFS) and read at start-up. The memory commands keep the comments too: "oublie que …" never
+`Memory` (not on SPIFFS) and read at start-up. The memory commands keep the comments too: "oublie que …" / "forget that …" never
 removes a `#` line, "oublie tout" removes the notes and keeps them.
 
 ### Languages: `LANG_<XX>.TXT`
@@ -1048,7 +1063,7 @@ Arabic, Hebrew, Chinese (except the glyphs of the 20 px font), Japanese, Korean�
 gaps on screen (the voice would still read them). The fonts are in flash: they take no RAM and do not slow the
 display down.
 
-**`COUNTRY.TXT`**: the countries known by voice ("change mon pays"), one per line, with their names in the
+**`COUNTRY.TXT`**: the countries known by voice ("change mon pays" / "change my country"), one per line, with their names in the
 languages of the first line:
 
 ```ini
@@ -1074,7 +1089,7 @@ configuration drive.
 
 #### 1. Declare the language in `CONFIG.INI`
 
-- Enter the configuration mode (Settings → folder-and-gear icon → OK, or say "édite la config"), open `CONFIG.INI`
+- Enter the configuration mode (Settings → folder-and-gear icon → OK, or say "édite la config" / "edit the config"), open `CONFIG.INI`
   on the drive and add the language to `Languages`:
 
   ```ini
@@ -1170,7 +1185,7 @@ Who the assistant is.
 
 - Save each file and **wait until the copy is finished** (a `LANG_` file is large: tens of seconds), then press
   **Restart**.
-- Choose the language in the Settings screen, or say "parle portugais" / "speak Portuguese" / "change la langue"
+- Choose the language in the Settings screen, or say "parle portugais" / "speak Portuguese" / "change la langue" / "change the language"
   then its number.
 - At start-up and at each change of language, the files are checked: a screen names the texts added in English or
   whose `%s` differ (**Skip** to go on, **Config** to correct them).
@@ -1262,14 +1277,15 @@ same as with plain lists (whole words, from the start of what is said) and costs
 ### Home automation: Homey
 
 With a **Homey Pro** on the same network, the assistant can switch devices on and off, set them, activate moods,
-start flows and tell who is home ("Allume la lumière du salon", "Active l'ambiance cinéma", "Qui est à la
-maison ?"). It works with the **Claude models** only (they are the ones given tools).
+start flows and tell who is home ("Allume la lumière du salon" / "Turn on the living room light", "Active
+l'ambiance cinéma" / "Activate the cinema mood", "Qui est à la maison ?" / "Who is home?"). It works with the **Claude models** only (they are the ones given tools).
 
 1. On the Homey, install the **MCP AI Bridge** app; its settings show the address of its MCP server and an API key.
 2. In `CONFIG.INI`, fill `Homey_url` (e.g. `http://192.168.1.20:52199/mcp`) and `Homey_key`, save, and restart.
-3. Ask in your own words: Claude chooses the tools. A short "Je regarde." is said while it works.
+3. Ask in your own words: Claude chooses the tools. A short "Je regarde." / "Let me check." is said while it works.
 
-Turning off a **power plug** is confirmed first ("Tu veux vraiment éteindre la prise du frigo ?"), so that an
+Turning off a **power plug** is confirmed first ("Tu veux vraiment éteindre la prise du frigo ?" / "Do you really
+want to switch off the fridge plug?"), so that an
 appliance is not switched off by mistake: `Confirm_off` lists the device classes to confirm (`socket` by default,
 `off` for none). Only 16 tools of the app are offered, none that deletes, installs or reconfigures anything. How it
 works: see the Homey items of the [Design notes](#design-notes).
@@ -1323,7 +1339,7 @@ transcription and voice) and opened while the user is still speaking.
 | First word from the model | 0.7 to 1.6 s |
 | Transcript → first sound | 1.4 to 2.8 s (Mistral speech: 2 to 2.6 s; the first question after 30 s of rest: ~2.4 s thanks to the warm-up, 5.4 s without) |
 | Weather question (Open-Meteo lookup) | + 3 to 4 s for the answer |
-| Web search ("Je regarde." spoken meanwhile) | first sound after 1.9 s, answer after about 3 s |
+| Web search ("Je regarde." / "Let me check." spoken meanwhile) | first sound after 1.9 s, answer after about 3 s |
 
 ### Hardware and software
 
@@ -1520,9 +1536,10 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   (3 by default, plus free ones),
   all listed in `AGENTS.INI` (up to 32); the languages of `Languages` (French, English, Dutch, German, Spanish and Italian by default); 10 OpenAI
   voices. The
-  language, the model and the voice can also be changed **by voice** ("Change la langue", "Utilise le modèle
-  3", "Prends la voix Cedar"); all apply at once, without restarting.
-- **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays", "Change ma ville"):
+  language, the model and the voice can also be changed **by voice** ("Change la langue" / "Change the language", "Utilise le
+  modèle 3" / "Use model 3", "Prends la voix Cedar" / "Use the voice Cedar"); all apply at once, without restarting.
+- **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays" / "Change my country",
+  "Change ma ville" / "Change my town"):
   the web search favours local results, and Claude uses this place for news, weather and local questions.
 - **Persona, per language**: who the assistant is (identity, personality, instructions) and the style of its
   voice, edited in `PERSO_<XX>.TXT` from the PC (`PERSO_FR.TXT`, `PERSO_EN.TXT`, `PERSO_NL.TXT`…).
@@ -1537,32 +1554,36 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - **Lists shown, not read** (`Read_lists = off`, the default): the replies offering languages, providers, models or
   voices say their question and show the list without reading it. The assistant listens at once, but the reply
   stays on screen for the time it takes to read the list (its characters at `Scroll_speed`, at most 20 s): the
-  listen screen comes after it, or as soon as you answer ("trois").
+  listen screen comes after it, or as soon as you answer ("trois" / "three").
 - **Conversation memory**: the last 6 to 12 exchanges are kept across sleep and restarts (saved to flash in
   `/spiffs/history.json` once the assistant is back to sleep, never during an exchange), so you can ask later "what
-  were we talking about?". Saying "Au revoir" ends the conversation and clears it; "Nouvelle discussion", "J'ai une
-  autre question" or "Passons à autre chose" clear it too, without going to sleep. Changing the model starts a new
+  were we talking about?". Saying "Au revoir" / "Goodbye" ends the conversation and clears it; "Nouvelle discussion" /
+  "New conversation", "J'ai une autre question" / "I have another question" or "Passons à autre chose" / "Let's move
+  on" clear it too, without going to sleep. Changing the model starts a new
   one; a full `idf.py flash` erases it (the `storage` partition is rewritten).
 - **Tools** (Claude models), called by Claude when the question needs them:
-  - **weather** ("Quel temps fera-t-il demain à Namur ?"), from Open-Meteo, free and without key;
-  - **volume** ("Parle plus fort", "Mets le volume à 50"), applied at once if nothing is playing (else after
+  - **weather** ("Quel temps fera-t-il demain à Namur ?" / "What will the weather be tomorrow in Namur?"), from Open-Meteo, free and without key;
+  - **volume** ("Parle plus fort" / "Speak louder", "Mets le volume à 50" / "Set the volume to 50"), applied at once if nothing is playing (else after
     the answer), kept across restarts; the assistant then goes back to sleep;
-  - **home automation** with a **Homey Pro** ("Allume la lumière du salon", "Active l'ambiance soirée",
-    "Qui est à la maison ?"), through the MCP server of the "MCP AI Bridge" app on the local network: a
+  - **home automation** with a **Homey Pro** ("Allume la lumière du salon" / "Turn on the living room
+    light", "Active l'ambiance soirée" / "Activate the evening mood", "Qui est à la maison ?" / "Who is home?"), through the MCP server of the "MCP AI Bridge" app on the local network: a
     selection of 16 of its tools (devices, zones, moods, flows, presence, live energy), nothing that deletes,
     installs or reconfigures;
-  - **web search** for current information ("Quelles sont les dernières nouvelles en Belgique ?"), run by
+  - **web search** for current information ("Quelles sont les dernières nouvelles en Belgique ?" / "What are the latest news in
+    Belgium?"), run by
     Anthropic, about $0.01 per search, 3 searches at most per question, enabled when the model supports it.
 
-  A short "Je regarde." is spoken (not shown) while a tool runs; the icon left of the answer turns into a
+  A short "Je regarde." / "Let me check." is spoken (not shown) while a tool runs; the icon left of the answer turns into a
   globe when the web was searched.
 - **Knows the date and time**: each question is sent with the current date and time ("[Nous sommes le dimanche
-  25 octobre 2026, il est 20 h 07.]"), so "what day is it?" or "how many days until Christmas?" work.
+  25 octobre 2026, il est 20 h 07.]" / "[It is Sunday 25 October 2026, 20:07.]"), so "quel jour sommes-nous ?" / "what day is it?" or "dans combien de jours est Noël ?" / "how many days until
+  Christmas?" work.
 - **Long-term memory**: "Souviens-toi que …" / "Retiens que …" (English: "Remember that …") stores a note,
-  "Oublie que …" removes the closest one, "Oublie tout" clears them, "Dis-moi tout ce que tu as mémorisé"
+  "Oublie que …" / "Forget that …" removes the closest one, "Oublie tout" / "Forget everything" clears them,
+  "Dis-moi tout ce que tu as mémorisé" / "Tell me everything you remember"
   reads them out. These are answered on the device (no model call); the notes are given to the model with
   every question and can be edited in `MEMORY.TXT`.
-- Saying "Bonjour ESP" during an answer, or **double-tapping the screen**, **interrupts** it and listens again.
+- Saying "Bonjour ESP" / "Hi ESP" during an answer, or **double-tapping the screen**, **interrupts** it and listens again.
 - **Sleep screen**: under the sleeping robot, the time in glowing seven-segment digits and the date
   (`DIM 25/10/26`), synchronized over the Internet (NTP); the speaker volume at the bottom left (a gauge: the
   outline of the full bar, filled from the bottom with the volume; speaker icon and percentage below it, all
@@ -1572,7 +1593,8 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   sections lit in green from the left: 2 from 3.50 V, 3 from 3.70 V, 4 from 3.80 V, 5 from 3.95 V; below 3.50 V
   (under ~5 %), only the first section, in red. Read 3 s after start-up, then every 30 s; hidden without the dock
   or its cell.
-- **Model in use**, while listening and thinking ("J'écoute…", "Entendu…", "Je réfléchis…"): the icon of its
+- **Model in use**, while listening and thinking ("J'écoute…", "Entendu…", "Je réfléchis…" / "I'm listening…", "Heard…",
+  "Thinking…"): the icon of its
   provider and its name (as in `AGENTS.INI`) at the bottom left, right under the text. The provider's icon is also
   shown on the **robot's forehead** (asleep, listening, thinking), above the screen of its eyes, which it follows
   when the robot looks aside (`HEAD_LOGO_GAP_Y`, `HEAD_LOGO_X` in `app_ui_ctrl.c`).
@@ -1583,15 +1605,17 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   0.3 s; someone coming back while it closes opens it again at once. Only the backlight: the wake word keeps
   being heard. With another dock, the screen stays on.
 - Errors (credit exhausted, key rejected, network…) are **shown and spoken**, each provider's own: "Le crédit
-  Mistral est épuisé…". A lack of credit is recognized before a key refused (some providers say it with a
+  Mistral est épuisé…" / "The Mistral credit is used up…". A lack of credit is recognized before a key refused (some providers say it with a
   401/403: Perplexity's "The Agent API requires paid credits"). A reasoning effort of `AGENTS.INI` refused by the
   model is said with the values it takes ("Le modèle Mistral Medium 3.5 refuse le niveau de raisonnement low.
-  Corrigez-le dans AGENTS.INI, valeurs acceptées : high, none."): the file is to be corrected, nothing is changed
+  Corrigez-le dans AGENTS.INI, valeurs acceptées : high, none." / "The model Mistral Medium 3.5 refuses the
+  reasoning level low. Correct it in AGENTS.INI, accepted values: high, none."): the file is to be corrected, nothing is changed
   behind your back. The speech and the transcription (OpenAI) without credit cannot speak: their message is
   **shown**, and stays on screen the time to read it before the listen panel comes back.
 - **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
-- **Internet radio** ([Radio-Browser](https://www.radio-browser.info), free): "joue du jazz", "joue la radio
-  Nostalgie", "joue de la musique italienne", "suivante", "stop", favourites (`RADIO.TXT`) and a radio screen;
+- **Internet radio** ([Radio-Browser](https://www.radio-browser.info), free): "joue du jazz" / "play some jazz",
+  "joue la radio Nostalgie" / "play the radio Nostalgie", "joue de la musique italienne" / "play italian music",
+  "suivante" / "next", "stop", favourites (`RADIO.TXT`) and a radio screen;
   stopped by the wake word and resumed after the answer, with fades and the same loudness on every station
   (see [Radio](#radio)).
 
@@ -1657,15 +1681,16 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   and are cut at 12,000 characters (logged when it happens). Once answered, the history keeps only their first
   600 characters, so a long list is not sent again in full with every question. The instructions then tell
   the model to call the Homey tools again for every question about the home instead of answering from the
-  conversation, and to answer an action in a few words ("C'est fait.", or what failed and the one question
+  conversation, and to answer an action in a few words ("C'est fait." / "Done.", or what failed and the one question
   needed to go on). An expired session is reopened; retried every minute while the Homey cannot be reached.
   After an update, say "au revoir" once if the saved conversation still holds old, wrong answers about the home.
 - **Confirmation before turning off** (`Confirm_off`, power plugs by default): `devices_set_capability` and
   `devices_zone_set_capability` get an extra `confirmed` argument. A call turning `onoff` off is checked first:
   `devices_find` lists the devices that are on (in the zone) with their class; if it targets one of a class to
   confirm, nothing is sent to Homey and the model gets `confirmation_required` with their names. It then asks
-  ("Tu veux vraiment éteindre la prise du frigo ?"), and after a "oui" calls again with `confirmed: true`
-  (removed before the call reaches Homey). A zone call limited to another class ("les lumières du salon") is not
+  ("Tu veux vraiment éteindre la prise du frigo ?" / "Do you really want to switch off the fridge plug?"), and after
+  a "oui" / "yes" calls again with `confirmed: true`
+  (removed before the call reaches Homey). A zone call limited to another class ("les lumières du salon" / "the living room lights") is not
   asked about. Flows and moods that turn plugs off are not checked.
 - **Radio**: a network task (stack in PSRAM) reads the stream into a 128 KB ring buffer in PSRAM (8 s at
   128 kbit/s), taking the ICY metadata out; a playback task, created for each stream with its stack in internal RAM

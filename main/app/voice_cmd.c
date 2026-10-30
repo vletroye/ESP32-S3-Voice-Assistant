@@ -35,7 +35,7 @@
  * After a question ("Quelle langue ?", "Quel modèle ?"), the answer is expected within this delay, counted from
  * the end of the question (the list of models takes 10 to 15 s to read)
  */
-#define CMD_ANSWER_TIMEOUT_US   (30 * 1000 * 1000LL)
+#define CMD_ANSWER_TIMEOUT_US   (60 * 1000 * 1000LL)    /* the list read on screen first */
 
 static const char *TAG = "voice_cmd";
 
@@ -527,13 +527,22 @@ static int find_model_name(const char *norm)
  * Model (1-based, in llm_models) said in the text: its name, else its number among the models of the
  * provider (all models for LLM_PROVIDER_COUNT); 0 if none
  */
+/* "un", "le un", "numéro un", alone or followed by "s'il te plaît" / "please": 1 (elsewhere "un" is an article) */
+static bool said_one(const char *norm)
+{
+    for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
+        if (is_only(norm, *one)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Number said in the answer to a numbered list ("un" alone, "2", "le deuxième"); 0 if none */
 static int said_number(const char *norm)
 {
-    for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
-        if (strcmp(norm, *one) == 0) {
-            return 1;
-        }
+    if (said_one(norm)) {
+        return 1;
     }
     return search_number(norm, false, VOICE_NUMBERS_MAX);
 }
@@ -813,10 +822,8 @@ static int find_voice(const char *norm)
             }
         }
     }
-    for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
-        if (strcmp(norm, *one) == 0) {
-            return 1;
-        }
+    if (said_one(norm)) {
+        return 1;
     }
     return search_number(norm, false, (int)s_voice_count);
 }
@@ -976,10 +983,8 @@ static int find_speech(llm_speech_kind_t kind, const char *norm)
         return best;
     }
     // "numéro un", "le un": 1 only said so (elsewhere "un" is an article)
-    for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
-        if (strcmp(norm, *one) == 0) {
-            return 1;
-        }
+    if (said_one(norm)) {
+        return 1;
     }
     return search_number(norm, false, (int)count);
 }

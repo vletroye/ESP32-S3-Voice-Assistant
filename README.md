@@ -790,6 +790,7 @@ speech synthesis", or page 2 of the Settings screen; the voice itself is chosen 
 | `gpt-realtime-2.1-mini` (default) | OpenAI (`ChatGPT_key`) | $0.60 per 1M text tokens, $20 per 1M audio tokens | 10, every language (Marin by default) | 0.9 s |
 | `voxtral-mini-tts-3-0` | Mistral (`Mistral_key`) | $13 per 1M characters | 36: French 4, English 11, Dutch, German, Spanish and Italian 1 each, and 17 for 15 other languages | 0.7 to 1 s |
 | `aura-2` | Deepgram (`Deepgram_key`) | $30 per 1M characters | 18: French 2 (Agathe, Hector), English 4, Dutch, German, Spanish and Italian 3 each | 0.4 s (1.8 s to reconnect after a long pause, done while you speak) |
+| `deepgram/aura-2` | OpenRouter (`OpenRouter_key`) | $30 per 1M characters (Deepgram's price through OpenRouter) | the same 18 Aura-2 voices | 0.7 to 0.9 s (MP3, decoded on the device; 1.8 to 2.0 s from the transcript to the first sound) |
 
 - With Mistral, each voice can have an emotion and a pace; OpenAI reads them in its instructions; Deepgram has
   neither.

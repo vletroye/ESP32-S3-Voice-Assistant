@@ -1170,6 +1170,10 @@ with the firmware (`main/lang/lang_<code>.txt`) are good models.
 - Keep the **`%s`, `%d`, `%02d`… in the same number and order** as in English. A text lacking its last ones gets
   them added at its end in `[TO DO: %s]` at the next start; a text with other conversions is replaced by the
   English one. In both cases a screen lists the keys to correct.
+- Keep the **`::` and `..`** where the English text has them (`lang_ask = Qual idioma você quer :: %s`): they
+  are shown as a single `:` or `.`, and mark where the reading stops before a list (languages, providers, models,
+  voices); with `Read_lists = off` (the default) the list after them is only shown, not read. Without them, the
+  list is always read (see [Languages](#37-languages-lang_xxtxt)).
 - `\n` is a line break. A text starting or ending with spaces, or empty, is written between quotes
   (`and_word = " e "`).
 - Lists are separated by commas and must keep their number of items: `weekdays` (7, Sunday first, short, shown

@@ -234,13 +234,16 @@ Every feature in detail: [Features in detail](#features-in-detail).
 
 0. At start-up, once the Wi-Fi is connected, a welcome screen shows the steps; its button at the bottom right
    ("OK (60)") counts down from 60 and closes it at 0 (tap it, or say "Bonjour ESP", to close it at once).
-1. Say "**Bonjour ESP**" (beep), then ask your question ("J'écoute …" is shown while you speak).
-2. After 0.9 s of silence (`End_speech_ms` in `CONFIG.INI`) the question is sent: "Entendu …" is shown until its
-   transcript arrives (0.7 to 1.2 s), then "Je réfléchis …" until the answer starts; the answer is shown and spoken.
-3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP"
+1. Say "**Bonjour ESP**" / "**Hi ESP**" (beep), then ask your question ("J'écoute …" / "I'm listening …" is shown
+   while you speak).
+2. After 0.9 s of silence (`End_speech_ms` in `CONFIG.INI`) the question is sent: "Entendu …" / "Heard …" is shown
+   until its transcript arrives (0.7 to 1.2 s), then "Je réfléchis …" / "Thinking …" until the answer starts; the
+   answer is shown and spoken.
+3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP" / "Hi ESP"
    (not after a volume change, which sends it back to sleep).
-4. To interrupt an answer, say "Bonjour ESP" again or **double-tap** the screen: it stops and listens. A double tap
-   while "J'écoute …" or "Je réfléchis …" is shown drops the question: back to sleep, nothing said. When a voice
+4. To interrupt an answer, say "Bonjour ESP" / "Hi ESP" again or **double-tap** the screen: it stops and listens. A
+   double tap while "J'écoute …" / "I'm listening …" or "Je réfléchis …" / "Thinking …" is shown drops the question:
+   back to sleep, nothing said. When a voice
    command has asked something (which language, provider, model, voice, town…), a double tap, while the question
    is spoken or while its answer is listened for, drops the command: back to sleep, and the next words are no
    longer taken as its answer.
@@ -255,7 +258,8 @@ Every feature in detail: [Features in detail](#features-in-detail).
 
 - Touch the screen while asleep: wakes the assistant up, like "Bonjour ESP".
 - Double-tap during an answer: interrupts it and listens.
-- Double-tap while listening ("J'écoute …") or thinking ("Entendu …", "Je réfléchis …"): the question is dropped
+- Double-tap while listening ("J'écoute …" / "I'm listening …") or thinking ("Entendu …" / "Heard …", "Je
+  réfléchis …" / "Thinking …"): the question is dropped
   and the assistant goes back to sleep, saying nothing. While listening, the session ends as without speech; while
   thinking, the answer's stream is left at once (every client reads `llm_cancelled()` and closes its connection).
 
@@ -849,8 +853,8 @@ Perplexity. Their cost comes from the prices of `AGENTS.INI`; the tokens read fr
 of the price in (Anthropic, OpenAI, Mistral), 25 % (Google, OpenRouter, xAI, Perplexity), and those written to it
 at 125 % (Anthropic).
 
-- **On screen**, top right, while the assistant sleeps, listens or prepares the answer ("Entendu…", "Je
-  réfléchis…"; hidden while the answer is shown): the cost since it
+- **On screen**, top right, while the assistant sleeps, listens or prepares the answer ("Entendu…" /
+  "Heard…", "Je réfléchis…" / "Thinking…"; hidden while the answer is shown): the cost since it
   last woke up ("0,0123 €") and below it the cost of the day with one decimal less ("[0,123 €]"); the first
   starts again at 0 at each wake-up (wake word or touch; not when the
   conversation is cleared). **Tapping it** opens a page showing one period at a time, chosen by its tabs: the

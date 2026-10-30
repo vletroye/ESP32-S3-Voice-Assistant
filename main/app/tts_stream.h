@@ -20,10 +20,6 @@ typedef enum {
     TTS_EVENT_DONE,         /* every sentence has been played (not sent after tts_stream_cancel()) */
 } tts_event_t;
 
-/** OpenAI Realtime voices, the recommended ones first (lowercase, as the API names them) */
-extern const char *const tts_voices[];
-extern const size_t tts_voice_count;
-
 /** Called from the playback task */
 typedef void (*tts_event_cb_t)(tts_event_t event);
 
@@ -45,20 +41,18 @@ extern const tts_backend_t tts_backend_mistral;
  * @param base_url     OpenAI base URL ending with '/', e.g. "https://api.openai.com/v1/" (wss:// is derived)
  * @param api_key      Key of the service
  * @param model        e.g. "gpt-realtime-2.1-mini", "voxtral-mini-tts-3-0"
- * @param voice        e.g. "marin" (OpenAI), "fr_marie_neutral" (Mistral)
+ * @param voice        e.g. "marin" (OpenAI), "voice_589" (Mistral); NULL: the service's own
  * @param instructions Reading instructions (read verbatim, language, tone; OpenAI), NULL: unchanged
+ * @param style        Tags put before each sentence (Mistral: "[emotion=calm][pace=slow] "), NULL for none
  */
 void tts_stream_configure(const tts_backend_t *backend, const char *base_url, const char *api_key, const char *model,
-                          const char *voice, const char *instructions);
+                          const char *voice, const char *instructions, const char *style);
 
 /**
- * @brief Change the voice (e.g. "cedar"). A Realtime session keeps its voice once it has spoken, so the OpenAI
- *        synthesis reconnects with a new session; the next sentences use the new voice.
+ * @brief The user is speaking: the speech service gets ready to answer (Mistral: its connection opened and the
+ *        service woken by a silent request when unused for a while). Does not block.
  */
-void tts_stream_set_voice(const char *voice);
-
-/** Change the reading instructions (language, tone): a new session too, before the next sentence */
-void tts_stream_set_instructions(const char *instructions);
+void tts_stream_prewarm(void);
 
 /**
  * @brief Start a new spoken reply; cancels the previous one if still playing.

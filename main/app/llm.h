@@ -109,6 +109,31 @@ const llm_speech_model_t *llm_speech_model(llm_speech_kind_t kind, size_t index)
 /** The model of this kind with this id, NULL if not listed */
 const llm_speech_model_t *llm_speech_find(llm_speech_kind_t kind, const char *id);
 
+/* Voices of AGENTS.INI ([voices]): those of the speech provider in use that speak the language are offered */
+typedef struct llm_voice {
+    const char *name;       /* unique, said and shown ("Lea"); kept in CONFIG.INI (Voice) */
+    const char *provider;   /* "openai", "mistral" */
+    const char *id;         /* voice of the provider's API ("marin", "voice_589") */
+    const char *languages;  /* "fr,en", "*" for every one */
+    const char *emotion;    /* "calm", NULL for none */
+    const char *pace;       /* "slow", NULL for none */
+} llm_voice_t;
+
+/** How many voices in [voices] */
+size_t llm_voice_count(void);
+
+/** The voice at this index (file order), NULL past the end */
+const llm_voice_t *llm_voice(size_t index);
+
+/** True when the voice is of this provider and speaks this language (2-letter code) */
+bool llm_voice_offered(const llm_voice_t *voice, const char *provider, const char *lang);
+
+/**
+ * @brief The voice to speak with: the one named (case ignored) if it is of the provider and speaks the language,
+ *        else the first one that is, else the first one of the provider; NULL if the provider has none
+ */
+const llm_voice_t *llm_voice_for(const char *provider, const char *lang, const char *name);
+
 /** LLM_ERR_EFFORT: the effort refused ("low") and the values the model takes ("high, none") */
 extern char llm_effort_refused[16];
 extern char llm_effort_values[64];

@@ -30,7 +30,7 @@ static const char *TAG = "llm";
 /* ---------- the models offered: AGENTS.INI ---------- */
 
 #define AGENTS_FILE         "/spiffs/agents.ini"
-#define AGENTS_FILE_MAX     8192
+#define AGENTS_FILE_MAX     (32 * 1024)
 
 /* The firmware's version (main/agents/agents.ini, embedded NUL-terminated) */
 extern const char s_agents_default_start[] asm("_binary_agents_ini_start");
@@ -53,7 +53,9 @@ static size_t s_file_count = 0;
 #define STT_SECTION             "stt"
 #define TTS_SECTION             "tts"
 #define PER_CALL_SECTION        "per_call"
+#define VOICES_SECTION          "voices"
 #define SPEECH_MODELS_MAX       16
+#define VOICES_MAX              64
 #define CALL_PRICES_MAX         8
 static struct {
     llm_speech_model_t model;
@@ -62,6 +64,8 @@ static struct {
     double price_out;
 } s_speech[SPEECH_MODELS_MAX];
 static int s_speech_count = 0;
+static llm_voice_t s_voices[VOICES_MAX];
+static int s_voice_count = 0;
 static struct {
     char *id;
     double price;
@@ -171,7 +175,8 @@ static void split_fields(char *rest, fields_t *f)
 
 /* Section of a line ("[anthropic]"): its provider, or one of the special sections */
 typedef enum {
-    SECTION_NONE, SECTION_MODELS, SECTION_EXCLUDE, SECTION_SPEECH, SECTION_STT, SECTION_TTS, SECTION_PER_CALL
+    SECTION_NONE, SECTION_MODELS, SECTION_EXCLUDE, SECTION_SPEECH, SECTION_STT, SECTION_TTS, SECTION_PER_CALL,
+    SECTION_VOICES
 } section_t;
 
 static section_t section_of(char *name, int *provider)
@@ -188,7 +193,62 @@ static section_t section_of(char *name, int *provider)
            strcasecmp(name, SPEECH_SECTION) == 0 ? SECTION_SPEECH :
            strcasecmp(name, STT_SECTION) == 0 ? SECTION_STT :
            strcasecmp(name, TTS_SECTION) == 0 ? SECTION_TTS :
-           strcasecmp(name, PER_CALL_SECTION) == 0 ? SECTION_PER_CALL : SECTION_NONE;
+           strcasecmp(name, PER_CALL_SECTION) == 0 ? SECTION_PER_CALL :
+           strcasecmp(name, VOICES_SECTION) == 0 ? SECTION_VOICES : SECTION_NONE;
+}
+
+/* "-" or nothing: none */
+static char *dup_value(const char *value)
+{
+    return (value[0] && strcmp(value, "-") != 0) ? strdup(value) : NULL;
+}
+
+/* "Lea = mistral | voice_589 | fr | calm | slow": a voice of [voices] (a name used twice: the first one kept) */
+static void add_voice(const char *name, char *rest)
+{
+    char *parts[5] = { "", "", "", "", "" };
+    int n = 0;
+    for (char *r = rest; r && n < 5;) {
+        char *bar = strchr(r, '|');
+        if (bar) {
+            *bar = '\0';
+        }
+        parts[n++] = trim(r);
+        r = bar ? bar + 1 : NULL;
+    }
+    if (!name[0] || !parts[0][0] || !parts[1][0]) {
+        ESP_LOGW(TAG, "AGENTS.INI: voice \"%s\" without a name, a provider or a voice id: ignored", name);
+        return;
+    }
+    for (int i = 0; i < s_voice_count; i++) {
+        if (strcasecmp(s_voices[i].name, name) == 0) {
+            ESP_LOGW(TAG, "AGENTS.INI: the voice name %s is used twice: the second one is ignored", name);
+            return;
+        }
+    }
+    if (s_voice_count >= VOICES_MAX) {
+        ESP_LOGW(TAG, "AGENTS.INI: more than %d voices: %s ignored", VOICES_MAX, name);
+        return;
+    }
+    // "fr, en" -> "fr,en"
+    char *languages = strdup(parts[2][0] ? parts[2] : "*");
+    char *out = languages;
+    for (const char *c = languages; languages && *c; c++) {
+        if (*c != ' ' && *c != '\t') {
+            *out++ = *c;
+        }
+    }
+    if (languages) {
+        *out = '\0';
+    }
+    s_voices[s_voice_count++] = (llm_voice_t) {
+        .name = strdup(name),
+        .provider = strdup(parts[0]),
+        .id = strdup(parts[1]),
+        .languages = languages,
+        .emotion = dup_value(parts[3]),
+        .pace = dup_value(parts[4]),
+    };
 }
 
 /*
@@ -214,6 +274,15 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
         }
         s_speech_count = 0;
         s_call_count = 0;
+        for (int i = 0; i < s_voice_count; i++) {
+            free((char *)s_voices[i].name);
+            free((char *)s_voices[i].provider);
+            free((char *)s_voices[i].id);
+            free((char *)s_voices[i].languages);
+            free((char *)s_voices[i].emotion);
+            free((char *)s_voices[i].pace);
+        }
+        s_voice_count = 0;
     }
     for (char *line = copy ? strtok(copy, "\n") : NULL; line && count < max; line = strtok(NULL, "\n")) {
         line = trim(line);
@@ -254,6 +323,12 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
             if (lists && id[0] && s_call_count < CALL_PRICES_MAX && parse_price(trim(eq + 1), &price)) {
                 s_calls[s_call_count].id = strdup(id);
                 s_calls[s_call_count++].price = price;
+            }
+            continue;
+        }
+        if (section == SECTION_VOICES) {
+            if (lists) {
+                add_voice(id, eq + 1);
             }
             continue;
         }
@@ -301,6 +376,8 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
     return count;
 }
 
+static bool s_agents_cut = false;   /* AGENTS.INI read only in part: never written back (it would be cut) */
+
 static char *read_agents_file(void)
 {
     FILE *f = fopen(AGENTS_FILE, "r");
@@ -312,6 +389,11 @@ static char *read_agents_file(void)
     fclose(f);
     if (text) {
         text[n] = '\0';
+    }
+    s_agents_cut = n == AGENTS_FILE_MAX - 1;
+    if (s_agents_cut) {
+        ESP_LOGE(TAG, "%s is larger than %d bytes: its end is ignored, and it is not written", AGENTS_FILE,
+                 AGENTS_FILE_MAX - 1);
     }
     return text;
 }
@@ -459,7 +541,7 @@ static int rewrite_agents(const char *const *speeds)
         }
         line = end ? end + 1 : NULL;
     }
-    if (changed) {
+    if (changed && !s_agents_cut) {
         bool ok = write_agents_file(out);
         ESP_LOGI(TAG, "%s %d line(s) of %s", ok ? "Rewrote" : "Could not rewrite", changed, AGENTS_FILE);
     }
@@ -499,7 +581,7 @@ static bool add_missing_call(const char *text, const char *id)
     }
     const char *def_end = strchr(def_line, '\n');
     const char *after = strchr(header, '\n');
-    if (!def_end || !after) {
+    if (!def_end || !after || s_agents_cut) {
         return false;
     }
     FILE *f = fopen(AGENTS_FILE, "w");
@@ -584,6 +666,7 @@ void llm_load_models(void)
         add_missing_section(text, FREE_EXCLUDE_SECTION);
         add_missing_section(text, STT_SECTION);    // the transcription and speech models to choose from
         add_missing_section(text, TTS_SECTION);
+        add_missing_section(text, VOICES_SECTION);     // the voices to choose from
         add_missing_section(text, PER_CALL_SECTION);
         add_missing_section(text, "xai");          // Grok models, offered since xAI is supported
         add_missing_section(text, "mistral");      // and the providers added since
@@ -600,7 +683,8 @@ void llm_load_models(void)
     free(text);
     llm_model_count = s_file_count;
     ESP_LOGI(TAG, "%u models from AGENTS.INI, %d free OpenRouter model(s) excluded, %d speech model(s), "
-             "%d per-call price(s)", (unsigned)s_file_count, s_free_excluded_count, s_speech_count, s_call_count);
+             "%d voice(s), %d per-call price(s)", (unsigned)s_file_count, s_free_excluded_count, s_speech_count,
+             s_voice_count, s_call_count);
 }
 
 bool llm_price_of(const char *id, double *price_in, double *price_out)
@@ -649,6 +733,54 @@ const llm_speech_model_t *llm_speech_find(llm_speech_kind_t kind, const char *id
         }
     }
     return NULL;
+}
+
+size_t llm_voice_count(void)
+{
+    return (size_t)s_voice_count;
+}
+
+const llm_voice_t *llm_voice(size_t index)
+{
+    return index < (size_t)s_voice_count ? &s_voices[index] : NULL;
+}
+
+bool llm_voice_offered(const llm_voice_t *voice, const char *provider, const char *lang)
+{
+    if (!voice || strcasecmp(voice->provider, provider) != 0) {
+        return false;
+    }
+    // "fr,en": one of them is the language; "*": every one
+    for (const char *l = voice->languages; l && *l;) {
+        size_t n = strcspn(l, ",");
+        if ((n == 1 && *l == '*') || (lang && n >= 2 && strncasecmp(l, lang, 2) == 0)) {
+            return true;
+        }
+        l += n + (l[n] == ',');
+    }
+    return false;
+}
+
+const llm_voice_t *llm_voice_for(const char *provider, const char *lang, const char *name)
+{
+    const llm_voice_t *first_of_lang = NULL, *first = NULL;
+    for (int i = 0; i < s_voice_count; i++) {
+        const llm_voice_t *v = &s_voices[i];
+        if (strcasecmp(v->provider, provider) != 0) {
+            continue;
+        }
+        bool offered = llm_voice_offered(v, provider, lang);
+        if (offered && name && strcasecmp(v->name, name) == 0) {
+            return v;
+        }
+        if (offered && !first_of_lang) {
+            first_of_lang = v;
+        }
+        if (!first) {
+            first = v;
+        }
+    }
+    return first_of_lang ? first_of_lang : first;
 }
 
 bool llm_call_price_of(const char *id, double *price)
@@ -703,7 +835,7 @@ void llm_free_exclude_add(const char *id, const char *comment)
         strlcat(out, header ? "\n" : "\n[" FREE_EXCLUDE_SECTION "]\n", size);
         strlcat(out, line, size);
     }
-    FILE *f = fopen(AGENTS_FILE, "w");
+    FILE *f = s_agents_cut ? NULL : fopen(AGENTS_FILE, "w");
     bool ok = f && fputs(out, f) >= 0;
     if (f) {
         ok &= (fclose(f) == 0);

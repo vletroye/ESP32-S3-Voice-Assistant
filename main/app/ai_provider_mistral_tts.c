@@ -12,11 +12,10 @@
  * header (first chunk) gives the sample format; without one, 32-bit floats and 16-bit integers are told apart on
  * the first audio. The events are read in blocks (an audio event is tens of KB: not byte by byte). The connection
  * is kept between sentences (keep-alive). Billed by the character
- * ($13 a million): counted as a token a character. The preset voices of a language are listed by
- * mistral_tts_voices() ("change de voix").
+ * ($13 a million): counted as a token a character. The voices and their emotion and pace tags come from [voices]
+ * of AGENTS.INI; the tags ("[emotion=calm][pace=slow] ") are put before each sentence.
  */
 
-#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -31,14 +30,10 @@
 #include "llm_sse.h"
 #include "tts_stream.h"
 #include "tts_backend.h"
-#include "ai_provider_mistral_tts.h"
 
 #define MISTRAL_TTS_URL         "https://api.mistral.ai/v1/audio/speech"
-#define MISTRAL_VOICES_V2_URL   "https://api.mistral.ai/v2/audio/voices?type=preset&page_size=100&language=%s"
-#define MISTRAL_VOICES_URL      "https://api.mistral.ai/v1/audio/voices?limit=100&type=preset"
 #define MISTRAL_TTS_TIMEOUT_MS  15000
 #define MISTRAL_TTS_READ_CHUNK  4096
-#define MISTRAL_VOICES_MAX_BYTES (192 * 1024)
 
 static const char *TAG = "mistral_tts";
 
@@ -58,6 +53,7 @@ typedef struct {
     uint8_t *raw;               /* decoded base64 (PSRAM) */
     size_t raw_cap;
     bool done;
+    bool warm_up;               /* request of mistral_prewarm(): its audio is not played */
     bool logged_event;
     char error[160];
 } stream_t;
@@ -117,7 +113,7 @@ static size_t wav_header(stream_t *st, const uint8_t *bytes, size_t len)
 /* Audio bytes of the stream (any cut) -> 16-bit samples for the speech engine */
 static void on_pcm(stream_t *st, const uint8_t *bytes, size_t len)
 {
-    if (st->generation != tts_backend_generation()) {
+    if (st->warm_up || st->generation != tts_backend_generation()) {
         return;
     }
     if (!st->header_checked) {
@@ -272,8 +268,14 @@ static char *build_request(const char *text)
     const tts_settings_t *settings = tts_backend_settings();
     cJSON *req = cJSON_CreateObject();
     cJSON_AddStringToObject(req, "model", settings->model);
-    cJSON_AddStringToObject(req, "input", text);
-    cJSON_AddStringToObject(req, "voice_id", settings->voice ? settings->voice : "fr_marie_neutral");
+    // Emotion and pace tags of the voice ([voices] of AGENTS.INI) before the text: not spoken
+    char *input = NULL;
+    if (settings->style && settings->style[0]) {
+        asprintf(&input, "%s%s", settings->style, text);
+    }
+    cJSON_AddStringToObject(req, "input", input ? input : text);
+    free(input);
+    cJSON_AddStringToObject(req, "voice_id", settings->voice ? settings->voice : "voice_589");
     cJSON_AddStringToObject(req, "response_format", "wav");
     cJSON_AddBoolToObject(req, "stream", true);
     char *body = cJSON_PrintUnformatted(req);
@@ -295,11 +297,19 @@ static void mistral_upkeep(void)
 {
 }
 
-static void mistral_say(const char *text, uint32_t generation)
+/* Last request answered (esp_timer us): a connection unused for long is likely closed by the server */
+static int64_t s_last_used_us = 0;
+#define MISTRAL_TTS_WARM_US     (30 * 1000000LL)
+
+/* A sentence, or with warm_up a request whose audio is dropped (nothing reported to the speech engine) */
+static void request(const char *text, uint32_t generation, bool warm_up)
 {
-    tts_backend_sentence_start(generation);
+    if (!warm_up) {
+        tts_backend_sentence_start(generation);
+    }
     stream_t st = {
         .generation = generation,
+        .warm_up = warm_up,
     };
     char *body = build_request(text);
     int64_t start_us = esp_timer_get_time();
@@ -339,14 +349,15 @@ static void mistral_say(const char *text, uint32_t generation)
         failed = (status <= 0);
     } else {
         while (!st.done && (n = esp_http_client_read(s_client, chunk, MISTRAL_TTS_READ_CHUNK)) > 0) {
-            if (generation != tts_backend_generation()) {
+            if (!warm_up && generation != tts_backend_generation()) {
                 status_text = "cancelled";
                 break;
             }
             feed(&st, chunk, n);
         }
         int64_t ms = (esp_timer_get_time() - start_us) / 1000;
-        ESP_LOGI(TAG, "%u KB of audio received in %lld ms", (unsigned)(st.received / 1024), ms);
+        ESP_LOGI(TAG, "%s%u KB of audio received in %lld ms", warm_up ? "warm-up: " : "",
+                 (unsigned)(st.received / 1024), ms);
         if (st.error[0]) {
             ESP_LOGE(TAG, "error: %s", st.error);
             if (tts_backend_is_no_credit(st.error)) {
@@ -366,12 +377,35 @@ static void mistral_say(const char *text, uint32_t generation)
         }
         // Billed by the character: a token a character
         costs_add_tokens(COST_TTS, tts_backend_settings()->model, (int)strlen(text), 0, 0, 0);
+        s_last_used_us = esp_timer_get_time();
     }
-    tts_backend_sentence_end(status_text, failed);
+    if (!warm_up) {
+        tts_backend_sentence_end(status_text, failed);
+    }
     llm_buf_free(&st.line);
     free(st.pcm16);
     free(st.raw);
     free(body);
+}
+
+static void mistral_say(const char *text, uint32_t generation)
+{
+    request(text, generation, false);
+}
+
+/*
+ * The user is speaking: a connection unused for 30 s is likely closed, and the first request of a new one takes
+ * about 3.5 s instead of 0.7 (TLS handshake, then the service slower to answer). A "." is synthesized meanwhile,
+ * not played (a character: next to nothing).
+ */
+static void mistral_prewarm(void)
+{
+    if (s_client && esp_timer_get_time() - s_last_used_us < MISTRAL_TTS_WARM_US) {
+        return;
+    }
+    int64_t start_us = esp_timer_get_time();
+    request(".", 0, true);
+    ESP_LOGI(TAG, "warmed up in %lld ms", (esp_timer_get_time() - start_us) / 1000);
 }
 
 const tts_backend_t tts_backend_mistral = {
@@ -380,99 +414,9 @@ const tts_backend_t tts_backend_mistral = {
     .stop = mistral_stop,
     .upkeep = mistral_upkeep,
     .say = mistral_say,
+    .prewarm = mistral_prewarm,
+    // A request takes 0.7 to 1 s to start, and its audio comes about 1.15 times faster than spoken: the sentences
+    // waiting go in one request (no wait between them), and more audio is kept in reserve before playing
+    .join_chars = 600,
+    .reserve_ms = 600,
 };
-
-/* ---------- voices ---------- */
-
-/* A voice of the language: its slug starts with "fr_", or one of its languages does ("fr_fr") */
-static bool voice_of(const cJSON *voice, const char *slug, const char *lang)
-{
-    size_t n = strlen(lang);
-    if (strncasecmp(slug, lang, n) == 0 && slug[n] == '_') {
-        return true;
-    }
-    const cJSON *language;
-    cJSON_ArrayForEach(language, cJSON_GetObjectItem(voice, "languages")) {
-        if (cJSON_IsString(language) && strncasecmp(language->valuestring, lang, n) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/* The voices of the language in one list (v2: "data", v1: "items"), kept by voice_of() in either case */
-static size_t fetch_voices(const char *url, const char *api_key, const char *lang, mistral_voice_t *voices,
-                           size_t max)
-{
-    char *auth = NULL;
-    asprintf(&auth, "Bearer %s", api_key ? api_key : "");
-    esp_http_client_config_t config = {
-        .url = url,
-        .method = HTTP_METHOD_GET,
-        .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    llm_buf_t body = {0};
-    int status = -1;
-    if (client && auth) {
-        esp_http_client_set_header(client, "Authorization", auth);
-        if (esp_http_client_open(client, 0) == ESP_OK && esp_http_client_fetch_headers(client) >= 0) {
-            status = esp_http_client_get_status_code(client);
-            char chunk[512];
-            int n;
-            while ((n = esp_http_client_read(client, chunk, sizeof(chunk))) > 0 && body.len < MISTRAL_VOICES_MAX_BYTES) {
-                llm_buf_append(&body, chunk, n);
-            }
-        }
-        esp_http_client_cleanup(client);
-    }
-    free(auth);
-    size_t count = 0;
-    cJSON *json = (status == 200 && body.len) ? cJSON_Parse(body.p) : NULL;
-    const cJSON *items = cJSON_GetObjectItem(json, "items");
-    if (!cJSON_IsArray(items)) {
-        items = cJSON_IsArray(json) ? json : cJSON_GetObjectItem(json, "data");
-    }
-    const cJSON *voice;
-    cJSON_ArrayForEach(voice, items) {
-        const cJSON *slug = cJSON_GetObjectItem(voice, "slug");
-        if (!cJSON_IsString(slug)) {
-            slug = cJSON_GetObjectItem(voice, "id");
-        }
-        const cJSON *name = cJSON_GetObjectItem(voice, "name");
-        if (count < max && cJSON_IsString(slug) && voice_of(voice, slug->valuestring, lang)) {
-            strlcpy(voices[count].slug, slug->valuestring, sizeof(voices[count].slug));
-            strlcpy(voices[count].name, cJSON_IsString(name) ? name->valuestring : slug->valuestring,
-                    sizeof(voices[count].name));
-            count++;
-        }
-    }
-    if (!count) {
-        ESP_LOGW(TAG, "No %s voice in %s (HTTP %d): %.200s", lang, url, status, body.len ? body.p : "-");
-    } else {
-        ESP_LOGI(TAG, "%u %s voice(s) from %s (%u bytes)", (unsigned)count, lang, url, (unsigned)body.len);
-    }
-    cJSON_Delete(json);
-    llm_buf_free(&body);
-    return count;
-}
-
-size_t mistral_tts_voices(const char *api_key, const char *lang, mistral_voice_t *voices, size_t max)
-{
-    // Asked for the voices of the language (v2); else the whole list (v1), its voices of the language kept
-    char code[3] = "";
-    for (int i = 0; i < 2 && lang && isalpha((unsigned char)lang[i]); i++) {
-        code[i] = tolower((unsigned char)lang[i]);
-    }
-    char *url = NULL;
-    size_t count = 0;
-    if (code[1] && asprintf(&url, MISTRAL_VOICES_V2_URL, code) > 0) {
-        count = fetch_voices(url, api_key, code, voices, max);
-    }
-    free(url);
-    if (!count) {
-        count = fetch_voices(MISTRAL_VOICES_URL, api_key, lang, voices, max);
-    }
-    return count;
-}

@@ -27,6 +27,8 @@ typedef struct {
     const char *wifi_failed;
     const char *system_prompt;   /* System message sent with every chat request */
     const char *tts_instructions;   /* Speaking style given to the speech synthesis */
+    const char *tts_emotion;        /* Added to it for a voice with an emotion ([voices]), %s = the emotion */
+    const char *tts_pace;           /* Added to it for a voice with a pace, %s = the pace */
     const char *stt_error;          /* Spoken when the question could not be transcribed */
     /* Long-term memory ("souviens-toi que ...") */
     const char *memory_header;      /* Introduces the notes in the instructions */

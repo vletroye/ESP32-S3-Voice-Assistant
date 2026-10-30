@@ -64,7 +64,8 @@ static volatile int64_t s_last_play_us = 0;
 /* The service and what it uses; a service chosen by tts_stream_configure(), taken by the synthesis task */
 static const tts_backend_t *s_backend = NULL;
 static const tts_backend_t *volatile s_next_backend = NULL;
-static volatile bool s_configuring = false;     /* settings being changed: not applied before they all are */
+static volatile bool s_configuring = false;
+static volatile bool s_prewarm = false;         /* tts_stream_prewarm() asked: done by the synthesis task */     /* settings being changed: not applied before they all are */
 static tts_settings_t s_settings;
 static SemaphoreHandle_t s_settings_lock = NULL;
 
@@ -304,6 +305,39 @@ bool tts_backend_is_no_credit(const char *text)
                     strcasestr(text, "credit"));
 }
 
+/*
+ * The sentences of the same reply already waiting, joined to this one (up to max characters, whole sentences):
+ * spoken by one request, without the wait of a new one between them. The synthesis task is the only reader of the
+ * queue: the sentence peeked is the one received.
+ */
+static char *join_waiting(char *text, uint32_t generation, size_t max)
+{
+    size_t len = strlen(text);
+    sentence_item_t next;
+    int joined = 0;
+    while (xQueuePeek(s_sentences, &next, 0) == pdTRUE && next.text && next.generation == generation) {
+        size_t add = strlen(next.text);
+        if (len + 1 + add > max) {
+            break;
+        }
+        char *longer = heap_caps_realloc(text, len + add + 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!longer) {
+            break;
+        }
+        text = longer;
+        xQueueReceive(s_sentences, &next, 0);
+        text[len++] = ' ';
+        memcpy(text + len, next.text, add + 1);
+        len += add;
+        free(next.text);
+        joined++;
+    }
+    if (joined) {
+        ESP_LOGI(TAG, "%d sentence(s) joined to the next request (%u characters)", joined + 1, (unsigned)len);
+    }
+    return text;
+}
+
 static void tts_task(void *arg)
 {
     /* Nothing to do before the network is up */
@@ -329,10 +363,19 @@ static void tts_task(void *arg)
         if (s_backend) {
             s_backend->upkeep();
         }
+        if (s_prewarm) {
+            s_prewarm = false;
+            if (s_backend && s_backend->prewarm && uxQueueMessagesWaiting(s_sentences) == 0) {
+                s_backend->prewarm();
+            }
+        }
 
         sentence_item_t item;
         if (xQueueReceive(s_sentences, &item, pdMS_TO_TICKS(200)) != pdTRUE) {
             continue;
+        }
+        if (item.generation == s_generation && item.text && s_backend && s_backend->join_chars) {
+            item.text = join_waiting(item.text, item.generation, s_backend->join_chars);
         }
         if (item.generation == s_generation) {
             if (item.text && s_backend) {
@@ -393,7 +436,12 @@ static void playback_task(void *arg)
 
         if (!playing) {
             unsigned shift = underruns < PREBUFFER_RESUME_MAX_SHIFT ? underruns : PREBUFFER_RESUME_MAX_SHIFT;
-            size_t needed = started ? (PREBUFFER_RESUME_BYTES << shift) : PREBUFFER_START_BYTES;
+            // The reserve of the service (Mistral: more), and half of it after running dry
+            const tts_backend_t *backend = s_backend;
+            size_t start = (backend && backend->reserve_ms) ? backend->reserve_ms * 16 * sizeof(int16_t) :
+                           PREBUFFER_START_BYTES;
+            size_t resume = start / 2 > PREBUFFER_RESUME_BYTES ? start / 2 : PREBUFFER_RESUME_BYTES;
+            size_t needed = started ? (resume << shift) : start;
             if (available >= needed || (synth_done && available > 0)) {
                 playing = true;
             } else {
@@ -444,11 +492,6 @@ static void playback_task(void *arg)
 
 /* ---------- public API ---------- */
 
-const char *const tts_voices[] = {
-    "marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse",
-};
-const size_t tts_voice_count = sizeof(tts_voices) / sizeof(tts_voices[0]);
-
 /* A setting changed: copied, the version tells the service to apply it */
 static void set_setting(const char **field, const char *value)
 {
@@ -465,7 +508,7 @@ static void set_setting(const char **field, const char *value)
 }
 
 void tts_stream_configure(const tts_backend_t *backend, const char *base_url, const char *api_key, const char *model,
-                          const char *voice, const char *instructions)
+                          const char *voice, const char *instructions, const char *style)
 {
     s_configuring = true;
     set_setting(&s_settings.base_url, base_url);
@@ -475,19 +518,11 @@ void tts_stream_configure(const tts_backend_t *backend, const char *base_url, co
     if (instructions) {
         set_setting(&s_settings.instructions, instructions);
     }
-    ESP_LOGI(TAG, "%s model: %s, voice: %s", backend->name, model ? model : "-", voice ? voice : "-");
+    set_setting(&s_settings.style, style);
+    ESP_LOGI(TAG, "%s model: %s, voice: %s%s%s", backend->name, model ? model : "-", voice ? voice : "-",
+             style ? ", style: " : "", style ? style : "");
     s_next_backend = backend;
     s_configuring = false;
-}
-
-void tts_stream_set_voice(const char *voice)
-{
-    set_setting(&s_settings.voice, voice);
-}
-
-void tts_stream_set_instructions(const char *instructions)
-{
-    set_setting(&s_settings.instructions, instructions);
 }
 
 /* One sentence spoken into the capture buffer; true when it gave audio */
@@ -512,7 +547,7 @@ bool tts_stream_test(const tts_backend_t *backend, const char *base_url, const c
     *audio = NULL;
     *samples = 0;
     *first_ms = *total_ms = -1;
-    tts_stream_configure(backend, base_url, api_key, model, voice, NULL);
+    tts_stream_configure(backend, base_url, api_key, model, voice, NULL, NULL);
     for (int i = 0; i < 50 && s_backend != backend; i++) {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
@@ -579,6 +614,11 @@ void tts_stream_begin(tts_event_cb_t cb)
     drop_queued_sentences();
     s_flush = true;
     s_event_cb = cb;
+}
+
+void tts_stream_prewarm(void)
+{
+    s_prewarm = true;
 }
 
 void tts_stream_say(const char *sentence)

@@ -29,6 +29,7 @@ which has been largely rewritten.
   - [On the device: Settings screen](#on-the-device-settings-screen)
   - [Files of the configuration drive](#files-of-the-configuration-drive)
   - [`CONFIG.INI`: settings and API keys](#configini-settings-and-api-keys)
+  - [Voices: `[voices]` of `AGENTS.INI`](#voices-voices-of-agentsini)
   - [`MEMORY.TXT`: long-term memory notes](#memorytxt-long-term-memory-notes)
   - [`PERSO_<XX>.TXT`: who the assistant is](#perso_xxtxt-who-the-assistant-is)
   - [Languages: `LANG_<XX>.TXT`](#languages-lang_xxtxt)
@@ -190,8 +191,8 @@ flowchart LR
 | Answer (Mistral) | Mistral AI Chat Completions API | `stream: true`, `reasoning_effort` `none` (no `stream_options`: Mistral rejects the fields it does not know; the usage comes with the last chunk), 6 to 12 exchanges of history kept on the device |
 | Answer (Perplexity) | Perplexity Agent API (`/v1/agent`, shaped like OpenAI's Responses API) | `stream: true`, `store: false`, `web_search` tool (`search_type: web`, 5 results), the "[1]" source marks taken out of the text, 6 to 12 exchanges of history kept on the device |
 | Answer (Gemini) | Gemini API `streamGenerateContent?alt=sse` | `thinkingLevel` `minimal` (Flash-Lite) or `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
-| Speech synthesis (OpenAI) | OpenAI Realtime, `gpt-realtime-2.1-mini`, voice `Voice` (default `marin`) | Permanent WebSocket, one response per sentence, read verbatim |
-| Speech synthesis (Mistral) | Mistral `POST /v1/audio/speech`, `voxtral-mini-tts-3-0`, voice `Mistral_voice` (default `fr_marie_neutral`) | One streamed request per sentence (`response_format: wav`, `stream: true`: server-sent events of base64 16-bit audio at 24 kHz), connection kept alive, events read in 4 KB blocks |
+| Speech synthesis (OpenAI) | OpenAI Realtime, `gpt-realtime-2.1-mini`, a voice of `[voices]` (default Marin) | Permanent WebSocket, one response per sentence, read verbatim |
+| Speech synthesis (Mistral) | Mistral `POST /v1/audio/speech`, `voxtral-mini-tts-3-0`, a voice of `[voices]` (Lea in French) | One streamed request per sentence, the sentences already waiting joined to it (up to 600 characters: a request takes 0.7 to 1 s to start, and its audio comes only ~1.15 times faster than spoken), with the emotion and pace tags of the voice before it (`response_format: wav`, `stream: true`: server-sent events of base64 16-bit audio at 24 kHz); 600 ms of audio kept in reserve before playing; connection kept alive, events read in 4 KB blocks, and warmed up while the user speaks when unused for 30 s |
 | Playback | local | 24 → 16 kHz resampling, short fade-out at the end of each sentence (no click), I2S fixed at 16 kHz (shared with the mics) |
 
 The stages overlap: FreeRTOS tasks are chained through queues (model text → sentences → synthesis →
@@ -205,7 +206,7 @@ transcription and voice) and opened while the user is still speaking.
 | End of speech detected | 0.9 s of silence |
 | End of speech → final transcript | 0.6 to 0.8 s |
 | First word from the model | 0.7 to 1.6 s |
-| Transcript → first sound | 1.4 to 2.8 s |
+| Transcript → first sound | 1.4 to 2.8 s (Mistral speech: 2 to 2.6 s; the first question after 30 s of rest: ~2.4 s thanks to the warm-up, 5.4 s without) |
 | Weather question (Open-Meteo lookup) | + 3 to 4 s for the answer |
 | Web search ("Je regarde." spoken meanwhile) | first sound after 1.9 s, answer after about 3 s |
 
@@ -313,6 +314,12 @@ mistral-medium-latest = Mistral Medium 3.5 | none | Medium | 1.29 | 6.45
 perplexity/sonar           = Perplexity Sonar             | - | Sonar | 0.22 | 2.15
 anthropic/claude-haiku-5-5 = Claude Haiku 5.5 (Perplexity) | - | Haiku | 0.09 | 0.43
 
+[voices]
+# name  = provider | voice id  | languages | emotion | pace
+Marin   = openai   | marin     | *         | -       | -
+Lea     = mistral  | voice_589 | fr        | -       | -
+James   = mistral  | voice_3150| en        | calm    | slow
+
 [per_call]
 claude:web_search = 0.0086
 perplexity:web_search = 0.0022
@@ -333,6 +340,16 @@ perplexity:web_search = 0.0022
   reasoning. Prices: transcription in = audio heard (counted as 10 tokens a second), out = text; speech in = text
   read (Mistral: 1 token a character, $13 a million characters), out = audio spoken (OpenAI). An older
   `[speech]` section is still read for its prices.
+- **`[voices]`**: the voices offered ("change de voix", Settings screen): those of the speech provider in use (second
+  column of `[tts]`) that speak the language in use. **Name**: unique, said and shown, kept in `Voice` of
+  `CONFIG.INI`. **Provider**: `openai` or `mistral`. **Voice id**: as the provider's API names it (OpenAI: `marin`,
+  `cedar`…; Mistral: `voice_589`…, listed by `GET https://api.mistral.ai/v1/audio/voices?type=preset`: the
+  `voice_…` ones are Voxtral 3's, one per person; the older `fr_marie_sad`… ones, one per emotion, are Voxtral 2's).
+  **Languages**: 2-letter codes separated by commas, `*` for every one. **Emotion** and **pace** (`-` for none):
+  Voxtral 3 gets them as tags before each sentence (`[emotion=calm][pace=slow]`, not spoken; 34 emotions: `calm`,
+  `happy`, `sad`, `sarcastic`…, paces `very-slow` to `very-fast`; Mistral tests them in English, "expected to work"
+  in French); OpenAI gets them in its reading instructions (`tts_emotion` and `tts_pace` of `LANG_<XX>.TXT`). The
+  file given with the firmware lists OpenAI's 10 voices and Mistral's 36 Voxtral 3 voices.
 - **`[per_call]`**: tools billed per call, `provider:tool = price` (`claude:web_search`); another provider's search
   would get its own line (`openai:web_search`…).
 - **Speed** (optional): `fast`, `average` or `slow`, written by the [model test](#model-test-teste-les-modèles).
@@ -463,10 +480,10 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `ai_provider_google.c` | Gemini client (`streamGenerateContent`, SSE streaming), history kept on the device |
 | `llm_sse.c` | Server-sent events parser and text buffers shared by the clients |
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
-| `tts_stream.c` | Speech synthesis engine shared by the services: sentence queue, service and settings changed at run time, resampling, fade-out and I2S playback; capture of the audio for the model test |
+| `tts_stream.c` | Speech synthesis engine shared by the services: sentence queue (sentences waiting joined for a service that asks it), service and settings changed at run time, warm-up while the user speaks, audio reserve per service, resampling, fade-out and I2S playback; capture of the audio for the model test |
 | `tts_backend.h` | Interface of a speech synthesis service (`start`, `stop`, `upkeep`, `say`) and the helpers it calls back |
 | `ai_provider_openai_tts.c` | OpenAI Realtime speech (permanent WebSocket, one response per sentence) |
-| `ai_provider_mistral_tts.c` | Mistral Voxtral speech (HTTP server-sent events, WAV 16-bit, keep-alive) and the list of its voices of the language in use (`GET /v2/audio/voices?language=fr`, else the whole `v1` list filtered on the device) |
+| `ai_provider_mistral_tts.c` | Mistral Voxtral speech (HTTP server-sent events, WAV 16-bit, keep-alive), emotion and pace tags before each sentence |
 | `stt_stream.c` | Transcription engine shared by the services: audio buffer in PSRAM, resampling when needed, connection kept or opened per question, transcript; transcription of a recorded sentence for the model test |
 | `stt_backend.h` | Interface of a transcription service (URL, `session.update`, message types, events) |
 | `ai_provider_openai_stt.c` | OpenAI Realtime transcription (24 kHz, permanent WebSocket) |
@@ -529,9 +546,10 @@ Tap the gear icon on the home screen:
   V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default), 13 Grok 4.7 and 14 Grok 4.20 rapide (xAI),
   15 to 17 Mistral Small 4, Medium 3.5, Large 4, 18 to 23 the Perplexity models, then the free ones (24 to 30 with
   the defaults; numbers up to 13 can be said, the others are chosen by name, or by provider then number).
-- **Voix / Voice**: the OpenAI voice reading the answers: Marin, Cedar (both recommended by OpenAI), Alloy,
-  Ash, Ballad, Coral, Echo, Sage, Shimmer, Verse. Applied **at once**, without Save or restart: the speech
-  session reconnects (~2 s) and the new voice introduces itself.
+- **Voix / Voice**: the voice reading the answers, among the voices of `[voices]` (`AGENTS.INI`) of the speech
+  provider in use that speak the language in use (OpenAI: Marin, Cedar, Alloy…; Mistral in French: Lea, Marie,
+  Manon, Camille). Applied **at once**, without Save or restart: the speech session reconnects (~2 s) and the new
+  voice introduces itself. The list follows the speech provider and the language.
 
 For the language and the model, press **Save** (bottom right, enabled once something changed): the choice is
 saved to the device's NVS and applied at once, without restarting (the speech session reconnects, ~2 s).
@@ -590,7 +608,10 @@ USB drive named "ESP-BOX" holding these files:
 - The text files of SPIFFS can hold up to 32,767 characters each, `CONFIG.INI` 4,096 and `MEMORY.TXT` about
   3,900. The drive shows up to 64 files of SPIFFS (12 languages × 3 files, plus the others above).
 - `CONFIG.INI` only takes its own keys: a line read while the PC was still writing the file (old and new sectors
-  mixed) could save a fragment as a key (`EDeutsch, ES`); such keys are ignored, and those saved before are erased.
+  mixed) could save a fragment as a key (`EDeutsch, ES`); such keys are ignored, and those saved before (or no
+  longer used, as `Mistral_voice`) are erased when the configuration mode starts.
+- `AGENTS.INI` is read up to 32 KB; a larger file has its end ignored, and is then never written by the device
+  (model test speeds, exclusions), so that it is not cut.
 - An emptied file of SPIFFS given with the firmware (0 bytes: no cluster left, which the drive notices too) is
   installed again at the next start; keys or sections added
   by a newer firmware are appended to the existing files, which are otherwise kept as edited.
@@ -607,8 +628,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`, `gemini-3.8-flash`… |
 | `Stt_model` | Transcription model, one of `[stt]` of `AGENTS.INI` (also set by voice: "change de transcription"); a Mistral model without `Mistral_key` falls back to OpenAI | `gpt-live-transcribe`, `voxtral-mini-transcribe-realtime-3-0` |
 | `Tts_model` | Speech synthesis model, one of `[tts]` (also set by voice: "change de synthèse vocale"); same fallback | `gpt-realtime-2.1-mini`, `voxtral-mini-tts-3-0` |
-| `Voice` | OpenAI voice of the answers (also set from the Settings screen or by voice: "change de voix" while OpenAI speaks) | `marin`, `cedar`, `coral`… |
-| `Mistral_voice` | Mistral voice (by voice: "change de voix" while Voxtral speaks: the Mistral voices of the language in use are listed) | `fr_marie_neutral` |
+| `Voice` | Voice of the answers: a name of `[voices]` in `AGENTS.INI` (also set from the Settings screen or by voice: "change de voix"). A voice of another speech provider, or that does not speak the language in use: the first one of `[voices]` that does is used (the setting is kept) | `Marin`, `Cedar`, `Lea`… |
 | `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
@@ -651,6 +671,56 @@ stored in plain text in the device's NVS and never appear in the logs (only thei
 
 `OpenRouter_list`, formerly in `CONFIG.INI`, is removed when the configuration mode starts: its models go
 into the `[openrouter]` section of `AGENTS.INI`.
+
+### Voices: `[voices]` of `AGENTS.INI`
+
+The voices reading the answers are listed in the section **`[voices]`** of `AGENTS.INI`, for every speech provider,
+one line per voice. You can remove, rename or add voices, and give each one an emotion and a pace:
+
+```ini
+[voices]
+# name   = provider | voice id   | languages | emotion | pace
+Marin    = openai   | marin      | *         | -       | -
+Cedar    = openai   | cedar      | *         | warm    | -
+Lea      = mistral  | voice_589  | fr        | -       | -
+Camille  = mistral  | voice_3141 | fr        | calm    | slow
+James    = mistral  | voice_3150 | en        | -       | -
+```
+
+| Column | Meaning |
+| --- | --- |
+| name | Unique: said and shown to choose the voice ("prends la voix Camille"), kept in `Voice` of `CONFIG.INI` |
+| provider | `openai` or `mistral`: the provider of the speech models of `[tts]` |
+| voice id | The voice as the provider's API names it |
+| languages | 2-letter codes separated by commas (`fr`, `en, nl`), `*` for every language |
+| emotion, pace | `-` for none, else see below |
+
+- **Which voices are offered**: "change de voix" and the Settings screen list the voices of the speech provider in
+  use ("change de synthèse vocale") that speak the language in use: with Voxtral in French, Lea, Marie, Manon and
+  Camille; with OpenAI, its 10 voices (they speak every language). The list follows a change of provider or of
+  language.
+- **The voice used**: the one named in `Voice`. If it is of another provider, or does not speak the language in
+  use, the first voice of `[voices]` that fits is used, and `Voice` is kept (back to that provider or language, the
+  chosen voice comes back).
+- **Emotion and pace**: Voxtral 3 gets them as tags before each sentence (`[emotion=calm][pace=slow]`, not spoken).
+  Emotions: amused, angry, anxious, apologetic, appreciative, assertive, bored, calm, confident, confused, critical,
+  curious, determined, disappointed, disgusted, excited, frustrated, grateful, happy, hopeful, playful, proud,
+  reflective, resigned, sad, sarcastic, skeptical, somber, surprised, tense, tired, urgent, warm, wistful; paces:
+  very-slow, slow, moderate, fast, very-fast. Mistral tests them in English; in French they are "expected to
+  work". OpenAI gets them in its reading instructions (`tts_emotion` and `tts_pace` of `LANG_<XX>.TXT`: "Lis avec
+  cette émotion : warm.").
+- **The voices given with the firmware**: OpenAI's 10 voices, and the 36 Voxtral 3 voices of Mistral with their
+  language (French: Lea, Marie, Manon, Camille; English: James, Sheila, Margaret, Rob, Hugo, Howard, Fred, Harriet,
+  David, Mary, Sky; Dutch: Lotte; German: Heidi; Spanish: Elena; Italian: Lorenzo; Portuguese: Gabriela; and one
+  or two for Catalan, Arabic, Hindi, Hungarian, Japanese, Korean, Norwegian, Polish, Romanian, Russian, Turkish,
+  Ukrainian, Vietnamese, Chinese).
+- **Other Mistral voices**: their list, with their language and gender, is given by
+  `curl -H "Authorization: Bearer $MISTRAL_KEY" "https://api.mistral.ai/v1/audio/voices?type=preset&limit=100"`.
+  The `voice_…` ones are Voxtral 3's, one per person (the emotion is given by the tags). The older `fr_marie_sad`,
+  `en_paul_happy`… ones, one per emotion, are Voxtral 2's: still accepted, but not needed with the tags. Your own
+  cloned voices (Mistral console) can be added the same way, with their id.
+- `AGENTS.INI` is read at start-up: press **Restart** after editing it. A line without a provider or a voice id is
+  ignored, and a name used twice keeps its first line (the log says so).
 
 ### `MEMORY.TXT`: long-term memory notes
 
@@ -893,8 +963,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_STT_MODEL` | `gpt-live-transcribe` | Transcription model when `Stt_model` is not set |
 | `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
 | `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Speech synthesis model when `Tts_model` is not set |
-| `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice when `Voice` is not set |
-| `CONFIG_ASSISTANT_MISTRAL_VOICE` | `fr_marie_neutral` | Mistral voice when `Mistral_voice` is not set |
+| `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice (a name of `[voices]`) when `Voice` is not set |
 | `CONFIG_ASSISTANT_OPENAI_URL` | `https://api.openai.com/v1/` | `Base_url` of a new `CONFIG.INI` |
 | `CONFIG_ASSISTANT_SHOW_CLOCK` | `on` | Clock on the sleep screen when `Show_clock` is not set |
 | `CONFIG_ASSISTANT_CURRENCY` | `EUR` | Currency when `Currency` is not set |
@@ -1051,7 +1120,7 @@ its sample, spoken with it ("Bonjour, je suis Cedar. Ma voix vous plaît ?"); th
 | Change the model directly (numbered over all models, as on the Settings screen; 1 to 13 can be said, the others by name) | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
 | Change the transcription (lists `[stt]` of `AGENTS.INI` numbered: "Quelle transcription voulez-vous : 1, OpenAI, celle que j'utilise. 2, Voxtral.", then asks which one; answered by its number or spoken name; a missing key is said: "Il manque la clé Mistral…") | change(r) de / la / ta transcription · change(r) de / la / ta reconnaissance vocale · change(r) de / le STT | change (the) transcription · change (the) speech recognition · change (the) STT |
 | Change the speech synthesis (lists `[tts]` the same way; the next answer is spoken with the new one) | change(r) de / la / ta synthèse vocale · change(r) de / le TTS · change(r) de / le / ton moteur de voix | change (the) speech synthesis · change (the) TTS · change (the) voice engine |
-| Change the voice: the voices of the speech service in use (OpenAI's 10 voices, or the Mistral voices of the language in use, read from Mistral's list), saved in `Voice` or `Mistral_voice` (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
+| Change the voice: the voices of `[voices]` (`AGENTS.INI`) of the speech provider in use that speak the language in use, saved in `Voice` (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
 | Answer to that question (within 30 s after the list) | its number (1 to 10: "deux", "2", "dixième"…) or its name ("Cedar", also heard as "Cèdre"; "Corail", "Écho", "Ballade", "Marine"…) | its number or its name |
 | Change the voice directly | prends la voix Cedar · utilise la voix 3 · passe à la voix Coral · mets la voix Sage · choisis la voix 2 · voix numéro 2 · la voix Cedar · change de voix pour Coral | use the voice Cedar · use voice 3 · switch to voice 2 · voice number 2 · voice Cedar |
 

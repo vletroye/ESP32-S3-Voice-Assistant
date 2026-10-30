@@ -480,11 +480,21 @@ static char *build_system_prompt(void)
 }
 
 /* Instructions of the speech synthesis: read word for word (file_lang.c), then the [voice] of PERSO_<LANG>.TXT */
-static char *build_tts_instructions(void)
+/* Reading instructions (OpenAI): read verbatim, the voice of the persona, the emotion and pace of the voice */
+static char *build_tts_instructions(const llm_voice_t *v)
 {
+    const app_lang_t *lang = app_lang_get();
     char *text = NULL;
     const char *voice = persona_get(PERSONA_VOICE);
-    asprintf(&text, "%s%s%s", app_lang_get()->tts_instructions, voice[0] ? " " : "", voice);
+    char emotion[96] = "", pace[96] = "";
+    if (v && v->emotion) {
+        snprintf(emotion, sizeof(emotion), lang->tts_emotion, v->emotion);
+    }
+    if (v && v->pace) {
+        snprintf(pace, sizeof(pace), lang->tts_pace, v->pace);
+    }
+    asprintf(&text, "%s%s%s%s%s%s%s", lang->tts_instructions, voice[0] ? " " : "", voice, emotion[0] ? " " : "",
+             emotion, pace[0] ? " " : "", pace);
     return text;
 }
 
@@ -632,9 +642,8 @@ void assistant_set_language(const char *code)
     // Who the assistant is in this language (PERSO_<LANG>.TXT)
     persona_load(lang->code);
     stt_stream_set_language(lang->code);
-    char *tts_instructions = build_tts_instructions();
-    tts_stream_set_instructions(tts_instructions ? tts_instructions : lang->tts_instructions);
-    free(tts_instructions);
+    // The reading instructions of the language, and a voice that speaks it
+    assistant_set_tts(NULL);
     char *prompt = build_system_prompt();
     if (prompt) {
         llm_set_system_prompt(prompt);
@@ -705,6 +714,11 @@ const char *assistant_tts_provider(void)
     return m ? m->provider : "openai";
 }
 
+const struct llm_voice *assistant_voice(void)
+{
+    return llm_voice_for(assistant_tts_provider(), app_lang_get()->code, sys_param->voice);
+}
+
 void assistant_set_stt(const char *model)
 {
     if (model) {
@@ -725,10 +739,23 @@ void assistant_set_tts(const char *model)
     const char *key;
     const llm_speech_model_t *m = speech_choice(LLM_SPEECH_TTS, sys_param->tts_model, &key);
     bool mistral = m && strcmp(m->provider, "mistral") == 0;
-    char *tts_instructions = build_tts_instructions();
+    const llm_voice_t *v = llm_voice_for(m ? m->provider : "openai", app_lang_get()->code, sys_param->voice);
+    char *tts_instructions = build_tts_instructions(v);
+    // Mistral (Voxtral 3): the emotion and pace as tags before each sentence; OpenAI: in its instructions
+    char style[64] = "";
+    if (mistral && v && v->emotion) {
+        snprintf(style, sizeof(style), "[emotion=%s]", v->emotion);
+    }
+    if (mistral && v && v->pace) {
+        snprintf(style + strlen(style), sizeof(style) - strlen(style), "[pace=%s]", v->pace);
+    }
+    if (style[0]) {
+        strlcat(style, " ", sizeof(style));
+    }
     tts_stream_configure(mistral ? &tts_backend_mistral : &tts_backend_openai, sys_param->url, key,
-                         m ? m->id : CONFIG_ASSISTANT_TTS_MODEL, mistral ? sys_param->mistral_voice : sys_param->voice,
-                         tts_instructions ? tts_instructions : app_lang_get()->tts_instructions);
+                         m ? m->id : CONFIG_ASSISTANT_TTS_MODEL, v ? v->id : NULL,
+                         tts_instructions ? tts_instructions : app_lang_get()->tts_instructions,
+                         style[0] ? style : NULL);
     free(tts_instructions);
 }
 
@@ -757,6 +784,7 @@ void assistant_prewarm(void)
 {
     /* The transcription connection is the most urgent: let its TLS handshake finish first */
     stt_stream_wait_connected(3000);
+    tts_stream_prewarm();   // done by the synthesis task, meanwhile
     llm_prewarm();
 }
 

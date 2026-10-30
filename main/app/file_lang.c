@@ -72,6 +72,8 @@ static const lang_field_t s_fields[] = {
     { "wifi_failed", offsetof(app_lang_t, wifi_failed), FIELD_TEXT, 1 },
     { "system_prompt", offsetof(app_lang_t, system_prompt), FIELD_TEXT, 1 },
     { "tts_instructions", offsetof(app_lang_t, tts_instructions), FIELD_TEXT, 1 },
+    { "tts_emotion", offsetof(app_lang_t, tts_emotion), FIELD_TEXT, 1 },
+    { "tts_pace", offsetof(app_lang_t, tts_pace), FIELD_TEXT, 1 },
     { "stt_error", offsetof(app_lang_t, stt_error), FIELD_TEXT, 1 },
     { "memory_header", offsetof(app_lang_t, memory_header), FIELD_TEXT, 1 },
     { "memory_saved", offsetof(app_lang_t, memory_saved), FIELD_TEXT, 1 },

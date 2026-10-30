@@ -28,6 +28,13 @@ struct tts_backend {
     void (*upkeep)(void);
     /* Speak a sentence of this generation (blocking until its audio is given, or the reply cancelled) */
     void (*say)(const char *text, uint32_t generation);
+    /* The user is speaking: get ready to answer (connection opened...), nothing played; NULL if not needed */
+    void (*prewarm)(void);
+    /* Sentences already waiting joined to the one spoken, up to this many characters (0: one by one): for a
+     * service whose request takes long to start and whose audio comes hardly faster than spoken */
+    size_t join_chars;
+    /* Audio kept in reserve before the reply starts playing, in ms (0: the default, 200 ms) */
+    unsigned reserve_ms;
 };
 
 /* What the service is to use, set by tts_stream_configure() / tts_stream_set_voice() / ..._set_instructions() */
@@ -37,6 +44,7 @@ typedef struct {
     const char *model;
     const char *voice;
     const char *instructions;   /* reading instructions (OpenAI), may be NULL */
+    const char *style;          /* emotion and pace tags put before each sentence (Mistral: "[emotion=calm]"), may be NULL */
     uint32_t version;           /* incremented at each change: the service applies them when it differs */
 } tts_settings_t;
 

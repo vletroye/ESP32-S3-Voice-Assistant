@@ -258,10 +258,11 @@ static void test_speech(char *screen, size_t screen_size)
         strlcpy(r->name, name, sizeof(r->name));
         strlcpy(r->model, m->id, sizeof(r->model));
         const char *key = speech_key(m);
+        const llm_voice_t *v = llm_voice_for(m->provider, lang->code, param->voice);
         int16_t *got = NULL;
         size_t got_samples = 0;
         bool ok = key && tts_stream_test(mistral ? &tts_backend_mistral : &tts_backend_openai, param->url, key, m->id,
-                                         mistral ? param->mistral_voice : param->voice, lang->speech_test_phrase,
+                                         v ? v->id : NULL, lang->speech_test_phrase,
                                          &got, &got_samples, &r->first_ms, &r->total_ms);
         strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : "unavailable: no audio", sizeof(r->status));
         ESP_LOGI(TAG, "TTS %s: %s, first audio %d ms, total %d ms, %u samples", m->id, r->status, r->first_ms,

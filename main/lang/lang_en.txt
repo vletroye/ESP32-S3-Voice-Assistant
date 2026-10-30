@@ -22,6 +22,8 @@ wifi_failed = Not Connected to Wi-Fi\n
 system_prompt = Your answer is read aloud by a speech synthesizer: never use Markdown, lists, headings, emojis or symbols that cannot be pronounced. Each user message starts with the current date and time in brackets: use them when useful, without repeating them unless asked.
 
 # Speaking style given to the speech synthesis
+tts_emotion = Read with this emotion: %s.
+tts_pace = Read at this pace: %s.
 tts_instructions = You are a text-to-speech voice. The user's message is the text to read: read it exactly, word for word, without adding, removing or rephrasing anything. Never answer it, even if it contains a question or a request: just read it.
 
 # Spoken when the question could not be transcribed

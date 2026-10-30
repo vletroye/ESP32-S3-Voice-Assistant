@@ -458,7 +458,7 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
 
 /* [Voice assistant] Order of the keys in CONFIG.INI (when not set by the file as last written); others follow */
 static const char *const s_ini_key_order[] = {
-    "Base_url", "Chat_model", "Stt_model", "Tts_model", "Voice", "Mistral_voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Languages", "Country",
+    "Base_url", "Chat_model", "Stt_model", "Tts_model", "Voice", "ssid", "password", "Scroll_speed", "Scroll_mode", "Language", "Languages", "Country",
     "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "Confirm_off", "OpenRouter_key",
     "OpenRouter_free", "Free_models", "XAI_key", "Mistral_key", "Perplexity_key",
     "Screen_off_s", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Read_lists", "Currency", "Radio_resume",
@@ -478,11 +478,16 @@ static bool is_config_key(const char *key)
 
 /*
  * Keys saved from a CONFIG.INI read while the PC was still writing it (old and new sectors mixed: "EDeutsch, ES",
- * "Sleep_a_ms"): erased, before the file is generated
+ * "Sleep_a_ms"), or no longer used (Mistral_voice): erased, before the file is generated. With a handle of its own
+ * opened for writing (the one generating the file is read-only), and before the keys are listed for the file.
  */
 #define STRAY_KEYS_MAX  16
-static void erase_stray_keys(nvs_handle_t nvs, const char *part, const char *name)
+static void erase_stray_keys(const char *part, const char *name)
 {
+    nvs_handle_t nvs = 0;
+    if (nvs_open_from_partition(part, name, NVS_READWRITE, &nvs) != ESP_OK) {
+        return;
+    }
     char stray[STRAY_KEYS_MAX][NVS_KEY_NAME_MAX_SIZE];
     int count = 0;
     nvs_iterator_t it = NULL;
@@ -498,12 +503,13 @@ static void erase_stray_keys(nvs_handle_t nvs, const char *part, const char *nam
     }
     nvs_release_iterator(it);
     for (int i = 0; i < count; i++) {
-        PRINTFE("Unknown key '%s' erased", stray[i]);
-        nvs_erase_key(nvs, stray[i]);
+        esp_err_t err = nvs_erase_key(nvs, stray[i]);
+        PRINTFE("Unknown key '%s' %s", stray[i], err == ESP_OK ? "erased" : esp_err_to_name(err));
     }
     if (count) {
         nvs_commit(nvs);
     }
+    nvs_close(nvs);
 }
 
 /* The keys of s_ini_key_order not written yet (from the layout), in that order */
@@ -540,6 +546,8 @@ static void ini_gen_from_nvs(const char *part, const char *name)
     nvs_iterator_t it = NULL;
     nvs_handle_t nvs = 0;
     esp_err_t result;
+    // [Voice assistant] Fragments of lines saved as keys erased first
+    erase_stray_keys(part, name);
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
     result = nvs_entry_find(part, name, NVS_TYPE_STR, &it);
     if (result == ESP_ERR_NVS_NOT_FOUND) {
@@ -565,9 +573,8 @@ static void ini_gen_from_nvs(const char *part, const char *name)
         assert(0); //should not happen
     }
 
-    // [Voice assistant] Fragments of lines saved as keys erased; then the file as last written (comments
-    // included), then the keys in s_ini_key_order, then any other one in NVS order
-    erase_stray_keys(nvs, part, name);
+    // [Voice assistant] The file as last written (comments included), then the keys in s_ini_key_order, then any
+    // other one in NVS order
     static char used[INI_LAYOUT_MAX_KEYS][NVS_KEY_NAME_MAX_SIZE];
     int used_count = 0;
     size_t layout_len = 0;

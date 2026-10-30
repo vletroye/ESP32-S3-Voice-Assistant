@@ -60,6 +60,9 @@ void tts_backend_sentence_start(uint32_t generation);
 /** Audio of the sentence: 24 kHz, 16-bit signed, mono, little-endian (any length, even odd) */
 void tts_backend_audio(const uint8_t *pcm, size_t len);
 
+/** Audio of the sentence already at the 16 kHz of the speaker (16-bit signed, mono): played as it is */
+void tts_backend_audio_16k(const int16_t *samples, size_t count);
+
 /** The sentence is over: status for the log ("completed", "failed"...); failed: sentence lost */
 void tts_backend_sentence_end(const char *status, bool failed);
 

@@ -1338,7 +1338,7 @@ flowchart LR
 | Answer (Gemini) | Gemini API `streamGenerateContent?alt=sse` | `thinkingLevel` `minimal` (Flash-Lite) or `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Speech synthesis (OpenAI) | OpenAI Realtime, `gpt-realtime-2.1-mini`, a voice of `[voices]` (default Marin) | Permanent WebSocket, one response per sentence, read verbatim |
 | Speech synthesis (Mistral) | Mistral `POST /v1/audio/speech`, `voxtral-mini-tts-3-0`, a voice of `[voices]` (Lea in French) | One streamed request per sentence, the sentences already waiting joined to it (up to 600 characters: a request takes 0.7 to 1 s to start, and its audio comes only ~1.15 times faster than spoken), with the emotion and pace tags of the voice before it (`response_format: wav`, `stream: true`: server-sent events of base64 16-bit audio at 24 kHz); 600 ms of audio kept in reserve before playing; connection kept alive, events read in 4 KB blocks, and warmed up while the user speaks when unused for 30 s |
-| Speech synthesis (Deepgram) | Deepgram `POST /v1/speak`, Aura-2, a voice of `[voices]` (Agathe in French) | One request per sentence, the voice as its `model` (`aura-2-agathe-fr`), raw 16-bit audio at 24 kHz (`encoding=linear16`, `container=none`) played as it comes; connection kept alive, warmed up while the user speaks when unused for 30 s |
+| Speech synthesis (Deepgram) | Deepgram `POST /v1/speak`, Aura-2, a voice of `[voices]` (Agathe in French) | One request per sentence, the voice as its `model` (`aura-2-agathe-fr`), 8-bit mu-law audio at 16 kHz (`encoding=mulaw`, `sample_rate=16000`, `container=none`: 16 KB a second, as Deepgram is far, ~90 ms, and the TCP window of the device small; 16-bit 24 kHz audio, 48 KB a second, came slower than spoken) decoded and played as it comes; connection kept alive, warmed up while the user speaks when unused for 30 s |
 | Playback | local | 24 → 16 kHz resampling, short fade-out at the end of each sentence (no click), I2S fixed at 16 kHz (shared with the mics) |
 
 The stages overlap: FreeRTOS tasks are chained through queues (model text → sentences → synthesis →
@@ -1404,7 +1404,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `tts_backend.h` | Interface of a speech synthesis service (`start`, `stop`, `upkeep`, `say`) and the helpers it calls back |
 | `ai_provider_openai_tts.c` | OpenAI Realtime speech (permanent WebSocket, one response per sentence) |
 | `ai_provider_mistral_tts.c` | Mistral Voxtral speech (HTTP server-sent events, WAV 16-bit, keep-alive), emotion and pace tags before each sentence |
-| `ai_provider_deepgram_tts.c` | Deepgram Aura-2 speech (HTTP, raw 16-bit audio streamed, keep-alive), the voice as the model |
+| `ai_provider_deepgram_tts.c` | Deepgram Aura-2 speech (HTTP, 16 kHz mu-law audio streamed and decoded, keep-alive), the voice as the model |
 | `stt_stream.c` | Transcription engine shared by the services: audio buffer in PSRAM, resampling when needed, connection kept or opened per question, transcript; transcription of a recorded sentence for the model test |
 | `stt_backend.h` | Interface of a transcription service (URL, `session.update`, message types, events) |
 | `ai_provider_openai_stt.c` | OpenAI Realtime transcription (24 kHz, permanent WebSocket) |

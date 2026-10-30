@@ -272,6 +272,25 @@ void tts_backend_audio(const uint8_t *pcm, size_t len)
     push_audio(s_resampled, count, generation);
 }
 
+void tts_backend_audio_16k(const int16_t *samples, size_t count)
+{
+    uint32_t generation = s_sentence_generation;
+    if (!s_sentence_active || generation != s_generation || count == 0) {
+        return;
+    }
+    if (!s_first_audio_us) {
+        s_first_audio_us = esp_timer_get_time();
+    }
+    s_sentence_has_audio = true;
+    s_audio_bytes += count * sizeof(int16_t) * 3 / 2;     // as at 24 kHz, for the logs
+    s_last_sample = samples[count - 1];
+    if (s_capturing) {
+        capture(samples, count);
+        return;
+    }
+    push_audio(samples, count, generation);
+}
+
 void tts_backend_sentence_end(const char *status, bool failed)
 {
     s_test_first_ms = s_first_audio_us ? (int)((s_first_audio_us - s_sentence_us) / 1000) : -1;

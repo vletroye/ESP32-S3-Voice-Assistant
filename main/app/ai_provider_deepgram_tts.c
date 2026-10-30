@@ -5,8 +5,12 @@
  *
  * Deepgram speech (Aura-2): one HTTP request per sentence, its raw audio read as it comes,
  *
- *   POST https://api.deepgram.com/v1/speak?model=aura-2-agathe-fr&encoding=linear16&sample_rate=24000&container=none
- *   (header "Authorization: Token <key>") {"text": "..."} -> 24 kHz 16-bit mono samples
+ *   POST https://api.deepgram.com/v1/speak?model=aura-2-agathe-fr&encoding=mulaw&sample_rate=16000&container=none
+ *   (header "Authorization: Token <key>") {"text": "..."} -> 16 kHz 8-bit mu-law mono samples
+ *
+ * Mu-law at the 16 kHz of the speaker: 16 KB a second of speech. Deepgram's servers are far (~90 ms round trip)
+ * and the TCP window of the device small (5760 bytes): about 26 KB/s come, less than the 48 KB/s of 16-bit
+ * audio at 24 kHz, which was played with gaps.
  *
  * The voice is the model of the request (aura-2-<name>-<language>, the voice id of [voices] in AGENTS.INI); the
  * model of [tts] ("aura-2") only names the service and its price. The connection is kept between sentences
@@ -26,7 +30,7 @@
 #include "tts_stream.h"
 #include "tts_backend.h"
 
-#define DEEPGRAM_TTS_URL        "https://api.deepgram.com/v1/speak?encoding=linear16&sample_rate=24000&container=none"
+#define DEEPGRAM_TTS_URL        "https://api.deepgram.com/v1/speak?encoding=mulaw&sample_rate=16000&container=none"
 #define DEEPGRAM_TTS_VOICE      "aura-2-thalia-en"
 #define DEEPGRAM_TTS_TIMEOUT_MS 15000
 #define DEEPGRAM_TTS_READ_CHUNK 4096
@@ -40,6 +44,14 @@ static char *s_auth = NULL;
 static char *s_url = NULL;
 /* Last request answered (esp_timer us) */
 static int64_t s_last_used_us = 0;
+
+/* G.711 mu-law byte -> 16-bit sample */
+static int16_t mulaw_decode(uint8_t u)
+{
+    u = ~u;
+    int t = (((u & 0x0F) << 3) + 0x84) << ((u & 0x70) >> 4);
+    return (int16_t)((u & 0x80) ? (0x84 - t) : (t - 0x84));
+}
 
 static void drop_client(void)
 {
@@ -144,7 +156,11 @@ static void request(const char *text, uint32_t generation, bool warm_up)
         status_text = "failed";
         failed = (status <= 0);
     } else {
-        // Raw samples: an odd byte cut between two blocks is kept by tts_backend_audio()
+        // A byte a sample, decoded to 16 bits (PSRAM)
+        static int16_t *samples = NULL;
+        if (!samples) {
+            samples = heap_caps_malloc(DEEPGRAM_TTS_READ_CHUNK * sizeof(int16_t), MALLOC_CAP_SPIRAM);
+        }
         size_t received = 0;
         while ((n = esp_http_client_read(s_client, chunk, DEEPGRAM_TTS_READ_CHUNK)) > 0) {
             if (!warm_up && generation != tts_backend_generation()) {
@@ -152,8 +168,11 @@ static void request(const char *text, uint32_t generation, bool warm_up)
                 break;
             }
             received += n;
-            if (!warm_up) {
-                tts_backend_audio((const uint8_t *)chunk, n);
+            if (!warm_up && samples) {
+                for (int i = 0; i < n; i++) {
+                    samples[i] = mulaw_decode((uint8_t)chunk[i]);
+                }
+                tts_backend_audio_16k(samples, n);
             }
         }
         ESP_LOGI(TAG, "%s%u KB of audio received in %lld ms", warm_up ? "warm-up: " : "", (unsigned)(received / 1024),

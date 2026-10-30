@@ -646,6 +646,8 @@ static esp_err_t backup_config(nvs_handle_t handle)
     // Who the assistant is, per language (PERSO_FR.TXT...)
     static const char *const s_persona_files[][2] = {
         { "/spiffs/persona_fr.txt", "PERSO_FR.TXT" }, { "/spiffs/persona_en.txt", "PERSO_EN.TXT" },
+        { "/spiffs/persona_nl.txt", "PERSO_NL.TXT" }, { "/spiffs/persona_de.txt", "PERSO_DE.TXT" },
+        { "/spiffs/persona_es.txt", "PERSO_ES.TXT" }, { "/spiffs/persona_it.txt", "PERSO_IT.TXT" },
     };
     for (size_t i = 0; i < sizeof(s_persona_files) / sizeof(s_persona_files[0]); i++) {
         FILE *pf = fopen(s_persona_files[i][0], "r");

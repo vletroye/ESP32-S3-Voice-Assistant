@@ -350,7 +350,7 @@ settings_saved = Enregistré.
 
 # Configuration screen, icon "soft reset": its confirmation
 soft_title = Réinitialisation douce
-soft_text = Remettre les réglages par défaut et les fichiers d'origine (VOICE_ et LANG_ FR/EN, COUNTRY.TXT, AGENTS.INI) ? Le Wi-Fi, les clés API, Homey, les PERSO_xx.TXT, MEMORY.TXT et les fichiers des langues ajoutées sont gardés. Puis l'appareil redémarre.
+soft_text = Remettre les réglages par défaut et les fichiers d'origine (VOICE_ et LANG_ FR/EN/NL/DE/ES/IT, COUNTRY.TXT, AGENTS.INI) ? Le Wi-Fi, les clés API, Homey, les PERSO_xx.TXT, MEMORY.TXT et les fichiers des langues ajoutées sont gardés. Puis l'appareil redémarre.
 soft_yes = Réinitialiser
 
 # icon "factory reset": its confirmation

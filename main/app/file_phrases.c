@@ -217,6 +217,14 @@ extern const char s_default_fr_start[] asm("_binary_phrases_fr_txt_start");
 extern const char s_default_fr_end[] asm("_binary_phrases_fr_txt_end");
 extern const char s_default_en_start[] asm("_binary_phrases_en_txt_start");
 extern const char s_default_en_end[] asm("_binary_phrases_en_txt_end");
+extern const char s_default_nl_start[] asm("_binary_phrases_nl_txt_start");
+extern const char s_default_nl_end[] asm("_binary_phrases_nl_txt_end");
+extern const char s_default_de_start[] asm("_binary_phrases_de_txt_start");
+extern const char s_default_de_end[] asm("_binary_phrases_de_txt_end");
+extern const char s_default_es_start[] asm("_binary_phrases_es_txt_start");
+extern const char s_default_es_end[] asm("_binary_phrases_es_txt_end");
+extern const char s_default_it_start[] asm("_binary_phrases_it_txt_start");
+extern const char s_default_it_end[] asm("_binary_phrases_it_txt_end");
 static const struct {
     const char *code;
     const char *start;
@@ -224,6 +232,10 @@ static const struct {
 } s_defaults[] = {
     { "fr", s_default_fr_start, s_default_fr_end },
     { "en", s_default_en_start, s_default_en_end },
+    { "nl", s_default_nl_start, s_default_nl_end },
+    { "de", s_default_de_start, s_default_de_end },
+    { "es", s_default_es_start, s_default_es_end },
+    { "it", s_default_it_start, s_default_it_end },
 };
 
 /* Text of the file of each language of file_lang.c (same index), read at start-up */

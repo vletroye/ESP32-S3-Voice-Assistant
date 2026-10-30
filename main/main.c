@@ -542,7 +542,7 @@ static const char *const s_user_files[] = {
 
 /* Languages whose files are given with the firmware: a soft reset restores them; those of a language added by the
  * user (its translation) are kept */
-static const char *const s_firmware_languages[] = { "fr", "en" };
+static const char *const s_firmware_languages[] = { "fr", "en", "nl", "de", "es", "it" };
 
 /* "phrases_de.txt" is a file of a language (prefix "phrases_", "lang_" or "persona_"), of the firmware's ones? */
 static bool language_file(const char *name, bool *firmware, bool *persona)

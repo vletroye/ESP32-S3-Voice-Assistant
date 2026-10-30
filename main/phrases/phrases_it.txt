@@ -1,0 +1,243 @@
+# Frasi dei comandi vocali, in italiano (file VOICE_IT.TXT del disco di configurazione).
+# Ogni sezione [s_...] porta il nome della lista del codice che riempie; un modello per riga.
+# Modelli: [parte facoltativa], (scelta|altra scelta), annidati se serve: [[ho ]un altra ]domanda
+# Scrivere in minuscolo, accenti conservati, apostrofi e trattini come spazi ("un altra"), senza punteggiatura.
+# Una sezione mancante viene presa dal file inglese; una sezione vuota disattiva il comando.
+# Le righe che iniziano con # sono commenti. File svuotato: riportato alla sua versione originale.
+
+[s_goodbyes]
+# Dette da sole, rimandano l'assistente in standby senza risposta (conversazione cancellata);
+# se la risposta dell'assistente finisce con una di esse, va anche in standby dopo averla detta
+arrivederci[ esp]
+ciao[ esp]
+a (presto|domani|dopo|più tardi)[ esp]
+ci vediamo[ esp]
+buona (notte|serata|giornata)[ esp]
+buonanotte[ esp]
+(arrivederci|ciao|a presto|a domani)[ esp][ e] (buona notte|buonanotte|buona serata|buona giornata)[ esp]
+
+[s_change_lang]
+cambia[re] (la|di|tua) lingua
+cambia lingua
+un altra lingua
+
+[s_lang_shortcut]
+parla[ in]
+parliamo[ in]
+passa a[ll]
+rispondi in
+
+[s_radio_station]
+# Radio: una stazione per nome ("metti la radio Radio Deejay"), cercata in Radio-Browser
+(metti|mettimi|accendi|fai partire|suona|suonami) la radio
+(metti|mettimi|fai partire|suona|suonami) la stazione
+[voglio ]ascoltare la radio
+
+[s_radio_music]
+# Radio: un genere o un paese ("metti del jazz", "metti musica classica", "metti musica italiana")
+(metti|mettimi|suona|suonami|fai partire) [un po di ][della ]musica[ (in stile|di genere|genere)]
+(mettimi|metti|suona) (del|della|dei|degli|delle|dell|un po di)
+
+[s_radio_next]
+# Radio: la stazione successiva della lista (solo quando una radio suona o è sospesa)
+successiva
+prossima
+[la ](radio|stazione) (successiva|seguente)
+(metti|passa al|passa alla|vai alla) [la ](successiva|prossima)[ (radio|stazione)]
+
+[s_radio_previous]
+precedente
+[la ](radio|stazione) precedente
+(metti|torna alla|ritorna alla) [la ]precedente[ (radio|stazione)]
+
+[s_radio_stop]
+# Radio: fermata, senza ripresa allo standby (solo quando una radio suona o è sospesa)
+stop
+basta
+(ferma|spegni|stacca) (la|questa) (radio|musica)
+
+[s_radio_resume]
+(rimetti|riaccendi|riprendi|fai ripartire) la (radio|musica)
+
+[s_radio_fav_add]
+# Radio: la stazione attuale aggiunta ai preferiti (RADIO.TXT)
+(aggiungi|metti|salva) (questa|la) (radio|stazione) (ai|nei|tra i) [miei ]preferiti
+(aggiungila|mettila|salvala) (ai|nei|tra i) [miei ]preferiti
+
+[s_radio_fav_remove]
+(togli|rimuovi|elimina|cancella) (questa|la) (radio|stazione) dai [miei ]preferiti
+(toglila|rimuovila|eliminala|cancellala) dai [miei ]preferiti
+
+[s_radio_favorites]
+# Radio: i preferiti, uno dopo l'altro ("successiva")
+(metti|mettimi|suona|suonami|fai partire) i miei preferiti
+(metti|mettimi|suona|suonami|fai partire) (le mie|una delle mie|la mia) (radio|stazione|stazioni) preferit(a|e)
+
+[s_radio_what]
+# Radio: la stazione e il titolo in onda
+(che|quale) (radio|stazione) è[ questa]
+cosa (sta suonando|stiamo ascoltando|c è in onda)
+(che|quale) (canzone|brano|pezzo) è[ questo| questa]
+come si chiama (questa canzone|questo brano|questo pezzo)
+
+[s_test_models]
+# Fa la stessa domanda a ogni modello e ne misura il tempo di risposta (SPEED.TXT, velocità in AGENTS.INI)
+(prova|testa) (i|il|il tuo) modell(i|o)
+(prova|testa) i tuoi modelli
+(fai|avvia|lancia) (il|un) test (dei|del) modell(i|o)
+
+[s_fastest_models]
+# I 3 modelli più veloci secondo i test ("prova i modelli"), con il loro tempo medio
+(quali|qual) (sono|è) (i|il) modell(i|o) più veloc(i|e)
+(che|quale) modell(i|o) (è|sono) [il |i ]più veloc(e|i)
+(dimmi|dammi) (il|i) modell(i|o) più veloc(i|e)
+(il|i) modell(i|o) più veloc(i|e)
+
+[s_list_models]
+# Legge, per fornitore, i nomi brevi dei modelli di AGENTS.INI (e i modelli gratuiti di OpenRouter)
+dammi la lista (di tutti i|dei|dei tuoi) modelli[ (disponibili|supportati)]
+elencami [tutti ](i|i tuoi) modelli[ (disponibili|supportati)]
+dimmi (i tuoi|i) modelli[ (disponibili|supportati)]
+quali sono (i|i tuoi) modelli[ (disponibili|supportati)]
+(che|quali) modelli (hai|supporti|ci sono)
+
+[s_change_model]
+cambia[re] (il|di|tuo) modello
+cambia modello
+un altro modello
+
+[s_model_shortcut]
+(usa|prendi|scegli) il modello
+passa al modello
+modello[ numero]
+
+[s_change_voice]
+cambia[re] (la|di|tua|mia) voce
+cambia voce
+[un ]altra voce
+
+[s_voice_shortcut]
+(usa|prendi|metti|scegli) la voce
+passa alla voce
+[la ]voce[ numero]
+
+[s_change_stt]
+cambia[re] (la|di|tua) trascrizione
+cambia[re] (il|di|tuo) riconoscimento vocale
+cambia[re] (lo|il|di) (stt|s t t)
+
+[s_change_tts]
+cambia[re] (la|di|tua) sintesi vocale
+cambia[re] (il|di) (tts|t t s)
+cambia[re] (il|di|tuo) motore vocale
+
+[s_new_conversation]
+(iniziamo|cominciamo|inizia|comincia) una nuova (conversazione|discussione|chiacchierata)
+(ricominciamo|ripartiamo) da (zero|capo)
+nuova (conversazione|discussione)
+[ho ]un altra domanda
+altra domanda
+passiamo ad altro
+parliamo d altro
+parliamo di altro
+cambiamo argomento
+cambio di argomento
+
+[s_edit_config]
+# "config" e "configurazione": come la trascrizione li scrive spesso
+voglio (modificare|cambiare|aprire) (la|il|i file di) config[urazione]
+(modifica|apri) (la|il|i file di) config[urazione]
+[passa in |vai in ]modalità (configurazione|di configurazione)
+[passa in |vai in ]modalita (configurazione|di configurazione)
+
+[s_restart]
+# Detta da sola (o con "per favore"): l'assistente si riavvia
+(riavvia|riavviati)
+(fai|lancia) un riavvio
+riavvio
+
+[s_clock_on]
+# Detta da sola: l'ora e la data appaiono sullo schermo di standby (Show_clock di CONFIG.INI)
+(mostra|visualizza|rimetti|attiva) (l ora|l orologio)
+(mostra|visualizza) la data e l ora
+
+[s_clock_off]
+# Detta da sola: l'ora e la data non appaiono più sullo schermo di standby
+(nascondi|togli|disattiva|spegni) (l ora|l orologio)
+(nascondi|togli) la data e l ora
+non mostrare più (l ora|l orologio)
+
+[s_open_settings]
+(apri|mostra) le impostazioni
+vai nelle impostazioni
+
+[s_change_country]
+cambia[re] (il mio|di|il) paese
+
+[s_change_city]
+cambia[re] (la mia|di|la) città
+cambia[re] (la mia|di|la) citta
+
+[s_answer_prefix]
+# Parole prima del nome in una risposta ("abito a Evere"), ignorate; gli articoli restano ("L Aia")
+(abito|vivo) (a|in)
+(la mia città|la mia citta|il mio paese) è
+è
+a
+in
+
+[s_yes]
+sì
+si
+certo
+esatto
+esattamente
+[lo ]confermo
+confermato
+è così
+d accordo
+va bene
+ok[ay]
+certamente
+assolutamente
+giusto
+corretto
+affermativo
+
+[s_no]
+# Risposta negativa a una domanda (escludere un modello lento dopo la prova dei modelli)
+no
+non serve
+non c è bisogno
+assolutamente no
+(tienilo|mantienilo)
+non escluderlo
+mai
+
+[s_courtesy]
+# Parole ammesse dopo la risposta di una scorciatoia ("parla inglese per favore")
+per favore
+per piacere
+adesso
+ora
+
+[s_one_alone]
+# "un" / "uno" / "una" valgono 1 solo detti da soli: altrove sono articoli
+(un|uno|una)
+[il ]numero (uno|una)
+
+[s_remember]
+ricorda[ti][ bene] che
+non dimenticare che
+(annota|segna|memorizza) che
+
+[s_forget]
+dimentica[ il fatto] che
+
+[s_forget_all]
+dimentica tutto
+(cancella|svuota)[ tutta] la tua memoria
+
+[s_list]
+dimmi[ tutto] (quello|ciò|cio) che (hai memorizzato|ricordi)
+(cosa|che cosa) (hai memorizzato|ricordi)

@@ -33,6 +33,14 @@ extern const char s_default_fr_start[] asm("_binary_lang_fr_txt_start");
 extern const char s_default_fr_end[] asm("_binary_lang_fr_txt_end");
 extern const char s_default_en_start[] asm("_binary_lang_en_txt_start");
 extern const char s_default_en_end[] asm("_binary_lang_en_txt_end");
+extern const char s_default_nl_start[] asm("_binary_lang_nl_txt_start");
+extern const char s_default_nl_end[] asm("_binary_lang_nl_txt_end");
+extern const char s_default_de_start[] asm("_binary_lang_de_txt_start");
+extern const char s_default_de_end[] asm("_binary_lang_de_txt_end");
+extern const char s_default_es_start[] asm("_binary_lang_es_txt_start");
+extern const char s_default_es_end[] asm("_binary_lang_es_txt_end");
+extern const char s_default_it_start[] asm("_binary_lang_it_txt_start");
+extern const char s_default_it_end[] asm("_binary_lang_it_txt_end");
 
 static const struct {
     const char *code;
@@ -41,6 +49,10 @@ static const struct {
 } s_defaults[] = {
     { "fr", s_default_fr_start, s_default_fr_end },
     { "en", s_default_en_start, s_default_en_end },
+    { "nl", s_default_nl_start, s_default_nl_end },
+    { "de", s_default_de_start, s_default_de_end },
+    { "es", s_default_es_start, s_default_es_end },
+    { "it", s_default_it_start, s_default_it_end },
 };
 
 /* Languages offered (their phrase and persona files are read too), from Languages of CONFIG.INI */
@@ -755,7 +767,15 @@ bool app_lang_create(const char *code, const char *name)
 {
     size_t len = 0;
     if (default_of(code, &len)) {
-        return false;   // given with the firmware (installed when missing)
+        // Given with the firmware: installed now when missing, to be seen on the configuration drive
+        char own[48];
+        snprintf(own, sizeof(own), LANG_FILE_FORMAT, code);
+        char *text = read_file(own);
+        if (is_blank(text)) {
+            install_default(code, own);
+        }
+        free(text);
+        return false;
     }
     char path[48];
     snprintf(path, sizeof(path), LANG_FILE_FORMAT, code);

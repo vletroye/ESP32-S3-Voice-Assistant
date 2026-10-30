@@ -71,17 +71,19 @@ which has been largely rewritten.
   Gemini 4 Argon (Google), Grok 4.7 (xAI), Mistral Small 4, Medium 3.5 and Large 4 (Mistral AI), Perplexity
   Sonar and five models of other providers with Perplexity's web search, and models reached through OpenRouter
   (3 by default, plus free ones),
-  all listed in `AGENTS.INI` (up to 32); the languages of `Languages` (French and English by default); 10 OpenAI
+  all listed in `AGENTS.INI` (up to 32); the languages of `Languages` (French, English, Dutch, German, Spanish and Italian by default); 10 OpenAI
   voices. The
   language, the model and the voice can also be changed **by voice** ("Change la langue", "Utilise le modèle
   3", "Prends la voix Cedar"); all apply at once, without restarting.
 - **Where you live** (country and town, in `CONFIG.INI` or by voice: "Change mon pays", "Change ma ville"):
   the web search favours local results, and Claude uses this place for news, weather and local questions.
 - **Persona, per language**: who the assistant is (identity, personality, instructions) and the style of its
-  voice, edited in `PERSO_FR.TXT` / `PERSO_EN.TXT` from the PC.
+  voice, edited in `PERSO_<XX>.TXT` from the PC (`PERSO_FR.TXT`, `PERSO_EN.TXT`, `PERSO_NL.TXT`…).
 - **Languages in files**: every text of the device (screen, spoken messages, model instructions, errors) is in
-  `LANG_FR.TXT` / `LANG_EN.TXT`; adding `DE:Deutsch` to `Languages` in `CONFIG.INI` creates the German files from
-  the English ones, ready to be translated. Country names per language in `COUNTRY.TXT`.
+  `LANG_<XX>.TXT`, the voice commands in `VOICE_<XX>.TXT`. **Six languages are given with the firmware**: French,
+  English, Dutch, German, Spanish and Italian (all made from the French files, the reference). Adding another one,
+  e.g. `PT:Português`, to `Languages` in `CONFIG.INI` creates its files from the English ones, ready to be
+  translated. Country names per language in `COUNTRY.TXT`.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
   (with the history of the last exchanges).
@@ -563,10 +565,10 @@ Tapping one stops the countdown and asks for a confirmation:
 - **Soft reset** (circular arrows): the settings of `CONFIG.INI` go back to their defaults (language, model,
   voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`, `Base_url`,
   `Claude_key`, `Gemini_key`, `OpenRouter_key`, `XAI_key`, `Mistral_key`, `Perplexity_key`) and Homey (`Homey_url`, `Homey_key`); the
-  `PERSO_<XX>.TXT` files, `MEMORY.TXT` and the comments of `CONFIG.INI` are kept. `VOICE_FR.TXT`,
-  `VOICE_EN.TXT`, `LANG_FR.TXT`, `LANG_EN.TXT`, `COUNTRY.TXT` and `AGENTS.INI` are replaced by the versions of
-  the firmware (your changes to them are lost); the files of a language you added (`LANG_DE.TXT`,
-  `VOICE_DE.TXT`…) and its column of `COUNTRY.TXT` are kept. Then the device restarts. This is how phrases, texts
+  `PERSO_<XX>.TXT` files, `MEMORY.TXT` and the comments of `CONFIG.INI` are kept. The `VOICE_<XX>.TXT` and
+  `LANG_<XX>.TXT` of the six languages given with the firmware (FR, EN, NL, DE, ES, IT), `COUNTRY.TXT` and
+  `AGENTS.INI` are replaced by the versions of the firmware (your changes to them are lost); the files of a
+  language you added (`LANG_PT.TXT`, `VOICE_PT.TXT`…) and its column of `COUNTRY.TXT` are kept. Then the device restarts. This is how phrases, texts
   or models added to the firmware reach a device whose files already exist (only missing sections and keys are
   added otherwise).
 - **Factory reset** (bin, red): **everything** goes back to the firmware's state: every setting is erased (Wi-Fi,
@@ -633,7 +635,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 | `Language` | Assistant language, one of the codes of `Languages` (also set from the Settings screen or by voice) | `fr`, `en`, `de`… |
-| `Languages` | Languages offered (Settings screen, voice): `CODE:name` separated by commas, the code being the 2-letter ISO 639-1 code the transcription expects. A language added here gets its files at the next start (see [Languages](#languages-lang_xxtxt)) | `FR:Français, EN:English` |
+| `Languages` | Languages offered (Settings screen, voice): `CODE:name` separated by commas, the code being the 2-letter ISO 639-1 code the transcription expects. FR, EN, NL, DE, ES and IT have their files in the firmware; another language added here gets its files, made from the English ones, at the next start (see [Languages](#languages-lang_xxtxt)) | `FR:Français, EN:English, NL:Nederlands, DE:Deutsch, ES:Español, IT:Italiano` |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
 | `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
@@ -763,7 +765,8 @@ rapide.
   persona cannot break the device.
 - **`[voix]`** / **`[voice]`**: the style of the speech synthesis (accent, tone, pace); the firmware puts first the
   order to read the text word for word and never answer it.
-- Section names in French or English (`[identity]`, `[personality]`, `[instructions]`, `[voice]`); several lines
+- Section names in French or English (`[identity]`, `[personality]`, `[instructions]`, `[voice]`; the Dutch,
+  German, Spanish and Italian files use the English ones); several lines
   per section (a blank line starts a new paragraph); `#` lines are comments. A missing section takes the firmware's
   text, an empty one stays empty. The files given with the firmware (`main/persona/`) are installed when missing or
   emptied; a factory reset erases them, a soft reset keeps them.
@@ -809,6 +812,10 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
   seconds). Be patient: wait until the copy is really finished (Windows' progress window closed, or the drive
   ejected) before pressing **Restart**, or the file may be cut, and its texts lost.
 
+**Languages given with the firmware**: French, English, Dutch, German, Spanish and Italian (`main/lang/`,
+`main/phrases/`, `main/persona/`), all made from the French files, the reference. Their files are installed at the
+first start, after a factory reset and when emptied, for the languages of `Languages` (all six by default).
+
 **Adding a language**: add `XX:name` to `Languages` in `CONFIG.INI` (up to 12 languages, 2-letter codes); at
 the next start the device makes `LANG_XX.TXT`, `VOICE_XX.TXT` and `PERSO_XX.TXT` from the English files and
 opens the configuration mode to translate them: see [Adding a new language](#adding-a-new-language-step-by-step).
@@ -839,9 +846,11 @@ NL: Netherlands/Holland, Pays-Bas/Hollande, Niederlande/Holland, Nederland/Holla
 
 ### Adding a new language, step by step
 
-The example adds German (`DE`); the same steps work for any language whose letters the screen can show (see
-[Languages supported on screen](#languages-lang_xxtxt): Latin-1, Latin Extended-A, Greek).
-Nothing has to be built or flashed: everything is done in the files of the configuration drive.
+French, English, Dutch, German, Spanish and Italian are given with the firmware: their files are installed at
+the first start, after a factory reset, and when emptied. The example below adds Portuguese (`PT`); the same steps
+work for any language whose letters the screen can show (see [Languages supported on screen](#languages-lang_xxtxt):
+Latin-1, Latin Extended-A, Greek). Nothing has to be built or flashed: everything is done in the files of the
+configuration drive.
 
 #### 1. Declare the language in `CONFIG.INI`
 
@@ -849,94 +858,100 @@ Nothing has to be built or flashed: everything is done in the files of the confi
   on the drive and add the language to `Languages`:
 
   ```ini
-  Languages = FR:Français, EN:English, DE:Deutsch
+  Languages = FR:Français, EN:English, NL:Nederlands, DE:Deutsch, ES:Español, IT:Italiano, PT:Português
   ```
 
-- The code is the **2-letter ISO 639-1** code (`de`, `nl`, `pl`, `el`…): the transcription is told this code, so
-  it must be a real one. A longer code is left out (warning in the log). The name after `:` is the one shown in the
-  Settings screen: write it in its own language ("Deutsch", "Polski", "Ελληνικά").
+- The code is the **2-letter ISO 639-1** code (`pt`, `pl`, `el`…): the transcription is told this code, so it must
+  be a real one. A longer code is left out (warning in the log). The name after `:` is the one shown in the
+  Settings screen: write it in its own language ("Português", "Polski", "Ελληνικά").
 - Up to 12 languages. Their order is the order of the Settings screen and of the numbered list read by "change la
   langue".
 - Save, **wait until the copy is finished**, then press **Restart**.
 
 #### 2. The device makes the files of the language
 
-At start-up, for a language of `Languages` that has no files yet, the device:
+At start-up, for a language of `Languages` that has no files yet and is not given with the firmware, the device:
 
-- creates **`LANG_DE.TXT`**, **`VOICE_DE.TXT`** and **`PERSO_DE.TXT`**, copies of the English files, with a header
+- creates **`LANG_PT.TXT`**, **`VOICE_PT.TXT`** and **`PERSO_PT.TXT`**, copies of the English files, with a header
   asking to translate them;
-- adds an empty `DE` column at the end of **`COUNTRY.TXT`** (if the file has none: German already has one);
-- shows "Nouvelle langue « Deutsch » : ses fichiers ont été créés en anglais…", then restarts in configuration
+- adds an empty `PT` column at the end of **`COUNTRY.TXT`**;
+- shows "Nouvelle langue « Português » : ses fichiers ont été créés en anglais…", then restarts in configuration
   mode: the new files show up on the drive.
 
-Until they are translated, the language works with English texts: the transcription is already German, but the
-persona (and so the answers) and the spoken messages are English.
+Until they are translated, the language works with English texts: the transcription is already Portuguese, but
+the persona (and so the answers) and the spoken messages are English.
 
-#### 3. Translate `LANG_DE.TXT`
+#### 3. Translate `LANG_PT.TXT`
 
-Texts of the device: screen, spoken messages, model instructions, errors.
+Texts of the device: screen, spoken messages, model instructions, errors. The files of the six languages given
+with the firmware (`main/lang/lang_<code>.txt`) are good models.
 
 - Translate the text after `=` on each line; **never change the keys** (left of `=`).
 - Keep the **`%s`, `%d`, `%02d`… in the same number and order** as in English. A text lacking its last ones gets
   them added at its end in `[TO DO: %s]` at the next start; a text with other conversions is replaced by the
   English one. In both cases a screen lists the keys to correct.
 - `\n` is a line break. A text starting or ending with spaces, or empty, is written between quotes
-  (`and_word = " und "`).
+  (`and_word = " e "`).
 - Lists are separated by commas and must keep their number of items: `weekdays` (7, Sunday first, short, shown
-  under the clock: `SO, MO, DI, MI, DO, FR, SA`), `weekdays_long` (7, Sunday first), `months` (12).
+  under the clock: `DOM, SEG, TER, QUA, QUI, SEX, SAB`), `weekdays_long` (7, Sunday first), `months` (12).
 - Lines needing care:
-  - `language_names`: how German names the languages, said to change language: `code: name/other name, …` in
-    lower case, e.g. `de: deutsch, fr: französisch/franzoesisch, en: englisch, nl: niederländisch/holländisch`.
-    Write every language of `Languages`: its first name is the one read in the numbered list ("1, französisch").
+  - `language_names`: how Portuguese names the languages, said to change language: `code: name/other name, …` in
+    lower case, e.g. `pt: português/portugues, fr: francês/frances, en: inglês/ingles, de: alemão/alemao`.
+    Write every language of `Languages`: its first name is the one read in the numbered list ("1, francês").
   - `numbers`: the numbers 1 to 13 as said to choose a model, a voice or a language, alternatives separated by
-    `/`: `eins/erste/ersten, zwei/zweite/zweiten, drei/dritte/dritten, …`.
+    `/`: `primeiro/primeira, dois/segundo/segunda, três/tres/terceiro/terceira, …` ("um" said alone: see
+    `[s_one_alone]` below).
   - `decimal_mark` (`,` or `.`), `second_one` / `seconds`, and `second_one_below_ms` (below this time, "1,2
     seconds" takes the singular; `0` if the language always uses the plural).
-  - `lang_already`, `lang_switched`: they name **this** language ("Ich spreche schon Deutsch.").
+  - `lang_already`, `lang_switched`: they name **this** language ("Já falo português.").
   - `system_prompt`, `tts_instructions`, `location_line`, `home_line`, `memory_header`, `now_format`: given to the
     models; translate them faithfully, they rule how the device works (no Markdown, date in brackets…).
 - Lines that start with `[TODO:` are texts added in English after a firmware update: translate them and remove
   the `[TODO:` and `]`.
 
-#### 4. Translate `VOICE_DE.TXT`
+#### 4. Translate `VOICE_PT.TXT`
 
 Phrases of the voice commands.
 
 - One section per command (`[s_change_lang]`, `[s_goodbyes]`, `[s_yes]`…), one pattern per line; keep the section
-  names. Patterns: `[optional part]`, `(choice|choice)`, e.g. `wechsle (die|deine) sprache` (see
+  names. Patterns: `[optional part]`, `(choice|choice)`, e.g. `muda[r] (o|de) idioma` (see
   [Writing voice phrases](#writing-voice-phrases-patterns)).
 - Write the phrases as the transcription writes them: in lower case is enough (the case is ignored), with the
-  accents of the language.
-- A section left out takes the English phrases; an **empty** section disables the command in German.
-- Sections needing care: `[s_lang_shortcut]` (the start of "sprich Deutsch", followed by a language name),
-  `[s_answer_prefix]` (words before an answer: "ich wohne in"), `[s_yes]` / `[s_no]`, `[s_courtesy]` (words allowed
-  after a short answer: "bitte"), `[s_one_alone]` ("eins" said alone means 1), `[s_goodbyes]` (back to sleep).
+  accents of the language, apostrophes as spaces, without punctuation.
+- A section left out takes the English phrases; an **empty** section disables the command in Portuguese.
+- Sections needing care: `[s_lang_shortcut]` (the start of "fala inglês", followed by a language name),
+  `[s_answer_prefix]` (words before an answer: "eu moro em"), `[s_yes]` / `[s_no]`, `[s_courtesy]` (words allowed
+  after a short answer: "por favor"), `[s_one_alone]` ("um" / "uma" mean 1 only said alone: elsewhere they are
+  articles), `[s_goodbyes]` (back to sleep).
 
-#### 5. Translate `PERSO_DE.TXT`
+#### 5. Translate `PERSO_PT.TXT`
 
 Who the assistant is.
 
 - Keep the section names **in English or French**: `[identity]`, `[personality]`, `[instructions]`, `[voice]`
-  (a German `[Identität]` would be ignored).
-- `[identity]` must say that the assistant **speaks German** ("Du bist ein Sprachassistent namens ESP, der Deutsch
-  spricht."): it decides the language of the answers.
-- `[voice]`: accent, tone and pace of the speech synthesis ("Sprich Deutsch mit hochdeutscher Aussprache…").
+  (a Portuguese `[identidade]` would be ignored).
+- `[identity]` must say that the assistant **speaks Portuguese** ("És um assistente de voz chamado ESP que fala
+  português."): it decides the language of the answers.
+- `[voice]`: accent, tone and pace of the speech synthesis ("Fala português com sotaque europeu…").
+- Add voices that speak the language to `[voices]` of `AGENTS.INI` (OpenAI's speak every language; Mistral has
+  `Gabriela` for Portuguese): see [Voices](#voices-voices-of-agentsini).
 
 #### 6. Complete the other files
 
-- **`COUNTRY.TXT`**: fill the `DE` column (country names in German, other names after `/`). An empty name takes
+- **`COUNTRY.TXT`**: fill the `PT` column (country names in Portuguese, other names after `/`). An empty name takes
   the English one.
-- **`LANG_FR.TXT`, `LANG_EN.TXT`** (and the other languages): add the new language to their `language_names`, so
-  that it can be named from them ("parle allemand", "speak German"). French and English already know `de`, `es`,
-  `it`, `nl` and `pt`; for another language add e.g. `pl: polonais` / `pl: polish`. Without it, the language can
-  still be named by its name in `Languages` ("Polski").
+- **`LANG_<XX>.TXT`** of the other languages: add the new language to their `language_names` if it is not there,
+  so that it can be named from them ("parle portugais", "speak Portuguese"). The six languages given with the
+  firmware already know `fr`, `en`, `nl`, `de`, `es`, `it` and `pt`; for another language add e.g.
+  `pl: polonais` / `pl: polish`. Without it, the language can still be named by its name in `Languages`
+  ("Polski").
 
 #### 7. Restart and check
 
 - Save each file and **wait until the copy is finished** (a `LANG_` file is large: tens of seconds), then press
   **Restart**.
-- Choose the language in the Settings screen, or say "parle allemand" / "speak German" / "change la langue" then
-  its number.
+- Choose the language in the Settings screen, or say "parle portugais" / "speak Portuguese" / "change la langue"
+  then its number.
 - At start-up and at each change of language, the files are checked: a screen names the texts added in English or
   whose `%s` differ (**Skip** to go on, **Config** to correct them).
 - The logs (`app_lang`, `phrases`, `persona`) list what was read, added or left out.
@@ -945,6 +960,11 @@ Who the assistant is.
 ESP", fixed by the ESP-SR model), the pronunciations of the providers, models and voices recognised by voice, the
 texts of `COSTS.TXT` (French or English), the subtitle credits filtered from the transcription (French and
 English), and the abbreviations that do not end a sentence (French).
+
+**Files of a language given with the firmware on a device that already had them** (a language added by hand
+before the firmware gave it): the files on the drive are kept, only the sections and keys missing are added. To get
+the firmware's version, empty the file (it is installed again at the next start) or run a soft reset (`VOICE_`
+and `LANG_` files; `PERSO_` files are kept by it: empty them).
 
 **Removing a language**: remove it from `Languages`. Its files stay on the drive (and are kept by the soft reset);
 the factory reset erases them.
@@ -958,7 +978,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | Option | Default | Role |
 | --- | --- | --- |
 | `CONFIG_ASSISTANT_LANGUAGE` | `fr` | Language when `Language` is not set |
-| `CONFIG_ASSISTANT_LANGUAGES` | `FR:Français, EN:English` | Languages offered when `Languages` is not set |
+| `CONFIG_ASSISTANT_LANGUAGES` | `FR:Français, EN:English, NL:Nederlands, DE:Deutsch, ES:Español, IT:Italiano` | Languages offered when `Languages` is not set |
 | `CONFIG_ASSISTANT_CHAT_MODEL` | `claude-haiku-5-5` | Model when `Chat_model` is not set |
 | `CONFIG_ASSISTANT_STT_MODEL` | `gpt-live-transcribe` | Transcription model when `Stt_model` is not set |
 | `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
@@ -987,7 +1007,7 @@ An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to chan
 
 ## Voice commands
 
-Phrases recognised by the device itself. Punctuation and case are ignored ("Au revoir !" works), and hyphens
+Phrases recognised by the device itself. Punctuation (¿ ¡ « » included) and case are ignored ("Au revoir !" works), and hyphens
 and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the French and English
 phrases; only those of the language in use are recognised, except "change la langue" and the direct language
 phrases ("parle anglais", "speak French"), recognised in every language of `Languages`. They are written as
@@ -996,7 +1016,7 @@ patterns in one file per language (see [Writing voice phrases](#writing-voice-ph
 ### Writing voice phrases (patterns)
 
 The phrases of the voice commands of `voice_cmd.c` and `file_memory.c` are in **one file per language**:
-`main/phrases/phrases_fr.txt`, `main/phrases/phrases_en.txt`. Each list of the code is a **section named after
+`main/phrases/phrases_<code>.txt` (`fr`, `en`, `nl`, `de`, `es`, `it`). Each list of the code is a **section named after
 its variable**, one pattern per line, `#` for comments:
 
 ```text

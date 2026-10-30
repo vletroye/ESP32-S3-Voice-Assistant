@@ -57,7 +57,7 @@ LV_FONT_DECLARE(ui_font_Latin20);
 #define MODEL_ROW_COLOR                 0xB9CCF5
 /* Provider icon on the robot's forehead: gap above the screen of the eyes (60 x 34), which it follows when the
  * robot looks aside while listening */
-#define HEAD_LOGO_GAP_Y                 (20)
+#define HEAD_LOGO_GAP_Y                 (25)
 /* and its shift to the right of their centre (negative: to the left) */
 #define HEAD_LOGO_X                     (-5)
 /* Text under the robot (listening / thinking): lines shown, bottom position (from the screen bottom), right above
@@ -382,6 +382,8 @@ static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width
     lv_obj_set_width(dropdown, dropdown_width);
     lv_obj_set_height(dropdown, lv_pct(100));
     lv_obj_set_style_text_align(dropdown, LV_TEXT_ALIGN_CENTER, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    // No arrow: the font has no glyph for it, it showed as a rectangle
+    lv_dropdown_set_symbol(dropdown, NULL);
     return dropdown;
 }
 
@@ -400,6 +402,7 @@ static void settings_screen_setup(void)
     lv_obj_set_style_pad_column(ui_PanelSettingsRegion, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_left(ui_PanelSettingsRegion, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_width(ui_DropdownSettingsRegion, lv_pct(40));
+    lv_dropdown_set_symbol(ui_DropdownSettingsRegion, NULL);
     uint16_t lang_selected = settings_language_index(param->lang);
     s_lang_stored = lang_selected;
     // The languages offered (Languages of CONFIG.INI), by their names

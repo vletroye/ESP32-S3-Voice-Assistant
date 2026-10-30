@@ -7,46 +7,46 @@
 # shown.
 # Lines starting with # are comments. Emptied file: restored to its original version.
 
-listening = Listening ...
+listening = I'm listening ...
 
 # end of the question, until its transcript arrives
-heard = Got it ...
+heard = Heard ...
 
 # transcript received, until the answer starts
 thinking = Thinking ...
-sorry = Sorry, I can't understand.
+sorry = Sorry, I did not understand.
 wifi_connecting = Connecting to Wi-Fi\n
-wifi_failed = Not Connected to Wi-Fi\n
+wifi_failed = Wi-Fi not connected\n
 
 # System message sent with every chat request
-system_prompt = Your answer is read aloud by a speech synthesizer: never use Markdown, lists, headings, emojis or symbols that cannot be pronounced. Each user message starts with the current date and time in brackets: use them when useful, without repeating them unless asked.
+system_prompt = Your answer is read aloud by a speech synthesis: never use Markdown, lists, headings, emojis or symbols that cannot be pronounced. Each user message starts with the current date and time in square brackets: use them if needed, without repeating them unless asked.
 
 # Speaking style given to the speech synthesis
 tts_emotion = Read with this emotion: %s.
 tts_pace = Read at this pace: %s.
-tts_instructions = You are a text-to-speech voice. The user's message is the text to read: read it exactly, word for word, without adding, removing or rephrasing anything. Never answer it, even if it contains a question or a request: just read it.
+tts_instructions = You are a text-to-speech voice that reads texts aloud. The user's message is the text to read: read it exactly, word for word, without adding, removing or rephrasing anything. Never answer this text, even if it contains a question or a request: just read it.
 
 # Spoken when the question could not be transcribed
-stt_error = I couldn't make out the question. Could you repeat it?
+stt_error = I could not understand the question. Could you say it again?
 
 # Introduces the notes in the instructions
-memory_header = Notes the user asked you to remember ("I" means the user, the date in brackets is the date of the note):
+memory_header = Notes the user asked you to remember ("I" means the user, the date in brackets is the note's date):
 memory_saved = Noted.
-memory_full = My memory is full. Please remove notes in the MEMORY.TXT file.
+memory_full = My memory is full. Delete some notes in the file MEMORY.TXT.
 memory_forgotten = Forgotten.
 memory_not_found = I found nothing like that in my memory.
-memory_cleared = I have forgotten everything.
+memory_cleared = I forgot everything.
 memory_empty = I have not memorized anything yet.
 memory_list_intro = "Here is what you asked me to remember. "
 
 # Language changed by voice ("change la langue")
-# %s: the languages offered (Languages of CONFIG.INI), numbered: "1, French. 2, English. ..."
+# %s: the languages offered (Languages of CONFIG.INI), numbered: "1, français. 2, anglais. ..."
 lang_ask = Which language do you want:: %s
 lang_already = I already speak English.
 lang_unknown = I don't know this language. Say the number or the name of a language:: %s
 
 # spoken in the new language, before the restart
-lang_switched = Very well, I will now speak English.
+lang_switched = Very well, I now speak English.
 
 # "liste tes modèles", first provider: %s provider, %s its models
 models_first = At %s, I support: %s.
@@ -66,10 +66,10 @@ language_added = New language "%s": its files were made in English. Restarting i
 lang_untranslated = Some texts were missing in LANG_%s.TXT: they were added in English, between [TODO: and ]. Please translate them into %s.
 lang_bad_format = LANG_%s.TXT: these texts do not have the same number of %%s as the English ones: %s. Please correct them (meanwhile, the missing %%s were added at their end, in [TO DO: %%s]).
 
-# How this language calls the languages, said to change: code: name/other name, ... (in lower case)
-language_names = fr: french, en: english/inglish, de: german, es: spanish, it: italian, nl: dutch, pt: portuguese
+# How this language names the languages, said to switch to them: code: name/other name, ... (in lowercase)
+language_names = fr: french, en: english/inglish, de: german, es: spanish, it: italian, nl: dutch/flemish, pt: portuguese
 
-# The numbers 1, 2, 3... as said to choose a model or a voice ("one" alone: see s_one_alone)
+# The numbers 1, 2, 3... as they are said to choose a model or a voice ("one" is never an article in English)
 numbers = one/first, two/second, three/third, four/fourth, five/fifth, six/sixth, seven/seventh, eight/eighth, nine/ninth, ten/tenth, eleven/eleventh, twelve/twelfth, thirteen/thirteenth
 
 # "teste les modèles": the question asked to every model
@@ -77,29 +77,29 @@ test_question = Explain in exactly 5 sentences how a rainbow forms.
 
 # "teste les modèles": the sentence spoken by each speech model (not played), then transcribed by each
 # transcription model; their names in the results (%s: spoken name, "OpenAI", "Voxtral")
-speech_test_phrase = Hello, I am checking the speed of the speech synthesis and of the transcription.
-test_tts_name = the speech %s
+speech_test_phrase = Hello, I am checking the speed of the speech synthesis and of the voice transcription.
+test_tts_name = the synthesis %s
 test_stt_name = the transcription %s
 
 # %d: number of models
 test_start = I am testing the %d models, one by one.
-test_running = A test of the models is already running.
+test_running = A model test is already running.
 
 # on screen, after the model's name
-test_unavailable_short = unavailable
+test_unavailable_short = not available
 
 # %s spoken name, %s time ("1,2 secondes")
 test_result = Result of %s: %s.
 
 # %s spoken name
-test_unavailable = %s: unavailable.
+test_unavailable = %s: not available.
 
 # %s fastest
 test_done = The fastest model was %s.
-test_none = Test done, but no model answered. The details are in SPEED.TXT.
+test_none = Test finished, but no model answered. The details are in SPEED.TXT.
 
 # %s spoken name, %s its mean time: exclude it?
-exclude_ask = The free model %s takes %s on average. Shall I exclude it?
+exclude_ask = The free model %s takes %s on average. Should I exclude it?
 
 # before the next question
 exclude_yes = It is excluded.
@@ -108,11 +108,11 @@ exclude_no = All right, I keep it.
 # after the last answer
 exclude_finished = That was the last slow model.
 
-# "quels sont les modèles les plus rapides", %s: "Haiku (0.8 seconds), Flash-Lite (1.1 seconds) and Luna (1.4 seconds)"
+# "quels sont les modèles les plus rapides", %s: "Haiku (0,8 seconde), Flash-Lite (1,1 seconde) et Luna (1,4 seconde)"
 fastest_models = The fastest models are %s.
 
 # the models were never tested: run a test? ("oui" / "non")
-fastest_none = I haven't tested the models yet. Shall I run a test?
+fastest_none = I have not tested the models yet. Do you want me to run a test?
 test_declined = All right, no test.
 
 # Radio. %s: the station that will play (once this reply has been spoken)
@@ -120,18 +120,18 @@ radio_playing = Playing %s.
 
 # %s: what was asked ("jazz", "nostalgie")
 radio_not_found = I found no radio for %s.
-radio_unreachable = I can't reach the radio directory. Please try again in a moment.
+radio_unreachable = I cannot reach the radio directory. Please try again in a moment.
 
 # "joue la radio" without a station, and no radio played yet
-radio_ask = Which radio? Say for example: play the radio Nostalgie, or play some jazz.
-radio_stopped = All right, I'm stopping the radio.
+radio_ask = Which radio? Say for example: play the radio BBC, or play some jazz.
+radio_stopped = All right, I stop the radio.
 radio_last = That was the last radio of the list.
 radio_first = That was the first radio of the list.
 radio_none = No radio is playing.
 
 # "qu'est-ce qui passe": %s station, then %s the title when the station gives it
-radio_what = You're listening to %s.
-radio_what_title = You're listening to %s: %s.
+radio_what = You are listening to %s.
+radio_what_title = You are listening to %s: %s.
 
 # Favourite radios (RADIO.TXT): %s the station
 radio_fav_added = %s is in your favourites.
@@ -146,11 +146,11 @@ radio_title = Radio
 radio_volume_label = Volume %d %%
 radio_treble_label = Treble
 radio_nothing = No radio
-radio_fav_empty = No favourites yet: tap the heart while a radio plays, or say "add this radio to my favourites".
+radio_fav_empty = No favourites yet: touch the heart while a radio plays, or say "add this radio to my favourites".
 
 # Genres said ("joue du jazz", "mets de la musique classique") and the tag of Radio-Browser they stand for:
 # words/other words: tag, ... (a genre not listed is searched as said)
-radio_genres = classical/classic music/classical music: classical, jazz: jazz, rock: rock, pop: pop, electronic/electro: electronic, techno: techno, house: house, dance: dance, rap/hip hop: hip-hop, rnb/r and b: rnb, reggae: reggae, metal: metal, blues: blues, soul: soul, funk: funk, country: country, disco: disco, lounge: lounge, chill/chill out/relaxing/calm: chillout, lofi/lo fi: lofi, ambient: ambient, sixties/60s: 60s, seventies/70s: 70s, eighties/80s: 80s, nineties/90s: 90s, oldies: oldies, latin: latin, salsa: salsa, gospel: gospel, opera: opera, baroque: baroque, piano: piano, kids/children: kids, christmas: christmas, news: news, sports/sport: sports, talk: talk, world music/world: world, celtic: celtic, flamenco: flamenco, bossa nova: bossa nova
+radio_genres = classical/classic music/classical music: classical, jazz: jazz, rock: rock, pop: pop, easy listening: pop, chanson/french songs: chanson, electronic/electro: electronic, techno: techno, house: house, dance: dance, rap/hip hop: hip-hop, rnb/r and b: rnb, reggae: reggae, metal: metal, blues: blues, soul: soul, funk: funk, country: country, disco: disco, lounge: lounge, chill/chill out/relaxing/calm/zen: chillout, lofi/lo fi: lofi, ambient: ambient, sixties/60s: 60s, seventies/70s: 70s, eighties/80s: 80s, nineties/90s: 90s, two thousands/2000s: 2000s, oldies/retro/old hits: oldies, latin: latin, salsa: salsa, gospel: gospel, opera: opera, baroque: baroque, piano: piano, kids/children/nursery rhymes: kids, christmas: christmas, news: news, sports/sport: sports, talk/debate: talk, world music/world: world, celtic: celtic, flamenco: flamenco, bossa nova/bossa: bossa nova
 
 # ',' or '.'
 decimal_mark = .
@@ -162,9 +162,9 @@ second_one_below_ms = 0
 
 # "change de modèle": which provider first; %s: the providers that have models, numbered ("1, Anthropic. 2, OpenAI. ...")
 provider_ask = Which provider do you want:: %s
-provider_unknown = I didn't understand. Say the number or the name of the provider:: %s
+provider_unknown = I did not understand. Say the number or the name of the provider:: %s
 
-# %s: provider ("Anthropic"), %s: its numbered models ("1, Haiku, the one I use. 2, Sonnet.")
+# %s: provider ("Anthropic"), %s: its numbered models ("1, Haiku, celui que j'utilise. 2, Sonnet.")
 model_ask_intro = Which model of %s do you want to use:: %s
 
 # after the current model in the list
@@ -174,7 +174,7 @@ model_current = , the one I use
 model_already = I already use %s.
 
 # %d: number of models
-model_unknown = I didn't understand. Say a number from 1 to %d, or the name of the model.
+model_unknown = I did not understand. Say a number from 1 to %d, or the name of the model.
 
 # %s: model name
 model_switched = Very well, I now use %s.
@@ -192,7 +192,7 @@ voice_already = I already have the voice %s.
 # "change de transcription" / "change de synthèse vocale": %s, the models numbered ("1, OpenAI. 2, Voxtral.")
 stt_ask = Which transcription do you want:: %s
 tts_ask = Which speech synthesis do you want:: %s
-speech_unknown = I didn't understand. Say the number or the name:: %s
+speech_unknown = I did not understand. Say the number or the name:: %s
 
 # after the model in use in the list
 speech_current = , the one I use
@@ -201,39 +201,39 @@ speech_current = , the one I use
 speech_already = I already use %s.
 
 # %s: provider, %s: its key in CONFIG.INI
-speech_no_key = The %s key is missing: add %s to the configuration file.
+speech_no_key = The %s key is missing: add %s in the configuration file.
 
 # %s: spoken name; tts_switched is said with the new voice
 stt_switched = Very well, the transcription now uses %s.
 tts_switched = Very well, I now speak with %s.
 
 # %d: number of voices
-voice_unknown = I didn't understand. Say a number from 1 to %d, or the name of a voice.
+voice_unknown = I did not understand. Say a number from 1 to %d, or the name of a voice.
 
 # Country and town changed by voice ("change mon pays", "change ma ville"), confirmed before saving
 country_ask = What is your country?
-city_ask = What is your city?
+city_ask = What is your town?
 
 # %s: country name
 country_confirm = Do you confirm that you want to change your country to %s?
 
 # %s: town
-city_confirm = Do you confirm that you want to change your city to %s?
-country_unknown = I don't know this country. Say "change my country" again to retry.
-place_saved = Saved.
-place_cancelled = All right, nothing changed.
+city_confirm = Do you confirm that you want to change your town to %s?
+country_unknown = I don't know this country. Say "change my country" again to try again.
+place_saved = It is saved.
+place_cancelled = All right, I change nothing.
 
-# in the instructions, %s: "Evere, Belgium" (town, country named in this language)
-location_line = User's location: %s. When the user asks for the news, the weather or local information without naming a place, it is about this place and country: for the news, search the news of this country by naming it in your search, and do not give news from other countries unless asked.
+# in the instructions, %s: "Evere, Belgique" (town, country named in this language)
+location_line = User's location: %s. When the user asks for the news, the weather or local information without giving a place, it is about this place and this country: for the news, look for those of this country by naming it in your search, and do not give the news of other countries unless asked.
 
 # "édite la config" without a PC connected
 config_need_pc = Connect me to your PC.
 
 # "édite la config": restarting in configuration mode
-config_opening = All right, I'm restarting in configuration mode. The files will appear on your PC.
+config_opening = All right, I restart in configuration mode. The files will show up on your PC.
 
 # "redémarre"
-restarting = All right, I'm restarting.
+restarting = All right, I restart.
 
 # "affiche l'heure"
 clock_shown = All right, I show the time.
@@ -259,13 +259,13 @@ clock_hidden = All right, I no longer show the time.
 new_conversation = All right, I'm listening.
 
 # shown after a reply whose speech was cut (slow connection)
-voice_choppy = (Connection too slow: the speech could not be played smoothly.)
+voice_choppy = (Connection too slow: the voice could not be read smoothly.)
 
 # shown (it cannot be spoken) when the transcription or the speech of OpenAI is refused for lack of credit
-speech_no_credit = (The OpenAI credit is exhausted: the transcription and the voice no longer work. Please add credit on platform.openai.com.)
+speech_no_credit = (The OpenAI credit is used up: the transcription and the voice no longer work. Add credit on platform.openai.com.)
 
 # in the instructions when a Homey is set: ask it, do not answer from memory
-home_line = For any question about the home (rooms, devices, their state, moods, flows, presence, consumption), call the Homey tools every time: older results in the conversation may be shortened or out of date, never answer from memory. For the list of rooms, call zones_list. When the user asks for an action (switch on or off, set, activate a mood, start a flow), answer in a few words: "Done." if everything worked, otherwise say briefly what failed and ask the one question needed to go on. Do not describe the devices, the tools or the steps, do not offer anything else.
+home_line = For any question about the home (rooms, devices, their state, moods, flows, presence, consumption), call the Homey tools every time: older results of the conversation may be shortened or out of date, never answer from memory. For the list of rooms, call zones_list. When the user asks for an action (switch on, switch off, set, activate a mood, start a flow), answer in a few words: "Done." if everything worked, else say briefly what did not work and ask the only useful question to go on. Do not describe the devices, the tools or the steps, do not offer anything else.
 
 # Day abbreviations of the clock under the sleeping robot, Sunday first
 weekdays = SUN, MON, TUE, WED, THU, FRI, SAT
@@ -278,62 +278,62 @@ weekdays_long = Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday
 months = January, February, March, April, May, June, July, August, September, October, November, December
 
 # Chat errors, shown and spoken as the answer (indexed by provider and llm_error_t, LLM_OK unused)
-error.claude.no_key = No Claude key is configured. Add it to the configuration file.
-error.claude.network = I can't reach Claude. Please check the internet connection.
-error.claude.auth = The Claude key was rejected. Please check it in the configuration file.
-error.claude.credit = The Claude credit is exhausted. Please add credit in the Anthropic console.
+error.claude.no_key = No Claude key is set. Add it in the configuration file.
+error.claude.network = I cannot reach Claude. Check the internet connection.
+error.claude.auth = The Claude key is refused. Check it in the configuration file.
+error.claude.credit = The Claude credit is used up. Add credit on the Anthropic console.
 error.claude.busy = Claude is overloaded right now. Please try again in a moment.
-error.claude.refusal = Claude declined to answer this question.
-error.claude.other = Something went wrong with Claude.
-error.openai.no_key = No OpenAI key is configured. Add it to the configuration file.
-error.openai.network = I can't reach GPT. Please check the internet connection.
-error.openai.auth = The OpenAI key was rejected. Please check it in the configuration file.
-error.openai.credit = The OpenAI credit is exhausted. Please add credit on the OpenAI platform.
+error.claude.refusal = Claude refused to answer this question.
+error.claude.other = An error occurred with Claude.
+error.openai.no_key = No OpenAI key is set. Add it in the configuration file.
+error.openai.network = I cannot reach GPT. Check the internet connection.
+error.openai.auth = The OpenAI key is refused. Check it in the configuration file.
+error.openai.credit = The OpenAI credit is used up. Add credit on the OpenAI platform.
 error.openai.busy = GPT is overloaded right now. Please try again in a moment.
-error.openai.refusal = GPT declined to answer this question.
-error.openai.other = Something went wrong with GPT.
-error.gemini.no_key = No Gemini key is configured. Add it to the configuration file.
-error.gemini.network = I can't reach Gemini. Please check the internet connection.
-error.gemini.auth = The Gemini key was rejected. Please check it in the configuration file.
-error.gemini.credit = The Gemini credit is exhausted. Please check the billing in Google AI Studio.
-error.gemini.busy = Gemini is overloaded or its usage limit is reached. Please try again in a moment.
-error.gemini.refusal = Gemini declined to answer this question.
-error.gemini.other = Something went wrong with Gemini.
-error.openrouter.no_key = No OpenRouter key is configured. Add it to the configuration file.
-error.openrouter.network = I can't reach OpenRouter. Please check the internet connection.
-error.openrouter.auth = The OpenRouter key was rejected. Please check it in the configuration file.
-error.openrouter.credit = The OpenRouter credit is exhausted. Please add credit on openrouter.ai.
+error.openai.refusal = GPT refused to answer this question.
+error.openai.other = An error occurred with GPT.
+error.gemini.no_key = No Gemini key is set. Add it in the configuration file.
+error.gemini.network = I cannot reach Gemini. Check the internet connection.
+error.gemini.auth = The Gemini key is refused. Check it in the configuration file.
+error.gemini.credit = The Gemini credit is used up. Check the billing in Google AI Studio.
+error.gemini.busy = Gemini is overloaded or the usage limit is reached. Please try again in a moment.
+error.gemini.refusal = Gemini refused to answer this question.
+error.gemini.other = An error occurred with Gemini.
+error.openrouter.no_key = No OpenRouter key is set. Add it in the configuration file.
+error.openrouter.network = I cannot reach OpenRouter. Check the internet connection.
+error.openrouter.auth = The OpenRouter key is refused. Check it in the configuration file.
+error.openrouter.credit = The OpenRouter credit is used up. Add credit on openrouter.ai.
 error.openrouter.busy = This model is overloaded or unavailable on OpenRouter. Please try again in a moment.
-error.openrouter.refusal = The model declined to answer this question.
-error.openrouter.other = Something went wrong with OpenRouter. Please check the model name.
+error.openrouter.refusal = The model refused to answer this question.
+error.openrouter.other = An error occurred with OpenRouter. Check the name of the model.
 # %s: model, %s: reasoning effort of AGENTS.INI refused, %s: the values it takes
-error_effort = The model %s refuses the reasoning effort %s. Please correct it in AGENTS.INI, values accepted: %s.
+error_effort = The model %s refuses the reasoning level %s. Correct it in AGENTS.INI, accepted values: %s.
 
-error.xai.no_key = No xAI key is configured. Add it to the configuration file.
-error.xai.network = I can't reach Grok. Please check the internet connection.
-error.xai.auth = The xAI key was rejected. Please check it in the configuration file.
-error.xai.credit = The xAI credit is exhausted. Please add credit on the xAI console.
+error.xai.no_key = No xAI key is set. Add it in the configuration file.
+error.xai.network = I cannot reach Grok. Check the internet connection.
+error.xai.auth = The xAI key is refused. Check it in the configuration file.
+error.xai.credit = The xAI credit is used up. Add credit on the xAI console.
 error.xai.busy = Grok is overloaded right now. Please try again in a moment.
-error.xai.refusal = Grok declined to answer this question.
-error.xai.other = Something went wrong with Grok. Please check the model name.
-error.mistral.no_key = No Mistral key is configured. Add it to the configuration file.
-error.mistral.network = I can't reach Mistral. Please check the internet connection.
-error.mistral.auth = The Mistral key was rejected. Please check it in the configuration file.
-error.mistral.credit = The Mistral credit is exhausted. Please check the billing on the Mistral console.
+error.xai.refusal = Grok refused to answer this question.
+error.xai.other = An error occurred with Grok. Check the name of the model.
+error.mistral.no_key = No Mistral key is set. Add it in the configuration file.
+error.mistral.network = I cannot reach Mistral. Check the internet connection.
+error.mistral.auth = The Mistral key is refused. Check it in the configuration file.
+error.mistral.credit = The Mistral credit is used up. Check the billing on the Mistral console.
 error.mistral.busy = Mistral is overloaded right now. Please try again in a moment.
-error.mistral.refusal = Mistral declined to answer this question.
-error.mistral.other = Something went wrong with Mistral. Please check the model name.
-error.perplexity.no_key = No Perplexity key is configured. Add it to the configuration file.
-error.perplexity.network = I can't reach Perplexity. Please check the internet connection.
-error.perplexity.auth = The Perplexity key was rejected. Please check it in the configuration file.
-error.perplexity.credit = The Perplexity credit is exhausted. Please add credit in the Perplexity API settings.
+error.mistral.refusal = Mistral refused to answer this question.
+error.mistral.other = An error occurred with Mistral. Check the name of the model.
+error.perplexity.no_key = No Perplexity key is set. Add it in the configuration file.
+error.perplexity.network = I cannot reach Perplexity. Check the internet connection.
+error.perplexity.auth = The Perplexity key is refused. Check it in the configuration file.
+error.perplexity.credit = The Perplexity credit is used up. Add credit in the settings of the Perplexity API.
 error.perplexity.busy = Perplexity is overloaded right now. Please try again in a moment.
-error.perplexity.refusal = Perplexity declined to answer this question.
-error.perplexity.other = Something went wrong with Perplexity. Please check the model name.
+error.perplexity.refusal = Perplexity refused to answer this question.
+error.perplexity.other = An error occurred with Perplexity. Check the name of the model.
 
 # Static screens generated by SquareLine; NULL keeps the generated (English) text
 steps_title = Steps
-steps_content = 1. Wake the device up by saying "Bonjour ESP" (or "Hi ESP").\n2. Ask your question, then wait for the answer.\n3. While asleep, touch the screen to wake the device up.
+steps_content = 1. Say "Bonjour ESP" or touch the screen to start.\n2. Ask your question and wait for the answer.\n3. Touch the screen twice to stop the answer.
 settings_title = Settings
 settings_language = Language
 settings_model = Model
@@ -350,12 +350,12 @@ settings_saved = Saved.
 
 # Configuration screen, icon "soft reset": its confirmation
 soft_title = Soft reset
-soft_text = Restore the default settings and the original files (VOICE_ and LANG_ FR/EN, COUNTRY.TXT, AGENTS.INI)? The Wi-Fi, the API keys, Homey, the PERSO_xx.TXT, MEMORY.TXT and the files of the languages added are kept. Then the device restarts.
+soft_text = Restore the default settings and the original files (VOICE_ and LANG_ FR/EN/NL/DE/ES/IT, COUNTRY.TXT, AGENTS.INI)? The Wi-Fi, the API keys, Homey, the PERSO_xx.TXT, MEMORY.TXT and the files of the languages added are kept. Then the device restarts.
 soft_yes = Reset
 
 # icon "factory reset": its confirmation
 factory_title = Factory reset
-factory_text = Erase EVERYTHING: Wi-Fi, API keys, Homey, MEMORY.TXT, settings, conversation, files of every language (VOICE_, LANG_, PERSO_), COUNTRY.TXT? CONFIG.INI is first copied to CONFIG.BKP. Then configuration mode (PC plugged in) or restart.
+factory_text = Erase EVERYTHING: Wi-Fi, API keys, Homey, MEMORY.TXT, settings, conversation, files of every language (VOICE_, LANG_, PERSO_), COUNTRY.TXT? CONFIG.INI is first copied to CONFIG.BKP. Then configuration mode (PC connected) or restart.
 factory_yes = Erase all
 
 # both: cancel
@@ -364,4 +364,4 @@ restore_no = Cancel
 # on the OK button while the device restarts
 restore_done = ...
 reset_title = Configuration
-reset_content = 1. Press "OK" to enter the configuration mode.\n2. Plug the box into your PC and fill in the Wi-Fi and the OpenAI and Claude keys.\n3. Follow the instructions on the screen to finish.
+reset_content = 1. Connect the box to your PC.\n2. Press "OK".\n3. Follow the instructions on the screen to finish.

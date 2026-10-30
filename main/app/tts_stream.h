@@ -33,12 +33,13 @@ typedef struct tts_backend tts_backend_t;
 extern const tts_backend_t tts_backend_openai;
 extern const tts_backend_t tts_backend_mistral;
 extern const tts_backend_t tts_backend_deepgram;
+extern const tts_backend_t tts_backend_openrouter;
 
 /**
  * @brief Set the speech service and its parameters (the strings are copied). Called again to change the service
  *        or the model at run time: the next sentences use it.
  *
- * @param backend      &tts_backend_openai, &tts_backend_mistral, &tts_backend_deepgram
+ * @param backend      &tts_backend_openai, &tts_backend_mistral, &tts_backend_deepgram, &tts_backend_openrouter
  * @param base_url     OpenAI base URL ending with '/', e.g. "https://api.openai.com/v1/" (wss:// is derived)
  * @param api_key      Key of the service
  * @param model        e.g. "gpt-realtime-2.1-mini", "voxtral-mini-tts-3-0"

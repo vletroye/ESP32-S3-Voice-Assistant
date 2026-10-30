@@ -209,7 +209,9 @@ settings of the [Quick start](#quick-start).
   French") or from the Settings screen; other languages can be added (see
   [Adding a new language, step by step](#adding-a-new-language-step-by-step)).
 - **Choose the voice**: 10 OpenAI voices, Mistral's natural voices for each language, with an emotion and a
-  pace if you like, or Deepgram's Aura-2 voices (the transcription can be Deepgram's Nova too) ("change de voix" / "change the voice", "prends la voix Cedar" / "use the voice Cedar").
+  pace if you like, or Deepgram's Aura-2 voices (the transcription can be Deepgram's Nova too); Aura-2 also through
+  OpenRouter, with the OpenRouter key alone ("change de voix" / "change the voice", "prends la voix Cedar" / "use the
+  voice Cedar").
 - **It knows things around you**: the date and time, the weather (Open-Meteo), the latest news (web search), your
   country and town for local answers.
 - **Long-term memory**: "Souviens-toi que…" / "Remember that…" stores a note it will use in every answer;
@@ -653,7 +655,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.x.y:52199/mcp` |
 | `Homey_key` | Its API key (shown in the app's settings) | |
 | `Confirm_off` | Homey device classes the assistant asks to confirm before turning them off (comma-separated; `socket`: power plugs, so that an appliance is not switched off by mistake; lights are not asked about), `off` for none | `socket` |
-| `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models), empty for none | `sk-or-…` |
+| `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models, and the speech models of `[tts]` reached through it: `deepgram/aura-2`), empty for none | `sk-or-…` |
 | `XAI_key` | xAI key (answers of the Grok models, section `[xai]` of `AGENTS.INI`), empty for none | `xai-…` |
 | `Mistral_key` | Mistral AI key (section `[mistral]` of `AGENTS.INI`, and the Voxtral transcription and speech), empty for none | |
 | `Perplexity_key` | Perplexity key, with paid credit (section `[perplexity]` of `AGENTS.INI`), empty for none | `pplx-…` |
@@ -782,6 +784,7 @@ nova-3                               = Deepgram Nova-3          | deepgram | Nov
 gpt-realtime-2.1-mini = OpenAI Realtime mini | openai  | OpenAI  | 0.52  | 17.2
 voxtral-mini-tts-3-0  = Mistral Voxtral TTS  | mistral | Voxtral | 11.18 | 0
 aura-2                = Deepgram Aura-2      | deepgram | Aura    | 25.8  | 0
+deepgram/aura-2       = Aura-2 (OpenRouter)  | openrouter | Aura OpenRouter | 25.8 | 0
 
 [mistral]
 mistral-medium-latest = Mistral Medium 3.5 | none | Medium | 1.29 | 6.45
@@ -936,15 +939,15 @@ James    = mistral  | voice_3150 | en        | -       | -
 
 | Column | Meaning |
 | --- | --- |
-| name | Unique: said and shown to choose the voice ("prends la voix Camille" / "use the voice Camille"), kept in `Voice` of `CONFIG.INI` |
-| provider | `openai`, `mistral` or `deepgram`: the provider of the speech models of `[tts]` |
+| name | Said and shown to choose the voice ("prends la voix Camille" / "use the voice Camille"), kept in `Voice` of `CONFIG.INI`; unique among the voices of a provider (or of a model): "Agathe" of Deepgram and of `deepgram/aura-2` are two voices |
+| provider | `openai`, `mistral` or `deepgram`: the provider of the speech models of `[tts]`; for a model reached through OpenRouter, the model's id (`deepgram/aura-2`): each model behind OpenRouter has its own voices |
 | voice id | The voice as the provider's API names it |
 | languages | 2-letter codes separated by commas (`fr`, `en, nl`), `*` for every language |
 | emotion, pace | `-` for none, else see below |
 
 - **Which voices are offered**: "change de voix" / "change the voice" and the Settings screen list the voices of
   the speech provider in use ("change de synthèse vocale" / "change the speech synthesis") that speak the language in use: with Voxtral in French, Lea, Marie, Manon and
-  Camille; with Deepgram Aura-2 in French, Agathe and Hector; with OpenAI, its 10 voices (they speak every language). The list follows a change of provider or of
+  Camille; with Deepgram Aura-2 in French (direct or through OpenRouter), Agathe and Hector; with OpenAI, its 10 voices (they speak every language). The list follows a change of provider or of
   language.
 - **The voice used**: the one named in `Voice`. If it is of another provider, or does not speak the language in
   use, the first voice of `[voices]` that fits is used, and `Voice` is kept (back to that provider or language, the
@@ -956,7 +959,8 @@ James    = mistral  | voice_3150 | en        | -       | -
   very-slow, slow, moderate, fast, very-fast. Mistral tests them in English; in French they are "expected to
   work". OpenAI gets them in its reading instructions (`tts_emotion` and `tts_pace` of `LANG_<XX>.TXT`: "Lis avec
   cette émotion : warm.").
-- **The voices given with the firmware**: OpenAI's 10 voices, Deepgram's Aura-2 voices for the six languages
+- **The voices given with the firmware**: OpenAI's 10 voices, Deepgram's Aura-2 voices for the six languages (the
+  same ones for `deepgram/aura-2` through OpenRouter)
   (French: Agathe, Hector; English: Thalia, Asteria, Orion, Zeus; Dutch: Beatrix, Daphne, Sander; German: Viktoria,
   Julius, Elara; Spanish: Celeste, Javier, Estrella; Italian: Livia, Flavio, Cesare; others: `aura-2-<name>-<code>`,
   see developers.deepgram.com/docs/tts-models), and the 36 Voxtral 3 voices of Mistral with their
@@ -1317,7 +1321,7 @@ flowchart LR
     AFE -->|audio 16 kHz| STT["<b>STT</b><br/>OpenAI Realtime,<br/>Mistral Voxtral Realtime or<br/>Deepgram Nova<br/>WebSocket"]
     STT -->|transcript| LLM["<b>LLM</b><br/>Anthropic, OpenAI, Google, OpenRouter,<br/>xAI, Mistral or Perplexity<br/>SSE streaming"]
     LLM -->|text| SPL["<b>Splitter</b><br/>sentence by sentence"]
-    SPL --> TTS["<b>TTS</b><br/>OpenAI Realtime (WebSocket),<br/>Mistral Voxtral TTS (HTTP SSE) or<br/>Deepgram Aura-2 (HTTP)"]
+    SPL --> TTS["<b>TTS</b><br/>OpenAI Realtime (WebSocket),<br/>Mistral Voxtral TTS (HTTP SSE),<br/>Deepgram Aura-2 (HTTP) or<br/>OpenRouter (HTTP, MP3)"]
     TTS -->|PCM 24→16 kHz| BUF["<b>Buffer</b><br/>audio in PSRAM"]
     BUF --> SPK["<b>Speaker</b><br/>I2S / ES8311"]
 ```
@@ -1338,6 +1342,7 @@ flowchart LR
 | Answer (Gemini) | Gemini API `streamGenerateContent?alt=sse` | `thinkingLevel` `minimal` (Flash-Lite) or `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Speech synthesis (OpenAI) | OpenAI Realtime, `gpt-realtime-2.1-mini`, a voice of `[voices]` (default Marin) | Permanent WebSocket, one response per sentence, read verbatim |
 | Speech synthesis (Mistral) | Mistral `POST /v1/audio/speech`, `voxtral-mini-tts-3-0`, a voice of `[voices]` (Lea in French) | One streamed request per sentence, the sentences already waiting joined to it (up to 600 characters: a request takes 0.7 to 1 s to start, and its audio comes only ~1.15 times faster than spoken), with the emotion and pace tags of the voice before it (`response_format: wav`, `stream: true`: server-sent events of base64 16-bit audio at 24 kHz); 600 ms of audio kept in reserve before playing; connection kept alive, events read in 4 KB blocks, and warmed up while the user speaks when unused for 30 s |
+| Speech synthesis (OpenRouter) | OpenRouter `POST /api/v1/audio/speech` (OpenAI-compatible), a model of `[tts]` with the provider `openrouter` (`deepgram/aura-2`), a voice of `[voices]` of that model | One request per sentence (`response_format: mp3`: a few KB a second instead of the 48 of 16-bit PCM at 24 kHz, as the services behind OpenRouter are far), the sentences waiting joined to it (up to 600 characters) and 600 ms in reserve; the MP3 comes as it is made (first bytes 0.7 to 0.9 s after the request, measured with Aura-2) and is decoded on the device by the radio's decoder (24 kHz mono for Aura-2; another rate is brought to 16 kHz); connection kept alive and warmed up while the user speaks |
 | Speech synthesis (Deepgram) | Deepgram `POST /v1/speak`, Aura-2, a voice of `[voices]` (Agathe in French) | One request per sentence, the voice as its `model` (`aura-2-agathe-fr`), 8-bit mu-law audio at 16 kHz (`encoding=mulaw`, `sample_rate=16000`, `container=none`: 16 KB a second, as Deepgram is far, ~90 ms, and the TCP window of the device small; 16-bit 24 kHz audio, 48 KB a second, came slower than spoken) decoded and played as it comes; connection kept alive, warmed up while the user speaks when unused for 30 s |
 | Playback | local | 24 → 16 kHz resampling, short fade-out at the end of each sentence (no click), I2S fixed at 16 kHz (shared with the mics) |
 
@@ -1404,6 +1409,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `tts_backend.h` | Interface of a speech synthesis service (`start`, `stop`, `upkeep`, `say`) and the helpers it calls back |
 | `ai_provider_openai_tts.c` | OpenAI Realtime speech (permanent WebSocket, one response per sentence) |
 | `ai_provider_mistral_tts.c` | Mistral Voxtral speech (HTTP server-sent events, WAV 16-bit, keep-alive), emotion and pace tags before each sentence |
+| `ai_provider_openrouter_tts.c` | Speech through OpenRouter's audio API (any model of `[tts]` with the provider `openrouter`): MP3 streamed, decoded on the device (`esp_audio_codec`), keep-alive, warm-up |
 | `ai_provider_deepgram_tts.c` | Deepgram Aura-2 speech (HTTP, 16 kHz mu-law audio streamed and decoded, keep-alive), the voice as the model |
 | `stt_stream.c` | Transcription engine shared by the services: audio buffer in PSRAM, resampling when needed, connection kept or opened per question, transcript; transcription of a recorded sentence for the model test |
 | `stt_backend.h` | Interface of a transcription service (URL, `session.update`, message types, events) |

@@ -281,13 +281,38 @@ static bool number_word_found(const char *word, int item, const char *code, void
     return true;
 }
 
+/* A word of the text is the number n in digits, possibly with an ordinal suffix: "3", "1er", "2e", "3ème", "2nd" */
+static bool has_digits_word(const char *norm, int n)
+{
+    static const char *const suffixes[] = {
+        "", "er", "re", "ère", "e", "è", "eme", "ème", "de", "nd", "st", "rd", "th", "te", "ste", "o", "a", "º", "ª",
+    };
+    for (const char *p = norm; *p;) {
+        const char *end = strchr(p, ' ');
+        size_t len = end ? (size_t)(end - p) : strlen(p);
+        size_t digits = 0;
+        while (digits < len && isdigit((unsigned char)p[digits])) {
+            digits++;
+        }
+        if (digits && atoi(p) == n) {
+            for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); i++) {
+                if (strlen(suffixes[i]) == len - digits && strncmp(p + digits, suffixes[i], len - digits) == 0) {
+                    return true;
+                }
+            }
+        }
+        p = end ? end + 1 : p + len;
+    }
+    return false;
+}
+
 static int search_number(const char *norm, bool only, int max)
 {
     max = max < VOICE_NUMBERS_MAX ? max : VOICE_NUMBERS_MAX;
     for (int n = 1; n <= max; n++) {
         char digits[4];
         snprintf(digits, sizeof(digits), "%d", n);
-        if (only ? is_only(norm, digits) : has_word(norm, digits)) {
+        if (only ? is_only(norm, digits) : has_digits_word(norm, n)) {
             return n;
         }
     }
@@ -890,19 +915,70 @@ static char *speech_list(llm_speech_kind_t kind, const char *format)
 
 /* Model number (1-based) said: a word of its spoken name or of its shown name ("voxtral", "mistral"), else a
  * number; 0 if none */
+/* A word of a model's name in what was said: as a word, as the start of one ("aurara" for "aura"), or across the
+ * spaces the transcription puts in it ("open router" for "openrouter") */
+static bool name_word_said(const char *norm, const char *glued, const char *word)
+{
+    size_t n = strlen(word);
+    if (n < 3 || isdigit((unsigned char)word[0])) {
+        return false;       // "2" of "Aura-2", "de": too common
+    }
+    if (has_word(norm, word)) {
+        return true;
+    }
+    for (const char *p = strstr(norm, word); n >= 4 && p; p = strstr(p + 1, word)) {
+        if (p == norm || p[-1] == ' ') {
+            return true;    // the start of a word
+        }
+    }
+    return n >= 6 && strstr(glued, word) != NULL;
+}
+
+/* The model whose names (spoken, shown, provider) have the most words said ("Aura OpenRouter" before "Aura"), else
+ * its number; 0 if none */
 static int find_speech(llm_speech_kind_t kind, const char *norm)
 {
+    char glued[CMD_NORM_SIZE];
+    size_t g = 0;
+    for (const char *c = norm; *c && g < sizeof(glued) - 1; c++) {
+        if (*c != ' ') {
+            glued[g++] = *c;
+        }
+    }
+    glued[g] = '\0';
     size_t count = llm_speech_count(kind);
+    int best = 0, best_score = 0;
     for (size_t i = 0; i < count; i++) {
         const llm_speech_model_t *m = llm_speech_model(kind, i);
-        const char *names[] = { m->spoken, m->label, m->provider };
-        for (size_t k = 0; k < sizeof(names) / sizeof(names[0]); k++) {
-            char name[48];
-            app_text_normalize(names[k], name, sizeof(name));
-            char *word = strtok(name, " ");
-            if (word && has_word(norm, word)) {
-                return (int)i + 1;
+        char names[160];
+        snprintf(names, sizeof(names), "%s %s %s", m->spoken, m->label, m->provider);
+        char norm_names[160];
+        app_text_normalize(names, norm_names, sizeof(norm_names));
+        // Each different word counted once
+        int score = 0;
+        char *saveptr = NULL;
+        char counted[160] = " ";
+        for (char *word = strtok_r(norm_names, " ", &saveptr); word; word = strtok_r(NULL, " ", &saveptr)) {
+            char key[48];
+            snprintf(key, sizeof(key), " %s ", word);
+            if (!strstr(counted, key) && name_word_said(norm, glued, word)) {
+                score++;
+                strlcat(counted, word, sizeof(counted));
+                strlcat(counted, " ", sizeof(counted));
             }
+        }
+        if (score > best_score) {
+            best = (int)i + 1;
+            best_score = score;
+        }
+    }
+    if (best) {
+        return best;
+    }
+    // "numéro un", "le un": 1 only said so (elsewhere "un" is an article)
+    for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
+        if (strcmp(norm, *one) == 0) {
+            return 1;
         }
     }
     return search_number(norm, false, (int)count);

@@ -106,6 +106,12 @@ size_t llm_speech_count(llm_speech_kind_t kind);
 /** The model of this kind at this index (file order), NULL past the end */
 const llm_speech_model_t *llm_speech_model(llm_speech_kind_t kind, size_t index);
 
+/**
+ * @brief Whose voices of [voices] a speech model takes: its provider ("openai", "mistral", "deepgram"), or for a
+ *        model reached through OpenRouter its own id ("deepgram/aura-2"), each having its own voices
+ */
+const char *llm_speech_voice_owner(const llm_speech_model_t *model);
+
 /** The model of this kind with this id, NULL if not listed */
 const llm_speech_model_t *llm_speech_find(llm_speech_kind_t kind, const char *id);
 

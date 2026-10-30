@@ -31,7 +31,8 @@ void assistant_set_model(const char *model);
 void assistant_set_stt(const char *model);
 void assistant_set_tts(const char *model);
 
-/** Provider of the speech in use ("openai", "mistral", "deepgram"): whose voices "change de voix" offers */
+/** Whose voices "change de voix" offers: the provider of the speech in use ("openai", "mistral", "deepgram"), or
+ *  the model's id for a model reached through OpenRouter ("deepgram/aura-2") */
 const char *assistant_tts_provider(void);
 
 /** The key of a speech provider of [stt] / [tts] ("openai", "mistral", "deepgram"), "" if not configured */

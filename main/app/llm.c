@@ -55,7 +55,7 @@ static size_t s_file_count = 0;
 #define PER_CALL_SECTION        "per_call"
 #define VOICES_SECTION          "voices"
 #define SPEECH_MODELS_MAX       16
-#define VOICES_MAX              80
+#define VOICES_MAX              128
 #define CALL_PRICES_MAX         8
 static struct {
     llm_speech_model_t model;
@@ -64,7 +64,7 @@ static struct {
     double price_out;
 } s_speech[SPEECH_MODELS_MAX];
 static int s_speech_count = 0;
-static llm_voice_t s_voices[VOICES_MAX];
+static llm_voice_t *s_voices = NULL;  /* VOICES_MAX entries, PSRAM (internal RAM is scarce) */
 static int s_voice_count = 0;
 static struct {
     char *id;
@@ -220,13 +220,19 @@ static void add_voice(const char *name, char *rest)
         ESP_LOGW(TAG, "AGENTS.INI: voice \"%s\" without a name, a provider or a voice id: ignored", name);
         return;
     }
+    // A name is unique among the voices of a provider (or of a model behind OpenRouter): "Agathe" of Deepgram and
+    // of deepgram/aura-2 are two voices
     for (int i = 0; i < s_voice_count; i++) {
-        if (strcasecmp(s_voices[i].name, name) == 0) {
-            ESP_LOGW(TAG, "AGENTS.INI: the voice name %s is used twice: the second one is ignored", name);
+        if (strcasecmp(s_voices[i].name, name) == 0 && strcasecmp(s_voices[i].provider, parts[0]) == 0) {
+            ESP_LOGW(TAG, "AGENTS.INI: the voice name %s is used twice for %s: the second one is ignored", name,
+                     parts[0]);
             return;
         }
     }
-    if (s_voice_count >= VOICES_MAX) {
+    if (!s_voices) {
+        s_voices = heap_caps_calloc(VOICES_MAX, sizeof(llm_voice_t), MALLOC_CAP_SPIRAM);
+    }
+    if (!s_voices || s_voice_count >= VOICES_MAX) {
         ESP_LOGW(TAG, "AGENTS.INI: more than %d voices: %s ignored", VOICES_MAX, name);
         return;
     }
@@ -734,6 +740,8 @@ void llm_load_models(void)
         add_missing_provider(STT_SECTION, "deepgram");     // Deepgram's models and voices, added since
         add_missing_provider(TTS_SECTION, "deepgram");
         add_missing_provider(VOICES_SECTION, "deepgram");
+        add_missing_provider(TTS_SECTION, "openrouter");   // speech through OpenRouter, added since
+        add_missing_provider(VOICES_SECTION, "deepgram/aura-2");
         rewrite_agents(NULL);
     }
     free(text);
@@ -786,6 +794,14 @@ const llm_speech_model_t *llm_speech_model(llm_speech_kind_t kind, size_t index)
         }
     }
     return NULL;
+}
+
+const char *llm_speech_voice_owner(const llm_speech_model_t *model)
+{
+    if (!model) {
+        return "openai";
+    }
+    return strcmp(model->provider, "openrouter") == 0 ? model->id : model->provider;
 }
 
 const llm_speech_model_t *llm_speech_find(llm_speech_kind_t kind, const char *id)

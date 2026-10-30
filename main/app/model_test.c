@@ -284,7 +284,7 @@ static void test_speech(char *screen, size_t screen_size)
         strlcpy(r->name, name, sizeof(r->name));
         strlcpy(r->model, m->id, sizeof(r->model));
         const char *key = speech_key(m);
-        const llm_voice_t *v = llm_voice_for(m->provider, lang->code, param->voice);
+        const llm_voice_t *v = llm_voice_for(llm_speech_voice_owner(m), lang->code, param->voice);
         int16_t *got = NULL;
         size_t got_samples = 0;
         bool ok = key && tts_stream_test(assistant_tts_backend(m->provider), param->url, key, m->id,

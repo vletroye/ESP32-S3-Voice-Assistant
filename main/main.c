@@ -700,13 +700,17 @@ const char *assistant_speech_key(const char *provider)
     if (strcmp(provider, "deepgram") == 0) {
         return sys_param->deepgram_key;
     }
+    if (strcmp(provider, "openrouter") == 0) {
+        return sys_param->openrouter_key;
+    }
     return sys_param->key;
 }
 
 const char *assistant_speech_key_name(const char *provider)
 {
     return strcmp(provider, "mistral") == 0 ? "Mistral_key" :
-           strcmp(provider, "deepgram") == 0 ? "Deepgram_key" : "ChatGPT_key";
+           strcmp(provider, "deepgram") == 0 ? "Deepgram_key" :
+           strcmp(provider, "openrouter") == 0 ? "OpenRouter_key" : "ChatGPT_key";
 }
 
 const struct stt_backend *assistant_stt_backend(const char *provider)
@@ -718,7 +722,8 @@ const struct stt_backend *assistant_stt_backend(const char *provider)
 const struct tts_backend *assistant_tts_backend(const char *provider)
 {
     return strcmp(provider, "mistral") == 0 ? &tts_backend_mistral :
-           strcmp(provider, "deepgram") == 0 ? &tts_backend_deepgram : &tts_backend_openai;
+           strcmp(provider, "deepgram") == 0 ? &tts_backend_deepgram :
+           strcmp(provider, "openrouter") == 0 ? &tts_backend_openrouter : &tts_backend_openai;
 }
 
 /*
@@ -741,7 +746,7 @@ const char *assistant_tts_provider(void)
 {
     const char *key;
     const llm_speech_model_t *m = speech_choice(LLM_SPEECH_TTS, sys_param->tts_model, &key);
-    return m ? m->provider : "openai";
+    return llm_speech_voice_owner(m);     // a model behind OpenRouter: its own voices
 }
 
 const struct llm_voice *assistant_voice(void)
@@ -768,7 +773,7 @@ void assistant_set_tts(const char *model)
     const char *key;
     const llm_speech_model_t *m = speech_choice(LLM_SPEECH_TTS, sys_param->tts_model, &key);
     bool mistral = m && strcmp(m->provider, "mistral") == 0;
-    const llm_voice_t *v = llm_voice_for(m ? m->provider : "openai", app_lang_get()->code, sys_param->voice);
+    const llm_voice_t *v = llm_voice_for(llm_speech_voice_owner(m), app_lang_get()->code, sys_param->voice);
     char *tts_instructions = build_tts_instructions(v);
     // Mistral (Voxtral 3): the emotion and pace as tags before each sentence; OpenAI: in its instructions
     char style[64] = "";

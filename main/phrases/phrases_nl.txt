@@ -124,11 +124,11 @@ model[ nummer]
 [s_change_stt]
 (verander|wijzig|wissel)[ (van|de|je)] transcriptie
 (verander|wijzig|wissel)[ (van|de|je)] spraakherkenning
-(verander|wijzig|wissel)[ (van|de)] (stt|s t t)
+(verander|wijzig|wissel)[ (van|de)] (stt|s t t|sst)
 
 [s_change_tts]
 (verander|wijzig|wissel)[ (van|de|je)] spraaksynthese
-(verander|wijzig|wissel)[ (van|de)] (tts|t t s)
+(verander|wijzig|wissel)[ (van|de)] (tts|t t s|dts|d t s)
 (verander|wijzig|wissel)[ (van|de|je)] (stemmotor|spraakmotor)
 
 [s_new_conversation]

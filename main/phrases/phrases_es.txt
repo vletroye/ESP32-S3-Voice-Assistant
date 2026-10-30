@@ -130,12 +130,12 @@ pasa a la voz
 cambia[r] (de|la|tu) transcripción
 cambia[r] (de|la|tu) transcripcion
 cambia[r] (de|el|tu) reconocimiento de voz
-cambia[r] (de|el) (stt|s t t)
+cambia[r] (de|el) (stt|s t t|sst)
 
 [s_change_tts]
 cambia[r] (de|la|tu) síntesis de voz
 cambia[r] (de|la|tu) sintesis de voz
-cambia[r] (de|el) (tts|t t s)
+cambia[r] (de|el) (tts|t t s|dts|d t s)
 cambia[r] (de|el|tu) motor de voz
 
 [s_new_conversation]

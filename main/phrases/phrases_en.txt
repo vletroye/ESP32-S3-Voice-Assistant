@@ -121,11 +121,11 @@ switch to the voice
 [s_change_stt]
 change[ (the|your)] transcription
 change[ (the|your)] speech recognition
-change[ the] (stt|s t t)
+change[ the] (stt|s t t|sst)
 
 [s_change_tts]
 change[ (the|your)] speech synthesis
-change[ the] (tts|t t s)
+change[ the] (tts|t t s|dts|d t s)
 change[ (the|your)] voice engine
 
 [s_new_conversation]

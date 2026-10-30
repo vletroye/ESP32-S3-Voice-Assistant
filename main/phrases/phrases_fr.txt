@@ -119,11 +119,11 @@ passe à la voix
 [s_change_stt]
 change[r] (de|la|ta) transcription
 change[r] (de|la|ta) reconnaissance vocale
-change[r] (de|le) (stt|s t t)
+change[r] (de|le) (stt|s t t|sst)
 
 [s_change_tts]
 change[r] (de|la|ta) synthèse vocale
-change[r] (de|le) (tts|t t s)
+change[r] (de|le) (tts|t t s|dts|d t s)
 change[r] (de|le|ton) moteur de voix
 
 [s_new_conversation]

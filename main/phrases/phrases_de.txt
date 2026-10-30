@@ -136,11 +136,11 @@ modell[ nummer]
 [s_change_stt]
 (ändere|wechsle|wechsel)[ (die|deine)] transkription
 (ändere|wechsle|wechsel)[ (die|deine)] spracherkennung
-(ändere|wechsle|wechsel)[ (die|das)] (stt|s t t)
+(ändere|wechsle|wechsel)[ (die|das)] (stt|s t t|sst)
 
 [s_change_tts]
 (ändere|wechsle|wechsel)[ (die|deine)] sprachsynthese
-(ändere|wechsle|wechsel)[ (die|das)] (tts|t t s)
+(ändere|wechsle|wechsel)[ (die|das)] (tts|t t s|dts|d t s)
 (ändere|wechsle|wechsel)[ (die|deine)] (sprachausgabe|stimmengine|stimm engine)
 
 [s_new_conversation]

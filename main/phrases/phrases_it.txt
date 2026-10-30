@@ -124,11 +124,11 @@ passa alla voce
 [s_change_stt]
 cambia[re] (la|di|tua) trascrizione
 cambia[re] (il|di|tuo) riconoscimento vocale
-cambia[re] (lo|il|di) (stt|s t t)
+cambia[re] (lo|il|di) (stt|s t t|sst)
 
 [s_change_tts]
 cambia[re] (la|di|tua) sintesi vocale
-cambia[re] (il|di) (tts|t t s)
+cambia[re] (il|di) (tts|t t s|dts|d t s)
 cambia[re] (il|di|tuo) motore vocale
 
 [s_new_conversation]

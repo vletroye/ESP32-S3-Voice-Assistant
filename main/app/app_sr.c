@@ -51,6 +51,12 @@ static const char *TAG = "app_sr";
 /* Cumulated speech required before a session is considered to contain speech (filters noise bursts) */
 #define SR_MIN_SPEECH_MS            300
 /*
+ * A shorter word, loud enough ("un", "deux": the answer to a numbered list), followed by silence: transcribed too
+ * (a noise gives an empty transcript, then ignored)
+ */
+#define SR_SHORT_SPEECH_MS          160
+#define SR_SHORT_SPEECH_DBFS        (-50.0f)
+/*
  * VAD frames quieter than this are not counted as speech: the VAD keeps reporting speech for
  * about 1 s after the beep / spoken reply. Measured on BOX-3: voice at ~1 m about -45 dBFS,
  * room silence about -68 dBFS.
@@ -224,7 +230,12 @@ static void audio_detect_task(void *arg)
                 speech_seen = false;
                 ESP_LOGI(TAG, "listening cancelled");
             }
-            bool speech_ended = speech_seen && (SR_SILENCE_END_FRAMES == frame_keep) && (VAD_SILENCE == res->vad_state);
+            bool short_speech = !speech_seen && speech_ms >= SR_SHORT_SPEECH_MS && max_volume > SR_SHORT_SPEECH_DBFS;
+            bool speech_ended = (speech_seen || short_speech) && (SR_SILENCE_END_FRAMES == frame_keep) &&
+                                (VAD_SILENCE == res->vad_state);
+            if (speech_ended && !speech_seen) {
+                ESP_LOGI(TAG, "short speech (%" PRIu32 " ms, %.1f dBFS): transcribed", speech_ms, max_volume);
+            }
             if (no_speech || speech_ended) {
                 ESP_LOGI(TAG, "listen end after %" PRIu32 " ms: speech %" PRIu32 " ms, max volume %.1f dBFS%s",
                          elapsed_ms, speech_ms, max_volume, no_speech ? " (no speech)" : "");

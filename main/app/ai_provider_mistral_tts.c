@@ -16,6 +16,7 @@
  * mistral_tts_voices() ("change de voix").
  */
 
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -33,6 +34,7 @@
 #include "ai_provider_mistral_tts.h"
 
 #define MISTRAL_TTS_URL         "https://api.mistral.ai/v1/audio/speech"
+#define MISTRAL_VOICES_V2_URL   "https://api.mistral.ai/v2/audio/voices?type=preset&page_size=100&language=%s"
 #define MISTRAL_VOICES_URL      "https://api.mistral.ai/v1/audio/voices?limit=100&type=preset"
 #define MISTRAL_TTS_TIMEOUT_MS  15000
 #define MISTRAL_TTS_READ_CHUNK  4096
@@ -398,12 +400,14 @@ static bool voice_of(const cJSON *voice, const char *slug, const char *lang)
     return false;
 }
 
-size_t mistral_tts_voices(const char *api_key, const char *lang, mistral_voice_t *voices, size_t max)
+/* The voices of the language in one list (v2: "data", v1: "items"), kept by voice_of() in either case */
+static size_t fetch_voices(const char *url, const char *api_key, const char *lang, mistral_voice_t *voices,
+                           size_t max)
 {
     char *auth = NULL;
     asprintf(&auth, "Bearer %s", api_key ? api_key : "");
     esp_http_client_config_t config = {
-        .url = MISTRAL_VOICES_URL,
+        .url = url,
         .method = HTTP_METHOD_GET,
         .timeout_ms = 10000,
         .crt_bundle_attach = esp_crt_bundle_attach,
@@ -445,11 +449,30 @@ size_t mistral_tts_voices(const char *api_key, const char *lang, mistral_voice_t
         }
     }
     if (!count) {
-        ESP_LOGW(TAG, "No %s voice in the list (HTTP %d): %.200s", lang, status, body.len ? body.p : "-");
+        ESP_LOGW(TAG, "No %s voice in %s (HTTP %d): %.200s", lang, url, status, body.len ? body.p : "-");
     } else {
-        ESP_LOGI(TAG, "%u %s voice(s) (list: %u bytes)", (unsigned)count, lang, (unsigned)body.len);
+        ESP_LOGI(TAG, "%u %s voice(s) from %s (%u bytes)", (unsigned)count, lang, url, (unsigned)body.len);
     }
     cJSON_Delete(json);
     llm_buf_free(&body);
+    return count;
+}
+
+size_t mistral_tts_voices(const char *api_key, const char *lang, mistral_voice_t *voices, size_t max)
+{
+    // Asked for the voices of the language (v2); else the whole list (v1), its voices of the language kept
+    char code[3] = "";
+    for (int i = 0; i < 2 && lang && isalpha((unsigned char)lang[i]); i++) {
+        code[i] = tolower((unsigned char)lang[i]);
+    }
+    char *url = NULL;
+    size_t count = 0;
+    if (code[1] && asprintf(&url, MISTRAL_VOICES_V2_URL, code) > 0) {
+        count = fetch_voices(url, api_key, code, voices, max);
+    }
+    free(url);
+    if (!count) {
+        count = fetch_voices(MISTRAL_VOICES_URL, api_key, lang, voices, max);
+    }
     return count;
 }

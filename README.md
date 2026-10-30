@@ -466,7 +466,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `tts_stream.c` | Speech synthesis engine shared by the services: sentence queue, service and settings changed at run time, resampling, fade-out and I2S playback; capture of the audio for the model test |
 | `tts_backend.h` | Interface of a speech synthesis service (`start`, `stop`, `upkeep`, `say`) and the helpers it calls back |
 | `ai_provider_openai_tts.c` | OpenAI Realtime speech (permanent WebSocket, one response per sentence) |
-| `ai_provider_mistral_tts.c` | Mistral Voxtral speech (HTTP server-sent events, WAV 16-bit, keep-alive) and the list of its voices per language (`GET /v1/audio/voices`) |
+| `ai_provider_mistral_tts.c` | Mistral Voxtral speech (HTTP server-sent events, WAV 16-bit, keep-alive) and the list of its voices of the language in use (`GET /v2/audio/voices?language=fr`, else the whole `v1` list filtered on the device) |
 | `stt_stream.c` | Transcription engine shared by the services: audio buffer in PSRAM, resampling when needed, connection kept or opened per question, transcript; transcription of a recorded sentence for the model test |
 | `stt_backend.h` | Interface of a transcription service (URL, `session.update`, message types, events) |
 | `ai_provider_openai_stt.c` | OpenAI Realtime transcription (24 kHz, permanent WebSocket) |

@@ -204,12 +204,15 @@ static const char *const s_noise_transcriptions[] = {
 static bool transcription_is_noise(const char *text)
 {
     size_t letters = 0;
+    bool digit = false;
     for (const char *p = text; *p; p++) {
         if (isalnum((unsigned char)*p) || ((unsigned char)*p & 0x80)) {
             letters++;
         }
+        digit |= isdigit((unsigned char)*p) != 0;
     }
-    if (letters < 2) {
+    // A lone digit is kept: the answer to a numbered list ("3.")
+    if (letters < 2 && !digit) {
         return true;
     }
 

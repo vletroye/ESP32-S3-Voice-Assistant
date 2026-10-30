@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "esp_log.h"
-#include "app_lang.h"
+#include "file_lang.h"
 #include "app_volume.h"
 #include "weather.h"
 #include "homey_mcp.h"

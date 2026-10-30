@@ -12,9 +12,9 @@
 #include <strings.h>
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "app_lang.h"
-#include "app_memory.h"
-#include "country.h"
+#include "file_lang.h"
+#include "file_memory.h"
+#include "file_country.h"
 
 #define COUNTRY_FILE_MAX        16384   /* as on the configuration drive */
 #define COUNTRY_COLUMNS_MAX     16

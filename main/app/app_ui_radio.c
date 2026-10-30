@@ -12,11 +12,11 @@
 #include "esp_heap_caps.h"
 #include "lvgl.h"
 #include "ui.h"
-#include "app_lang.h"
+#include "file_lang.h"
 #include "app_volume.h"
 #include "settings.h"
 #include "radio.h"
-#include "radio_favorites.h"
+#include "file_radio_favorites.h"
 #include "app_ui_radio.h"
 
 LV_FONT_DECLARE(ui_font_Latin14);

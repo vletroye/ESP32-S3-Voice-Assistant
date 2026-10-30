@@ -18,8 +18,8 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
-#include "claude_client.h"
-#include "costs.h"
+#include "ai_provider_anthropic.h"
+#include "file_costs.h"
 #include "llm_sse.h"
 
 #define CLAUDE_URL              "https://api.anthropic.com/v1/messages"
@@ -175,12 +175,14 @@ void claude_client_reset(void)
 /* Map an API error to the error kinds shown to the user */
 static llm_error_t classify_error(int status, const char *type, const char *message)
 {
+    // First: "Your credit balance is too low to access the Anthropic API" (400), billing_error
+    if ((type && strcmp(type, "billing_error") == 0) ||
+            (message && (strcasestr(message, "credit balance") || strcasestr(message, "billing")))) {
+        return LLM_ERR_CREDIT;
+    }
     if (status == 401 || status == 403 || (type && (strcmp(type, "authentication_error") == 0 ||
                                                      strcmp(type, "permission_error") == 0))) {
         return LLM_ERR_AUTH;
-    }
-    if ((type && strcmp(type, "billing_error") == 0) || (message && strstr(message, "credit balance"))) {
-        return LLM_ERR_CREDIT;
     }
     if (status == 429 || status >= 500 || (type && (strcmp(type, "overloaded_error") == 0 ||
                                                      strcmp(type, "rate_limit_error") == 0 ||

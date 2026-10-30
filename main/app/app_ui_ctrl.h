@@ -32,6 +32,8 @@ typedef enum {
     UI_CTRL_LOGO_GEMINI,
     UI_CTRL_LOGO_OPENROUTER,
     UI_CTRL_LOGO_XAI,
+    UI_CTRL_LOGO_MISTRAL,
+    UI_CTRL_LOGO_PERPLEXITY,
     UI_CTRL_LOGO_WEB,
     UI_CTRL_LOGO_LOCAL,     /* answered by the device without a model (memory commands, errors) */
 } ui_ctrl_logo_t;

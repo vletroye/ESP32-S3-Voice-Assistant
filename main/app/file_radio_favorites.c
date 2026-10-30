@@ -12,8 +12,8 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "app_memory.h"
-#include "radio_favorites.h"
+#include "file_memory.h"
+#include "file_radio_favorites.h"
 
 #define FAV_FILE_MAX    16384       /* as on the configuration drive */
 #define FAV_NORM_SIZE   96

@@ -13,8 +13,8 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "app_lang.h"
-#include "phrases.h"
+#include "file_lang.h"
+#include "file_phrases.h"
 
 /* Phrases one pattern may stand for: far more than needed, a guard against a mistyped pattern */
 #define PHRASES_PER_PATTERN_MAX     256
@@ -226,7 +226,7 @@ static const struct {
     { "en", s_default_en_start, s_default_en_end },
 };
 
-/* Text of the file of each language of app_lang.c (same index), read at start-up */
+/* Text of the file of each language of file_lang.c (same index), read at start-up */
 static char *s_texts[PHRASES_LANG_MAX];
 static size_t s_lang_count = 0;
 /* The lists are made in the task that first uses them */
@@ -484,7 +484,7 @@ const char *const *phrases_of(phrase_list_t *list)
     static const char *s_empty[] = { NULL };
     int slot = PHRASES_LANG_MAX;
     if (!list->all_languages) {
-        // The current language; a language without UI texts (not in app_lang.c) takes the English phrases
+        // The current language; a language without UI texts (not in file_lang.c) takes the English phrases
         slot = lang_index(app_lang_get()->code);
         if (slot < 0) {
             slot = lang_index(PHRASES_FALLBACK_LANG);

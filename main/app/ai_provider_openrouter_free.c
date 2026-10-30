@@ -23,7 +23,7 @@
 #include "cJSON.h"
 #include "llm.h"
 #include "settings.h"
-#include "openrouter_free.h"
+#include "ai_provider_openrouter_free.h"
 
 #define FREE_MODELS_URL         "https://openrouter.ai/api/v1/models"
 #define FREE_CACHE_FILE         "/spiffs/or_free.json"

@@ -83,6 +83,9 @@ bool tts_stream_is_silent(uint32_t ms);
  */
 bool tts_stream_reply_was_choppy(void);
 
+/** The speech of the last reply refused for lack of OpenAI credit (insufficient_quota) */
+bool tts_stream_no_credit(void);
+
 #ifdef __cplusplus
 }
 #endif

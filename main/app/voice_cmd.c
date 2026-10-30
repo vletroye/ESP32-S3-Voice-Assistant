@@ -13,21 +13,21 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
-#include "app_lang.h"
-#include "app_memory.h"
+#include "file_lang.h"
+#include "file_memory.h"
 #include "llm.h"
 #include "settings.h"
 #include "voice_cmd.h"
-#include "phrases.h"
+#include "file_phrases.h"
 #include "assistant.h"
 #include "tts_stream.h"
 #include "app_ui_ctrl.h"
 #include "driver/usb_serial_jtag.h"
 #include "model_test.h"
-#include "country.h"
+#include "file_country.h"
 #include "radio.h"
 #include "radio_browser.h"
-#include "radio_favorites.h"
+#include "file_radio_favorites.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -41,7 +41,7 @@ static const char *TAG = "voice_cmd";
 
 /*
  * Phrase lists: their patterns are in the phrase files (main/phrases/phrases_<lang>.txt, VOICE_<LANG>.TXT on the
- * configuration drive), in the section named after the variable (phrases.h). Only the current language's
+ * configuration drive), in the section named after the variable (file_phrases.h). Only the current language's
  * phrases are recognised, except "change la langue", recognised in every language.
  */
 /* Said alone, they send the assistant back to sleep without an answer */
@@ -393,6 +393,9 @@ static const struct {
     [LLM_PROVIDER_OPENROUTER] = { "OpenRouter", { "openrouter", "open router", "open routeur", "openrouteur",
                                                   "open rooter", NULL } },
     [LLM_PROVIDER_XAI] = { "xAI", { "xai", "x ai", "ix ai", "grok", "grock", "groc", "groque" } },
+    [LLM_PROVIDER_MISTRAL] = { "Mistral AI", { "mistral", "mistrale", "mistral ai", NULL } },
+    [LLM_PROVIDER_PERPLEXITY] = { "Perplexity", { "perplexity", "perplexité", "perplexiti", "perplexite", "sonar",
+                                                  "sonare", NULL } },
 };
 
 /* Provider named in the text, LLM_PROVIDER_COUNT if none */
@@ -441,6 +444,10 @@ static const struct {
     { "gemini-3.8-flash", { "flache", "flasch", NULL } },
     { "gemini-4-argon", { "argonne", "argone", NULL } },
     { "grok-4.7", { "grock", "groc", "groque", NULL } },
+    { "mistral-small-2603", { "small", "smol", "smoll", NULL } },
+    { "mistral-large-4", { "large", "larje", "lardje", NULL } },
+    { "mistral-medium-latest", { "medium", "médium", "midium", NULL } },
+    { "perplexity/sonar", { "sonar", "sonare", "sonnard", NULL } },
 };
 
 /* Model number (1-based, in llm_models) named in the text by a word of its name ("sonnet"); 0 if none */
@@ -551,7 +558,7 @@ static char *model_list(llm_provider_t provider)
     return out;
 }
 
-/* A free OpenRouter model, read from its live list (openrouter_free.c) */
+/* A free OpenRouter model, read from its live list (ai_provider_openrouter_free.c) */
 static bool is_free_model(const llm_model_t *m)
 {
     size_t len = strlen(m->id);

@@ -16,14 +16,14 @@
 
 #include "app_ui_ctrl.h"
 #include "app_wifi.h"
-#include "app_lang.h"
+#include "file_lang.h"
 #include "llm.h"
 #include "app_clock.h"
 #include "app_sr.h"
 #include "tts_stream.h"
 #include "settings.h"
 #include "assistant.h"
-#include "costs.h"
+#include "file_costs.h"
 #include "radio.h"
 #include "app_ui_radio.h"
 #include "bsp/esp-bsp.h"
@@ -37,6 +37,8 @@ LV_IMG_DECLARE(ui_img_reply_local);
 LV_IMG_DECLARE(ui_img_reply_gemini);
 LV_IMG_DECLARE(ui_img_reply_openrouter);
 LV_IMG_DECLARE(ui_img_reply_xai);
+LV_IMG_DECLARE(ui_img_reply_mistral);
+LV_IMG_DECLARE(ui_img_reply_perplexity);
 LV_FONT_DECLARE(ui_font_Latin14);
 LV_FONT_DECLARE(ui_font_Latin16);
 LV_FONT_DECLARE(ui_font_Latin20);
@@ -793,6 +795,8 @@ static const void *logo_image(ui_ctrl_logo_t logo)
            logo == UI_CTRL_LOGO_GEMINI ? (const void *)&ui_img_reply_gemini :
            logo == UI_CTRL_LOGO_OPENROUTER ? (const void *)&ui_img_reply_openrouter :
            logo == UI_CTRL_LOGO_XAI ? (const void *)&ui_img_reply_xai :
+           logo == UI_CTRL_LOGO_MISTRAL ? (const void *)&ui_img_reply_mistral :
+           logo == UI_CTRL_LOGO_PERPLEXITY ? (const void *)&ui_img_reply_perplexity :
            (const void *)&ui_img_reply_chatgpt_logo_png;
 }
 
@@ -801,7 +805,9 @@ static ui_ctrl_logo_t provider_logo(llm_provider_t provider)
     return provider == LLM_PROVIDER_OPENAI ? UI_CTRL_LOGO_OPENAI :
            provider == LLM_PROVIDER_GEMINI ? UI_CTRL_LOGO_GEMINI :
            provider == LLM_PROVIDER_OPENROUTER ? UI_CTRL_LOGO_OPENROUTER :
-           provider == LLM_PROVIDER_XAI ? UI_CTRL_LOGO_XAI : UI_CTRL_LOGO_CLAUDE;
+           provider == LLM_PROVIDER_XAI ? UI_CTRL_LOGO_XAI :
+           provider == LLM_PROVIDER_MISTRAL ? UI_CTRL_LOGO_MISTRAL :
+           provider == LLM_PROVIDER_PERPLEXITY ? UI_CTRL_LOGO_PERPLEXITY : UI_CTRL_LOGO_CLAUDE;
 }
 
 static lv_obj_t *s_model_icon = NULL;

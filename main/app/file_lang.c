@@ -21,7 +21,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "app_lang.h"
+#include "file_lang.h"
 
 static const char *TAG = "app_lang";
 
@@ -168,11 +168,13 @@ static const lang_field_t s_fields[] = {
     { "clock_hidden", offsetof(app_lang_t, clock_hidden), FIELD_TEXT, 1 },
     { "new_conversation", offsetof(app_lang_t, new_conversation), FIELD_TEXT, 1 },
     { "voice_choppy", offsetof(app_lang_t, voice_choppy), FIELD_TEXT, 1 },
+    { "speech_no_credit", offsetof(app_lang_t, speech_no_credit), FIELD_TEXT, 1 },
     { "home_line", offsetof(app_lang_t, home_line), FIELD_TEXT, 1 },
     { "weekdays", offsetof(app_lang_t, weekdays), FIELD_LIST, 7 },
     { "now_format", offsetof(app_lang_t, now_format), FIELD_TEXT, 1 },
     { "weekdays_long", offsetof(app_lang_t, weekdays_long), FIELD_LIST, 7 },
     { "months", offsetof(app_lang_t, months), FIELD_LIST, 12 },
+    { "error_effort", offsetof(app_lang_t, error_effort), FIELD_TEXT, 1 },
     { "error.claude.no_key", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_NO_KEY]), FIELD_TEXT, 1 },
     { "error.claude.network", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_NETWORK]), FIELD_TEXT, 1 },
     { "error.claude.auth", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_CLAUDE][LLM_ERR_AUTH]), FIELD_TEXT, 1 },
@@ -208,6 +210,20 @@ static const lang_field_t s_fields[] = {
     { "error.xai.busy", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_XAI][LLM_ERR_BUSY]), FIELD_TEXT, 1 },
     { "error.xai.refusal", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_XAI][LLM_ERR_REFUSAL]), FIELD_TEXT, 1 },
     { "error.xai.other", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_XAI][LLM_ERR_OTHER]), FIELD_TEXT, 1 },
+    { "error.mistral.no_key", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_MISTRAL][LLM_ERR_NO_KEY]), FIELD_TEXT, 1 },
+    { "error.mistral.network", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_MISTRAL][LLM_ERR_NETWORK]), FIELD_TEXT, 1 },
+    { "error.mistral.auth", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_MISTRAL][LLM_ERR_AUTH]), FIELD_TEXT, 1 },
+    { "error.mistral.credit", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_MISTRAL][LLM_ERR_CREDIT]), FIELD_TEXT, 1 },
+    { "error.mistral.busy", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_MISTRAL][LLM_ERR_BUSY]), FIELD_TEXT, 1 },
+    { "error.mistral.refusal", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_MISTRAL][LLM_ERR_REFUSAL]), FIELD_TEXT, 1 },
+    { "error.mistral.other", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_MISTRAL][LLM_ERR_OTHER]), FIELD_TEXT, 1 },
+    { "error.perplexity.no_key", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_PERPLEXITY][LLM_ERR_NO_KEY]), FIELD_TEXT, 1 },
+    { "error.perplexity.network", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_PERPLEXITY][LLM_ERR_NETWORK]), FIELD_TEXT, 1 },
+    { "error.perplexity.auth", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_PERPLEXITY][LLM_ERR_AUTH]), FIELD_TEXT, 1 },
+    { "error.perplexity.credit", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_PERPLEXITY][LLM_ERR_CREDIT]), FIELD_TEXT, 1 },
+    { "error.perplexity.busy", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_PERPLEXITY][LLM_ERR_BUSY]), FIELD_TEXT, 1 },
+    { "error.perplexity.refusal", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_PERPLEXITY][LLM_ERR_REFUSAL]), FIELD_TEXT, 1 },
+    { "error.perplexity.other", offsetof(app_lang_t, llm_errors[LLM_PROVIDER_PERPLEXITY][LLM_ERR_OTHER]), FIELD_TEXT, 1 },
     { "steps_title", offsetof(app_lang_t, steps_title), FIELD_TEXT, 1 },
     { "steps_content", offsetof(app_lang_t, steps_content), FIELD_TEXT, 1 },
     { "settings_title", offsetof(app_lang_t, settings_title), FIELD_TEXT, 1 },

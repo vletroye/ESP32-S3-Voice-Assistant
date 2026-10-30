@@ -16,10 +16,10 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "cJSON.h"
-#include "app_lang.h"
+#include "file_lang.h"
 #include "assistant.h"
 #include "llm.h"
-#include "openrouter_free.h"
+#include "ai_provider_openrouter_free.h"
 #include "voice_cmd.h"
 #include "app_ui_ctrl.h"
 #include "model_test.h"
@@ -143,6 +143,7 @@ static const char *status_of(llm_error_t err)
     case LLM_ERR_CREDIT: return "unavailable: no credit";
     case LLM_ERR_BUSY: return "unavailable: busy";
     case LLM_ERR_REFUSAL: return "unavailable: refused";
+    case LLM_ERR_EFFORT: return "unavailable: reasoning effort refused (AGENTS.INI)";
     default: return "unavailable: error";
     }
 }

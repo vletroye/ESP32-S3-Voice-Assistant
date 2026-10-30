@@ -338,6 +338,8 @@ settings_title = Impostazioni
 settings_language = Lingua
 settings_model = Modello
 settings_voice = Voce
+settings_tts = Sintesi
+settings_stt = Trascrizione
 
 # Spoken with a voice just chosen, %s = its name
 voice_sample = Ciao, sono %s. Ti piace la mia voce?
@@ -355,7 +357,7 @@ soft_yes = Ripristina
 
 # icon "factory reset": its confirmation
 factory_title = Ripristino di fabbrica
-factory_text = Cancellare TUTTO: wifi, chiavi API, Homey, MEMORY.TXT, impostazioni, conversazione, file di tutte le lingue (VOICE_, LANG_, PERSO_), COUNTRY.TXT? CONFIG.INI viene prima copiato in CONFIG.BKP. Poi modalità di configurazione (PC collegato) o riavvio.
+factory_text = Cancellare TUTTO: wifi, chiavi API, Homey, MEMORY.TXT, impostazioni, conversazione, file di tutte le lingue (VOICE_, LANG_, PERSO_), COUNTRY.TXT? Poi modalità di configurazione (PC collegato) o riavvio.
 factory_yes = Cancella tutto
 
 # both: cancel

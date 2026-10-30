@@ -338,6 +338,8 @@ settings_title = Ajustes
 settings_language = Idioma
 settings_model = Modelo
 settings_voice = Voz
+settings_tts = Síntesis
+settings_stt = Transcripción
 
 # Spoken with a voice just chosen, %s = its name
 voice_sample = Hola, soy %s. ¿Te gusta mi voz?
@@ -355,7 +357,7 @@ soft_yes = Restablecer
 
 # icon "factory reset": its confirmation
 factory_title = Restablecimiento de fábrica
-factory_text = ¿Borrar TODO: wifi, claves API, Homey, MEMORY.TXT, ajustes, conversación, archivos de todos los idiomas (VOICE_, LANG_, PERSO_), COUNTRY.TXT? CONFIG.INI se copia antes en CONFIG.BKP. Después modo de configuración (PC conectado) o reinicio.
+factory_text = ¿Borrar TODO: wifi, claves API, Homey, MEMORY.TXT, ajustes, conversación, archivos de todos los idiomas (VOICE_, LANG_, PERSO_), COUNTRY.TXT? Después modo de configuración (PC conectado) o reinicio.
 factory_yes = Borrar todo
 
 # both: cancel

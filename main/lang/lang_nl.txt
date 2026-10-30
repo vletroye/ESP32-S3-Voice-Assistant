@@ -339,6 +339,8 @@ settings_title = Instellingen
 settings_language = Taal
 settings_model = Model
 settings_voice = Stem
+settings_tts = Spraak
+settings_stt = Transcriptie
 
 # Spoken with a voice just chosen, %s = its name
 voice_sample = Hallo, ik ben %s. Vind je mijn stem mooi?
@@ -356,7 +358,7 @@ soft_yes = Resetten
 
 # icon "factory reset": its confirmation
 factory_title = Fabrieksreset
-factory_text = ALLES wissen: wifi, API-sleutels, Homey, MEMORY.TXT, instellingen, gesprek, bestanden van alle talen (VOICE_, LANG_, PERSO_), COUNTRY.TXT? CONFIG.INI wordt eerst gekopieerd naar CONFIG.BKP. Daarna configuratiemodus (pc aangesloten) of herstart.
+factory_text = ALLES wissen: wifi, API-sleutels, Homey, MEMORY.TXT, instellingen, gesprek, bestanden van alle talen (VOICE_, LANG_, PERSO_), COUNTRY.TXT? Daarna configuratiemodus (pc aangesloten) of herstart.
 factory_yes = Alles wissen
 
 # both: cancel

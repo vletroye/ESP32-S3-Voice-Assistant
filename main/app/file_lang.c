@@ -255,6 +255,8 @@ static const lang_field_t s_fields[] = {
     { "settings_language", offsetof(app_lang_t, settings_language), FIELD_TEXT, 1 },
     { "settings_model", offsetof(app_lang_t, settings_model), FIELD_TEXT, 1 },
     { "settings_voice", offsetof(app_lang_t, settings_voice), FIELD_TEXT, 1 },
+    { "settings_tts", offsetof(app_lang_t, settings_tts), FIELD_TEXT, 1 },
+    { "settings_stt", offsetof(app_lang_t, settings_stt), FIELD_TEXT, 1 },
     { "voice_sample", offsetof(app_lang_t, voice_sample), FIELD_TEXT, 1 },
     { "settings_save", offsetof(app_lang_t, settings_save), FIELD_TEXT, 1 },
     { "settings_saved", offsetof(app_lang_t, settings_saved), FIELD_TEXT, 1 },

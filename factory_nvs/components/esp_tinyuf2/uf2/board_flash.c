@@ -136,15 +136,6 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "RADIO   TXT", 12);
         PRINTF("%s shown as RADIO.TXT", t->path);
     }
-    // CONFIG.INI saved by the "restore" icon of the Settings screen, when there is one
-    FILE *backup = fopen(PHRASES_DIR "/config.bkp", "r");
-    if (backup) {
-        fclose(backup);
-        text_file_t *t = &s_text_files[slot++];
-        strlcpy(t->path, PHRASES_DIR "/config.bkp", sizeof(t->path));
-        memcpy(t->fat_name, "CONFIG  BKP", 12);
-        PRINTF("%s shown as CONFIG.BKP", t->path);
-    }
     // Costs of the assistant, when some were counted
     FILE *costs = fopen(PHRASES_DIR "/costs.txt", "r");
     if (costs) {

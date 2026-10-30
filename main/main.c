@@ -534,7 +534,7 @@ void assistant_request_restore(bool factory)
     s_restore_requested = true;
 }
 
-/* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
+/* Files written by the assistant, removed by the factory reset (sounds of the image kept) */
 static const char *const s_user_files[] = {
     "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "speed.txt", "log.txt",
     "costs.json", "costs.tmp", "costs.txt", "radio.txt", "radio.txt.tmp",
@@ -997,6 +997,10 @@ void app_main()
     sys_param = settings_get_parameter();
 
     bsp_spiffs_mount();
+    // The backup of CONFIG.INI made by the factory reset of an older firmware (keys included): no longer kept
+    if (remove("/spiffs/config.bkp") == 0) {
+        ESP_LOGI(TAG, "CONFIG.BKP removed");
+    }
     // The languages offered (Languages of CONFIG.INI), then the texts of the language (LANG_<CODE>.TXT on SPIFFS)
     app_lang_init(sys_param->languages);
     app_lang_set(sys_param->lang);

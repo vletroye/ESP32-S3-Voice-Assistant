@@ -243,14 +243,14 @@ static void settings_save_clicked_cb(lv_event_t *e)
 }
 
 static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uint16_t selected,
-                                    lv_event_cb_t changed_cb)
+                                    lv_event_cb_t changed_cb, void *user_data)
 {
     lv_dropdown_set_options(dropdown, options);
     lv_dropdown_set_selected(dropdown, selected);
-    // Accented names: Latin font for the field and its list (the arrow keeps the default font and its symbol)
+    // Accented names: Latin font for the field and its list
     lv_obj_set_style_text_font(dropdown, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(lv_dropdown_get_list(dropdown), &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_add_event_cb(dropdown, changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(dropdown, changed_cb, LV_EVENT_VALUE_CHANGED, user_data);
 }
 
 /* Voices offered: those of [voices] (AGENTS.INI) of the speech provider in use that speak the language in use */
@@ -305,6 +305,81 @@ static void settings_voice_changed_cb(lv_event_t *e)
     tts_stream_begin(NULL);
     tts_stream_say(sample);
     tts_stream_end();
+}
+
+/* Transcription and speech models offered: those of [stt] / [tts] (AGENTS.INI) whose provider has a key */
+#define SETTINGS_SPEECH_MAX     16
+typedef struct {
+    llm_speech_kind_t kind;
+    lv_obj_t *dropdown;
+    lv_obj_t *label;
+    const llm_speech_model_t *models[SETTINGS_SPEECH_MAX];
+    size_t count;
+} settings_speech_t;
+static settings_speech_t s_settings_speech[2] = {
+    { .kind = LLM_SPEECH_TTS },
+    { .kind = LLM_SPEECH_STT },
+};
+
+/* The options of a speech row, the model in use selected (added at the end when it is not listed) */
+static void speech_options_refresh(settings_speech_t *row)
+{
+    if (!row->dropdown) {
+        return;
+    }
+    const sys_param_t *param = settings_get_parameter();
+    const char *current = row->kind == LLM_SPEECH_STT ? param->stt_model : param->tts_model;
+    char options[SETTINGS_SPEECH_MAX * 40] = "";
+    uint16_t selected = SETTINGS_SPEECH_MAX;
+    row->count = 0;
+    for (size_t i = 0; i < llm_speech_count(row->kind) && row->count < SETTINGS_SPEECH_MAX; i++) {
+        const llm_speech_model_t *m = llm_speech_model(row->kind, i);
+        if (strcmp(m->provider, "mistral") == 0 && !param->mistral_key[0]) {
+            continue;
+        }
+        if (strcmp(m->id, current) == 0) {
+            selected = row->count;
+        }
+        strlcat(options, row->count ? "\n" : "", sizeof(options));
+        strlcat(options, m->label, sizeof(options));
+        row->models[row->count++] = m;
+    }
+    if (selected == SETTINGS_SPEECH_MAX) {
+        selected = row->count;
+        strlcat(options, row->count ? "\n" : "", sizeof(options));
+        strlcat(options, current[0] ? current : "-", sizeof(options));
+    }
+    lv_dropdown_set_options(row->dropdown, options);
+    lv_dropdown_set_selected(row->dropdown, selected);
+}
+
+/* A speech model applies at once (no restart), as with "change de synthèse vocale": saved, then reconnected */
+static void settings_speech_changed_cb(lv_event_t *e)
+{
+    settings_speech_t *row = lv_event_get_user_data(e);
+    uint16_t selected = lv_dropdown_get_selected(row->dropdown);
+    if (selected >= row->count) {
+        return;
+    }
+    const llm_speech_model_t *m = row->models[selected];
+    if (settings_save_str(row->kind == LLM_SPEECH_STT ? "Stt_model" : "Tts_model", m->id) != ESP_OK) {
+        return;
+    }
+    if (row->kind == LLM_SPEECH_STT) {
+        assistant_set_stt(m->id);
+        return;
+    }
+    assistant_set_tts(m->id);
+    // The voices of its provider, and a sample spoken with the one now in use
+    voice_options_refresh();
+    const llm_voice_t *voice = assistant_voice();
+    if (voice) {
+        char sample[96];
+        snprintf(sample, sizeof(sample), app_lang_get()->voice_sample, voice->name);
+        tts_stream_begin(NULL);
+        tts_stream_say(sample);
+        tts_stream_end();
+    }
 }
 
 /* The models, numbered as in the voice command "utilise le modèle 3"; returns the index of the current one */
@@ -387,6 +462,68 @@ static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width
     return dropdown;
 }
 
+/*
+ * Pages of the Settings screen, browsed with the arrows at the bottom (looping): 1. language and model,
+ * 2. speech, transcription and voice. The rows of the other pages are hidden (the panel's flex layout skips them).
+ */
+#define SETTINGS_PAGES          2
+#define SETTINGS_ROWS_MAX       6
+static lv_obj_t *s_settings_rows[SETTINGS_ROWS_MAX];
+static uint8_t s_settings_row_page[SETTINGS_ROWS_MAX];
+static size_t s_settings_row_count = 0;
+static int s_settings_page = 0;
+
+static void settings_row_add(lv_obj_t *row, uint8_t page)
+{
+    assert(s_settings_row_count < SETTINGS_ROWS_MAX);
+    s_settings_rows[s_settings_row_count] = row;
+    s_settings_row_page[s_settings_row_count++] = page;
+}
+
+static void settings_page_show(int page)
+{
+    s_settings_page = (page + SETTINGS_PAGES) % SETTINGS_PAGES;
+    for (size_t i = 0; i < s_settings_row_count; i++) {
+        if (s_settings_row_page[i] == s_settings_page) {
+            lv_obj_clear_flag(s_settings_rows[i], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(s_settings_rows[i], LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
+static void settings_page_clicked_cb(lv_event_t *e)
+{
+    settings_page_show(s_settings_page + (int)(intptr_t)lv_event_get_user_data(e));
+}
+
+/* Back to the first page each time the screen is shown */
+static void settings_screen_loaded_cb(lv_event_t *e)
+{
+    settings_page_show(0);
+}
+
+/* A button at the bottom of the Settings screen (arrows, Save) */
+static lv_obj_t *settings_button_create(lv_align_t align, lv_coord_t x)
+{
+    lv_obj_t *btn = lv_btn_create(ui_ScreenSettings);
+    lv_obj_align(btn, align, x, -10);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x6E47BD), LV_PART_MAIN | LV_STATE_DEFAULT);
+    return btn;
+}
+
+static void settings_arrow_create(lv_align_t align, lv_coord_t x, const char *symbol, int step)
+{
+    lv_obj_t *btn = settings_button_create(align, x);
+    lv_obj_set_width(btn, 50);
+    lv_obj_add_event_cb(btn, settings_page_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)step);
+    lv_obj_t *label = lv_label_create(btn);
+    lv_label_set_text(label, symbol);
+    // The default font has the arrow symbols (the Latin ones do not)
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_center(label);
+}
+
 static void settings_screen_setup(void)
 {
     const app_lang_t *lang = app_lang_get();
@@ -394,6 +531,7 @@ static void settings_screen_setup(void)
     char *options = dropdown_options();
 
     lv_obj_set_style_pad_row(ui_PanelSettings, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    settings_row_add(ui_PanelSettingsRegion, 0);
 
     // The generated "Region" row (unused) becomes the language row
     label_localize(ui_LabelSettingsRegion, lang->settings_language, &ui_font_Latin16);
@@ -411,26 +549,42 @@ static void settings_screen_setup(void)
         strlcat(languages, i ? "\n" : "", SETTINGS_OPTIONS_SIZE);
         strlcat(languages, app_lang_name(i), SETTINGS_OPTIONS_SIZE);
     }
-    settings_dropdown_setup(ui_DropdownSettingsRegion, languages, lang_selected, settings_changed_cb);
+    settings_dropdown_setup(ui_DropdownSettingsRegion, languages, lang_selected, settings_changed_cb, NULL);
 
     // Model row: the listed models, plus the current one if it was set in CONFIG.INI and is not listed
     s_model_dropdown = settings_row_create(lang->settings_model, lv_pct(62));
     s_model_row_label = lv_obj_get_child(lv_obj_get_parent(s_model_dropdown), 0);
+    settings_row_add(lv_obj_get_parent(s_model_dropdown), 0);
     uint16_t model_selected = model_options(options, SETTINGS_OPTIONS_SIZE);
     s_model_stored = model_selected;
-    settings_dropdown_setup(s_model_dropdown, options, model_selected, settings_changed_cb);
+    settings_dropdown_setup(s_model_dropdown, options, model_selected, settings_changed_cb, NULL);
 
-    // Voice row: applied immediately, without the Save button
-    lv_obj_t *voice_dropdown = settings_row_create(lang->settings_voice, lv_pct(62));
+    // Second page: speech and transcription models, then the voice, all applied immediately (no Save button)
+    const char *speech_texts[2] = { lang->settings_tts, lang->settings_stt };
+    for (size_t i = 0; i < 2; i++) {
+        settings_speech_t *row = &s_settings_speech[i];
+        row->dropdown = settings_row_create(speech_texts[i], lv_pct(58));
+        row->label = lv_obj_get_child(lv_obj_get_parent(row->dropdown), 0);
+        settings_row_add(lv_obj_get_parent(row->dropdown), 1);
+        settings_dropdown_setup(row->dropdown, "-", 0, settings_speech_changed_cb, row);
+        speech_options_refresh(row);
+    }
+
+    lv_obj_t *voice_dropdown = settings_row_create(lang->settings_voice, lv_pct(58));
     s_voice_dropdown = voice_dropdown;
     s_voice_row_label = lv_obj_get_child(lv_obj_get_parent(voice_dropdown), 0);
-    settings_dropdown_setup(voice_dropdown, "-", 0, settings_voice_changed_cb);
+    settings_row_add(lv_obj_get_parent(voice_dropdown), 1);
+    settings_dropdown_setup(voice_dropdown, "-", 0, settings_voice_changed_cb, NULL);
     voice_options_refresh();
 
-    // Save button (bottom right), enabled once a selection differs from the stored settings
-    s_save_btn = lv_btn_create(ui_ScreenSettings);
-    lv_obj_align(s_save_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
-    lv_obj_set_style_bg_color(s_save_btn, lv_color_hex(0x6E47BD), LV_PART_MAIN | LV_STATE_DEFAULT);
+    // Arrows to the previous / next page at the bottom left and right
+    settings_arrow_create(LV_ALIGN_BOTTOM_LEFT, 10, LV_SYMBOL_LEFT, -1);
+    settings_arrow_create(LV_ALIGN_BOTTOM_RIGHT, -10, LV_SYMBOL_RIGHT, 1);
+    lv_obj_add_event_cb(ui_ScreenSettings, settings_screen_loaded_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
+    settings_page_show(0);
+
+    // Save button (bottom middle), enabled once the language or the model differs from the stored settings
+    s_save_btn = settings_button_create(LV_ALIGN_BOTTOM_MID, 0);
     lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
     lv_obj_add_event_cb(s_save_btn, settings_save_clicked_cb, LV_EVENT_CLICKED, NULL);
     s_save_label = lv_label_create(s_save_btn);
@@ -451,6 +605,8 @@ static void ui_ctrl_apply_texts(void)
     if (s_model_row_label) {
         lv_label_set_text(s_model_row_label, lang->settings_model);
         lv_label_set_text(s_voice_row_label, lang->settings_voice);
+        lv_label_set_text(s_settings_speech[0].label, lang->settings_tts);
+        lv_label_set_text(s_settings_speech[1].label, lang->settings_stt);
         lv_label_set_text(s_save_label, lang->settings_save);
     }
     label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);
@@ -472,7 +628,9 @@ void ui_ctrl_settings_sync(void)
             lv_dropdown_set_selected(s_model_dropdown, i);
         }
     }
-    // Voice changed by voice ("change de voix"), or the voices of another speech provider or language
+    // Speech models changed by voice ("change de synthèse vocale"), then their voices ("change de voix")
+    speech_options_refresh(&s_settings_speech[0]);
+    speech_options_refresh(&s_settings_speech[1]);
     voice_options_refresh();
     lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
     bsp_display_unlock();

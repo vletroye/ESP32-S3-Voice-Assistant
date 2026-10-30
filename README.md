@@ -66,7 +66,7 @@ which has been largely rewritten.
   Gemini, OpenRouter, xAI, Mistral AI or Perplexity, a globe when the web was searched, a chip when the device answered by itself: memory,
   language and model commands, errors) and prefixed with the model id
   (`[claude-haiku-5-5] …`).
-- **Model, language and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
+- **Model, language, speech, transcription and voice chosen on the device** (Settings screen): Claude Haiku 5.5, Sonnet 5.5, Opus 5.5
   (Anthropic), GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra (OpenAI), Gemini 3.5 Flash-Lite, Gemini 3.8 Flash,
   Gemini 4 Argon (Google), Grok 4.7 (xAI), Mistral Small 4, Medium 3.5 and Large 4 (Mistral AI), Perplexity
   Sonar and five models of other providers with Perplexity's web search, and models reached through OpenRouter
@@ -538,7 +538,11 @@ idf.py -p COMx flash monitor
 
 ### On the device: Settings screen
 
-Tap the gear icon on the home screen:
+Tap the gear icon on the home screen. The settings are split over two pages, browsed with the arrows at the
+bottom left and right (from the last page, the right arrow goes back to the first, and the other way round); the
+screen opens on the first page.
+
+First page:
 
 - **Langue / Language**: the languages of `Languages` in `CONFIG.INI`, Français and English by default
   (interface, transcription, answers and voice).
@@ -548,12 +552,20 @@ Tap the gear icon on the home screen:
   V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default), 13 Grok 4.7 and 14 Grok 4.20 rapide (xAI),
   15 to 17 Mistral Small 4, Medium 3.5, Large 4, 18 to 23 the Perplexity models, then the free ones (24 to 30 with
   the defaults; numbers up to 13 can be said, the others are chosen by name, or by provider then number).
+
+Second page:
+
+- **Synthèse / Speech**: the speech model, among `[tts]` of `AGENTS.INI` (Mistral's only with a `Mistral_key`).
+  Applied **at once** and saved (`Tts_model`), as with "change de synthèse vocale": the voice list follows its
+  provider and the voice now in use introduces itself.
+- **Transcription**: the transcription model, among `[stt]` of `AGENTS.INI`, applied at once and saved
+  (`Stt_model`), as with "change de transcription".
 - **Voix / Voice**: the voice reading the answers, among the voices of `[voices]` (`AGENTS.INI`) of the speech
   provider in use that speak the language in use (OpenAI: Marin, Cedar, Alloy…; Mistral in French: Lea, Marie,
   Manon, Camille). Applied **at once**, without Save or restart: the speech session reconnects (~2 s) and the new
   voice introduces itself. The list follows the speech provider and the language.
 
-For the language and the model, press **Save** (bottom right, enabled once something changed): the choice is
+For the language and the model, press **Save** (bottom middle, enabled once one of them changed): the choice is
 saved to the device's NVS and applied at once, without restarting (the speech session reconnects, ~2 s).
 The folder-and-gear icon (top right) opens the **Configuration** screen: its button at the bottom right
 ("OK (30)") counts down from 30 and switches to the configuration mode described below at 0 (tap it to switch
@@ -574,16 +586,13 @@ Tapping one stops the countdown and asks for a confirmation:
 - **Factory reset** (bin, red): **everything** goes back to the firmware's state: every setting is erased (Wi-Fi,
   API keys, Homey, `MEMORY.TXT`, comments of `CONFIG.INI`), as well as the files of every language (`VOICE_`,
   `LANG_`, `PERSO_<XX>.TXT`, those of the languages added too), `COUNTRY.TXT`, `RADIO.TXT`, `AGENTS.INI`, the saved
-  conversation, the places of the weather and the list of free models. Before that, `CONFIG.INI` is saved as
-  **`CONFIG.BKP`** (on SPIFFS, shown on the configuration drive), with `MEMORY.TXT`, `PERSO_FR.TXT` and
-  `PERSO_EN.TXT` at its end as comments; this backup is only replaced when `CONFIG.INI` differs from the
-  firmware's, so a second factory reset in a row keeps the settings saved by the first one. Nothing is erased if
-  the backup fails. Then, with a PC connected, the device switches to the configuration mode (its drive shows up on
+  conversation, the places of the weather and the list of free models. No backup is kept: copy `CONFIG.INI` (and
+  the files you edited) to your PC first if you want to keep them. Then, with a PC connected, the device switches to the configuration mode (its drive shows up on
   the PC, which may offer to open it); without a PC it restarts, and since the Wi-Fi is erased it starts the
   configuration mode anyway.
 
 The firmware holds **no Wi-Fi nor API key** (no build option for them): after a factory reset they are empty and
-must be filled in `CONFIG.INI` (copy them from `CONFIG.BKP`). Without a Wi-Fi network or an OpenAI key, the
+must be filled in `CONFIG.INI` again. Without a Wi-Fi network or an OpenAI key, the
 device starts in configuration mode.
 
 ### Files of the configuration drive
@@ -603,7 +612,6 @@ USB drive named "ESP-BOX" holding these files:
 | `COSTS.TXT` | Costs counted (written by the device: do not edit) | SPIFFS | factory reset (erased) |
 | `SPEED.TXT` | Results of the model test (written by the device) | SPIFFS | factory reset (erased) |
 | `RADIO.TXT` | Favourite radios (see [Radio](#favourites-radiotxt)) | SPIFFS | kept by the soft reset, factory reset (erased) |
-| `CONFIG.BKP` | `CONFIG.INI` saved before a factory reset | SPIFFS | — |
 
 - Edit a file, save it, **wait until the copy is finished** (Windows may delay the write; a `LANG_` file takes
   tens of seconds), then press **Restart** (bottom right of the screen).

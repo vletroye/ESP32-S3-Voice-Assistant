@@ -204,12 +204,15 @@ static const char *const s_noise_transcriptions[] = {
 static bool transcription_is_noise(const char *text)
 {
     size_t letters = 0;
+    bool digit = false;
     for (const char *p = text; *p; p++) {
         if (isalnum((unsigned char)*p) || ((unsigned char)*p & 0x80)) {
             letters++;
         }
+        digit |= isdigit((unsigned char)*p) != 0;
     }
-    if (letters < 2) {
+    // A lone digit is kept: the answer to a numbered list ("3.")
+    if (letters < 2 && !digit) {
         return true;
     }
 
@@ -477,11 +480,21 @@ static char *build_system_prompt(void)
 }
 
 /* Instructions of the speech synthesis: read word for word (file_lang.c), then the [voice] of PERSO_<LANG>.TXT */
-static char *build_tts_instructions(void)
+/* Reading instructions (OpenAI): read verbatim, the voice of the persona, the emotion and pace of the voice */
+static char *build_tts_instructions(const llm_voice_t *v)
 {
+    const app_lang_t *lang = app_lang_get();
     char *text = NULL;
     const char *voice = persona_get(PERSONA_VOICE);
-    asprintf(&text, "%s%s%s", app_lang_get()->tts_instructions, voice[0] ? " " : "", voice);
+    char emotion[96] = "", pace[96] = "";
+    if (v && v->emotion) {
+        snprintf(emotion, sizeof(emotion), lang->tts_emotion, v->emotion);
+    }
+    if (v && v->pace) {
+        snprintf(pace, sizeof(pace), lang->tts_pace, v->pace);
+    }
+    asprintf(&text, "%s%s%s%s%s%s%s", lang->tts_instructions, voice[0] ? " " : "", voice, emotion[0] ? " " : "",
+             emotion, pace[0] ? " " : "", pace);
     return text;
 }
 
@@ -629,9 +642,8 @@ void assistant_set_language(const char *code)
     // Who the assistant is in this language (PERSO_<LANG>.TXT)
     persona_load(lang->code);
     stt_stream_set_language(lang->code);
-    char *tts_instructions = build_tts_instructions();
-    tts_stream_set_instructions(tts_instructions ? tts_instructions : lang->tts_instructions);
-    free(tts_instructions);
+    // The reading instructions of the language, and a voice that speaks it
+    assistant_set_tts(NULL);
     char *prompt = build_system_prompt();
     if (prompt) {
         llm_set_system_prompt(prompt);
@@ -676,6 +688,77 @@ void assistant_set_model(const char *model)
     ESP_LOGI(TAG, "Model %s applied", model);
 }
 
+/*
+ * The transcription / speech model of CONFIG.INI with its provider ([stt] / [tts] of AGENTS.INI) and the key of
+ * that provider; a Mistral one without Mistral_key falls back to OpenAI's default model (nothing would work)
+ */
+static const llm_speech_model_t *speech_choice(llm_speech_kind_t kind, const char *model, const char **key)
+{
+    const llm_speech_model_t *m = llm_speech_find(kind, model);
+    if (m && strcmp(m->provider, "mistral") == 0) {
+        if (sys_param->mistral_key[0]) {
+            *key = sys_param->mistral_key;
+            return m;
+        }
+        ESP_LOGW(TAG, "%s: no Mistral_key, OpenAI's model is used", model);
+        m = llm_speech_find(kind, kind == LLM_SPEECH_STT ? CONFIG_ASSISTANT_STT_MODEL : CONFIG_ASSISTANT_TTS_MODEL);
+    }
+    *key = sys_param->key;
+    return m;
+}
+
+const char *assistant_tts_provider(void)
+{
+    const char *key;
+    const llm_speech_model_t *m = speech_choice(LLM_SPEECH_TTS, sys_param->tts_model, &key);
+    return m ? m->provider : "openai";
+}
+
+const struct llm_voice *assistant_voice(void)
+{
+    return llm_voice_for(assistant_tts_provider(), app_lang_get()->code, sys_param->voice);
+}
+
+void assistant_set_stt(const char *model)
+{
+    if (model) {
+        strlcpy(sys_param->stt_model, model, sizeof(sys_param->stt_model));
+    }
+    const char *key;
+    const llm_speech_model_t *m = speech_choice(LLM_SPEECH_STT, sys_param->stt_model, &key);
+    bool mistral = m && strcmp(m->provider, "mistral") == 0;
+    stt_stream_configure(mistral ? &stt_backend_mistral : &stt_backend_openai, key,
+                         m ? m->id : CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
+}
+
+void assistant_set_tts(const char *model)
+{
+    if (model) {
+        strlcpy(sys_param->tts_model, model, sizeof(sys_param->tts_model));
+    }
+    const char *key;
+    const llm_speech_model_t *m = speech_choice(LLM_SPEECH_TTS, sys_param->tts_model, &key);
+    bool mistral = m && strcmp(m->provider, "mistral") == 0;
+    const llm_voice_t *v = llm_voice_for(m ? m->provider : "openai", app_lang_get()->code, sys_param->voice);
+    char *tts_instructions = build_tts_instructions(v);
+    // Mistral (Voxtral 3): the emotion and pace as tags before each sentence; OpenAI: in its instructions
+    char style[64] = "";
+    if (mistral && v && v->emotion) {
+        snprintf(style, sizeof(style), "[emotion=%s]", v->emotion);
+    }
+    if (mistral && v && v->pace) {
+        snprintf(style + strlen(style), sizeof(style) - strlen(style), "[pace=%s]", v->pace);
+    }
+    if (style[0]) {
+        strlcat(style, " ", sizeof(style));
+    }
+    tts_stream_configure(mistral ? &tts_backend_mistral : &tts_backend_openai, sys_param->url, key,
+                         m ? m->id : CONFIG_ASSISTANT_TTS_MODEL, v ? v->id : NULL,
+                         tts_instructions ? tts_instructions : app_lang_get()->tts_instructions,
+                         style[0] ? style : NULL);
+    free(tts_instructions);
+}
+
 /* Start of a listening session (wake word, touch or follow-up). Called from app_audio.c */
 /* Double tap while "J'écoute" / "Je réfléchis": what is under way is dropped, the assistant goes back to sleep */
 void assistant_cancel(void)
@@ -701,6 +784,7 @@ void assistant_prewarm(void)
 {
     /* The transcription connection is the most urgent: let its TLS handshake finish first */
     stt_stream_wait_connected(3000);
+    tts_stream_prewarm();   // done by the synthesis task, meanwhile
     llm_prewarm();
 }
 
@@ -995,13 +1079,11 @@ void app_main()
              system_prompt ? system_prompt : app_lang_get()->system_prompt);
     free(system_prompt);
     llm_set_location(sys_param->country, sys_param->city);
+    // Transcription and speech: the models of CONFIG.INI (Stt_model, Tts_model), by their provider
     ESP_ERROR_CHECK(stt_stream_init());
-    stt_stream_configure(sys_param->key, CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
+    assistant_set_stt(NULL);
     ESP_ERROR_CHECK(tts_stream_init());
-    char *tts_instructions = build_tts_instructions();
-    tts_stream_configure(sys_param->url, sys_param->key, CONFIG_ASSISTANT_TTS_MODEL, sys_param->voice,
-                         tts_instructions ? tts_instructions : app_lang_get()->tts_instructions);
-    free(tts_instructions);
+    assistant_set_tts(NULL);
 
     for (int seconds = 0; ; seconds++) {
         vTaskDelay(pdMS_TO_TICKS(1000));

@@ -114,6 +114,16 @@ use [the ]voice
 switch to [the ]voice
 voice[ number]
 
+[s_change_stt]
+change [the ]transcription
+change [the ]speech recognition
+change [the ](stt|s t t)
+
+[s_change_tts]
+change [the ]speech synthesis
+change [the ](tts|t t s)
+change [the ]voice engine
+
 [s_new_conversation]
 [let s ]start a new conversation
 new (conversation|chat)

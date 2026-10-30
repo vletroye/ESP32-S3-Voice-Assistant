@@ -81,8 +81,8 @@ qu est ce qu on (écoute|ecoute)
 
 [s_test_models]
 # Pose la même question à chaque modèle et mesure son temps de réponse (SPEED.TXT, vitesse dans AGENTS.INI)
-test(e) (les|tes) mod(è|e)les
-(lance|fais) (le|un) test des mod(è|e)les
+test[e][r] (les|tes|le|ton) mod(è|e)le[s]
+(lance|fais|fait) (le|un) test (des|de|du) mod(è|e)le[s]
 
 [s_fastest_models]
 # Les 3 modèles les plus rapides selon les tests (« teste les modèles »), avec leur temps moyen
@@ -114,6 +114,16 @@ change[r] (de|la|ta|ma) voix
 (utilise|prends|mets|choisis) la voix
 passe à la voix
 [la ]voix[ numéro]
+
+[s_change_stt]
+change[r] (de|la|ta) transcription
+change[r] (de|la|ta) reconnaissance vocale
+change[r] (de|le) (stt|s t t)
+
+[s_change_tts]
+change[r] (de|la|ta) synthèse vocale
+change[r] (de|le) (tts|t t s)
+change[r] (de|le|ton) moteur de voix
 
 [s_new_conversation]
 (démarrons|commençons|[on ](démarre|commence)) une nouvelle (discussion|conversation)

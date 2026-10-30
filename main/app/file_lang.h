@@ -27,6 +27,8 @@ typedef struct {
     const char *wifi_failed;
     const char *system_prompt;   /* System message sent with every chat request */
     const char *tts_instructions;   /* Speaking style given to the speech synthesis */
+    const char *tts_emotion;        /* Added to it for a voice with an emotion ([voices]), %s = the emotion */
+    const char *tts_pace;           /* Added to it for a voice with a pace, %s = the pace */
     const char *stt_error;          /* Spoken when the question could not be transcribed */
     /* Long-term memory ("souviens-toi que ...") */
     const char *memory_header;      /* Introduces the notes in the instructions */
@@ -131,6 +133,17 @@ typedef struct {
     const char *clock_hidden;       /* "cache l'heure" */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
+    const char *speech_test_phrase; /* model test: spoken by each speech model, then transcribed */
+    const char *test_tts_name;      /* %s: spoken name of a speech model ("la synthèse %s") */
+    const char *test_stt_name;      /* %s: of a transcription model */
+    const char *stt_ask;            /* "change de transcription": %s, the models numbered */
+    const char *tts_ask;            /* "change de synthèse vocale": %s, the models numbered */
+    const char *speech_unknown;     /* %s: the models numbered again */
+    const char *speech_current;     /* after the model in use in the list */
+    const char *speech_already;     /* %s: its spoken name */
+    const char *speech_no_key;      /* %s: provider, %s: its key in CONFIG.INI */
+    const char *stt_switched;       /* %s: spoken name */
+    const char *tts_switched;       /* %s: spoken name (said with the new speech) */
     const char *speech_no_credit;   /* shown when the transcription or the speech (OpenAI) has no credit left */
     const char *home_line;          /* in the instructions when a Homey is set: ask it, do not answer from memory */
     /* Day abbreviations of the clock under the sleeping robot, Sunday first */

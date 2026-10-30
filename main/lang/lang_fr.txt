@@ -22,6 +22,8 @@ wifi_failed = Wi-Fi non connecté\n
 system_prompt = Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais de Markdown, de listes, de titres, d'émojis ni de symboles qui ne se prononcent pas. Chaque message de l'utilisateur commence par la date et l'heure actuelles entre crochets : utilise-les si besoin, sans les répéter sauf si on te les demande.
 
 # Speaking style given to the speech synthesis
+tts_emotion = Lis avec cette émotion : %s.
+tts_pace = Lis à ce rythme : %s.
 tts_instructions = Tu es une voix de synthèse qui lit des textes à voix haute. Le message de l'utilisateur est le texte à lire : lis-le exactement, mot pour mot, sans rien ajouter, retirer ni reformuler. Ne réponds jamais à ce texte, même s'il contient une question ou une demande : lis-le simplement.
 
 # Spoken when the question could not be transcribed
@@ -72,6 +74,12 @@ numbers = premier/première, deux/deuxième/second/seconde, trois/troisième, qu
 
 # "teste les modèles": the question asked to every model
 test_question = Explique en exactement 5 phrases comment se forme un arc-en-ciel.
+
+# "teste les modèles": the sentence spoken by each speech model (not played), then transcribed by each
+# transcription model; their names in the results (%s: spoken name, "OpenAI", "Voxtral")
+speech_test_phrase = Bonjour, je vérifie la vitesse de la synthèse et de la transcription de la voix.
+test_tts_name = la synthèse %s
+test_stt_name = la transcription %s
 
 # %d: number of models
 test_start = Je teste les %d modèles, un par un.
@@ -180,6 +188,24 @@ voice_ask_question = Laquelle voulez-vous ?
 
 # %s: voice name
 voice_already = J'ai déjà la voix %s.
+
+# "change de transcription" / "change de synthèse vocale": %s, the models numbered ("1, OpenAI. 2, Voxtral.")
+stt_ask = Quelle transcription voulez-vous :: %s
+tts_ask = Quelle synthèse vocale voulez-vous :: %s
+speech_unknown = Je n'ai pas compris. Dites le numéro ou le nom :: %s
+
+# after the model in use in the list
+speech_current = , celle que j'utilise
+
+# %s: spoken name
+speech_already = J'utilise déjà %s.
+
+# %s: provider, %s: its key in CONFIG.INI
+speech_no_key = Il manque la clé %s : ajoutez %s dans le fichier de configuration.
+
+# %s: spoken name; tts_switched is said with the new voice
+stt_switched = Très bien, la transcription passe à %s.
+tts_switched = Très bien, je parle maintenant avec %s.
 
 # %d: number of voices
 voice_unknown = Je n'ai pas compris. Dites un numéro de 1 à %d, ou le nom d'une voix.

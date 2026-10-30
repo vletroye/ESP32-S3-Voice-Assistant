@@ -25,14 +25,22 @@ typedef void (*stt_partial_cb_t)(const char *text);
  */
 esp_err_t stt_stream_init(void);
 
+/* The transcription services (ai_provider_<name>_stt.c) */
+typedef struct stt_backend stt_backend_t;
+extern const stt_backend_t stt_backend_openai;
+extern const stt_backend_t stt_backend_mistral;
+
 /**
- * @brief Set the OpenAI Realtime transcription parameters. The strings are copied.
+ * @brief Set the transcription service and its parameters (the strings are copied). Called again to change the
+ *        service or the model at run time: a new connection.
  *
- * @param api_key  OpenAI key
- * @param model    e.g. "gpt-live-transcribe"
- * @param language ISO-639-1 code, e.g. "fr"
+ * @param backend  &stt_backend_openai, &stt_backend_mistral
+ * @param api_key  Key of the service
+ * @param model    e.g. "gpt-live-transcribe", "voxtral-mini-transcribe-realtime-3-0"
+ * @param language ISO-639-1 code, e.g. "fr" (NULL: unchanged)
  */
-void stt_stream_configure(const char *api_key, const char *model, const char *language);
+void stt_stream_configure(const stt_backend_t *backend, const char *api_key, const char *model,
+                          const char *language);
 
 /** Change the transcription language (ISO-639-1): the session is updated before the next question */
 void stt_stream_set_language(const char *language);
@@ -61,7 +69,15 @@ char *stt_stream_finish(uint32_t timeout_ms);
  */
 bool stt_stream_has_text(void);
 
-/** The last transcription refused for lack of OpenAI credit (insufficient_quota) */
+/**
+ * @brief Model test: transcribe this audio (16 kHz mono, at most 10 s) with the service configured.
+ *
+ * @param ms Time from the commit (all the audio sent) to the transcript (-1 if none)
+ * @return The transcript (to be freed with free()), or NULL
+ */
+char *stt_stream_test(const int16_t *audio, size_t samples, int *ms);
+
+/** The last transcription refused for lack of credit (insufficient_quota, 402...) */
 bool stt_stream_no_credit(void);
 
 /**

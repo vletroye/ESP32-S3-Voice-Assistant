@@ -25,6 +25,21 @@ void assistant_set_language(const char *code);
 void assistant_set_model(const char *model);
 
 /**
+ * @brief Use this transcription / speech model ([stt] / [tts] of AGENTS.INI), NULL for the one of the settings;
+ *        applied at once (a new connection), not saved
+ */
+void assistant_set_stt(const char *model);
+void assistant_set_tts(const char *model);
+
+/** Provider of the speech in use ("openai", "mistral"): whose voices "change de voix" offers */
+const char *assistant_tts_provider(void);
+
+/** The voice speaking: Voice of CONFIG.INI if it is of the speech provider in use and speaks the language, else
+ *  the first one of [voices] that is (NULL if the provider has none) */
+struct llm_voice;
+const struct llm_voice *assistant_voice(void);
+
+/**
  * @brief Where the user lives (2-letter country code, town; NULL keeps the current value): web search and
  *        model instructions updated at once.
  */

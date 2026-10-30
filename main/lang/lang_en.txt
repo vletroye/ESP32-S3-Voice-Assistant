@@ -22,6 +22,8 @@ wifi_failed = Not Connected to Wi-Fi\n
 system_prompt = Your answer is read aloud by a speech synthesizer: never use Markdown, lists, headings, emojis or symbols that cannot be pronounced. Each user message starts with the current date and time in brackets: use them when useful, without repeating them unless asked.
 
 # Speaking style given to the speech synthesis
+tts_emotion = Read with this emotion: %s.
+tts_pace = Read at this pace: %s.
 tts_instructions = You are a text-to-speech voice. The user's message is the text to read: read it exactly, word for word, without adding, removing or rephrasing anything. Never answer it, even if it contains a question or a request: just read it.
 
 # Spoken when the question could not be transcribed
@@ -72,6 +74,12 @@ numbers = one/first, two/second, three/third, four/fourth, five/fifth, six/sixth
 
 # "teste les modèles": the question asked to every model
 test_question = Explain in exactly 5 sentences how a rainbow forms.
+
+# "teste les modèles": the sentence spoken by each speech model (not played), then transcribed by each
+# transcription model; their names in the results (%s: spoken name, "OpenAI", "Voxtral")
+speech_test_phrase = Hello, I am checking the speed of the speech synthesis and of the transcription.
+test_tts_name = the speech %s
+test_stt_name = the transcription %s
 
 # %d: number of models
 test_start = I am testing the %d models, one by one.
@@ -180,6 +188,24 @@ voice_ask_question = Which one do you want?
 
 # %s: voice name
 voice_already = I already have the voice %s.
+
+# "change de transcription" / "change de synthèse vocale": %s, the models numbered ("1, OpenAI. 2, Voxtral.")
+stt_ask = Which transcription do you want:: %s
+tts_ask = Which speech synthesis do you want:: %s
+speech_unknown = I didn't understand. Say the number or the name:: %s
+
+# after the model in use in the list
+speech_current = , the one I use
+
+# %s: spoken name
+speech_already = I already use %s.
+
+# %s: provider, %s: its key in CONFIG.INI
+speech_no_key = The %s key is missing: add %s to the configuration file.
+
+# %s: spoken name; tts_switched is said with the new voice
+stt_switched = Very well, the transcription now uses %s.
+tts_switched = Very well, I now speak with %s.
 
 # %d: number of voices
 voice_unknown = I didn't understand. Say a number from 1 to %d, or the name of a voice.

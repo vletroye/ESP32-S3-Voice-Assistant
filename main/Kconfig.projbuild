@@ -35,7 +35,9 @@ menu "Example Configuration"
         string "Speech-to-text model"
         default "gpt-live-transcribe"
         help
-            OpenAI Realtime transcription model (streaming, transcription-only session).
+            Transcription model, one of the [stt] section of AGENTS.INI (OpenAI gpt-live-transcribe, Mistral
+            voxtral-mini-transcribe-realtime-3-0). Default of Stt_model in CONFIG.INI, which takes precedence
+            ("change de transcription" sets it).
 
     config ASSISTANT_END_OF_SPEECH_MS
         int "End of speech silence (ms)"
@@ -49,7 +51,9 @@ menu "Example Configuration"
         string "Speech synthesis model"
         default "gpt-realtime-2.1-mini"
         help
-            OpenAI Realtime model reading the answer aloud (WebSocket, one response per sentence).
+            Speech model reading the answer aloud, one of the [tts] section of AGENTS.INI (OpenAI
+            gpt-realtime-2.1-mini, Mistral voxtral-mini-tts-3-0). Default of Tts_model in CONFIG.INI, which takes
+            precedence ("change de synthèse vocale" sets it).
 
     config ASSISTANT_OPENAI_URL
         string "OpenAI base URL"
@@ -152,7 +156,9 @@ menu "Example Configuration"
         string "Speech synthesis voice"
         default "marin"
         help
-            OpenAI voice, e.g. marin, cedar, coral, nova.
+            Name of a voice of [voices] in AGENTS.INI, e.g. Marin, Cedar (OpenAI), Lea (Mistral). Default of
+            Voice in CONFIG.INI, which takes precedence. A voice of another provider or language: the first
+            voice of [voices] for the speech provider and the language in use.
 
     config ASSISTANT_TIMEZONE
         string "Time zone (POSIX TZ)"

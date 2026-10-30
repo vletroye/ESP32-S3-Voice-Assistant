@@ -253,29 +253,55 @@ static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uin
     lv_obj_add_event_cb(dropdown, changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
 }
 
-/* OpenAI Realtime voices offered (tts_stream.c) */
-#define s_settings_voices       tts_voices
-#define SETTINGS_VOICE_COUNT    tts_voice_count
+/* Voices offered: those of [voices] (AGENTS.INI) of the speech provider in use that speak the language in use */
+#define SETTINGS_VOICES_MAX     32
+static const llm_voice_t *s_settings_voices[SETTINGS_VOICES_MAX];
+static size_t s_settings_voice_count = 0;
 static lv_obj_t *s_voice_dropdown = NULL;
+
+/* The options of the voice row (again when the speech provider or the language changes), the voice in use selected */
+static void voice_options_refresh(void)
+{
+    if (!s_voice_dropdown) {
+        return;
+    }
+    const char *provider = assistant_tts_provider();
+    const char *code = app_lang_get()->code;
+    const llm_voice_t *current = assistant_voice();
+    char options[SETTINGS_VOICES_MAX * 25] = "";
+    uint16_t selected = 0;
+    s_settings_voice_count = 0;
+    for (size_t i = 0; i < llm_voice_count() && s_settings_voice_count < SETTINGS_VOICES_MAX; i++) {
+        const llm_voice_t *v = llm_voice(i);
+        if (!llm_voice_offered(v, provider, code)) {
+            continue;
+        }
+        if (v == current) {
+            selected = s_settings_voice_count;
+        }
+        strlcat(options, s_settings_voice_count ? "\n" : "", sizeof(options));
+        strlcat(options, v->name, sizeof(options));
+        s_settings_voices[s_settings_voice_count++] = v;
+    }
+    lv_dropdown_set_options(s_voice_dropdown, options[0] ? options : "-");
+    lv_dropdown_set_selected(s_voice_dropdown, selected);
+}
 
 /* The voice applies at once (no restart): saved, the synthesis reconnects, then a sample is spoken */
 static void settings_voice_changed_cb(lv_event_t *e)
 {
     uint16_t selected = lv_dropdown_get_selected(lv_event_get_target(e));
-    if (selected >= SETTINGS_VOICE_COUNT) {
-        return;     // the voice set in CONFIG.INI (not listed), already in use
+    if (selected >= s_settings_voice_count) {
+        return;
     }
-    const char *voice = s_settings_voices[selected];
-    settings_save_str("Voice", voice);
+    const llm_voice_t *voice = s_settings_voices[selected];
+    settings_save_str("Voice", voice->name);
     sys_param_t *param = settings_get_parameter();
-    strlcpy(param->voice, voice, sizeof(param->voice));
-    tts_stream_set_voice(voice);
+    strlcpy(param->voice, voice->name, sizeof(param->voice));
+    assistant_set_tts(NULL);
 
-    char name[24];
-    strlcpy(name, voice, sizeof(name));
-    name[0] = toupper((unsigned char)name[0]);
     char sample[96];
-    snprintf(sample, sizeof(sample), app_lang_get()->voice_sample, name);
+    snprintf(sample, sizeof(sample), app_lang_get()->voice_sample, voice->name);
     tts_stream_begin(NULL);
     tts_stream_say(sample);
     tts_stream_end();
@@ -395,23 +421,8 @@ static void settings_screen_setup(void)
     lv_obj_t *voice_dropdown = settings_row_create(lang->settings_voice, lv_pct(62));
     s_voice_dropdown = voice_dropdown;
     s_voice_row_label = lv_obj_get_child(lv_obj_get_parent(voice_dropdown), 0);
-    options[0] = '\0';
-    uint16_t voice_selected = SETTINGS_VOICE_COUNT;
-    for (size_t i = 0; i < SETTINGS_VOICE_COUNT; i++) {
-        char name[24];
-        strlcpy(name, s_settings_voices[i], sizeof(name));
-        name[0] = toupper((unsigned char)name[0]);
-        strlcat(options, i ? "\n" : "", SETTINGS_OPTIONS_SIZE);
-        strlcat(options, name, SETTINGS_OPTIONS_SIZE);
-        if (strcmp(param->voice, s_settings_voices[i]) == 0) {
-            voice_selected = i;
-        }
-    }
-    if (voice_selected == SETTINGS_VOICE_COUNT) {
-        strlcat(options, "\n", SETTINGS_OPTIONS_SIZE);
-        strlcat(options, param->voice, SETTINGS_OPTIONS_SIZE);
-    }
-    settings_dropdown_setup(voice_dropdown, options, voice_selected, settings_voice_changed_cb);
+    settings_dropdown_setup(voice_dropdown, "-", 0, settings_voice_changed_cb);
+    voice_options_refresh();
 
     // Save button (bottom right), enabled once a selection differs from the stored settings
     s_save_btn = lv_btn_create(ui_ScreenSettings);
@@ -458,12 +469,8 @@ void ui_ctrl_settings_sync(void)
             lv_dropdown_set_selected(s_model_dropdown, i);
         }
     }
-    // Voice changed by voice ("change de voix")
-    for (size_t i = 0; i < SETTINGS_VOICE_COUNT && s_voice_dropdown; i++) {
-        if (strcmp(param->voice, s_settings_voices[i]) == 0) {
-            lv_dropdown_set_selected(s_voice_dropdown, i);
-        }
-    }
+    // Voice changed by voice ("change de voix"), or the voices of another speech provider or language
+    voice_options_refresh();
     lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
     bsp_display_unlock();
 }

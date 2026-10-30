@@ -173,13 +173,9 @@ esp_err_t settings_read_parameter_from_nvs(void)
         goto err;
     }
 
-    // Read url
-    len = sizeof(g_sys_param.url);
-    ret = nvs_get_str(my_handle, "Base_url", g_sys_param.url, &len);
-    if (ret != ESP_OK || len == 0) {
-        ESP_LOGI(TAG, "No OpenAI Base url found");
-        goto err;
-    }
+    // OpenAI's API: fixed (no longer in CONFIG.INI; a Base_url key of an older version is erased by the
+    // configuration mode)
+    strlcpy(g_sys_param.url, CONFIG_ASSISTANT_OPENAI_URL, sizeof(g_sys_param.url));
 
     // Read language (optional, written by factory_nvs since the language support was added)
     len = sizeof(g_sys_param.lang);
@@ -502,7 +498,7 @@ sys_param_t *settings_get_parameter(void)
 
 /* Kept by the soft reset: Wi-Fi, API keys, Homey, PERSONA.TXT, MEMORY.TXT, comments of CONFIG.INI */
 static const char *const s_kept_keys[] = {
-    "ssid", "password", "ChatGPT_key", "Base_url", "Claude_key", "Gemini_key", "OpenRouter_key", "XAI_key",
+    "ssid", "password", "ChatGPT_key", "Claude_key", "Gemini_key", "OpenRouter_key", "XAI_key",
     "Mistral_key", "Perplexity_key",
     "Homey_url", "Homey_key", "Persona", "Memory", "Config_layout",
 };

@@ -15,13 +15,19 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "sdkconfig.h"
 #include "cJSON.h"
 #include "stt_backend.h"
 #include "stt_stream.h"
 
+/* "https://api.openai.com/v1/" (CONFIG_ASSISTANT_OPENAI_URL) -> "wss://api.openai.com/v1/realtime?intent=..." */
 static char *openai_uri(const char *model)
 {
-    return strdup("wss://api.openai.com/v1/realtime?intent=transcription");
+    const char *host_path = strstr(CONFIG_ASSISTANT_OPENAI_URL, "://");
+    host_path = host_path ? host_path + 3 : CONFIG_ASSISTANT_OPENAI_URL;
+    char *uri = NULL;
+    asprintf(&uri, "wss://%srealtime?intent=transcription", host_path);
+    return uri;
 }
 
 static char *openai_session_update(const char *model, const char *language)

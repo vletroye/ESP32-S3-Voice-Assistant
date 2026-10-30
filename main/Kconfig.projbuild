@@ -59,7 +59,9 @@ menu "Example Configuration"
         string "OpenAI base URL"
         default "https://api.openai.com/v1/"
         help
-            Written to the "Base_url" key of CONFIG.INI when it does not exist yet.
+            Base URL of OpenAI's API, used for the GPT answers, the transcription and the speech (wss:// is
+            derived from it). Not in CONFIG.INI: change it here for another endpoint (e.g. OpenAI's European
+            one, https://eu.api.openai.com/v1/), then rebuild.
 
     config ASSISTANT_SHOW_CLOCK
         string "Clock shown while the assistant sleeps (on or off)"

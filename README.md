@@ -689,6 +689,11 @@ speed.
 
 #### 3.3.1 Available models
 
+Three kinds of models work together: the **LLM** answers, the **STT** transcribes what you say, the **TTS** speaks
+the answer. Each one is chosen apart (Settings screen, voice commands, `CONFIG.INI`).
+
+**LLM: the answers** (`Chat_model`; "change de modèle" / "change the model")
+
 | Model | Provider | Price in / out (per 1M tokens) | ≈ cost per 1,000 questions | Speed | Reasoning | Settings used |
 | --- | --- | --- | --- | --- | --- | --- |
 | `claude-haiku-5-5` (default) | Anthropic | $0.10 / $0.50 | $0.15 | ★★★ fastest | none | thinking `disabled`, effort `low` |
@@ -757,6 +762,35 @@ How to read this table:
   and do not depend on the chosen model. Prices as of October 2026; check the providers' pricing pages.
 - The effort is kept `low` on every model to favour a fast spoken answer. Raising it (in `AGENTS.INI`) makes
   Opus, Sol and Astra think more, and makes them slower and more expensive.
+
+**STT: the transcription of what you say** (`Stt_model`, `[stt]` of `AGENTS.INI`; "change de transcription" /
+"change the transcription", or page 2 of the Settings screen)
+
+| Model | Provider (key) | Price | Connection | Transcript after the end of speech (measured) |
+| --- | --- | --- | --- | --- |
+| `gpt-live-transcribe` (default) | OpenAI (`ChatGPT_key`) | $2.50 / $10 per 1M tokens (audio counted 10 tokens a second: ≈ $0.0015 a minute, plus the text) | WebSocket kept open | 0.7 s |
+| `voxtral-mini-transcribe-realtime-3-0` | Mistral (`Mistral_key`) | $0.008 a minute | a session per question | not measured |
+| `nova-3` | Deepgram (`Deepgram_key`) | $0.0077 a minute | a session per question | 0.4 s |
+| `nova-2` | Deepgram (`Deepgram_key`) | ≈ $0.0058 a minute | a session per question | not measured |
+
+- The six languages of the firmware are understood by every model; the language in use is given to them.
+- A session per question is opened when listening starts (its audio is buffered meanwhile): nothing is open while
+  the assistant sleeps. OpenAI's connection stays open, so that listening never waits for it.
+
+**TTS: the voice of the answers** (`Tts_model`, `[tts]` of `AGENTS.INI`; "change de synthèse vocale" / "change the
+speech synthesis", or page 2 of the Settings screen; the voice itself is chosen apart, see
+[Voices](#34-voices-voices-of-agentsini))
+
+| Model | Provider (key) | Price | Voices given with the firmware | First audio of a sentence (measured) |
+| --- | --- | --- | --- | --- |
+| `gpt-realtime-2.1-mini` (default) | OpenAI (`ChatGPT_key`) | $0.60 per 1M text tokens, $20 per 1M audio tokens | 10, every language (Marin by default) | 0.9 s |
+| `voxtral-mini-tts-3-0` | Mistral (`Mistral_key`) | $13 per 1M characters | 36: French 4, English 11, Dutch, German, Spanish and Italian 1 each, and 17 for 15 other languages | 0.7 to 1 s |
+| `aura-2` | Deepgram (`Deepgram_key`) | $30 per 1M characters | 18: French 2 (Agathe, Hector), English 4, Dutch, German, Spanish and Italian 3 each | 0.4 s (1.8 s to reconnect after a long pause, done while you speak) |
+
+- With Mistral, each voice can have an emotion and a pace; OpenAI reads them in its instructions; Deepgram has
+  neither.
+- A model whose key is missing is not offered on the Settings screen; chosen by voice, the missing key is said.
+- Their costs are counted apart from the answers' in `COSTS.TXT` (STT, LLM, TTS).
 
 #### 3.3.2 AGENTS.INI: the models offered
 

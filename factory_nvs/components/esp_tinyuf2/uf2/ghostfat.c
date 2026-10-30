@@ -303,7 +303,7 @@ void padded_memcpy(char *dst, char const *src, int len)
 }
 
 /*------------------------------------------------------------------*/
-/* [Voice assistant] Text files (CONFIG.INI, PERSONA.TXT, MEMORY.TXT) written elsewhere
+/* [Voice assistant] Text files (CONFIG.INI, MEMORY.TXT) written elsewhere
  *------------------------------------------------------------------*/
 
 /*

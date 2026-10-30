@@ -11,60 +11,60 @@ added.
 
 This page has four parts:
 
-1. **[Quick start](#quick-start)**: flash the firmware, enter your Wi-Fi and two API keys, talk. About 15 minutes.
-2. **[User guide](#user-guide)**: everyday use, voice commands, radio, Settings screen, updates.
-3. **[Advanced user guide](#advanced-user-guide)**: everything that can be tuned (models, voices, persona,
+1. **[Quick start](#1-quick-start)**: flash the firmware, enter your Wi-Fi and two API keys, talk. About 15 minutes.
+2. **[User guide](#2-user-guide)**: everyday use, voice commands, radio, Settings screen, updates.
+3. **[Advanced user guide](#3-advanced-user-guide)**: everything that can be tuned (models, voices, persona,
    languages, costs, home automation). Nothing there is needed to start: every setting has a working default.
-4. **[Design and architecture](#design-and-architecture)**: how it works, and how to build it from source.
+4. **[Design and architecture](#4-design-and-architecture)**: how it works, and how to build it from source.
 
 The project started from Espressif's [`chatgpt_demo`](https://github.com/espressif/esp-box) (ESP-IDF), which has
 been largely rewritten.
 
 ## Contents
 
-- [Quick start](#quick-start)
-  - [1. What you need](#1-what-you-need)
-  - [2. Get the API keys](#2-get-the-api-keys)
-  - [3. Flash the firmware](#3-flash-the-firmware)
-  - [4. First configuration: Wi-Fi and keys](#4-first-configuration-wi-fi-and-keys)
-  - [5. Talk to it](#5-talk-to-it)
-  - [If something goes wrong](#if-something-goes-wrong)
-- [User guide](#user-guide)
-  - [What it can do](#what-it-can-do)
-  - [Everyday use](#everyday-use)
-  - [Gestures](#gestures)
-  - [On the device: Settings screen](#on-the-device-settings-screen)
-  - [Voice commands](#voice-commands)
-  - [Radio](#radio)
-  - [Updating the firmware](#updating-the-firmware)
-- [Advanced user guide](#advanced-user-guide)
-  - [Files of the configuration drive](#files-of-the-configuration-drive)
-  - [`CONFIG.INI`: settings and API keys](#configini-settings-and-api-keys)
-  - [Models and costs](#models-and-costs)
-  - [Voices: `[voices]` of `AGENTS.INI`](#voices-voices-of-agentsini)
-  - [`PERSO_<XX>.TXT`: who the assistant is](#perso_xxtxt-who-the-assistant-is)
-  - [`MEMORY.TXT`: long-term memory notes](#memorytxt-long-term-memory-notes)
-  - [Languages: `LANG_<XX>.TXT`](#languages-lang_xxtxt)
-  - [Adding a new language, step by step](#adding-a-new-language-step-by-step)
-  - [Writing voice phrases (patterns)](#writing-voice-phrases-patterns)
-  - [Home automation: Homey](#home-automation-homey)
-- [Design and architecture](#design-and-architecture)
-  - [Architecture](#architecture)
-  - [Hardware and software](#hardware-and-software)
-  - [Repository layout](#repository-layout)
-  - [Build and flash](#build-and-flash)
-  - [Making a release](#making-a-release)
-  - [At build time: `sdkconfig.defaults` / `idf.py menuconfig`](#at-build-time-sdkconfigdefaults--idfpy-menuconfig)
-  - [System sounds](#system-sounds)
-  - [Logs and diagnostics](#logs-and-diagnostics)
-  - [Features in detail](#features-in-detail)
-  - [Design notes](#design-notes)
-- [Roadmap](#roadmap)
-- [Credits and licenses](#credits-and-licenses)
+- [1. Quick start](#1-quick-start)
+  - [1.1 What you need](#11-what-you-need)
+  - [1.2 Get the API keys](#12-get-the-api-keys)
+  - [1.3 Flash the firmware](#13-flash-the-firmware)
+  - [1.4 First configuration: Wi-Fi and keys](#14-first-configuration-wi-fi-and-keys)
+  - [1.5 Talk to it](#15-talk-to-it)
+  - [1.6 If something goes wrong](#16-if-something-goes-wrong)
+- [2. User guide](#2-user-guide)
+  - [2.1 What it can do](#21-what-it-can-do)
+  - [2.2 Everyday use](#22-everyday-use)
+  - [2.3 Gestures](#23-gestures)
+  - [2.4 On the device: Settings screen](#24-on-the-device-settings-screen)
+  - [2.5 Voice commands](#25-voice-commands)
+  - [2.6 Radio](#26-radio)
+  - [2.7 Updating the firmware](#27-updating-the-firmware)
+- [3. Advanced user guide](#3-advanced-user-guide)
+  - [3.1 Files of the configuration drive](#31-files-of-the-configuration-drive)
+  - [3.2 `CONFIG.INI`: settings and API keys](#32-configini-settings-and-api-keys)
+  - [3.3 Models and costs](#33-models-and-costs)
+  - [3.4 Voices: `[voices]` of `AGENTS.INI`](#34-voices-voices-of-agentsini)
+  - [3.5 `PERSO_<XX>.TXT`: who the assistant is](#35-perso_xxtxt-who-the-assistant-is)
+  - [3.6 `MEMORY.TXT`: long-term memory notes](#36-memorytxt-long-term-memory-notes)
+  - [3.7 Languages: `LANG_<XX>.TXT`](#37-languages-lang_xxtxt)
+  - [3.8 Adding a new language, step by step](#38-adding-a-new-language-step-by-step)
+  - [3.9 Writing voice phrases (patterns)](#39-writing-voice-phrases-patterns)
+  - [3.10 Home automation: Homey](#310-home-automation-homey)
+- [4. Design and architecture](#4-design-and-architecture)
+  - [4.1 Architecture](#41-architecture)
+  - [4.2 Hardware and software](#42-hardware-and-software)
+  - [4.3 Repository layout](#43-repository-layout)
+  - [4.4 Build and flash](#44-build-and-flash)
+  - [4.5 Making a release](#45-making-a-release)
+  - [4.6 At build time: `sdkconfig.defaults` / `idf.py menuconfig`](#46-at-build-time-sdkconfigdefaults--idfpy-menuconfig)
+  - [4.7 System sounds](#47-system-sounds)
+  - [4.8 Logs and diagnostics](#48-logs-and-diagnostics)
+  - [4.9 Features in detail](#49-features-in-detail)
+  - [4.10 Design notes](#410-design-notes)
+- [5. Roadmap](#5-roadmap)
+- [6. Credits and licenses](#6-credits-and-licenses)
 
-## Quick start
+## 1. Quick start
 
-### 1. What you need
+### 1.1 What you need
 
 - An **[ESP32-S3-BOX-3](https://www.espressif.com/en/news/ESP32-S3-BOX-3)** (the BOX-3-SENSOR dock is optional:
   it adds presence detection and the battery gauge).
@@ -76,9 +76,9 @@ been largely rewritten.
 
   With the OpenAI key alone, the assistant works too, But the OpenAI model will be answering **without using the tools** 
   web search, weather or home automation. If you prefer alternatives to Anthropic's Models to use these tools (Gemini, Mistral, Grok, Perplexity,
-  OpenRouter), look at what each one can do in [Models and costs](#models-and-costs).
+  OpenRouter), look at what each one can do in [Models and costs](#33-models-and-costs).
 
-### 2. Get the API keys
+### 1.2 Get the API keys
 
 | Key | Where | Note |
 | --- | --- | --- |
@@ -87,14 +87,14 @@ been largely rewritten.
 
 Everyday use costs little: with the defaults (Claude Haiku), about **$0.15 for 1,000 answers**, plus the
 transcription and the voice (a few cents per hour of conversation). The device shows what it spends (see
-[Costs](#costs-coststxt-and-the-cost-on-screen)). Other providers (Google Gemini, Mistral, xAI Grok, Perplexity,
+[Costs](#333-costs-coststxt-and-the-cost-on-screen)). Other providers (Google Gemini, Mistral, xAI Grok, Perplexity,
 OpenRouter for the answers; Mistral and Deepgram for the transcription and the voice) can be added later, each with
 its own key.
 
 The keys stay **only on your device** (its flash memory): they are never sent anywhere but to their provider, and
 never shown in the logs.
 
-### 3. Flash the firmware
+### 1.3 Flash the firmware
 
 1. Download the firmware from the **[Releases](https://github.com/vletroye/ESP32-S3-Voice-Assistant/releases)**
    page: the file **`ESP32-S3-Assistant-<version>.bin`** (about 12 MB). It holds everything: the assistant, its
@@ -123,9 +123,9 @@ Replace `COM3` with the port of the BOX (`/dev/ttyACM0` on Linux, `/dev/cu.usbmo
 download mode: hold its **Boot** button, press and release **Reset**, release **Boot**, and try again.
 
 This first flash **erases everything** on the BOX (it is a full install). To update later without losing your
-settings, see [Updating the firmware](#updating-the-firmware).
+settings, see [Updating the firmware](#27-updating-the-firmware).
 
-### 4. First configuration: Wi-Fi and keys
+### 1.4 First configuration: Wi-Fi and keys
 
 1. At the first start, the BOX has no Wi-Fi nor key yet: it opens its **configuration mode** by itself. With the
    USB cable still connected to the PC, it shows up as a **USB drive** named "ESP-BOX".
@@ -150,7 +150,7 @@ settings, see [Updating the firmware](#updating-the-firmware).
    ```
 
    With an OpenAI key only, leave out `Claude_key` and also set `Chat_model = gpt-6-luna` (an OpenAI model answers
-   instead of Claude; no web search, weather or home automation, see [step 1](#1-what-you-need)).
+   instead of Claude; no web search, weather or home automation, see [step 1](#11-what-you-need)).
 3. **Save** the file, then **wait about 10 seconds** before going on. Saving on the PC is not enough: the PC
    still has to copy the file into the BOX, and it may do it a little later (Windows often waits a few seconds).
    If the BOX restarts before the copy is finished, the file is lost or cut.
@@ -163,9 +163,9 @@ it holds (Wi-Fi and keys included, if they were saved before); fill in what is m
 
 You can come back to the configuration mode at any time: tap the gear icon, then the folder-and-gear icon at the
 top right, then **OK** (or say "**édite la config**" / "**edit the config**" with the BOX connected to the PC).
-Every file of the drive is explained in the [Advanced user guide](#advanced-user-guide).
+Every file of the drive is explained in the [Advanced user guide](#3-advanced-user-guide).
 
-### 5. Talk to it
+### 1.5 Talk to it
 
 - Say "**Bonjour ESP**" or "**Hi ESP**" (or touch the screen): a beep, then "J'écoute…" / "I'm listening…". Ask
   your question and stop: the answer is shown and spoken.
@@ -177,9 +177,9 @@ Every file of the drive is explained in the [Advanced user guide](#advanced-user
 - Try: "What's the weather tomorrow?" (with a Claude model), "Play some jazz", "Remember that my sister is called Anne", "Speak
   Spanish", "Change the voice", "What are the latest news?".
 
-The voice commands handled by the device itself are listed in the [User guide](#voice-commands).
+The voice commands handled by the device itself are listed in the [User guide](#25-voice-commands).
 
-### If something goes wrong
+### 1.6 If something goes wrong
 
 | What you see or hear | What to do |
 | --- | --- |
@@ -190,14 +190,14 @@ The voice commands handled by the device itself are listed in the [User guide](#
 | The answer is cut or stutters | The Internet connection is slow; it says so on screen. |
 | `CONFIG.INI` changes are lost, or the file looks damaged | After saving, wait about 10 seconds before pressing **Restart** (the PC copies the file into the BOX a little after saving). A damaged file: empty it, save, wait, **Restart**: a clean one comes back at the next configuration mode. |
 
-To start again from scratch, see the **factory reset** in [The Settings screen](#on-the-device-settings-screen).
+To start again from scratch, see the **factory reset** in [The Settings screen](#24-on-the-device-settings-screen).
 
-## User guide
+## 2. User guide
 
 The assistant in daily use: what it does, how to speak to it, its screens. Everything here works with the
-settings of the [Quick start](#quick-start).
+settings of the [Quick start](#1-quick-start).
 
-### What it can do
+### 2.1 What it can do
 
 - **Talk to an AI out loud**: say "Bonjour ESP" or "Hi ESP" (or touch the screen), ask, listen. The answer is
   spoken sentence by sentence as the model writes it, and shown on screen. After an answer it keeps listening a
@@ -207,7 +207,7 @@ settings of the [Quick start](#quick-start).
   modèle" / "change the model", "utilise le modèle 3" / "use model 3"); the models offered are listed in a file you can edit.
 - **Six languages** (French, English, Dutch, German, Spanish, Italian), switched by voice ("parle anglais", "speak
   French") or from the Settings screen; other languages can be added (see
-  [Adding a new language, step by step](#adding-a-new-language-step-by-step)).
+  [Adding a new language, step by step](#38-adding-a-new-language-step-by-step)).
 - **Choose the voice**: 10 OpenAI voices, Mistral's natural voices for each language, with an emotion and a
   pace if you like, or Deepgram's Aura-2 voices (the transcription can be Deepgram's Nova too); Aura-2 also through
   OpenRouter, with the OpenRouter key alone ("change de voix" / "change the voice", "prends la voix Cedar" / "use the
@@ -231,9 +231,9 @@ settings of the [Quick start](#quick-start).
 - **Model test**: "teste les modèles" / "test the models" measures how fast each model (and each voice) answers, and says which one is
   the fastest.
 
-Every feature in detail: [Features in detail](#features-in-detail).
+Every feature in detail: [Features in detail](#49-features-in-detail).
 
-### Everyday use
+### 2.2 Everyday use
 
 0. At start-up, once the Wi-Fi is connected, a welcome screen shows the steps; its button at the bottom right
    ("OK (60)") counts down from 60 and closes it at 0 (tap it, or say "Bonjour ESP", to close it at once).
@@ -258,7 +258,7 @@ Every feature in detail: [Features in detail](#features-in-detail).
    it goes to sleep once it has said it, without listening again, and the conversation is cleared.
    Otherwise the conversation goes on after sleep or a restart.
 
-### Gestures
+### 2.3 Gestures
 
 - Touch the screen while asleep: wakes the assistant up, like "Bonjour ESP".
 - Double-tap during an answer: interrupts it and listens.
@@ -267,7 +267,7 @@ Every feature in detail: [Features in detail](#features-in-detail).
   and the assistant goes back to sleep, saying nothing. While listening, the session ends as without speech; while
   thinking, the answer's stream is left at once (every client reads `llm_cancelled()` and closes its connection).
 
-### On the device: Settings screen
+### 2.4 On the device: Settings screen
 
 Tap the gear icon on the home screen. The settings are split over two pages, browsed with the arrows at the
 bottom left and right (from the last page, the right arrow goes back to the first, and the other way round); the
@@ -327,22 +327,22 @@ The firmware holds **no Wi-Fi nor API key** (no build option for them): after a 
 must be filled in `CONFIG.INI` again. Without a Wi-Fi network or an OpenAI key, the
 device starts in configuration mode.
 
-### Voice commands
+### 2.5 Voice commands
 
 Phrases recognised by the device itself. Punctuation (¿ ¡ « » included) and case are ignored ("Au revoir !" / "Goodbye!" works), and hyphens
 and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the French and English
 phrases; only those of the language in use are recognised, except "change la langue" / "change the language" and the direct language
 phrases ("parle anglais", "speak French"), recognised in every language of `Languages`. They are written as
-patterns in one file per language (see [Writing voice phrases](#writing-voice-phrases-patterns)).
+patterns in one file per language (see [Writing voice phrases](#39-writing-voice-phrases-patterns)).
 
-#### Wake words (detected locally, without Internet)
+#### 2.5.1 Wake words (detected locally, without Internet)
 
 | Phrase | Effect |
 | --- | --- |
 | "Bonjour ESP" | Wakes the assistant up (beep, then listening); during an answer, interrupts it and listens |
 | "Hi ESP" | Same (English pronunciation) |
 
-#### Closing phrases: back to sleep, conversation cleared
+#### 2.5.2 Closing phrases: back to sleep, conversation cleared
 
 Recognised only when said **alone**. The French list is used when the assistant is in French, the English one
 in English (section `[s_goodbyes]` of the phrase files, `voice_cmd_is_goodbye()` in `voice_cmd.c`).
@@ -357,7 +357,7 @@ the assistant goes to sleep after saying it (no follow-up listening) and the con
 | à demain · à bientôt · à plus · ciao | bye · bye bye · bye ESP · see you (soon / later / tomorrow) |
 | bonne soirée · bonne journée · bonne après-midi | have a nice / good day · evening · night · afternoon |
 
-#### New conversation: conversation cleared, without going to sleep
+#### 2.5.3 New conversation: conversation cleared, without going to sleep
 
 Recognised at the **start** of what is said, in the language in use (`main/app/voice_cmd.c`). Said alone (or with
 "s'il te plaît" / "please"), the assistant answers "D'accord, je t'écoute." / "All right, I'm listening." and keeps
@@ -372,7 +372,7 @@ question.
 | j'ai une autre question · une autre question · autre question | I have another question · another question |
 | passons à autre chose · on passe à autre chose · parlons d'autre chose · changeons de sujet · on change de sujet · changement de sujet | let's move on · let's talk about something else · let's change the subject · change of subject |
 
-#### Language, model and voice
+#### 2.5.4 Language, model and voice
 
 Recognised in the language in use, except "change la langue" / "change the language" and the direct language phrases, recognised in
 every language (`main/app/voice_cmd.c`). Answered on the device; the
@@ -387,7 +387,7 @@ voice?"); the Settings screen follows.
 | Change the language (asks "Quelle langue voulez-vous ?" / "Which language do you want?" with the languages of `Languages` numbered: "1, français. 2, anglais. 3, allemand." / "1, French. 2, English. 3, German."; not understood: asked again) | change la langue · changer la langue · change de langue · changer de langue · change ta langue | change the language · change language · switch language · switch the language |
 | Answer to that question (within 60 s after it) | its number ("2", "le deuxième") or its name: français · anglais · "en anglais s'il te plaît"… | its number ("2", "the second") or its name: French · English · "in English please"… |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
-| Test the models: same question to each one, time to the first words spoken after each, results in `SPEED.TXT`, speed written to `AGENTS.INI` (see [Model test](#model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
+| Test the models: same question to each one, time to the first words spoken after each, results in `SPEED.TXT`, speed written to `AGENTS.INI` (see [Model test](#334-model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
 | The fastest models: the 3 fastest offered, by their mean time over the model tests ("Les modèles les plus rapides sont Haiku (0,8 seconde)…" / "The fastest models are Haiku (0.8 second)…"); never tested: "Je n'ai pas encore testé les modèles. Veux-tu que je lance un test ?" / "I have not tested the models yet. Do you want me to run a test?", then "oui" / "yes" runs the test, "non" / "no" does not (section `[s_fastest_models]`) | quels sont les modèles les plus rapides · quel est le modèle le plus rapide · donne-moi / dis-moi les modèles les plus rapides · les modèles les plus rapides | what are the fastest models · which model is the fastest · tell me the fastest models · the fastest models |
 | List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …" / "At Anthropic, I support: Haiku, Sonnet and Opus. At OpenAI: …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
 | Change the model (asks the provider first, the providers that have models in `AGENTS.INI` numbered (the `%s` of `provider_ask`): "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI…" / "Which provider do you want: 1, Anthropic. 2, OpenAI…"; a provider with a single model is chosen at once, without listing it) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
@@ -415,7 +415,7 @@ language. Say the number or the name of a language: 1, French. 2, English.") or 
 de 1 à 3, ou le nom du modèle." / "I did not understand. Say a number from 1 to 3, or the name of the model.".
 "Flash" alone is Gemini 3.8 Flash, "Flash-Lite" Gemini 3.5 Flash-Lite.
 
-#### Settings screen, configuration files, restart
+#### 2.5.5 Settings screen, configuration files, restart
 
 | French | English | Effect |
 | --- | --- | --- |
@@ -428,7 +428,7 @@ de 1 à 3, ou le nom du modèle." / "I did not understand. Say a number from 1 t
 The PC is detected by the USB start-of-frame packets a host sends every millisecond (`usb_serial_jtag_is_connected()`):
 a charger or a power bank sends none.
 
-#### Country and town
+#### 2.5.6 Country and town
 
 Asked, then confirmed before saving ("Confirmes-tu que tu veux changer ton pays en Belgique ?" / "Do you confirm
 that you want to change your country to Belgium?"): "oui" / "yes", "d'accord" / "all right", "ok", "exact" /
@@ -442,10 +442,10 @@ instructions.
 | Answer | the name ("Belgique", "j'habite à Evere"…) | the name ("Belgium", "I live in Evere"…) |
 
 The country must be one of the countries of `COUNTRY.TXT` (about 40 by default: Europe, North America,
-French-speaking Africa…; see [Languages](#languages-lang_xxtxt)), as the web search needs
+French-speaking Africa…; see [Languages](#37-languages-lang_xxtxt)), as the web search needs
 its 2-letter code; the town is kept as said.
 
-#### Long-term memory
+#### 2.5.7 Long-term memory
 
 Recognised in the language in use (`main/app/file_memory.c`). "Remember" phrases are
 followed by what to remember; the other ones are said alone. Answered on the device, without calling the model.
@@ -457,7 +457,7 @@ followed by what to remember; the other ones are said alone. Answered on the dev
 | Forget everything | oublie tout · efface ta mémoire · efface toute ta mémoire | forget everything · erase your memory | "J'ai tout oublié." / "I forgot everything." |
 | List the notes | dis-moi tout ce que tu as mémorisé · dis-moi ce que tu as mémorisé · qu'est-ce que tu as mémorisé · qu'as-tu mémorisé · dis-moi tout ce que tu as retenu · dis-moi ce que tu as retenu · qu'est-ce que tu as retenu | tell me everything you remember · what do you remember · what have you memorized | The notes, read out |
 
-#### Free phrases understood by Claude (tools)
+#### 2.5.8 Free phrases understood by Claude (tools)
 
 No fixed wording: Claude decides when to use a tool.
 
@@ -466,16 +466,16 @@ No fixed wording: Claude decides when to use a tool.
 | Weather | "Quel temps fait-il à Namur ?" / "What's the weather in Namur?", "Va-t-il pleuvoir demain ?" / "Will it rain tomorrow?" (your town: `City` in `CONFIG.INI`, or "change ma ville" / "change my town") |
 | Volume | "Parle plus fort" / "Speak louder", "Baisse le son" / "Turn the volume down", "Mets le volume à 50" / "Set the volume to 50" (then back to sleep) |
 | Web search | "Quelles sont les dernières nouvelles ?" / "What are the latest news?", "Cherche sur internet …" / "Search the web for …" |
-| Radio | "Mets un truc calme pour dîner" / "Put something calm on for dinner", "Une radio d'infos belge" / "A Belgian news radio" (`play_radio`; the usual phrases are handled by the device, see [Radio](#radio)) |
+| Radio | "Mets un truc calme pour dîner" / "Put something calm on for dinner", "Une radio d'infos belge" / "A Belgian news radio" (`play_radio`; the usual phrases are handled by the device, see [Radio](#26-radio)) |
 | Homey | "Allume la lumière du salon" / "Turn on the living room light", "Éteins tout au rez-de-chaussée" / "Switch everything off downstairs", "Active l'ambiance cinéma" / "Activate the cinema mood", "Lance le flow Bonne nuit" / "Start the Good night flow", "Qui est à la maison ?" / "Who is home?", "Combien je consomme en ce moment ?" / "How much power am I using right now?" |
 | Date and time | "Quel jour sommes-nous ?" / "What day is it?", "Dans combien de jours est Noël ?" / "How many days until Christmas?" (no tool: the date comes with each question) |
 
-### Radio
+### 2.6 Radio
 
 Internet radios from [Radio-Browser](https://www.radio-browser.info), the free directory maintained by its
 community (no key, no account), played through the speaker. Asked by voice, or from the **radio screen**.
 
-#### Playing a radio
+#### 2.6.1 Playing a radio
 
 | Action | French | English |
 | --- | --- | --- |
@@ -503,7 +503,7 @@ community (no key, no account), played through the speaker. Asked by voice, or f
   duplicates. A station that gives no sound is skipped (the next one plays); a stream that drops is reconnected
   (3 tries). Each station played is counted by Radio-Browser, as its API asks.
 
-#### While it plays
+#### 2.6.2 While it plays
 
 - **The wake word stops it**: "Bonjour ESP" (or a touch) fades it out in 0.4 s, the assistant listens and answers,
   then the radio plays again when the assistant goes back to sleep (`Radio_resume = off`: it stays stopped).
@@ -520,7 +520,7 @@ community (no key, no account), played through the speaker. Asked by voice, or f
 - **Sound**: the I2S bus, shared with the microphones, stays at 16 kHz: the music is mixed to mono and filtered
   below 7 kHz (the speaker is mono and small anyway).
 
-#### Radio screen
+#### 2.6.3 Radio screen
 
 Opened by a tap on the **volume** of the sleep screen (bottom left); closed by the back arrow, after 60 s without
 a touch, or when the assistant listens.
@@ -541,7 +541,7 @@ a touch, or when the assistant listens.
   stops (no station yet: the first favourite).
 - Volume -/+ by 10 %; treble -/+ by 2 dB (saved in `Radio_treble`).
 
-#### Favourites: `RADIO.TXT`
+#### 2.6.4 Favourites: `RADIO.TXT`
 
 One station per line, `name | stream URL | Radio-Browser id` (the id is optional), up to 30, on SPIFFS, shown on
 the configuration drive:
@@ -554,10 +554,10 @@ Ma radio | https://exemple.org/stream.mp3
 A radio missing from Radio-Browser can be added by hand (MP3 or AAC; https allowed here). Comments (`#`) are kept
 when the device adds or removes a line. The soft reset keeps the file, the factory reset erases it.
 
-### Updating the firmware
+### 2.7 Updating the firmware
 
 Each [release](https://github.com/vletroye/ESP32-S3-Voice-Assistant/releases) gives, besides the full image of the
-[Quick start](#3-flash-the-firmware), two smaller files that update the BOX **without erasing anything** (Wi-Fi, keys,
+[Quick start](#13-flash-the-firmware), two smaller files that update the BOX **without erasing anything** (Wi-Fi, keys,
 settings, conversation and the files you edited are kept):
 
 | File | Flash address | What it is |
@@ -575,25 +575,25 @@ esptool.py --chip esp32s3 -p COM3 write_flash 0x10000 ESP32-S3-Assistant-<versio
 After an update, the files of the configuration drive you already have are kept: the new keys, sections and voice
 phrases of the firmware are added to them at the next start. To get the new versions of the texts, voice phrases
 and models (your changes to them are then lost), use the **soft reset** of the
-[Settings screen](#on-the-device-settings-screen), or empty the file concerned. When a release changes the sounds
+[Settings screen](#24-on-the-device-settings-screen), or empty the file concerned. When a release changes the sounds
 or the wake word models, its notes say so: flash the full image again (this erases the settings).
 
-## Advanced user guide
+## 3. Advanced user guide
 
-Everything below is optional: the assistant works with the defaults of the [Quick start](#quick-start). The
+Everything below is optional: the assistant works with the defaults of the [Quick start](#1-quick-start). The
 settings are changed in **files of the configuration drive** (the BOX as a USB drive, see
-[Files of the configuration drive](#files-of-the-configuration-drive)), and a few of them from the Settings screen
+[Files of the configuration drive](#31-files-of-the-configuration-drive)), and a few of them from the Settings screen
 or by voice. The most useful ones first:
 
-- **Who the assistant is** (its name, personality, way of answering, accent): [`PERSO_<XX>.TXT`](#perso_xxtxt-who-the-assistant-is).
-- **Which models answer**, their prices and the other providers: [Models and costs](#models-and-costs).
-- **Which voices** are offered, with an emotion or a pace: [Voices](#voices-voices-of-agentsini).
-- **Every setting** (scrolling, sleep, radio level, end of speech…): [`CONFIG.INI`](#configini-settings-and-api-keys).
-- **Home automation** with a Homey Pro: [Home automation: Homey](#home-automation-homey).
-- **Another language**, or other words for the voice commands: [Languages](#languages-lang_xxtxt),
-  [Writing voice phrases](#writing-voice-phrases-patterns).
+- **Who the assistant is** (its name, personality, way of answering, accent): [`PERSO_<XX>.TXT`](#35-perso_xxtxt-who-the-assistant-is).
+- **Which models answer**, their prices and the other providers: [Models and costs](#33-models-and-costs).
+- **Which voices** are offered, with an emotion or a pace: [Voices](#34-voices-voices-of-agentsini).
+- **Every setting** (scrolling, sleep, radio level, end of speech…): [`CONFIG.INI`](#32-configini-settings-and-api-keys).
+- **Home automation** with a Homey Pro: [Home automation: Homey](#310-home-automation-homey).
+- **Another language**, or other words for the voice commands: [Languages](#37-languages-lang_xxtxt),
+  [Writing voice phrases](#39-writing-voice-phrases-patterns).
 
-### Files of the configuration drive
+### 3.1 Files of the configuration drive
 
 In configuration mode (Settings → folder-and-gear icon → OK, or "édite la config" / "edit the config"), the BOX shows up on the PC as a
 USB drive named "ESP-BOX" holding these files:
@@ -602,14 +602,14 @@ USB drive named "ESP-BOX" holding these files:
 | --- | --- | --- | --- |
 | `CONFIG.INI` | Settings and API keys (see below) | NVS | soft reset (Wi-Fi, keys and Homey kept), factory reset |
 | `MEMORY.TXT` | Notes of the long-term memory | NVS | factory reset (erased) |
-| `AGENTS.INI` | Models offered, their prices (see [AGENTS.INI](#agentsini-the-models-offered)) | SPIFFS | emptied, or soft reset |
-| `LANG_<XX>.TXT` | Texts of the device, per language (see [Languages](#languages-lang_xxtxt)) | SPIFFS | emptied, or soft reset (FR, EN; the languages added are kept) |
-| `VOICE_<XX>.TXT` | Phrases of the voice commands, per language (see [Writing voice phrases](#writing-voice-phrases-patterns)) | SPIFFS | same as `LANG_` |
-| `PERSO_<XX>.TXT` | Who the assistant is, per language (see [PERSO](#perso_xxtxt-who-the-assistant-is)) | SPIFFS | emptied (kept by the soft reset), factory reset |
+| `AGENTS.INI` | Models offered, their prices (see [AGENTS.INI](#332-agentsini-the-models-offered)) | SPIFFS | emptied, or soft reset |
+| `LANG_<XX>.TXT` | Texts of the device, per language (see [Languages](#37-languages-lang_xxtxt)) | SPIFFS | emptied, or soft reset (FR, EN; the languages added are kept) |
+| `VOICE_<XX>.TXT` | Phrases of the voice commands, per language (see [Writing voice phrases](#39-writing-voice-phrases-patterns)) | SPIFFS | same as `LANG_` |
+| `PERSO_<XX>.TXT` | Who the assistant is, per language (see [PERSO](#35-perso_xxtxt-who-the-assistant-is)) | SPIFFS | emptied (kept by the soft reset), factory reset |
 | `COUNTRY.TXT` | Countries known by voice, their names per language | SPIFFS | emptied, or soft reset (columns of the languages added kept) |
 | `COSTS.TXT` | Costs counted (written by the device: do not edit) | SPIFFS | factory reset (erased) |
 | `SPEED.TXT` | Results of the model test (written by the device) | SPIFFS | factory reset (erased) |
-| `RADIO.TXT` | Favourite radios (see [Radio](#favourites-radiotxt)) | SPIFFS | kept by the soft reset, factory reset (erased) |
+| `RADIO.TXT` | Favourite radios (see [Radio](#264-favourites-radiotxt)) | SPIFFS | kept by the soft reset, factory reset (erased) |
 
 - Edit a file, save it, then **wait before pressing Restart** (bottom right of the screen): saving on the PC is not
   enough, the PC copies the file into the BOX a little later. About 10 seconds for `CONFIG.INI`, up to tens of
@@ -631,7 +631,7 @@ USB drive named "ESP-BOX" holding these files:
   firmware): your lines are kept, an emptied section stays empty (the command stays disabled), but a pattern of the
   firmware you deleted from a non-empty section comes back (the log lists each pattern added).
 
-### `CONFIG.INI`: settings and API keys
+### 3.2 `CONFIG.INI`: settings and API keys
 
 The settings, one `Key = value` per line. On the first start (no Wi-Fi nor key yet), the BOX opens the
 configuration mode by itself. The keys keep the order and the comments of the file as you last saved it; keys it
@@ -647,7 +647,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
 | `Language` | Assistant language, one of the codes of `Languages` (also set from the Settings screen or by voice) | `en` (default), `fr`, `de`… |
-| `Languages` | Languages offered (Settings screen, voice): `CODE:name` separated by commas, the code being the 2-letter ISO 639-1 code the transcription expects. FR, EN, NL, DE, ES and IT have their files in the firmware; another language added here gets its files, made from the English ones, at the next start (see [Languages](#languages-lang_xxtxt)) | `FR:Français, EN:English, NL:Nederlands, DE:Deutsch, ES:Español, IT:Italiano` |
+| `Languages` | Languages offered (Settings screen, voice): `CODE:name` separated by commas, the code being the 2-letter ISO 639-1 code the transcription expects. FR, EN, NL, DE, ES and IT have their files in the firmware; another language added here gets its files, made from the English ones, at the next start (see [Languages](#37-languages-lang_xxtxt)) | `FR:Français, EN:English, NL:Nederlands, DE:Deutsch, ES:Español, IT:Italiano` |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
 | `Volume` | Speaker volume, 0 to 100 (also changed by voice: "parle plus fort") | `90` |
@@ -686,12 +686,17 @@ stored in plain text in the device's NVS and never appear in the logs (only thei
 `OpenRouter_list`, formerly in `CONFIG.INI`, is removed when the configuration mode starts: its models go
 into the `[openrouter]` section of `AGENTS.INI`.
 
-### Models and costs
+### 3.3 Models and costs
 
 The models that answer the questions, the file that lists them, what they cost, and how to compare their
 speed.
 
-#### Available models
+#### 3.3.1 Available models
+
+Three kinds of models work together: the **LLM** answers, the **STT** transcribes what you say, the **TTS** speaks
+the answer. Each one is chosen apart (Settings screen, voice commands, `CONFIG.INI`).
+
+**LLM: the answers** (`Chat_model`; "change de modèle" / "change the model")
 
 | Model | Provider | Price in / out (per 1M tokens) | ≈ cost per 1,000 questions | Speed | Reasoning | Settings used |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -762,7 +767,36 @@ How to read this table:
 - The effort is kept `low` on every model to favour a fast spoken answer. Raising it (in `AGENTS.INI`) makes
   Opus, Sol and Astra think more, and makes them slower and more expensive.
 
-#### AGENTS.INI: the models offered
+**STT: the transcription of what you say** (`Stt_model`, `[stt]` of `AGENTS.INI`; "change de transcription" /
+"change the transcription", or page 2 of the Settings screen)
+
+| Model | Provider (key) | Price | Connection | Transcript after the end of speech (measured) |
+| --- | --- | --- | --- | --- |
+| `gpt-live-transcribe` (default) | OpenAI (`ChatGPT_key`) | $2.50 / $10 per 1M tokens (audio counted 10 tokens a second: ≈ $0.0015 a minute, plus the text) | WebSocket kept open | 0.7 s |
+| `voxtral-mini-transcribe-realtime-3-0` | Mistral (`Mistral_key`) | $0.008 a minute | a session per question | not measured |
+| `nova-3` | Deepgram (`Deepgram_key`) | $0.0077 a minute | a session per question | 0.4 s |
+| `nova-2` | Deepgram (`Deepgram_key`) | ≈ $0.0058 a minute | a session per question | not measured |
+
+- The six languages of the firmware are understood by every model; the language in use is given to them.
+- A session per question is opened when listening starts (its audio is buffered meanwhile): nothing is open while
+  the assistant sleeps. OpenAI's connection stays open, so that listening never waits for it.
+
+**TTS: the voice of the answers** (`Tts_model`, `[tts]` of `AGENTS.INI`; "change de synthèse vocale" / "change the
+speech synthesis", or page 2 of the Settings screen; the voice itself is chosen apart, see
+[Voices](#34-voices-voices-of-agentsini))
+
+| Model | Provider (key) | Price | Voices given with the firmware | First audio of a sentence (measured) |
+| --- | --- | --- | --- | --- |
+| `gpt-realtime-2.1-mini` (default) | OpenAI (`ChatGPT_key`) | $0.60 per 1M text tokens, $20 per 1M audio tokens | 10, every language (Marin by default) | 0.9 s |
+| `voxtral-mini-tts-3-0` | Mistral (`Mistral_key`) | $13 per 1M characters | 36: French 4, English 11, Dutch, German, Spanish and Italian 1 each, and 17 for 15 other languages | 0.7 to 1 s |
+| `aura-2` | Deepgram (`Deepgram_key`) | $30 per 1M characters | 18: French 2 (Agathe, Hector), English 4, Dutch, German, Spanish and Italian 3 each | 0.4 s (1.8 s to reconnect after a long pause, done while you speak) |
+
+- With Mistral, each voice can have an emotion and a pace; OpenAI reads them in its instructions; Deepgram has
+  neither.
+- A model whose key is missing is not offered on the Settings screen; chosen by voice, the missing key is said.
+- Their costs are counted apart from the answers' in `COSTS.TXT` (STT, LLM, TTS).
+
+#### 3.3.2 AGENTS.INI: the models offered
 
 The models are listed in **`AGENTS.INI`**, one section per provider (`[anthropic]`, `[openai]`, `[google]`,
 `[openrouter]`, `[xai]`, `[mistral]`, `[perplexity]`), one line per model:
@@ -812,7 +846,7 @@ perplexity:web_search = 0.0022
   the model refuses is said with the ones it takes (correct the file). **Spoken name**:
   read in the spoken list of models, and said to choose it.
 - **Price in / out** (required): price of a million tokens read / written, **in the currency of `Currency`**
-  (`CONFIG.INI`, `EUR` by default; no conversion), used by the [costs](#costs-coststxt-and-the-cost-on-screen).
+  (`CONFIG.INI`, `EUR` by default; no conversion), used by the [costs](#333-costs-coststxt-and-the-cost-on-screen).
   The prices of the file given with the firmware are estimates in euros: check them on the providers' pages. A
   line of an older firmware gets the prices of the firmware's file when it has none; a model without prices is
   not counted ("?" in `COSTS.TXT`). The free OpenRouter models cost 0.
@@ -833,7 +867,7 @@ perplexity:web_search = 0.0022
   file given with the firmware lists OpenAI's 10 voices and Mistral's 36 Voxtral 3 voices.
 - **`[per_call]`**: tools billed per call, `provider:tool = price` (`claude:web_search`); another provider's search
   would get its own line (`openai:web_search`…).
-- **Speed** (optional): `fast`, `average` or `slow`, written by the [model test](#model-test-teste-les-modèles).
+- **Speed** (optional): `fast`, `average` or `slow`, written by the [model test](#334-model-test-teste-les-modèles).
 - **Claude thinking** (optional, Anthropic only): `disabled`, `between_tools` or `default` (left to the model).
   Without it, it comes from the name: `disabled` for a Haiku, `between_tools` for a Sonnet, left to the model
   otherwise (Opus cannot turn thinking off).
@@ -855,7 +889,7 @@ perplexity:web_search = 0.0022
   `magistral-…`, `ministral-…` → Mistral AI, `sonar…` → Perplexity, otherwise Anthropic), and it
   shows up as an extra entry in the Settings list.
 
-#### Costs: COSTS.TXT and the cost on screen
+#### 3.3.3 Costs: COSTS.TXT and the cost on screen
 
 Each request is counted: the tokens of the **transcription** (STT), of the **answer** (LLM, each round of tool
 calls included, reasoning included) and of the **speech** (TTS), plus the **web searches** of Claude and
@@ -878,7 +912,7 @@ at 125 % (Anthropic).
   kind; then the total by kind of each of the last 12 months. The figures are kept in `/spiffs/costs.json`
   (counters of today and this month started again on a new day or month); the factory reset erases them.
 
-#### Model test ("teste les modèles")
+#### 3.3.4 Model test ("teste les modèles")
 
 Say "**teste les modèles**" ("test the models"): the assistant announces how many models it tests, then asks
 each model of `AGENTS.INI`, then each free OpenRouter model, **the same question** ("Explique en exactement 5
@@ -924,7 +958,7 @@ conversation nor tools** but with the same instructions. The model chosen and it
   are in a second table of `SPEED.TXT`.
 - Each test costs one short answer of each paid model, and a sentence of each speech model.
 
-### Voices: `[voices]` of `AGENTS.INI`
+### 3.4 Voices: `[voices]` of `AGENTS.INI`
 
 The voices reading the answers are listed in the section **`[voices]`** of `AGENTS.INI`, for every speech provider,
 one line per voice. You can remove, rename or add voices, and give each one an emotion and a pace:
@@ -978,12 +1012,12 @@ James    = mistral  | voice_3150 | en        | -       | -
 - `AGENTS.INI` is read at start-up: press **Restart** after editing it. A line without a provider or a voice id is
   ignored, and a name used twice keeps its first line (the log says so).
 
-### `PERSO_<XX>.TXT`: who the assistant is
+### 3.5 `PERSO_<XX>.TXT`: who the assistant is
 
 **`PERSO_FR.TXT`**, **`PERSO_EN.TXT`**… say who the assistant is in each language; they are given to it with
 every question (Claude, GPT, Gemini, Grok, Mistral, Perplexity and OpenRouter alike). Only the file of the language in use is
 read (again when the language changes); a language added to `Languages` gets its own, made from the English one
-(see [Adding a new language](#adding-a-new-language-step-by-step)).
+(see [Adding a new language](#38-adding-a-new-language-step-by-step)).
 
 ```ini
 [identité]
@@ -1014,10 +1048,8 @@ rapide.
   per section (a blank line starts a new paragraph); `#` lines are comments. A missing section takes the firmware's
   text, an empty one stays empty. The files given with the firmware (`main/persona/`) are installed when missing or
   emptied; a factory reset erases them, a soft reset keeps them.
-- The `PERSONA.TXT` of an older firmware (NVS key `Persona`) is moved once into the `[personnalité]` of the file of
-  the language in use, then its key is erased.
 
-### `MEMORY.TXT`: long-term memory notes
+### 3.6 `MEMORY.TXT`: long-term memory notes
 
 `MEMORY.TXT` holds the notes of the long-term memory, one per line (`- note (25/10/26)`): you can correct or
 delete them there.
@@ -1027,7 +1059,7 @@ never given to the assistant (an empty file shows a short help in such lines). I
 `Memory` (not on SPIFFS) and read at start-up. The memory commands keep the comments too: "oublie que …" / "forget that …" never
 removes a `#` line, "oublie tout" removes the notes and keeps them.
 
-### Languages: `LANG_<XX>.TXT`
+### 3.7 Languages: `LANG_<XX>.TXT`
 
 Every text of the device is in one file per language, **`LANG_FR.TXT`** and **`LANG_EN.TXT`** on the drive
 (`main/lang/`, installed on SPIFFS when missing or emptied): the screen texts, the spoken messages, the technical
@@ -1072,7 +1104,7 @@ first start, after a factory reset and when emptied, for the languages of `Langu
 
 **Adding a language**: add `XX:name` to `Languages` in `CONFIG.INI` (up to 12 languages, 2-letter codes); at
 the next start the device makes `LANG_XX.TXT`, `VOICE_XX.TXT` and `PERSO_XX.TXT` from the English files and
-opens the configuration mode to translate them: see [Adding a new language](#adding-a-new-language-step-by-step).
+opens the configuration mode to translate them: see [Adding a new language](#38-adding-a-new-language-step-by-step).
 
 **Languages supported on screen**: the fonts hold Latin-1 (French, English, German, Dutch, Spanish, Italian,
 Portuguese, the Nordic languages…), **Latin Extended-A** (Polish, Czech, Slovak, Hungarian, Turkish, Croatian,
@@ -1098,15 +1130,15 @@ NL: Netherlands/Holland, Pays-Bas/Hollande, Niederlande/Holland, Nederland/Holla
   several names match, the longest wins. An empty name takes the English one.
 - A language of `Languages` without a column gets an empty one at the end of the file.
 
-### Adding a new language, step by step
+### 3.8 Adding a new language, step by step
 
 French, English, Dutch, German, Spanish and Italian are given with the firmware: their files are installed at
 the first start, after a factory reset, and when emptied. The example below adds Portuguese (`PT`); the same steps
-work for any language whose letters the screen can show (see [Languages supported on screen](#languages-lang_xxtxt):
+work for any language whose letters the screen can show (see [Languages supported on screen](#37-languages-lang_xxtxt):
 Latin-1, Latin Extended-A, Greek). Nothing has to be built or flashed: everything is done in the files of the
 configuration drive.
 
-#### 1. Declare the language in `CONFIG.INI`
+#### 3.8.1 Declare the language in `CONFIG.INI`
 
 - Enter the configuration mode (Settings → folder-and-gear icon → OK, or say "édite la config" / "edit the config"), open `CONFIG.INI`
   on the drive and add the language to `Languages`:
@@ -1122,7 +1154,7 @@ configuration drive.
   langue".
 - Save, **wait until the copy is finished**, then press **Restart**.
 
-#### 2. The device makes the files of the language
+#### 3.8.2 The device makes the files of the language
 
 At start-up, for a language of `Languages` that has no files yet and is not given with the firmware, the device:
 
@@ -1135,7 +1167,7 @@ At start-up, for a language of `Languages` that has no files yet and is not give
 Until they are translated, the language works with English texts: the transcription is already Portuguese, but
 the persona (and so the answers) and the spoken messages are English.
 
-#### 3. Translate `LANG_PT.TXT`
+#### 3.8.3 Translate `LANG_PT.TXT`
 
 Texts of the device: screen, spoken messages, model instructions, errors. The files of the six languages given
 with the firmware (`main/lang/lang_<code>.txt`) are good models.
@@ -1144,6 +1176,10 @@ with the firmware (`main/lang/lang_<code>.txt`) are good models.
 - Keep the **`%s`, `%d`, `%02d`… in the same number and order** as in English. A text lacking its last ones gets
   them added at its end in `[TO DO: %s]` at the next start; a text with other conversions is replaced by the
   English one. In both cases a screen lists the keys to correct.
+- Keep the **`::` and `..`** where the English text has them (`lang_ask = Qual idioma você quer :: %s`): they
+  are shown as a single `:` or `.`, and mark where the reading stops before a list (languages, providers, models,
+  voices); with `Read_lists = off` (the default) the list after them is only shown, not read. Without them, the
+  list is always read (see [Languages](#37-languages-lang_xxtxt)).
 - `\n` is a line break. A text starting or ending with spaces, or empty, is written between quotes
   (`and_word = " e "`).
 - Lists are separated by commas and must keep their number of items: `weekdays` (7, Sunday first, short, shown
@@ -1163,13 +1199,13 @@ with the firmware (`main/lang/lang_<code>.txt`) are good models.
 - Lines that start with `[TODO:` are texts added in English after a firmware update: translate them and remove
   the `[TODO:` and `]`.
 
-#### 4. Translate `VOICE_PT.TXT`
+#### 3.8.4 Translate `VOICE_PT.TXT`
 
 Phrases of the voice commands.
 
 - One section per command (`[s_change_lang]`, `[s_goodbyes]`, `[s_yes]`…), one pattern per line; keep the section
   names. Patterns: `[optional part]`, `(choice|choice)`, e.g. `muda[r] (o|de) idioma` (see
-  [Writing voice phrases](#writing-voice-phrases-patterns)).
+  [Writing voice phrases](#39-writing-voice-phrases-patterns)).
 - Write the phrases as the transcription writes them: in lower case is enough (the case is ignored), with the
   accents of the language, apostrophes as spaces, without punctuation.
 - A section left out takes the English phrases; an **empty** section disables the command in Portuguese.
@@ -1178,7 +1214,7 @@ Phrases of the voice commands.
   after a short answer: "por favor"), `[s_one_alone]` ("um" / "uma" mean 1 only said alone: elsewhere they are
   articles), `[s_goodbyes]` (back to sleep).
 
-#### 5. Translate `PERSO_PT.TXT`
+#### 3.8.5 Translate `PERSO_PT.TXT`
 
 Who the assistant is.
 
@@ -1188,9 +1224,9 @@ Who the assistant is.
   português."): it decides the language of the answers.
 - `[voice]`: accent, tone and pace of the speech synthesis ("Fala português com sotaque europeu…").
 - Add voices that speak the language to `[voices]` of `AGENTS.INI` (OpenAI's speak every language; Mistral has
-  `Gabriela` for Portuguese): see [Voices](#voices-voices-of-agentsini).
+  `Gabriela` for Portuguese): see [Voices](#34-voices-voices-of-agentsini).
 
-#### 6. Complete the other files
+#### 3.8.6 Complete the other files
 
 - **`COUNTRY.TXT`**: fill the `PT` column (country names in Portuguese, other names after `/`). An empty name takes
   the English one.
@@ -1200,7 +1236,7 @@ Who the assistant is.
   `pl: polonais` / `pl: polish`. Without it, the language can still be named by its name in `Languages`
   ("Polski").
 
-#### 7. Restart and check
+#### 3.8.7 Restart and check
 
 - Save each file and **wait until the copy is finished** (a `LANG_` file is large: tens of seconds), then press
   **Restart**.
@@ -1224,7 +1260,7 @@ and `LANG_` files; `PERSO_` files are kept by it: empty them).
 **Removing a language**: remove it from `Languages`. Its files stay on the drive (and are kept by the soft reset);
 the factory reset erases them.
 
-### Writing voice phrases (patterns)
+### 3.9 Writing voice phrases (patterns)
 
 The phrases of the voice commands of `voice_cmd.c` and `file_memory.c` are in **one file per language**:
 `main/phrases/phrases_<code>.txt` (`fr`, `en`, `nl`, `de`, `es`, `it`). Each list of the code is a **section named after
@@ -1254,7 +1290,7 @@ apostrophes and hyphens as spaces (`j ai`, `let s`), no punctuation. Spaces doub
 empty part are removed. Add a variant where it is needed, e.g. both `éditer` and `editer` when the transcription
 writes either (`(é|e)diter` works too).
 
-#### Which phrases are recognised
+#### 3.9.1 Which phrases are recognised
 
 - Only the files of the languages of `Languages` are read, and a list takes the phrases of the **current
   language** only: in French, "change the model" is no longer a command (it goes to the model).
@@ -1265,7 +1301,7 @@ writes either (`(é|e)diter` works too).
 - At start-up, the patterns of the firmware's file missing in a non-empty section of the file of SPIFFS are added
   at its end (an improved section reaches a device whose file already exists); the patterns there are kept.
 
-#### Where the files are
+#### 3.9.2 Where the files are
 
 - The files of `main/phrases/` are built into the firmware. At start-up, each one missing on SPIFFS (first start)
   or emptied is installed as `/spiffs/phrases_<code>.txt`; the files of SPIFFS are then read (a few KB, kept in
@@ -1293,7 +1329,7 @@ beginning another one never hides it ("parle" does not take "parle en anglais" f
 unbalanced brackets, or standing for more than 256 phrases, is left out with an error in the log. Matching is the
 same as with plain lists (whole words, from the start of what is said) and costs nothing more at run time.
 
-### Home automation: Homey
+### 3.10 Home automation: Homey
 
 With a **Homey Pro** on the same network, the assistant can switch devices on and off, set them, activate moods,
 start flows and tell who is home ("Allume la lumière du salon" / "Turn on the living room light", "Active
@@ -1307,14 +1343,14 @@ Turning off a **power plug** is confirmed first ("Tu veux vraiment éteindre la 
 want to switch off the fridge plug?"), so that an
 appliance is not switched off by mistake: `Confirm_off` lists the device classes to confirm (`socket` by default,
 `off` for none). Only 16 tools of the app are offered, none that deletes, installs or reconfigures anything. How it
-works: see the Homey items of the [Design notes](#design-notes).
+works: see the Homey items of the [Design notes](#410-design-notes).
 
-## Design and architecture
+## 4. Design and architecture
 
 For developers: how the assistant works inside, how to build it from source, and the choices made along
 the way.
 
-### Architecture
+### 4.1 Architecture
 
 ```mermaid
 flowchart LR
@@ -1352,7 +1388,7 @@ The stages overlap: FreeRTOS tasks are chained through queues (model text → se
 audio buffer → I2S). TLS connections are reused (keep-alive for the chat API, permanent WebSockets for
 transcription and voice) and opened while the user is still speaking.
 
-#### Typical latencies (measured with Claude Haiku 5.5)
+#### 4.1.1 Typical latencies (measured with Claude Haiku 5.5)
 
 | Stage | Duration |
 | --- | --- |
@@ -1363,7 +1399,7 @@ transcription and voice) and opened while the user is still speaking.
 | Weather question (Open-Meteo lookup) | + 3 to 4 s for the answer |
 | Web search ("Je regarde." / "Let me check." spoken meanwhile) | first sound after 1.9 s, answer after about 3 s |
 
-### Hardware and software
+### 4.2 Hardware and software
 
 - **ESP32-S3-BOX-3** (16 MB flash, 16 MB octal PSRAM).
 - **ESP-IDF v5.3.6** (tested with this version; 6.x versions are not compatible as is).
@@ -1374,7 +1410,7 @@ transcription and voice) and opened while the user is still speaking.
   for Mistral, a **Mistral API key** (console.mistral.ai); for Perplexity, a **Perplexity API key** with paid
   credit (console.perplexity.ai).
 
-### Repository layout
+### 4.3 Repository layout
 
 Two firmwares live side by side in flash:
 
@@ -1438,7 +1474,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `images/` | Answer icons (Claude, Gemini, OpenRouter, xAI, Mistral AI, Perplexity, web globe, chip for local answers; OpenAI's is in `main/ui/images/`) |
 | `main.c` | Listen → transcribe → answer → speak pipeline |
 
-### Build and flash
+### 4.4 Build and flash
 
 In an ESP-IDF v5.3.6 terminal:
 
@@ -1462,7 +1498,7 @@ idf.py -p COMx flash monitor
   versions are pinned in `dependencies.lock`.
 - After changing a `Kconfig` file, run `idf.py reconfigure`.
 
-### Making a release
+### 4.5 Making a release
 
 The files of the [Releases](https://github.com/vletroye/ESP32-S3-Voice-Assistant/releases) page are made from a
 full build (configuration mode first, then the assistant, as above), in the `build` folder of the assistant:
@@ -1481,7 +1517,7 @@ configuration mode, sounds (`storage`) and ESP-SR models. The full image is abou
 parts are filled with `0xFF`, so the NVS (Wi-Fi, keys, settings) is erased, as a first install should be. Say in
 the release notes when the sounds (`spiffs/`) or the wake word models changed: the update files do not carry them.
 
-### At build time: `sdkconfig.defaults` / `idf.py menuconfig`
+### 4.6 At build time: `sdkconfig.defaults` / `idf.py menuconfig`
 
 "Example Configuration" menu of the assistant (`main/Kconfig.projbuild`). These are the **only** default values:
 the configuration mode (`factory_nvs/`) writes the same ones to a new `CONFIG.INI`, its `CMakeLists.txt` reading
@@ -1516,14 +1552,14 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to change a value, use
 `idf.py menuconfig` (or delete `sdkconfig` before rebuilding).
 
-### System sounds
+### 4.7 System sounds
 
 The sounds in `spiffs/` must be **16-bit PCM WAV at 16 kHz** (mono or stereo): the I2S bus is shared with
 the microphones and stays at 16 kHz, other rates are rejected. The wake beep is loaded into PSRAM at start-up
 and played once an interrupted answer has left the speaker. After changing the sounds, do a full flash
 (`idf.py flash`).
 
-### Logs and diagnostics
+### 4.8 Logs and diagnostics
 
 The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
@@ -1545,7 +1581,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - `claude: web search: available` (capability read at the first wake)
 - `[heap] internal free …` every 30 s (internal RAM is the critical resource)
 
-### Features in detail
+### 4.9 Features in detail
 
 - Local wake word **"Bonjour ESP"** (or "Hi ESP"), or touch the screen while asleep.
 - **Live transcription** while you speak (streamed to the API, so the question is ready as soon as you stop;
@@ -1642,9 +1678,9 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   "joue la radio Nostalgie" / "play the radio Nostalgie", "joue de la musique italienne" / "play italian music",
   "suivante" / "next", "stop", favourites (`RADIO.TXT`) and a radio screen;
   stopped by the wake word and resumed after the answer, with fades and the same loudness on every station
-  (see [Radio](#radio)).
+  (see [Radio](#26-radio)).
 
-### Design notes
+### 4.10 Design notes
 
 - **Presence radar**: the AT581X of the BOX-3-SENSOR dock is on the dock's own I2C bus (GPIO 40/41, the port the
   board does not use) and signals a presence on GPIO 21. `app_presence.c` probes it at start-up (nothing happens
@@ -1732,14 +1768,14 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   question; exchanges with thinking blocks (Opus) are kept verbatim. `pause_turn` is resumed. With `Country` /
   `City` set, the tool gets a `user_location` and the instructions say where the user lives.
 
-## Roadmap
+## 5. Roadmap
 
 - More tools: timers and alarms…
 - Spoken confirmation before other sensitive Homey actions (locks, alarm), as done for turning plugs off.
 - Tools for the GPT models.
 - NVS encryption to protect the API keys.
 
-## Credits and licenses
+## 6. Credits and licenses
 
 - Based on the `chatgpt_demo` example from [esp-box](https://github.com/espressif/esp-box) (Espressif,
   CC0 / Apache-2.0 depending on the files).

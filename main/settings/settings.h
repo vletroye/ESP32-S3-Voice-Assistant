@@ -65,14 +65,13 @@ typedef struct {
     char homey_key[HOMEY_KEY_SIZE];   /* Its API key. */
     char confirm_off[64];             /* Homey classes confirmed before being turned off ("socket"), "" for none. */
     int volume;                       /* Speaker volume 0..100, changed by voice ("parle plus fort"). */
-    char *persona;                    /* Context always given to the assistant (allocated), NULL if none. */
     char *memory;                     /* Notes it was asked to remember at start-up (allocated), NULL if none. */
 } sys_param_t;
 
 esp_err_t settings_factory_reset(void);
 
 /**
- * @brief A text of PERSONA.TXT or MEMORY.TXT without its comment lines (starting with '#'), trimmed.
+ * @brief A text of MEMORY.TXT without its comment lines (starting with '#'), trimmed.
  *
  * @return Allocated (to be freed), "" when nothing is left; NULL only when out of memory
  */
@@ -87,7 +86,7 @@ sys_param_t *settings_get_parameter(void);
  */
 esp_err_t settings_save_str(const char *key, const char *value);
 
-/** Erase a configuration value (e.g. "Persona", moved to the files of the languages) */
+/** Erase a configuration value of NVS */
 esp_err_t settings_erase_key(const char *key);
 
 /**

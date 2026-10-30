@@ -13,7 +13,7 @@
  * - "ouvre les paramètres", "open the settings": the Settings screen;
  * - "redémarre", "restart" (alone): restart the device;
  * - "je veux éditer la config", "édite les fichiers de configuration": restart in configuration mode (CONFIG.INI,
- *   PERSONA.TXT and MEMORY.TXT on a USB drive), only when a PC is connected;
+ *   MEMORY.TXT and the files of SPIFFS on a USB drive), only when a PC is connected;
  * - "nouvelle discussion", "j'ai une autre question", "passons à autre chose": the conversation starts afresh
  *   (as after "au revoir"); a question following the phrase is then asked to the model.
  * The new setting is saved and applied at once, without restarting.

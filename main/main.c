@@ -439,7 +439,7 @@ static void speak_message(const char *message)
 }
 
 /*
- * Instructions given to the model: the base ones, the Persona of PERSONA.TXT and the notes the user asked
+ * Instructions given to the model: the base ones, who the assistant is (PERSO_<XX>.TXT) and the notes the user asked
  * to remember (MEMORY.TXT). Allocated, to be freed.
  */
 static char *build_system_prompt(void)
@@ -1100,13 +1100,11 @@ void app_main()
     ESP_LOGI(TAG, "speech recognition start");
     app_sr_start(false);
 
-    // The Persona (name, who made it, who it talks to...) and the remembered notes complete the base instructions
+    // Who the assistant is (PERSO_<XX>.TXT) and the remembered notes complete the base instructions
     // Phrase files of the voice commands (installed at the first start), before the lists are made
     phrases_init();
-    // Who the assistant is, per language (PERSO_FR.TXT...): the PERSONA.TXT of an older firmware moves there
-    if (persona_init(app_lang_get()->code, sys_param->persona)) {
-        settings_erase_key("Persona");
-    }
+    // Who the assistant is, per language (PERSO_FR.TXT...)
+    persona_init();
     persona_load(app_lang_get()->code);
     app_memory_init(sys_param->memory);
     voice_cmd_init();

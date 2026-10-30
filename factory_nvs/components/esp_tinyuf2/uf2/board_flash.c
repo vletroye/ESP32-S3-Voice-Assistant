@@ -298,8 +298,6 @@ static void ini_insert_section(const char *section)
  * the file is rebuilt from it with the current values, so that comments survive. Not shown in the file.
  */
 #define INI_LAYOUT_KEY          "Config_layout"
-/* Who the assistant is, before it moved to PERSO_<LANG>.TXT (the assistant moves it, then erases the key) */
-#define OLD_PERSONA_KEY         "Persona"
 #define INI_LAYOUT_MAX_LEN      3999    /* NVS string limit */
 #define INI_LAYOUT_MAX_KEYS     64
 
@@ -418,7 +416,7 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
             }
         }
         size_t value_len = 0;
-        if (strcmp(key, INI_LAYOUT_KEY) == 0 || strcmp(key, OLD_PERSONA_KEY) == 0 || text_file_of_key(key) ||
+        if (strcmp(key, INI_LAYOUT_KEY) == 0 || text_file_of_key(key) ||
                 nvs_get_str(nvs, key, NULL, &value_len) != ESP_OK) {
             line = next;    // no longer stored: left out
             continue;
@@ -486,8 +484,7 @@ static void erase_stray_keys(const char *part, const char *name)
     while (result == ESP_OK && count < STRAY_KEYS_MAX) {
         nvs_entry_info_t info;
         nvs_entry_info(it, &info);
-        if (!is_config_key(info.key) && strcmp(info.key, INI_LAYOUT_KEY) != 0 &&
-                strcmp(info.key, OLD_PERSONA_KEY) != 0 && !text_file_of_key(info.key)) {
+        if (!is_config_key(info.key) && strcmp(info.key, INI_LAYOUT_KEY) != 0 && !text_file_of_key(info.key)) {
             strlcpy(stray[count++], info.key, NVS_KEY_NAME_MAX_SIZE);
         }
         result = nvs_entry_next(&it);
@@ -593,8 +590,8 @@ static void ini_gen_from_nvs(const char *part, const char *name)
                     strlcpy(text_file->content, str, CFG_UF2_TEXT_FILE_SIZE);
                 }
             } else if (result == ESP_OK) {
-                // [Voice assistant] Already written from the layout, the layout itself, or the old Persona key
-                bool skip = (strcmp(info.key, INI_LAYOUT_KEY) == 0 || strcmp(info.key, OLD_PERSONA_KEY) == 0);
+                // [Voice assistant] Already written from the layout, or the layout itself
+                bool skip = (strcmp(info.key, INI_LAYOUT_KEY) == 0);
                 for (int i = 0; i < used_count && !skip; i++) {
                     skip = (strcmp(info.key, used[i]) == 0);
                 }

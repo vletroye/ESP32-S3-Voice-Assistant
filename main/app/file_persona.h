@@ -24,12 +24,8 @@ typedef enum {
     PERSONA_SECTIONS,
 } persona_section_t;
 
-/**
- * @brief Install the files of the languages of the firmware when missing; the PERSONA.TXT of an older firmware
- *        (old_persona, NVS key Persona) becomes the [personality] of the file of the language given. SPIFFS mounted.
- * @return true when old_persona was moved (the NVS key can be erased)
- */
-bool persona_init(const char *lang_code, const char *old_persona);
+/** Install the files of the languages of the firmware when missing or emptied (SPIFFS mounted) */
+void persona_init(void);
 
 /**
  * @brief The file of a language added to Languages of CONFIG.INI, made from the English one of the firmware (to be

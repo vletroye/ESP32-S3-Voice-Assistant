@@ -164,7 +164,9 @@ Every file of the drive is explained in the [Advanced user guide](#advanced-user
   your question and stop: the answer is shown and spoken.
 - After the answer it keeps listening for 4 seconds: go on without the wake word.
 - To interrupt it, say "Bonjour ESP" again or **double-tap** the screen.
-- Say "**Au revoir**" / "**Goodbye**" to send it back to sleep and start the next conversation afresh.
+- Say "**Au revoir**" / "**Goodbye**" to send it back to sleep and start the next conversation afresh. Without
+  it, the assistant remembers the conversation, even after sleeping or a restart: the next questions are answered
+  in the light of what was already said ("and tomorrow?" after a weather question).
 - Try: "What's the weather tomorrow?" (with a Claude model), "Play some jazz", "Remember that my sister is called Anne", "Speak
   Spanish", "Change the voice", "What are the latest news?".
 

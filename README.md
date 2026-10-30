@@ -248,9 +248,10 @@ Every feature in detail: [Features in detail](#features-in-detail).
    is spoken or while its answer is listened for, drops the command: back to sleep, and the next words are no
    longer taken as its answer.
 5. Without speech, it goes back to sleep (no API call is made for silence).
-6. Saying just "**Au revoir**" (or another closing phrase, see below) sends it back to sleep at once, without
+6. Saying just "**Au revoir**" / "**Goodbye**" (or another closing phrase, see below) sends it back to sleep at once, without
    an answer and without listening again, and clears the saved conversation: the next one starts afresh.
-   Likewise, when the **assistant's answer ends with a closing phrase** ("… Bonne soirée !", "Au revoir !"),
+   Likewise, when the **assistant's answer ends with a closing phrase** ("… Bonne soirée !" / "… Have a nice
+   evening!", "Au revoir !" / "Goodbye!"),
    it goes to sleep once it has said it, without listening again, and the conversation is cleared.
    Otherwise the conversation goes on after sleep or a restart.
 
@@ -325,7 +326,7 @@ device starts in configuration mode.
 
 ### Voice commands
 
-Phrases recognised by the device itself. Punctuation (¿ ¡ « » included) and case are ignored ("Au revoir !" works), and hyphens
+Phrases recognised by the device itself. Punctuation (¿ ¡ « » included) and case are ignored ("Au revoir !" / "Goodbye!" works), and hyphens
 and apostrophes count as spaces ("souviens-toi" = "souviens toi"). The tables below list the French and English
 phrases; only those of the language in use are recognised, except "change la langue" / "change the language" and the direct language
 phrases ("parle anglais", "speak French"), recognised in every language of `Languages`. They are written as

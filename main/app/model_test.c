@@ -206,8 +206,7 @@ static int s_speech_result_count = 0;
 /* The key of a speech model's provider, NULL without one */
 static const char *speech_key(const llm_speech_model_t *m)
 {
-    const sys_param_t *param = settings_get_parameter();
-    const char *key = strcmp(m->provider, "mistral") == 0 ? param->mistral_key : param->key;
+    const char *key = assistant_speech_key(m->provider);
     return key[0] ? key : NULL;
 }
 
@@ -276,7 +275,6 @@ static void test_speech(char *screen, size_t screen_size)
 
     for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_TTS) && !s_cancel && s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
         const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_TTS, i);
-        bool mistral = strcmp(m->provider, "mistral") == 0;
         snprintf(name, sizeof(name), lang->test_tts_name, m->spoken);
         size_t line_start = strlen(screen);
         speech_line(screen, screen_size, name, NULL);
@@ -289,7 +287,7 @@ static void test_speech(char *screen, size_t screen_size)
         const llm_voice_t *v = llm_voice_for(m->provider, lang->code, param->voice);
         int16_t *got = NULL;
         size_t got_samples = 0;
-        bool ok = key && tts_stream_test(mistral ? &tts_backend_mistral : &tts_backend_openai, param->url, key, m->id,
+        bool ok = key && tts_stream_test(assistant_tts_backend(m->provider), param->url, key, m->id,
                                          v ? v->id : NULL, lang->speech_test_phrase,
                                          &got, &got_samples, &r->first_ms, &r->total_ms);
         strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : "unavailable: no audio", sizeof(r->status));
@@ -317,7 +315,6 @@ static void test_speech(char *screen, size_t screen_size)
     for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_STT) && audio && !s_cancel &&
             s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
         const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_STT, i);
-        bool mistral = strcmp(m->provider, "mistral") == 0;
         snprintf(name, sizeof(name), lang->test_stt_name, m->spoken);
         size_t line_start = strlen(screen);
         speech_line(screen, screen_size, name, NULL);
@@ -329,7 +326,7 @@ static void test_speech(char *screen, size_t screen_size)
         const char *key = speech_key(m);
         char *text = NULL;
         if (key) {
-            stt_stream_configure(mistral ? &stt_backend_mistral : &stt_backend_openai, key, m->id, lang->code);
+            stt_stream_configure(assistant_stt_backend(m->provider), key, m->id, lang->code);
             text = stt_stream_test(audio, samples, &r->first_ms);
         }
         r->words = text ? words_found(lang->speech_test_phrase, text) : -1;

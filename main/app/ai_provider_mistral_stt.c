@@ -20,7 +20,7 @@
 #include "stt_backend.h"
 #include "stt_stream.h"
 
-static char *mistral_uri(const char *model)
+static char *mistral_uri(const char *model, const char *language)
 {
     char *uri = NULL;
     asprintf(&uri, "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=%s", model);

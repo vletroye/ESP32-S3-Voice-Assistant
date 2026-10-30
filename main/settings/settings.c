@@ -233,6 +233,11 @@ esp_err_t settings_read_parameter_from_nvs(void)
     if (nvs_get_str(my_handle, "Perplexity_key", g_sys_param.perplexity_key, &len) != ESP_OK) {
         g_sys_param.perplexity_key[0] = '\0';
     }
+    // Deepgram (optional): its key, for its transcription and speech models ([stt], [tts] of AGENTS.INI)
+    len = sizeof(g_sys_param.deepgram_key);
+    if (nvs_get_str(my_handle, "Deepgram_key", g_sys_param.deepgram_key, &len) != ESP_OK) {
+        g_sys_param.deepgram_key[0] = '\0';
+    }
 
     // Read the scrolling speed of the answer (optional)
     char speed[8] = {0};
@@ -472,6 +477,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     str_trim(g_sys_param.xai_key);
     str_trim(g_sys_param.mistral_key);
     str_trim(g_sys_param.perplexity_key);
+    str_trim(g_sys_param.deepgram_key);
     str_trim(g_sys_param.chat_model);
 
     ESP_LOGI(TAG, "stored ssid:%s", g_sys_param.ssid);
@@ -506,7 +512,7 @@ sys_param_t *settings_get_parameter(void)
 /* Kept by the soft reset: Wi-Fi, API keys, Homey, PERSONA.TXT, MEMORY.TXT, comments of CONFIG.INI */
 static const char *const s_kept_keys[] = {
     "ssid", "password", "ChatGPT_key", "Claude_key", "Gemini_key", "OpenRouter_key", "XAI_key",
-    "Mistral_key", "Perplexity_key",
+    "Mistral_key", "Perplexity_key", "Deepgram_key",
     "Homey_url", "Homey_key", "Persona", "Memory", "Config_layout",
 };
 

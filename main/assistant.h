@@ -31,8 +31,20 @@ void assistant_set_model(const char *model);
 void assistant_set_stt(const char *model);
 void assistant_set_tts(const char *model);
 
-/** Provider of the speech in use ("openai", "mistral"): whose voices "change de voix" offers */
+/** Provider of the speech in use ("openai", "mistral", "deepgram"): whose voices "change de voix" offers */
 const char *assistant_tts_provider(void);
+
+/** The key of a speech provider of [stt] / [tts] ("openai", "mistral", "deepgram"), "" if not configured */
+const char *assistant_speech_key(const char *provider);
+
+/** The name of that key in CONFIG.INI ("ChatGPT_key", "Mistral_key", "Deepgram_key") */
+const char *assistant_speech_key_name(const char *provider);
+
+/** The transcription / speech service of a provider */
+struct stt_backend;
+struct tts_backend;
+const struct stt_backend *assistant_stt_backend(const char *provider);
+const struct tts_backend *assistant_tts_backend(const char *provider);
 
 /** The voice speaking: Voice of CONFIG.INI if it is of the speech provider in use and speaks the language, else
  *  the first one of [voices] that is (NULL if the provider has none) */

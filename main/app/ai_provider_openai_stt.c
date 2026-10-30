@@ -21,7 +21,7 @@
 #include "stt_stream.h"
 
 /* "https://api.openai.com/v1/" (CONFIG_ASSISTANT_OPENAI_URL) -> "wss://api.openai.com/v1/realtime?intent=..." */
-static char *openai_uri(const char *model)
+static char *openai_uri(const char *model, const char *language)
 {
     const char *host_path = strstr(CONFIG_ASSISTANT_OPENAI_URL, "://");
     host_path = host_path ? host_path + 3 : CONFIG_ASSISTANT_OPENAI_URL;

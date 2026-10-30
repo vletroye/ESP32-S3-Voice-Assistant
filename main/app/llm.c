@@ -55,7 +55,7 @@ static size_t s_file_count = 0;
 #define PER_CALL_SECTION        "per_call"
 #define VOICES_SECTION          "voices"
 #define SPEECH_MODELS_MAX       16
-#define VOICES_MAX              64
+#define VOICES_MAX              80
 #define CALL_PRICES_MAX         8
 static struct {
     llm_speech_model_t model;
@@ -596,6 +596,66 @@ static bool add_missing_call(const char *text, const char *id)
     return true;
 }
 
+/* The end of a section starting at header: the next "[...]" line, or the end of the text */
+static const char *section_end(const char *header)
+{
+    const char *p = strchr(header, '\n');
+    while (p && p[1] && p[1] != '[') {
+        p = strchr(p + 1, '\n');
+    }
+    return p ? p + 1 : header + strlen(header);
+}
+
+/*
+ * The lines of a provider in a section of the firmware's file ("| deepgram |" in [stt], "= deepgram |" in
+ * [voices]), when that section of AGENTS.INI (written by an older firmware) has none: inserted under its header.
+ * Read again from the file (an earlier call may have changed it).
+ */
+static bool add_missing_provider(const char *section, const char *provider)
+{
+    char header[48], mark[32];
+    snprintf(header, sizeof(header), "[%s]", section);
+    char *text = read_agents_file();
+    const char *head = text ? section_line(text, header) : NULL;
+    const char *def_head = section_line(s_agents_default_start, header);
+    if (!head || !def_head || s_agents_cut) {
+        free(text);
+        return false;
+    }
+    snprintf(mark, sizeof(mark), " %s ", provider);
+    const char *end = section_end(head);
+    // The section already names the provider: kept as it is (its lines may have been edited or removed)
+    const char *named = strstr(head, mark);
+    if (named && named < end) {
+        free(text);
+        return false;
+    }
+    const char *def_end = section_end(def_head);
+    const char *after = strchr(head, '\n');
+    FILE *f = after ? fopen(AGENTS_FILE, "w") : NULL;
+    if (!f) {
+        free(text);
+        return false;
+    }
+    fwrite(text, 1, (size_t)(after + 1 - text), f);
+    int added = 0;
+    for (const char *line = strchr(def_head, '\n') + 1; line < def_end; ) {
+        const char *eol = strchr(line, '\n');
+        size_t len = eol ? (size_t)(eol + 1 - line) : strlen(line);
+        const char *found = strstr(line, mark);
+        if (*line != '#' && found && found < line + len) {
+            fwrite(line, 1, len, f);
+            added++;
+        }
+        line += len;
+    }
+    fputs(after + 1, f);
+    fclose(f);
+    free(text);
+    ESP_LOGI(TAG, "%d line(s) of %s added to %s of %s", added, provider, header, AGENTS_FILE);
+    return added > 0;
+}
+
 /* A section of the firmware's file missing in AGENTS.INI (written by an older firmware): appended to it */
 static bool add_missing_section(const char *text, const char *section)
 {
@@ -671,6 +731,9 @@ void llm_load_models(void)
         add_missing_section(text, "xai");          // Grok models, offered since xAI is supported
         add_missing_section(text, "mistral");      // and the providers added since
         add_missing_section(text, "perplexity");
+        add_missing_provider(STT_SECTION, "deepgram");     // Deepgram's models and voices, added since
+        add_missing_provider(TTS_SECTION, "deepgram");
+        add_missing_provider(VOICES_SECTION, "deepgram");
         rewrite_agents(NULL);
     }
     free(text);

@@ -192,6 +192,8 @@ void app_main(void)
         // Mistral AI and Perplexity keys (sections [mistral] and [perplexity] of AGENTS.INI)
         nvs_init_str_if_missing("Mistral_key", "");
         nvs_init_str_if_missing("Perplexity_key", "");
+        // Deepgram key, for its transcription and speech models ([stt] and [tts] of AGENTS.INI)
+        nvs_init_str_if_missing("Deepgram_key", "");
         // Free OpenRouter models offered (0 to 5; 0: none). An older version's OpenRouter_free = on / off and
         // Free_models merged into it ("off": 0, "on": its Free_models); Free_models is then erased as unknown
         char free_models[8];

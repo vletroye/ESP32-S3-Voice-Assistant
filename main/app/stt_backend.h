@@ -18,13 +18,15 @@ extern "C" {
 #endif
 
 struct stt_backend {
-    const char *name;           /* "openai", "mistral" (logs) */
+    const char *name;           /* "openai", "mistral", "deepgram" (logs) */
+    const char *auth_scheme;    /* of the Authorization header: "Bearer" when NULL, "Token" (Deepgram) */
     int rate;                   /* sample rate of the audio sent: 24000 (resampled from 16 kHz) or 16000 */
-    /* "wss://..." for this model (allocated) */
-    char *(*uri)(const char *model);
+    /* "wss://..." for this model and language (allocated), made at each connection */
+    char *(*uri)(const char *model, const char *language);
     /* The session configuration sent once connected (allocated JSON), NULL for none */
     char *(*session_update)(const char *model, const char *language);
-    const char *append_type;    /* message carrying base64 audio: {"type": append_type, "audio": "..."} */
+    /* message carrying base64 audio: {"type": append_type, "audio": "..."}; NULL: the audio in binary frames */
+    const char *append_type;
     const char *clear_type;     /* message dropping the audio of an abandoned turn, NULL for none */
     const char *commit_type;    /* message ending the audio of the turn */
     /*

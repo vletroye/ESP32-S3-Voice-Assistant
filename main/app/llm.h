@@ -96,7 +96,7 @@ typedef enum { LLM_SPEECH_STT, LLM_SPEECH_TTS } llm_speech_kind_t;
 typedef struct {
     const char *id;         /* model id of the API ("gpt-live-transcribe", "voxtral-mini-tts-3-0") */
     const char *label;      /* shown name */
-    const char *provider;   /* "openai", "mistral" */
+    const char *provider;   /* "openai", "mistral", "deepgram" */
     const char *spoken;     /* said in the spoken list, and to choose it */
 } llm_speech_model_t;
 
@@ -112,7 +112,7 @@ const llm_speech_model_t *llm_speech_find(llm_speech_kind_t kind, const char *id
 /* Voices of AGENTS.INI ([voices]): those of the speech provider in use that speak the language are offered */
 typedef struct llm_voice {
     const char *name;       /* unique, said and shown ("Lea"); kept in CONFIG.INI (Voice) */
-    const char *provider;   /* "openai", "mistral" */
+    const char *provider;   /* "openai", "mistral", "deepgram" */
     const char *id;         /* voice of the provider's API ("marin", "voice_589") */
     const char *languages;  /* "fr,en", "*" for every one */
     const char *emotion;    /* "calm", NULL for none */

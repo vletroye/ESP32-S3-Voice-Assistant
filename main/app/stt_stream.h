@@ -29,12 +29,13 @@ esp_err_t stt_stream_init(void);
 typedef struct stt_backend stt_backend_t;
 extern const stt_backend_t stt_backend_openai;
 extern const stt_backend_t stt_backend_mistral;
+extern const stt_backend_t stt_backend_deepgram;
 
 /**
  * @brief Set the transcription service and its parameters (the strings are copied). Called again to change the
  *        service or the model at run time: a new connection.
  *
- * @param backend  &stt_backend_openai, &stt_backend_mistral
+ * @param backend  &stt_backend_openai, &stt_backend_mistral, &stt_backend_deepgram
  * @param api_key  Key of the service
  * @param model    e.g. "gpt-live-transcribe", "voxtral-mini-transcribe-realtime-3-0"
  * @param language ISO-639-1 code, e.g. "fr" (NULL: unchanged)

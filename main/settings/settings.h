@@ -22,6 +22,7 @@
 #define XAI_KEY_SIZE 128
 #define MISTRAL_KEY_SIZE 128
 #define PERPLEXITY_KEY_SIZE 128
+#define DEEPGRAM_KEY_SIZE 128
 #define VOICE_SIZE 24
 #define COUNTRY_SIZE 4
 #define CITY_SIZE 48
@@ -40,6 +41,7 @@ typedef struct {
     char xai_key[XAI_KEY_SIZE];       /* xAI key (Grok models), empty if not configured. */
     char mistral_key[MISTRAL_KEY_SIZE];             /* Mistral AI key, empty if not configured. */
     char perplexity_key[PERPLEXITY_KEY_SIZE];       /* Perplexity key (Sonar), empty if not configured. */
+    char deepgram_key[DEEPGRAM_KEY_SIZE];           /* Deepgram key (Nova, Aura speech), empty if not configured. */
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude, GPT, Gemini, Grok or OpenRouter). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
     int screen_off_s;                 /* Screen off after this long without presence (radar dock), 0: never. */

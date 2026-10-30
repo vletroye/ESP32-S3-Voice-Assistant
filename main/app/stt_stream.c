@@ -4,16 +4,17 @@
  * SPDX-License-Identifier: CC0-1.0
  *
  * Streaming speech-to-text over a Realtime WebSocket, the protocol of the service chosen ([stt] of AGENTS.INI)
- * given by its backend (ai_provider_openai_stt.c, ai_provider_mistral_stt.c).
+ * given by its backend (ai_provider_openai_stt.c, ai_provider_mistral_stt.c, ai_provider_deepgram_stt.c).
  *
  * Each listening session is a "turn":
  *
  *   detect task (AFE output, 16 kHz) -> stt_stream_write() -> audio buffer (PSRAM)
- *   -> [stt task] (16 kHz -> 24 kHz for OpenAI), base64 -> append messages
+ *   -> [stt task] (16 kHz -> 24 kHz for OpenAI), base64 -> append messages (Deepgram: binary frames)
  *   end of speech (local VAD) -> commit message -> ... final transcript
  *
  * OpenAI's WebSocket stays open (connected at boot, reconnected after any error or server close), so that
- * listening never waits for a TLS handshake; Mistral's session lasts a question: opened when listening starts
+ * listening never waits for a TLS handshake; Mistral's and Deepgram's sessions last a question: opened when
+ * listening starts
  * (the audio is buffered meanwhile) and closed once transcribed. The end of speech is detected on the device.
  */
 
@@ -271,6 +272,9 @@ static void ws_event_handler(void *arg, esp_event_base_t base, int32_t event_id,
 
 static esp_websocket_client_handle_t create_client(void)
 {
+    // Its URI made now: it may carry the language in use (Deepgram)
+    free(s_uri);
+    s_uri = s_backend->uri(s_model, s_language);
     if (!s_uri || !s_auth_header) {
         return NULL;
     }
@@ -339,12 +343,17 @@ static bool send_simple(esp_websocket_client_handle_t client, const char *type)
 
 static bool send_audio(esp_websocket_client_handle_t client, const int16_t *samples, size_t count)
 {
-    // 24 kHz for OpenAI, the 16 kHz of the AFE as is for Mistral
+    // 24 kHz for OpenAI, the 16 kHz of the AFE as is for Mistral and Deepgram
     const int16_t *pcm = samples;
     size_t n_out = count;
     if (s_backend->rate != STT_INPUT_RATE) {
         n_out = upsample(&s_upsampler, samples, count, s_out);
         pcm = s_out;
+    }
+    if (!s_backend->append_type) {
+        // The samples as they are, in a binary frame
+        int len = (int)(n_out * sizeof(int16_t));
+        return esp_websocket_client_send_bin(client, (const char *)pcm, len, pdMS_TO_TICKS(5000)) == len;
     }
     char prefix[64];
     size_t prefix_len = snprintf(prefix, sizeof(prefix), "{\"type\":\"%s\",\"audio\":\"", s_backend->append_type);
@@ -549,13 +558,11 @@ void stt_stream_configure(const stt_backend_t *backend, const char *api_key, con
                           const char *language)
 {
     char *header = NULL;
-    asprintf(&header, "Authorization: Bearer %s\r\n", api_key);
-    char *uri = backend->uri(model);
-    // Taken by the stt task at its next loop: the old strings stay valid until it has reconnected
+    asprintf(&header, "Authorization: %s %s\r\n", backend->auth_scheme ? backend->auth_scheme : "Bearer", api_key);
+    // Taken by the stt task at its next loop (which makes the URI): the old header stays valid until it has
+    // reconnected
     char *old_header = s_auth_header;
-    char *old_uri = s_uri;
     s_auth_header = header;
-    s_uri = uri;
     replace_str(&s_model, model);
     if (language) {
         replace_str(&s_language, language);
@@ -573,7 +580,6 @@ void stt_stream_configure(const stt_backend_t *backend, const char *api_key, con
         }
     }
     free(old_header);
-    free(old_uri);
 
     /* The connection task starts once configured; it connects as soon as the Wi-Fi is up */
     static bool task_started = false;

@@ -692,22 +692,48 @@ void assistant_set_model(const char *model)
     ESP_LOGI(TAG, "Model %s applied", model);
 }
 
+const char *assistant_speech_key(const char *provider)
+{
+    if (strcmp(provider, "mistral") == 0) {
+        return sys_param->mistral_key;
+    }
+    if (strcmp(provider, "deepgram") == 0) {
+        return sys_param->deepgram_key;
+    }
+    return sys_param->key;
+}
+
+const char *assistant_speech_key_name(const char *provider)
+{
+    return strcmp(provider, "mistral") == 0 ? "Mistral_key" :
+           strcmp(provider, "deepgram") == 0 ? "Deepgram_key" : "ChatGPT_key";
+}
+
+const struct stt_backend *assistant_stt_backend(const char *provider)
+{
+    return strcmp(provider, "mistral") == 0 ? &stt_backend_mistral :
+           strcmp(provider, "deepgram") == 0 ? &stt_backend_deepgram : &stt_backend_openai;
+}
+
+const struct tts_backend *assistant_tts_backend(const char *provider)
+{
+    return strcmp(provider, "mistral") == 0 ? &tts_backend_mistral :
+           strcmp(provider, "deepgram") == 0 ? &tts_backend_deepgram : &tts_backend_openai;
+}
+
 /*
  * The transcription / speech model of CONFIG.INI with its provider ([stt] / [tts] of AGENTS.INI) and the key of
- * that provider; a Mistral one without Mistral_key falls back to OpenAI's default model (nothing would work)
+ * that provider; one whose provider has no key (Mistral_key, Deepgram_key) falls back to OpenAI's default model
+ * (nothing would work)
  */
 static const llm_speech_model_t *speech_choice(llm_speech_kind_t kind, const char *model, const char **key)
 {
     const llm_speech_model_t *m = llm_speech_find(kind, model);
-    if (m && strcmp(m->provider, "mistral") == 0) {
-        if (sys_param->mistral_key[0]) {
-            *key = sys_param->mistral_key;
-            return m;
-        }
-        ESP_LOGW(TAG, "%s: no Mistral_key, OpenAI's model is used", model);
+    if (m && !assistant_speech_key(m->provider)[0]) {
+        ESP_LOGW(TAG, "%s: no %s, OpenAI's model is used", model, assistant_speech_key_name(m->provider));
         m = llm_speech_find(kind, kind == LLM_SPEECH_STT ? CONFIG_ASSISTANT_STT_MODEL : CONFIG_ASSISTANT_TTS_MODEL);
     }
-    *key = sys_param->key;
+    *key = assistant_speech_key(m ? m->provider : "openai");
     return m;
 }
 
@@ -730,8 +756,7 @@ void assistant_set_stt(const char *model)
     }
     const char *key;
     const llm_speech_model_t *m = speech_choice(LLM_SPEECH_STT, sys_param->stt_model, &key);
-    bool mistral = m && strcmp(m->provider, "mistral") == 0;
-    stt_stream_configure(mistral ? &stt_backend_mistral : &stt_backend_openai, key,
+    stt_stream_configure(assistant_stt_backend(m ? m->provider : "openai"), key,
                          m ? m->id : CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
 }
 
@@ -756,7 +781,7 @@ void assistant_set_tts(const char *model)
     if (style[0]) {
         strlcat(style, " ", sizeof(style));
     }
-    tts_stream_configure(mistral ? &tts_backend_mistral : &tts_backend_openai, sys_param->url, key,
+    tts_stream_configure(assistant_tts_backend(m ? m->provider : "openai"), sys_param->url, key,
                          m ? m->id : CONFIG_ASSISTANT_TTS_MODEL, v ? v->id : NULL,
                          tts_instructions ? tts_instructions : app_lang_get()->tts_instructions,
                          style[0] ? style : NULL);

@@ -344,8 +344,8 @@ static void speech_options_refresh(settings_speech_t *row)
     row->count = 0;
     for (size_t i = 0; i < llm_speech_count(row->kind) && row->count < SETTINGS_SPEECH_MAX; i++) {
         const llm_speech_model_t *m = llm_speech_model(row->kind, i);
-        if (strcmp(m->provider, "mistral") == 0 && !param->mistral_key[0]) {
-            continue;
+        if (!assistant_speech_key(m->provider)[0]) {
+            continue;       // its provider has no key (Mistral_key, Deepgram_key)
         }
         if (strcmp(m->id, current) == 0) {
             selected = row->count;

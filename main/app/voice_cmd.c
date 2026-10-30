@@ -931,9 +931,16 @@ static voice_cmd_t choose_speech(llm_speech_kind_t kind, const char *norm, char 
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
-    sys_param_t *param = settings_get_parameter();
-    if (strcmp(m->provider, "mistral") == 0 && !param->mistral_key[0]) {
-        asprintf(&text, lang->speech_no_key, "Mistral", "Mistral_key");
+    if (!assistant_speech_key(m->provider)[0]) {
+        // "Il manque la clé Deepgram : ajoutez Deepgram_key...": the provider named as its key, without "_key"
+        const char *key_name = assistant_speech_key_name(m->provider);
+        char provider[24];
+        strlcpy(provider, key_name, sizeof(provider));
+        char *suffix = strstr(provider, "_key");
+        if (suffix) {
+            *suffix = '\0';
+        }
+        asprintf(&text, lang->speech_no_key, provider, key_name);
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }

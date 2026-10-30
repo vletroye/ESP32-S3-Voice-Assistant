@@ -23,6 +23,10 @@
 #include "voice_cmd.h"
 #include "app_ui_ctrl.h"
 #include "model_test.h"
+#include "settings.h"
+#include "stt_stream.h"
+#include "tts_stream.h"
+#include "file_memory.h"
 
 #define MODEL_TIMES_FILE        "/spiffs/model_times.json"
 #define MODEL_TIMES_FILE_MAX    8192
@@ -177,6 +181,142 @@ static void record(cJSON *times, const llm_model_t *m, llm_error_t err, const ll
     set_number(entry, "reasoning", st->reasoning_tokens);
 }
 
+static void spoken_seconds(char *buf, size_t size, int ms, bool short_unit);
+
+/* ---------- the speech models ([tts], [stt] of AGENTS.INI) ---------- */
+
+/*
+ * The sentence of LANG_<XX>.TXT (speech_test_phrase) spoken by each speech model into memory (not played), then
+ * the audio of the first one transcribed by each transcription model. Shown in SPEED.TXT after the chat models.
+ */
+#define SPEECH_RESULTS_MAX  16
+static struct {
+    bool stt;
+    char name[24];
+    char model[48];
+    int first_ms;           /* TTS: first audio; STT: the transcript after all the audio is sent */
+    int total_ms;           /* TTS: end of the audio */
+    int words;              /* STT: % of the words of the sentence found in the transcript, -1 if none */
+    char status[32];
+} s_speech_results[SPEECH_RESULTS_MAX];
+static int s_speech_result_count = 0;
+
+/* The key of a speech model's provider, NULL without one */
+static const char *speech_key(const llm_speech_model_t *m)
+{
+    const sys_param_t *param = settings_get_parameter();
+    const char *key = strcmp(m->provider, "mistral") == 0 ? param->mistral_key : param->key;
+    return key[0] ? key : NULL;
+}
+
+/* % of the words of the sentence (3 letters or more) found in the transcript */
+static int words_found(const char *sentence, const char *transcript)
+{
+    // Each one between spaces, so that a word is not found inside another
+    char said[256], heard[512] = " ";
+    app_text_normalize(sentence, said, sizeof(said));
+    app_text_normalize(transcript, heard + 1, sizeof(heard) - 2);
+    strlcat(heard, " ", sizeof(heard));
+    int total = 0, found = 0;
+    for (char *w = strtok(said, " "); w; w = strtok(NULL, " ")) {
+        if (strlen(w) < 3) {
+            continue;
+        }
+        total++;
+        char pattern[sizeof(said) + 2] = " ";
+        strlcat(pattern, w, sizeof(pattern));
+        strlcat(pattern, " ", sizeof(pattern));
+        found += strstr(heard, pattern) != NULL;
+    }
+    return total ? found * 100 / total : -1;
+}
+
+static void speech_line(char *screen, size_t size, const char *name, const char *result)
+{
+    size_t from = strlen(screen);
+    snprintf(screen + from, size - from, "%s%s%s%s", from ? "\n" : "", name, result ? " : " : "…", result ? result : "");
+}
+
+static void test_speech(char *screen, size_t screen_size)
+{
+    const app_lang_t *lang = app_lang_get();
+    const sys_param_t *param = settings_get_parameter();
+    int16_t *audio = NULL;
+    size_t samples = 0;
+    char name[32], result[32];
+    s_speech_result_count = 0;
+
+    for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_TTS) && !s_cancel && s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
+        const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_TTS, i);
+        bool mistral = strcmp(m->provider, "mistral") == 0;
+        snprintf(name, sizeof(name), lang->test_tts_name, m->spoken);
+        size_t line_start = strlen(screen);
+        speech_line(screen, screen_size, name, NULL);
+        assistant_show(screen);
+        typeof(s_speech_results[0]) *r = &s_speech_results[s_speech_result_count++];
+        *r = (typeof(*r)) { .stt = false, .first_ms = -1, .total_ms = -1, .words = -1 };
+        strlcpy(r->name, name, sizeof(r->name));
+        strlcpy(r->model, m->id, sizeof(r->model));
+        const char *key = speech_key(m);
+        int16_t *got = NULL;
+        size_t got_samples = 0;
+        bool ok = key && tts_stream_test(mistral ? &tts_backend_mistral : &tts_backend_openai, param->url, key, m->id,
+                                         mistral ? param->mistral_voice : param->voice, lang->speech_test_phrase,
+                                         &got, &got_samples, &r->first_ms, &r->total_ms);
+        strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : "unavailable: no audio", sizeof(r->status));
+        ESP_LOGI(TAG, "TTS %s: %s, first audio %d ms, total %d ms, %u samples", m->id, r->status, r->first_ms,
+                 r->total_ms, (unsigned)got_samples);
+        if (ok && !audio) {
+            audio = got;        // the audio transcribed next
+            samples = got_samples;
+        } else {
+            free(got);
+        }
+        screen[line_start] = '\0';
+        if (ok) {
+            spoken_seconds(result, sizeof(result), r->first_ms, true);
+        }
+        speech_line(screen, screen_size, name, ok ? result : lang->test_unavailable_short);
+        assistant_show(screen);
+    }
+    // The speech of the settings again
+    assistant_set_tts(NULL);
+
+    for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_STT) && audio && !s_cancel &&
+            s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
+        const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_STT, i);
+        bool mistral = strcmp(m->provider, "mistral") == 0;
+        snprintf(name, sizeof(name), lang->test_stt_name, m->spoken);
+        size_t line_start = strlen(screen);
+        speech_line(screen, screen_size, name, NULL);
+        assistant_show(screen);
+        typeof(s_speech_results[0]) *r = &s_speech_results[s_speech_result_count++];
+        *r = (typeof(*r)) { .stt = true, .first_ms = -1, .total_ms = -1, .words = -1 };
+        strlcpy(r->name, name, sizeof(r->name));
+        strlcpy(r->model, m->id, sizeof(r->model));
+        const char *key = speech_key(m);
+        char *text = NULL;
+        if (key) {
+            stt_stream_configure(mistral ? &stt_backend_mistral : &stt_backend_openai, key, m->id, lang->code);
+            text = stt_stream_test(audio, samples, &r->first_ms);
+        }
+        r->words = text ? words_found(lang->speech_test_phrase, text) : -1;
+        strlcpy(r->status, !key ? "unavailable: no key" : text ? "ok" : "unavailable: no text", sizeof(r->status));
+        ESP_LOGI(TAG, "STT %s: %s, %d ms, %d %% of the words: \"%s\"", m->id, r->status, r->first_ms, r->words,
+                 text ? text : "");
+        free(text);
+        screen[line_start] = '\0';
+        if (r->first_ms >= 0) {
+            spoken_seconds(result, sizeof(result), r->first_ms, true);
+        }
+        speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : lang->test_unavailable_short);
+        assistant_show(screen);
+    }
+    free(audio);
+    // The transcription of the settings again
+    assistant_set_stt(NULL);
+}
+
 /* ---------- SPEED.TXT ---------- */
 
 static int compare_avg(const void *a, const void *b)
@@ -244,6 +384,22 @@ static void write_speed_file(const cJSON *times, const char *question)
                 tested && reasoning >= 0 ? reason : "-", tested && gen_s > 0.05 ? tps : "-",
                 string_of(e, "speed")[0] ? string_of(e, "speed") : "-", string_of(e, "date"),
                 string_of(e, "status"), e->string);
+    }
+    if (s_speech_result_count) {
+        fprintf(f, "\r\n# Speech models of the last test: speech_test_phrase of LANG_<XX>.TXT spoken by each speech model\r\n"
+                "# (TTS, not played: first = first audio, total = end of the audio), then the audio of the first one\r\n"
+                "# transcribed by each transcription model (STT: first = transcript after all the audio sent,\r\n"
+                "# words = %% of the words of the sentence found)\r\n\r\n");
+        fprintf(f, "%-24s %6s %6s %6s  %-26s  %s\r\n", "name", "first", "total", "words", "status", "model");
+        for (i = 0; i < s_speech_result_count; i++) {
+            char b1[12], b2[12], w[8];
+            bool ok = s_speech_results[i].first_ms >= 0;
+            snprintf(w, sizeof(w), "%d", s_speech_results[i].words);
+            fprintf(f, "%-24.24s %6s %6s %6s  %-26s  %s\r\n", s_speech_results[i].name,
+                    secs(b1, sizeof(b1), s_speech_results[i].first_ms, ok),
+                    secs(b2, sizeof(b2), s_speech_results[i].total_ms, ok && !s_speech_results[i].stt),
+                    s_speech_results[i].words >= 0 ? w : "-", s_speech_results[i].status, s_speech_results[i].model);
+        }
     }
     fclose(f);
     free(entries);
@@ -415,8 +571,13 @@ static void test_run(void)
     const llm_model_t *best = NULL;
     int best_ms = 0;
     char text[200], time_text[32];
-    size_t screen_size = (count + 1) * SCREEN_LINE_MAX;
+    size_t screen_size = (count + 1 + SPEECH_RESULTS_MAX) * SCREEN_LINE_MAX;
     char *screen = calloc(1, screen_size);
+    // The speech models first: the speech is free (the results of the chat models are then spoken while testing)
+    if (screen) {
+        test_speech(screen, screen_size);
+        strlcat(screen, "\n", screen_size);
+    }
     ESP_LOGI(TAG, "Testing %u models", (unsigned)count);
     assistant_announce_begin();
 

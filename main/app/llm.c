@@ -45,13 +45,19 @@ static size_t s_file_count = 0;
 /* Free OpenRouter models never offered: [openrouter_free_exclude] of AGENTS.INI */
 #define FREE_EXCLUDED_MAX   32
 #define FREE_EXCLUDE_SECTION    "openrouter_free_exclude"
-/* [speech]: the transcription and speech models with their prices; [per_call]: prices per call (web search) */
+/*
+ * [stt], [tts]: the transcription and speech models offered, with their provider and prices ([speech]: the prices
+ * only, in a file of an older firmware); [per_call]: prices per call (web search)
+ */
 #define SPEECH_SECTION          "speech"
+#define STT_SECTION             "stt"
+#define TTS_SECTION             "tts"
 #define PER_CALL_SECTION        "per_call"
-#define SPEECH_MODELS_MAX       8
+#define SPEECH_MODELS_MAX       16
 #define CALL_PRICES_MAX         8
 static struct {
-    char *id;
+    llm_speech_model_t model;
+    int kind;               /* llm_speech_kind_t, -1 for a line of [speech] (prices only) */
     double price_in;
     double price_out;
 } s_speech[SPEECH_MODELS_MAX];
@@ -164,7 +170,9 @@ static void split_fields(char *rest, fields_t *f)
 }
 
 /* Section of a line ("[anthropic]"): its provider, or one of the special sections */
-typedef enum { SECTION_NONE, SECTION_MODELS, SECTION_EXCLUDE, SECTION_SPEECH, SECTION_PER_CALL } section_t;
+typedef enum {
+    SECTION_NONE, SECTION_MODELS, SECTION_EXCLUDE, SECTION_SPEECH, SECTION_STT, SECTION_TTS, SECTION_PER_CALL
+} section_t;
 
 static section_t section_of(char *name, int *provider)
 {
@@ -178,6 +186,8 @@ static section_t section_of(char *name, int *provider)
     }
     return strcasecmp(name, FREE_EXCLUDE_SECTION) == 0 ? SECTION_EXCLUDE :
            strcasecmp(name, SPEECH_SECTION) == 0 ? SECTION_SPEECH :
+           strcasecmp(name, STT_SECTION) == 0 ? SECTION_STT :
+           strcasecmp(name, TTS_SECTION) == 0 ? SECTION_TTS :
            strcasecmp(name, PER_CALL_SECTION) == 0 ? SECTION_PER_CALL : SECTION_NONE;
 }
 
@@ -196,6 +206,12 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
             free(s_free_excluded[i]);
         }
         s_free_excluded_count = 0;
+        for (int i = 0; i < s_speech_count; i++) {
+            free((char *)s_speech[i].model.id);
+            free((char *)s_speech[i].model.label);
+            free((char *)s_speech[i].model.provider);
+            free((char *)s_speech[i].model.spoken);
+        }
         s_speech_count = 0;
         s_call_count = 0;
     }
@@ -243,9 +259,17 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
         }
         fields_t f;
         split_fields(eq + 1, &f);
-        if (section == SECTION_SPEECH) {
+        if (section == SECTION_SPEECH || section == SECTION_STT || section == SECTION_TTS) {
+            // "gpt-live-transcribe = OpenAI | openai | OpenAI | 2.15 | 8.6": the second column is the provider
             if (lists && id[0] && s_speech_count < SPEECH_MODELS_MAX) {
-                s_speech[s_speech_count].id = strdup(id);
+                s_speech[s_speech_count].model = (llm_speech_model_t) {
+                    .id = strdup(id),
+                    .label = strdup(f.label[0] ? f.label : id),
+                    .provider = strdup(f.effort[0] && strcmp(f.effort, "-") != 0 ? f.effort : "openai"),
+                    .spoken = strdup(f.spoken[0] ? f.spoken : f.label),
+                };
+                s_speech[s_speech_count].kind = section == SECTION_STT ? LLM_SPEECH_STT :
+                                                section == SECTION_TTS ? LLM_SPEECH_TTS : -1;
                 s_speech[s_speech_count].price_in = f.price_in;
                 s_speech[s_speech_count++].price_out = f.price_out;
                 if (!f.priced) {
@@ -558,7 +582,8 @@ void llm_load_models(void)
         // [per_call] line first: it rewrites the file from text, which the sections appended would not be in
         add_missing_call(text, "perplexity:web_search");
         add_missing_section(text, FREE_EXCLUDE_SECTION);
-        add_missing_section(text, SPEECH_SECTION);
+        add_missing_section(text, STT_SECTION);    // the transcription and speech models to choose from
+        add_missing_section(text, TTS_SECTION);
         add_missing_section(text, PER_CALL_SECTION);
         add_missing_section(text, "xai");          // Grok models, offered since xAI is supported
         add_missing_section(text, "mistral");      // and the providers added since
@@ -588,13 +613,42 @@ bool llm_price_of(const char *id, double *price_in, double *price_out)
         }
     }
     for (int i = 0; i < s_speech_count; i++) {
-        if (strcmp(id, s_speech[i].id) == 0) {
+        if (strcmp(id, s_speech[i].model.id) == 0) {
             *price_in = s_speech[i].price_in;
             *price_out = s_speech[i].price_out;
             return true;
         }
     }
     return false;
+}
+
+size_t llm_speech_count(llm_speech_kind_t kind)
+{
+    size_t n = 0;
+    for (int i = 0; i < s_speech_count; i++) {
+        n += (s_speech[i].kind == (int)kind);
+    }
+    return n;
+}
+
+const llm_speech_model_t *llm_speech_model(llm_speech_kind_t kind, size_t index)
+{
+    for (int i = 0; i < s_speech_count; i++) {
+        if (s_speech[i].kind == (int)kind && index-- == 0) {
+            return &s_speech[i].model;
+        }
+    }
+    return NULL;
+}
+
+const llm_speech_model_t *llm_speech_find(llm_speech_kind_t kind, const char *id)
+{
+    for (int i = 0; i < s_speech_count; i++) {
+        if (s_speech[i].kind == (int)kind && strcmp(s_speech[i].model.id, id) == 0) {
+            return &s_speech[i].model;
+        }
+    }
+    return NULL;
 }
 
 bool llm_call_price_of(const char *id, double *price)

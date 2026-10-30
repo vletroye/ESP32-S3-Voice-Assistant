@@ -676,6 +676,59 @@ void assistant_set_model(const char *model)
     ESP_LOGI(TAG, "Model %s applied", model);
 }
 
+/*
+ * The transcription / speech model of CONFIG.INI with its provider ([stt] / [tts] of AGENTS.INI) and the key of
+ * that provider; a Mistral one without Mistral_key falls back to OpenAI's default model (nothing would work)
+ */
+static const llm_speech_model_t *speech_choice(llm_speech_kind_t kind, const char *model, const char **key)
+{
+    const llm_speech_model_t *m = llm_speech_find(kind, model);
+    if (m && strcmp(m->provider, "mistral") == 0) {
+        if (sys_param->mistral_key[0]) {
+            *key = sys_param->mistral_key;
+            return m;
+        }
+        ESP_LOGW(TAG, "%s: no Mistral_key, OpenAI's model is used", model);
+        m = llm_speech_find(kind, kind == LLM_SPEECH_STT ? CONFIG_ASSISTANT_STT_MODEL : CONFIG_ASSISTANT_TTS_MODEL);
+    }
+    *key = sys_param->key;
+    return m;
+}
+
+const char *assistant_tts_provider(void)
+{
+    const char *key;
+    const llm_speech_model_t *m = speech_choice(LLM_SPEECH_TTS, sys_param->tts_model, &key);
+    return m ? m->provider : "openai";
+}
+
+void assistant_set_stt(const char *model)
+{
+    if (model) {
+        strlcpy(sys_param->stt_model, model, sizeof(sys_param->stt_model));
+    }
+    const char *key;
+    const llm_speech_model_t *m = speech_choice(LLM_SPEECH_STT, sys_param->stt_model, &key);
+    bool mistral = m && strcmp(m->provider, "mistral") == 0;
+    stt_stream_configure(mistral ? &stt_backend_mistral : &stt_backend_openai, key,
+                         m ? m->id : CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
+}
+
+void assistant_set_tts(const char *model)
+{
+    if (model) {
+        strlcpy(sys_param->tts_model, model, sizeof(sys_param->tts_model));
+    }
+    const char *key;
+    const llm_speech_model_t *m = speech_choice(LLM_SPEECH_TTS, sys_param->tts_model, &key);
+    bool mistral = m && strcmp(m->provider, "mistral") == 0;
+    char *tts_instructions = build_tts_instructions();
+    tts_stream_configure(mistral ? &tts_backend_mistral : &tts_backend_openai, sys_param->url, key,
+                         m ? m->id : CONFIG_ASSISTANT_TTS_MODEL, mistral ? sys_param->mistral_voice : sys_param->voice,
+                         tts_instructions ? tts_instructions : app_lang_get()->tts_instructions);
+    free(tts_instructions);
+}
+
 /* Start of a listening session (wake word, touch or follow-up). Called from app_audio.c */
 /* Double tap while "J'écoute" / "Je réfléchis": what is under way is dropped, the assistant goes back to sleep */
 void assistant_cancel(void)
@@ -995,13 +1048,11 @@ void app_main()
              system_prompt ? system_prompt : app_lang_get()->system_prompt);
     free(system_prompt);
     llm_set_location(sys_param->country, sys_param->city);
+    // Transcription and speech: the models of CONFIG.INI (Stt_model, Tts_model), by their provider
     ESP_ERROR_CHECK(stt_stream_init());
-    stt_stream_configure(sys_param->key, CONFIG_ASSISTANT_STT_MODEL, app_lang_get()->code);
+    assistant_set_stt(NULL);
     ESP_ERROR_CHECK(tts_stream_init());
-    char *tts_instructions = build_tts_instructions();
-    tts_stream_configure(sys_param->url, sys_param->key, CONFIG_ASSISTANT_TTS_MODEL, sys_param->voice,
-                         tts_instructions ? tts_instructions : app_lang_get()->tts_instructions);
-    free(tts_instructions);
+    assistant_set_tts(NULL);
 
     for (int seconds = 0; ; seconds++) {
         vTaskDelay(pdMS_TO_TICKS(1000));

@@ -3,63 +3,43 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Sentence-by-sentence speech synthesis with the OpenAI Realtime API (gpt-realtime-2.1-mini).
+ * Sentence-by-sentence speech synthesis, by the service chosen ([tts] of AGENTS.INI: ai_provider_openai_tts.c,
+ * ai_provider_mistral_tts.c).
  *
- *   tts_stream_say() -> sentence queue -> [tts task] response.create (one out-of-band response per
- *   sentence) -> response.output_audio.delta, 24 kHz -> 16 kHz -> audio stream buffer (PSRAM)
- *   -> [playback task] I2S (16 kHz stereo)
+ *   tts_stream_say() -> sentence queue -> [tts task] the service speaks the sentence -> 24 kHz audio
+ *   -> 16 kHz -> audio stream buffer (PSRAM) -> [playback task] I2S (16 kHz stereo)
  *
- * The WebSocket stays open (reconnected after any error). The I2S bus stays at 16 kHz, shared with
- * the microphones, so that listening is never interrupted.
+ * The I2S bus stays at 16 kHz, shared with the microphones, so that listening is never interrupted.
  */
 
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-#include "file_costs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-#include "freertos/event_groups.h"
+#include "freertos/semphr.h"
 #include "freertos/stream_buffer.h"
 #include "freertos/idf_additions.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
-#include "esp_crt_bundle.h"
-#include "esp_websocket_client.h"
-#include "mbedtls/base64.h"
-#include "cJSON.h"
 #include "bsp_board.h"
 #include "radio.h"
 #include "app_wifi.h"
 #include "tts_stream.h"
+#include "tts_backend.h"
 
-#define TTS_SAMPLE_RATE_IN      24000   /* audio/pcm: 24 kHz, 16-bit signed, mono, little-endian */
+#define TTS_SAMPLE_RATE_IN      24000   /* audio given by the services: 24 kHz, 16-bit signed, mono */
 #define TTS_AUDIO_BUFFER_BYTES  (256 * 1024)    /* 8 s of 16 kHz mono audio, in PSRAM */
 #define TTS_SENTENCE_QUEUE_LEN  16
-/*
- * A response that stalls (no first audio, or no more audio for a while) is given up and the connection
- * recreated: a stuck connection would otherwise block every following sentence of the reply
- */
-#define TTS_FIRST_AUDIO_TIMEOUT_MS  15000
-#define TTS_STALL_TIMEOUT_MS        8000
 /* Cuts in the middle of a sentence from which the reply is reported as choppy */
 #define TTS_CHOPPY_CUTS             2
-#define TTS_CONNECT_WAIT_MS     5000
-#define TTS_RECONNECT_MS        2000
-#define TTS_RECREATE_AFTER_MS   30000
-#define TTS_WS_TASK_STACK       4608    /* internal RAM, runs the TLS handshake (~3.5 KB used) */
-#define TTS_WS_BUFFER_SIZE      8192    /* PSRAM */
 #define PLAYBACK_FRAMES         256
 
 #define RESAMPLER_TAPS          15
-
-/* Event group bits */
-#define EV_CONNECTED            BIT0
-#define EV_RESPONSE_DONE        BIT1
 
 static const char *TAG = "tts";
 
@@ -70,7 +50,6 @@ typedef struct {
 
 static QueueHandle_t s_sentences = NULL;
 static StreamBufferHandle_t s_audio = NULL;
-static EventGroupHandle_t s_events = NULL;
 
 /* Incremented for each new reply and on cancel: work tagged with an older value is dropped */
 static volatile uint32_t s_generation = 0;
@@ -79,20 +58,15 @@ static volatile uint32_t s_synth_done_generation = 0;
 /* Set on cancel: the playback task drops the buffered audio */
 static volatile bool s_flush = false;
 static tts_event_cb_t s_event_cb = NULL;
-
-static char *s_uri = NULL;
-static char *s_auth_header = NULL;
-static char *s_model = NULL;
-static char *s_voice = NULL;
-/* Voice requested by tts_stream_set_voice(), applied by the synthesis task (empty: none) */
-static char s_pending_voice[24];
-static char *s_pending_instructions = NULL;
-static volatile bool s_voice_change = false;    /* voice and/or instructions changed: new session */
 /* Last audio sent to the speaker (tts_stream_is_silent) */
 static volatile int64_t s_last_play_us = 0;
-/* The session configuration (voice, format, instructions) was sent on the current connection */
-static bool s_session_ready = false;
-static char *s_instructions = NULL;
+
+/* The service and what it uses; a service chosen by tts_stream_configure(), taken by the synthesis task */
+static const tts_backend_t *s_backend = NULL;
+static const tts_backend_t *volatile s_next_backend = NULL;
+static volatile bool s_configuring = false;     /* settings being changed: not applied before they all are */
+static tts_settings_t s_settings;
+static SemaphoreHandle_t s_settings_lock = NULL;
 
 /* ---------- 24 kHz -> 16 kHz resampler ---------- */
 
@@ -175,93 +149,57 @@ static size_t resample(resampler_t *r, const uint8_t *bytes, size_t len, int16_t
     return n_out;
 }
 
-/* ---------- synthesis (Realtime WebSocket) ---------- */
+/* ---------- the sentence being spoken (given by the service) ---------- */
 
-/* Audio of the sentence being spoken, filled by the WebSocket task */
 static resampler_t s_resampler;
-static volatile uint32_t s_response_generation = 0;    /* generation of the response in progress */
-static volatile bool s_response_active = false;
-static int64_t s_request_us = 0;
+static volatile bool s_sentence_active = false;
+static volatile bool s_sentence_has_audio = false;
+static volatile uint32_t s_sentence_generation = 0;
+static int64_t s_sentence_us = 0;
 static int64_t s_first_audio_us = 0;
-static volatile int64_t s_last_audio_us = 0;
 static size_t s_audio_bytes = 0;
+static const char *s_sentence_text = "";
 /* Quality of the current reply: speech run dry in the middle of a sentence, sentences lost */
 static volatile unsigned s_cuts = 0;
 static volatile bool s_failed = false;
-/* The speech refused for lack of credit (insufficient_quota): said on screen after the reply */
+/* The speech refused for lack of credit: said on screen after the reply */
 static volatile bool s_no_credit = false;
-
-/* An OpenAI error saying the credit is exhausted */
-static bool is_no_credit(const char *text)
-{
-    return text && (strstr(text, "insufficient_quota") || strcasestr(text, "quota") || strcasestr(text, "billing"));
-}
-/* The connection is to be recreated before the next sentence (response stalled, request not sent) */
-static bool s_reconnect = false;
-static char s_response_status[24];
-
-/* Received frame being assembled and decoding buffers (PSRAM) */
-static char *s_rx = NULL;
-static size_t s_rx_len = 0;
-static size_t s_rx_cap = 0;
-static uint8_t *s_pcm = NULL;
-static size_t s_pcm_cap = 0;
 static int16_t *s_resampled = NULL;
 static size_t s_resampled_cap = 0;
+/* Model test: the audio of the sentences kept here (16 kHz, PSRAM) instead of being played */
+static volatile bool s_capturing = false;
+static int16_t *s_capture = NULL;
+static size_t s_capture_len = 0;    /* samples */
+static size_t s_capture_cap = 0;
+static int s_test_first_ms = -1;
+static int s_test_total_ms = -1;
+
+static void capture(const int16_t *samples, size_t count)
+{
+    if (s_capture_len + count > s_capture_cap) {
+        size_t cap = s_capture_cap ? s_capture_cap * 2 : 16000 * 4;
+        while (cap < s_capture_len + count) {
+            cap *= 2;
+        }
+        int16_t *p = heap_caps_realloc(s_capture, cap * sizeof(int16_t), MALLOC_CAP_SPIRAM);
+        if (!p) {
+            return;
+        }
+        s_capture = p;
+        s_capture_cap = cap;
+    }
+    memcpy(s_capture + s_capture_len, samples, count * sizeof(int16_t));
+    s_capture_len += count;
+}
+
+/* Last sample of the sentence: brought down to 0 at its end (a service that stops on a sample far from 0 clicks) */
+static int16_t s_last_sample = 0;
+#define FADE_OUT_SAMPLES    128     /* 8 ms at 16 kHz */
 
 static void replace_str(char **dst, const char *src)
 {
     free(*dst);
     *dst = (src && src[0]) ? strdup(src) : NULL;
-}
-
-static bool grow(void **buf, size_t *cap, size_t needed)
-{
-    if (needed <= *cap) {
-        return true;
-    }
-    void *p = heap_caps_realloc(*buf, needed, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!p) {
-        return false;
-    }
-    *buf = p;
-    *cap = needed;
-    return true;
-}
-
-void tts_stream_configure(const char *base_url, const char *api_key, const char *model, const char *voice,
-                          const char *instructions)
-{
-    /* "https://api.openai.com/v1/" -> "wss://api.openai.com/v1/realtime?model=..." */
-    const char *host_path = strstr(base_url, "://");
-    host_path = host_path ? host_path + 3 : base_url;
-    char *uri = NULL;
-    char *auth = NULL;
-    asprintf(&uri, "wss://%srealtime?model=%s", host_path, model);
-    asprintf(&auth, "Authorization: Bearer %s\r\n", api_key);
-    free(s_uri);
-    free(s_auth_header);
-    s_uri = uri;
-    s_auth_header = auth;
-    replace_str(&s_model, model);
-    replace_str(&s_voice, voice);
-    replace_str(&s_instructions, instructions);
-    ESP_LOGI(TAG, "model: %s, voice: %s", s_model ? s_model : "-", s_voice ? s_voice : "-");
-}
-
-void tts_stream_set_voice(const char *voice)
-{
-    strlcpy(s_pending_voice, voice, sizeof(s_pending_voice));
-    s_voice_change = true;
-}
-
-void tts_stream_set_instructions(const char *instructions)
-{
-    char *copy = strdup(instructions ? instructions : "");
-    char *old = s_pending_instructions;
-    s_pending_instructions = copy;
-    free(old);
-    s_voice_change = true;
 }
 
 /* Send audio to the playback buffer, giving up if the reply was cancelled meanwhile */
@@ -280,323 +218,90 @@ static bool push_audio(const int16_t *samples, size_t count, uint32_t generation
     return true;
 }
 
-static void on_audio_delta(const char *b64)
+const tts_settings_t *tts_backend_settings(void)
 {
-    uint32_t generation = s_response_generation;
-    if (!s_response_active || generation != s_generation) {
-        return;
-    }
-    size_t b64_len = strlen(b64);
-    size_t pcm_len = 0;
-    if (!grow((void **)&s_pcm, &s_pcm_cap, b64_len / 4 * 3 + 4) ||
-            mbedtls_base64_decode(s_pcm, s_pcm_cap, &pcm_len, (const unsigned char *)b64, b64_len) != 0) {
-        ESP_LOGE(TAG, "Bad audio delta");
-        return;
-    }
-    s_last_audio_us = esp_timer_get_time();
-    if (!s_first_audio_us) {
-        s_first_audio_us = s_last_audio_us;
-    }
-    s_audio_bytes += pcm_len;
-    if (!grow((void **)&s_resampled, &s_resampled_cap, (pcm_len / 3 + 2) * sizeof(int16_t))) {
-        return;
-    }
-    size_t count = resample(&s_resampler, s_pcm, pcm_len, s_resampled);
-    push_audio(s_resampled, count, generation);
+    return &s_settings;
 }
 
-static void handle_message(const char *text)
+uint32_t tts_backend_generation(void)
 {
-    /* Audio deltas are frequent and large: find the field without parsing the whole JSON */
-    if (strstr(text, "\"response.output_audio.delta\"")) {
-        const char *d = strstr(text, "\"delta\"");
-        d = d ? strchr(d + 7, '"') : NULL;
-        if (d) {
-            char *end = strchr(d + 1, '"');
-            if (end) {
-                *end = '\0';
-                on_audio_delta(d + 1);
-            }
-        }
-        return;
-    }
-    cJSON *json = cJSON_Parse(text);
-    if (!json) {
-        return;
-    }
-    const cJSON *type = cJSON_GetObjectItem(json, "type");
-    const char *t = cJSON_IsString(type) ? type->valuestring : "";
-    if (strcmp(t, "response.done") == 0) {
-        // Billed tokens: text read (in, some of it cached), audio spoken (out)
-        const cJSON *usage = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "usage");
-        const cJSON *in = cJSON_GetObjectItem(usage, "input_tokens");
-        const cJSON *cached = cJSON_GetObjectItem(cJSON_GetObjectItem(usage, "input_token_details"), "cached_tokens");
-        const cJSON *out = cJSON_GetObjectItem(usage, "output_tokens");
-        if (cJSON_IsNumber(in) || cJSON_IsNumber(out)) {
-            int cached_n = cJSON_IsNumber(cached) ? cached->valueint : 0;
-            costs_add_tokens(COST_TTS, s_model, (cJSON_IsNumber(in) ? in->valueint : 0) - cached_n, cached_n, 0,
-                             cJSON_IsNumber(out) ? out->valueint : 0);
-        }
-        const cJSON *status = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "status");
-        strlcpy(s_response_status, cJSON_IsString(status) ? status->valuestring : "?", sizeof(s_response_status));
-        if (strcmp(s_response_status, "completed") != 0) {
-            // Why: {"type": "failed", "error": {"type", "code", "message"}} (quota, rate limit, model...)
-            const cJSON *details = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "status_details");
-            char *why = details ? cJSON_PrintUnformatted(details) : NULL;
-            ESP_LOGE(TAG, "response %s: %.300s", s_response_status, why ? why : "(no details)");
-            if (is_no_credit(why)) {
-                s_no_credit = true;
-            }
-            free(why);
-        }
-        s_response_active = false;
-        xEventGroupSetBits(s_events, EV_RESPONSE_DONE);
-    } else if (strcmp(t, "error") == 0) {
-        const cJSON *error = cJSON_GetObjectItem(json, "error");
-        const cJSON *code = cJSON_GetObjectItem(error, "code");
-        const cJSON *message = cJSON_GetObjectItem(error, "message");
-        ESP_LOGE(TAG, "error: %s: %s", cJSON_IsString(code) ? code->valuestring : "-",
-                 cJSON_IsString(message) ? message->valuestring : "-");
-        if (is_no_credit(cJSON_IsString(code) ? code->valuestring : NULL) ||
-                is_no_credit(cJSON_IsString(message) ? message->valuestring : NULL)) {
-            s_no_credit = true;
-        }
-        if (s_response_active) {
-            strlcpy(s_response_status, "error", sizeof(s_response_status));
-            s_response_active = false;
-            xEventGroupSetBits(s_events, EV_RESPONSE_DONE);
-        }
-    } else if (strcmp(t, "session.created") == 0 || strcmp(t, "session.updated") == 0) {
-        ESP_LOGI(TAG, "%s", t);
-    }
-    cJSON_Delete(json);
+    return s_generation;
 }
 
-static void ws_event_handler(void *arg, esp_event_base_t base, int32_t event_id, void *event_data)
+void tts_backend_sentence_start(uint32_t generation)
 {
-    esp_websocket_event_data_t *data = (esp_websocket_event_data_t *)event_data;
-    switch (event_id) {
-    case WEBSOCKET_EVENT_CONNECTED:
-        s_rx_len = 0;
-        xEventGroupSetBits(s_events, EV_CONNECTED);
-        break;
-    case WEBSOCKET_EVENT_DATA:
-        /* Text frames; a large message arrives in several events (payload_offset / payload_len) */
-        if (data->op_code != 0x01 && data->op_code != 0x00) {
-            break;
-        }
-        if (data->payload_offset == 0) {
-            s_rx_len = 0;
-        }
-        if (grow((void **)&s_rx, &s_rx_cap, s_rx_len + data->data_len + 1)) {
-            memcpy(s_rx + s_rx_len, data->data_ptr, data->data_len);
-            s_rx_len += data->data_len;
-            s_rx[s_rx_len] = '\0';
-        }
-        if (data->payload_offset + data->data_len >= data->payload_len && s_rx_len) {
-            handle_message(s_rx);
-            s_rx_len = 0;
-        }
-        break;
-    case WEBSOCKET_EVENT_ERROR:
-        ESP_LOGW(TAG, "WebSocket error (handshake status %d)", data->error_handle.esp_ws_handshake_status_code);
-        xEventGroupClearBits(s_events, EV_CONNECTED);
-        break;
-    case WEBSOCKET_EVENT_DISCONNECTED:
-    case WEBSOCKET_EVENT_CLOSED:
-        xEventGroupClearBits(s_events, EV_CONNECTED);
-        if (s_response_active) {
-            strlcpy(s_response_status, "disconnected", sizeof(s_response_status));
-            s_response_active = false;
-            xEventGroupSetBits(s_events, EV_RESPONSE_DONE);
-        }
-        break;
-    default:
-        break;
-    }
-}
-
-static esp_websocket_client_handle_t create_client(void)
-{
-    esp_websocket_client_config_t config = {
-        .uri = s_uri,
-        .headers = s_auth_header,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .task_stack = TTS_WS_TASK_STACK,
-        .task_name = "tts_ws",
-        .task_prio = 5,
-        .buffer_size = TTS_WS_BUFFER_SIZE,
-        .disable_auto_reconnect = false,
-        .enable_close_reconnect = true,
-        .reconnect_timeout_ms = TTS_RECONNECT_MS,
-        .network_timeout_ms = 10000,
-    };
-    esp_websocket_client_handle_t client = esp_websocket_client_init(&config);
-    if (!client) {
-        ESP_LOGE(TAG, "Failed to create WebSocket client");
-        return NULL;
-    }
-    esp_websocket_register_events(client, WEBSOCKET_EVENT_ANY, ws_event_handler, NULL);
-    if (esp_websocket_client_start(client) != ESP_OK) {
-        esp_websocket_client_destroy(client);
-        return NULL;
-    }
-    return client;
-}
-
-static bool send_json(esp_websocket_client_handle_t client, const char *text)
-{
-    int len = strlen(text);
-    return esp_websocket_client_send_text(client, text, len, pdMS_TO_TICKS(5000)) == len;
-}
-
-static bool send_cjson(esp_websocket_client_handle_t client, cJSON *msg)
-{
-    char *text = cJSON_PrintUnformatted(msg);
-    cJSON_Delete(msg);
-    bool ok = text && send_json(client, text);
-    free(text);
-    return ok;
-}
-
-/* Audio only, verbatim reading instructions, voice and PCM 24 kHz output; no input audio */
-static bool send_session_update(esp_websocket_client_handle_t client)
-{
-    cJSON *msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(msg, "type", "session.update");
-    cJSON *session = cJSON_AddObjectToObject(msg, "session");
-    cJSON_AddStringToObject(session, "type", "realtime");
-    cJSON_AddStringToObject(session, "model", s_model);
-    cJSON_AddItemToObject(session, "output_modalities", cJSON_CreateStringArray((const char *[]) {"audio"}, 1));
-    if (s_instructions) {
-        cJSON_AddStringToObject(session, "instructions", s_instructions);
-    }
-    cJSON *audio = cJSON_AddObjectToObject(session, "audio");
-    cJSON_AddNullToObject(cJSON_AddObjectToObject(audio, "input"), "turn_detection");
-    cJSON *output = cJSON_AddObjectToObject(audio, "output");
-    cJSON *format = cJSON_AddObjectToObject(output, "format");
-    cJSON_AddStringToObject(format, "type", "audio/pcm");
-    cJSON_AddNumberToObject(format, "rate", TTS_SAMPLE_RATE_IN);
-    cJSON_AddStringToObject(output, "voice", s_voice);
-    return send_cjson(client, msg);
-}
-
-/*
- * One out-of-band response per sentence (conversation "none": nothing accumulates on the server).
- * The text to read is a separate input message, not part of the instructions.
- */
-static bool send_response_create(esp_websocket_client_handle_t client, const char *text)
-{
-    cJSON *msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(msg, "type", "response.create");
-    cJSON *response = cJSON_AddObjectToObject(msg, "response");
-    cJSON_AddStringToObject(response, "conversation", "none");
-    cJSON_AddItemToObject(response, "output_modalities", cJSON_CreateStringArray((const char *[]) {"audio"}, 1));
-    if (s_instructions) {
-        cJSON_AddStringToObject(response, "instructions", s_instructions);
-    }
-    cJSON *input = cJSON_AddArrayToObject(response, "input");
-    cJSON *item = cJSON_CreateObject();
-    cJSON_AddStringToObject(item, "type", "message");
-    cJSON_AddStringToObject(item, "role", "user");
-    cJSON *content = cJSON_AddArrayToObject(item, "content");
-    cJSON *part = cJSON_CreateObject();
-    cJSON_AddStringToObject(part, "type", "input_text");
-    cJSON_AddStringToObject(part, "text", text);
-    cJSON_AddItemToArray(content, part);
-    cJSON_AddItemToArray(input, item);
-    return send_cjson(client, msg);
-}
-
-static void synthesize(esp_websocket_client_handle_t client, const char *text, uint32_t generation)
-{
-    if (!(xEventGroupWaitBits(s_events, EV_CONNECTED, pdFALSE, pdFALSE, pdMS_TO_TICKS(TTS_CONNECT_WAIT_MS)) &
-            EV_CONNECTED)) {
-        ESP_LOGE(TAG, "Not connected: sentence dropped");
-        s_failed = true;
-        return;
-    }
-    /* Just (re)connected: the session configuration must go first */
-    if (!s_session_ready && send_session_update(client)) {
-        s_session_ready = true;
-    }
     s_resampler = (resampler_t) {0};
     s_first_audio_us = 0;
     s_audio_bytes = 0;
-    s_response_generation = generation;
-    s_response_active = true;
-    xEventGroupClearBits(s_events, EV_RESPONSE_DONE);
-    s_request_us = esp_timer_get_time();
-    if (!send_response_create(client, text)) {
-        s_response_active = false;
-        ESP_LOGE(TAG, "Request not sent");
+    s_sentence_generation = generation;
+    s_sentence_has_audio = false;
+    s_last_sample = 0;
+    s_sentence_us = esp_timer_get_time();
+    s_sentence_active = true;
+}
+
+void tts_backend_audio(const uint8_t *pcm, size_t len)
+{
+    uint32_t generation = s_sentence_generation;
+    if (!s_sentence_active || generation != s_generation || len == 0) {
+        return;
+    }
+    if (!s_first_audio_us) {
+        s_first_audio_us = esp_timer_get_time();
+    }
+    s_sentence_has_audio = true;
+    s_audio_bytes += len;
+    size_t needed = (len / 3 + 2) * sizeof(int16_t);
+    if (needed > s_resampled_cap) {
+        int16_t *p = heap_caps_realloc(s_resampled, needed, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!p) {
+            return;
+        }
+        s_resampled = p;
+        s_resampled_cap = needed;
+    }
+    size_t count = resample(&s_resampler, pcm, len, s_resampled);
+    if (count) {
+        s_last_sample = s_resampled[count - 1];
+    }
+    if (s_capturing) {
+        capture(s_resampled, count);
+        return;
+    }
+    push_audio(s_resampled, count, generation);
+}
+
+void tts_backend_sentence_end(const char *status, bool failed)
+{
+    s_test_first_ms = s_first_audio_us ? (int)((s_first_audio_us - s_sentence_us) / 1000) : -1;
+    s_test_total_ms = (int)((esp_timer_get_time() - s_sentence_us) / 1000);
+    if (s_sentence_has_audio && s_last_sample && s_sentence_generation == s_generation && !s_capturing) {
+        // A short ramp from the last sample to silence
+        int16_t fade[FADE_OUT_SAMPLES];
+        for (int i = 0; i < FADE_OUT_SAMPLES; i++) {
+            fade[i] = (int16_t)((int32_t)s_last_sample * (FADE_OUT_SAMPLES - 1 - i) / FADE_OUT_SAMPLES);
+        }
+        push_audio(fade, FADE_OUT_SAMPLES, s_sentence_generation);
+        s_last_sample = 0;
+    }
+    s_sentence_active = false;
+    if (failed) {
         s_failed = true;
-        s_reconnect = true;
-        return;
     }
-
-    /* Wait for the end of the response; cancel it if the reply is cancelled */
-    bool cancel_sent = false;
-    while (!(xEventGroupWaitBits(s_events, EV_RESPONSE_DONE, pdFALSE, pdFALSE, pdMS_TO_TICKS(50)) & EV_RESPONSE_DONE)) {
-        if (generation != s_generation && !cancel_sent) {
-            send_json(client, "{\"type\":\"response.cancel\"}");
-            cancel_sent = true;
-        }
-        int64_t now = esp_timer_get_time();
-        if (s_first_audio_us ? now - s_last_audio_us > TTS_STALL_TIMEOUT_MS * 1000LL :
-                now - s_request_us > TTS_FIRST_AUDIO_TIMEOUT_MS * 1000LL) {
-            ESP_LOGE(TAG, "Response stalled (%s), reconnecting", s_first_audio_us ? "no more audio" : "no audio");
-            s_response_active = false;
-            s_failed = true;
-            s_reconnect = true;
-            break;
-        }
-    }
-    ESP_LOGI(TAG, "\"%.40s%s\": first audio %lld ms, total %lld ms, %u bytes, %s", text, strlen(text) > 40 ? "..." : "",
-             s_first_audio_us ? (s_first_audio_us - s_request_us) / 1000 : -1LL,
-             (esp_timer_get_time() - s_request_us) / 1000, (unsigned)s_audio_bytes, s_response_status);
+    ESP_LOGI(TAG, "\"%.40s%s\": first audio %lld ms, total %lld ms, %u bytes, %s", s_sentence_text,
+             strlen(s_sentence_text) > 40 ? "..." : "", s_first_audio_us ? (s_first_audio_us - s_sentence_us) / 1000 : -1LL,
+             (esp_timer_get_time() - s_sentence_us) / 1000, (unsigned)s_audio_bytes, status ? status : "?");
 }
 
-/* A new connection, after a stalled response or a request that could not be sent */
-static void reconnect(esp_websocket_client_handle_t *client, int64_t *down_since)
+void tts_backend_no_credit(void)
 {
-    s_reconnect = false;
-    if (*client) {
-        esp_websocket_client_stop(*client);
-        esp_websocket_client_destroy(*client);
-    }
-    xEventGroupClearBits(s_events, EV_CONNECTED);
-    s_session_ready = false;
-    *client = (WIFI_STATUS_CONNECTED_OK == wifi_connected_already()) ? create_client() : NULL;
-    *down_since = esp_timer_get_time();
+    s_no_credit = true;
 }
 
-/* New voice: a new session (a session cannot change its voice once it has spoken) */
-static void apply_voice_change(esp_websocket_client_handle_t *client, int64_t *down_since)
+bool tts_backend_is_no_credit(const char *text)
 {
-    if (!s_voice_change) {
-        return;
-    }
-    s_voice_change = false;
-    if (s_pending_voice[0]) {
-        replace_str(&s_voice, s_pending_voice);
-        s_pending_voice[0] = '\0';
-    }
-    char *instructions = s_pending_instructions;
-    s_pending_instructions = NULL;
-    if (instructions) {
-        replace_str(&s_instructions, instructions);
-        free(instructions);
-    }
-    ESP_LOGI(TAG, "voice: %s, reconnecting", s_voice);
-    if (*client) {
-        esp_websocket_client_stop(*client);
-        esp_websocket_client_destroy(*client);
-    }
-    xEventGroupClearBits(s_events, EV_CONNECTED);
-    s_session_ready = false;
-    *client = (WIFI_STATUS_CONNECTED_OK == wifi_connected_already()) ? create_client() : NULL;
-    *down_since = esp_timer_get_time();
+    return text && (strstr(text, "insufficient_quota") || strcasestr(text, "quota") || strcasestr(text, "billing") ||
+                    strcasestr(text, "credit"));
 }
 
 static void tts_task(void *arg)
@@ -605,50 +310,37 @@ static void tts_task(void *arg)
     while (WIFI_STATUS_CONNECTED_OK != wifi_connected_already()) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
-    esp_websocket_client_handle_t client = create_client();
-    int64_t down_since = esp_timer_get_time();
-
     for (;;) {
-        apply_voice_change(&client, &down_since);
-
-        /* Connection supervision: (re)send the session configuration after each connection */
-        bool connected = client && esp_websocket_client_is_connected(client) &&
-                         (xEventGroupGetBits(s_events) & EV_CONNECTED);
-        if (connected && !s_session_ready) {
-            if (send_session_update(client)) {
-                s_session_ready = true;
-                ESP_LOGI(TAG, "connected in %lld ms", (esp_timer_get_time() - down_since) / 1000);
-            }
-        } else if (!connected && s_session_ready) {
-            s_session_ready = false;
-            down_since = esp_timer_get_time();
-            ESP_LOGW(TAG, "connection lost, reconnecting");
+        /* Settings half changed (the key of another service with the old one...): waited for */
+        if (s_configuring) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
         }
-        if (!connected && esp_timer_get_time() - down_since > TTS_RECREATE_AFTER_MS * 1000LL) {
-            ESP_LOGW(TAG, "still disconnected, recreating the WebSocket client");
-            if (client) {
-                esp_websocket_client_stop(client);
-                esp_websocket_client_destroy(client);
-                xEventGroupClearBits(s_events, EV_CONNECTED);
+        /* Another service chosen: the old one closes, the new one connects in advance */
+        const tts_backend_t *next = s_next_backend;
+        if (next && next != s_backend) {
+            if (s_backend) {
+                s_backend->stop();
             }
-            client = (WIFI_STATUS_CONNECTED_OK == wifi_connected_already()) ? create_client() : NULL;
-            down_since = esp_timer_get_time();
+            s_backend = next;
+            ESP_LOGI(TAG, "%s speech: %s", s_backend->name, s_settings.model);
+            s_backend->start();
+        }
+        if (s_backend) {
+            s_backend->upkeep();
         }
 
         sentence_item_t item;
         if (xQueueReceive(s_sentences, &item, pdMS_TO_TICKS(200)) != pdTRUE) {
             continue;
         }
-        /* A voice chosen just before this sentence (e.g. its sample) must already apply to it */
-        apply_voice_change(&client, &down_since);
         if (item.generation == s_generation) {
-            if (item.text && client) {
-                synthesize(client, item.text, item.generation);
-                if (s_reconnect) {
-                    reconnect(&client, &down_since);
-                }
+            if (item.text && s_backend) {
+                s_sentence_text = item.text;
+                s_backend->say(item.text, item.generation);
+                s_sentence_text = "";
             } else if (item.text) {
-                s_failed = true;    // no connection: the sentence is lost
+                s_failed = true;    // no service: the sentence is lost
             } else {
                 s_synth_done_generation = item.generation;
             }
@@ -742,7 +434,7 @@ static void playback_task(void *arg)
             if (!synth_done) {
                 underruns++;
                 /* Not a pause between two sentences: speech cut while a sentence was arriving */
-                if (s_response_active && s_first_audio_us && s_response_generation == playing_generation) {
+                if (s_sentence_active && s_sentence_has_audio && s_sentence_generation == playing_generation) {
                     s_cuts++;
                 }
             }
@@ -756,6 +448,88 @@ const char *const tts_voices[] = {
     "marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse",
 };
 const size_t tts_voice_count = sizeof(tts_voices) / sizeof(tts_voices[0]);
+
+/* A setting changed: copied, the version tells the service to apply it */
+static void set_setting(const char **field, const char *value)
+{
+    xSemaphoreTake(s_settings_lock, portMAX_DELAY);
+    char *old = (char *)*field;
+    char *copy = NULL;
+    replace_str(&copy, value);
+    *field = copy;
+    s_settings.version++;
+    xSemaphoreGive(s_settings_lock);
+    // The old string may still be read by the synthesis task for a moment: freed a little later
+    vTaskDelay(pdMS_TO_TICKS(50));
+    free(old);
+}
+
+void tts_stream_configure(const tts_backend_t *backend, const char *base_url, const char *api_key, const char *model,
+                          const char *voice, const char *instructions)
+{
+    s_configuring = true;
+    set_setting(&s_settings.base_url, base_url);
+    set_setting(&s_settings.api_key, api_key);
+    set_setting(&s_settings.model, model);
+    set_setting(&s_settings.voice, voice);
+    if (instructions) {
+        set_setting(&s_settings.instructions, instructions);
+    }
+    ESP_LOGI(TAG, "%s model: %s, voice: %s", backend->name, model ? model : "-", voice ? voice : "-");
+    s_next_backend = backend;
+    s_configuring = false;
+}
+
+void tts_stream_set_voice(const char *voice)
+{
+    set_setting(&s_settings.voice, voice);
+}
+
+void tts_stream_set_instructions(const char *instructions)
+{
+    set_setting(&s_settings.instructions, instructions);
+}
+
+/* One sentence spoken into the capture buffer; true when it gave audio */
+static bool test_sentence(const char *text, uint32_t timeout_ms)
+{
+    s_capture_len = 0;
+    s_test_first_ms = -1;
+    tts_stream_begin(NULL);
+    uint32_t generation = s_generation;
+    tts_stream_say(text);
+    tts_stream_end();
+    for (uint32_t t = 0; t < timeout_ms / 50 && s_synth_done_generation != generation; t++) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    return s_synth_done_generation == generation && s_test_first_ms >= 0 && s_capture_len > 0;
+}
+
+bool tts_stream_test(const tts_backend_t *backend, const char *base_url, const char *api_key, const char *model,
+                     const char *voice, const char *text, int16_t **audio, size_t *samples, int *first_ms,
+                     int *total_ms)
+{
+    *audio = NULL;
+    *samples = 0;
+    *first_ms = *total_ms = -1;
+    tts_stream_configure(backend, base_url, api_key, model, voice, NULL);
+    for (int i = 0; i < 50 && s_backend != backend; i++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    s_capturing = true;
+    // A first short sentence opens the connection (as it is open in use), then the one measured
+    bool ok = test_sentence(".", 20000) && test_sentence(text, 30000);
+    s_capturing = false;
+    *first_ms = s_test_first_ms;
+    *total_ms = s_test_total_ms;
+    if (ok) {
+        *audio = s_capture;
+        *samples = s_capture_len;
+        s_capture = NULL;
+        s_capture_len = s_capture_cap = 0;
+    }
+    return ok;
+}
 
 bool tts_stream_no_credit(void)
 {
@@ -778,8 +552,8 @@ esp_err_t tts_stream_init(void)
     resampler_design();
     s_sentences = xQueueCreate(TTS_SENTENCE_QUEUE_LEN, sizeof(sentence_item_t));
     s_audio = xStreamBufferCreateWithCaps(TTS_AUDIO_BUFFER_BYTES, sizeof(int16_t), MALLOC_CAP_SPIRAM);
-    s_events = xEventGroupCreate();
-    ESP_RETURN_ON_FALSE(s_sentences && s_audio && s_events, ESP_ERR_NO_MEM, TAG, "Failed to create queues");
+    s_settings_lock = xSemaphoreCreateMutex();
+    ESP_RETURN_ON_FALSE(s_sentences && s_audio && s_settings_lock, ESP_ERR_NO_MEM, TAG, "Failed to create queues");
 
     /* Stacks in PSRAM: internal RAM is too fragmented for 8 KB blocks once Wi-Fi and the AFE run */
     BaseType_t ok = xTaskCreatePinnedToCoreWithCaps(tts_task, "tts", 8 * 1024, NULL, 4, NULL, 0, MALLOC_CAP_SPIRAM);

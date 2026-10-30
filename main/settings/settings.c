@@ -422,6 +422,23 @@ esp_err_t settings_read_parameter_from_nvs(void)
         *p = tolower((unsigned char)*p);
     }
 
+    // Mistral's voice, and the transcription and speech models ([stt] and [tts] of AGENTS.INI)
+    len = sizeof(g_sys_param.mistral_voice);
+    if (nvs_get_str(my_handle, "Mistral_voice", g_sys_param.mistral_voice, &len) != ESP_OK || len <= 1) {
+        strlcpy(g_sys_param.mistral_voice, CONFIG_ASSISTANT_MISTRAL_VOICE, sizeof(g_sys_param.mistral_voice));
+    }
+    str_trim(g_sys_param.mistral_voice);
+    len = sizeof(g_sys_param.stt_model);
+    if (nvs_get_str(my_handle, "Stt_model", g_sys_param.stt_model, &len) != ESP_OK || len <= 1) {
+        strlcpy(g_sys_param.stt_model, CONFIG_ASSISTANT_STT_MODEL, sizeof(g_sys_param.stt_model));
+    }
+    str_trim(g_sys_param.stt_model);
+    len = sizeof(g_sys_param.tts_model);
+    if (nvs_get_str(my_handle, "Tts_model", g_sys_param.tts_model, &len) != ESP_OK || len <= 1) {
+        strlcpy(g_sys_param.tts_model, CONFIG_ASSISTANT_TTS_MODEL, sizeof(g_sys_param.tts_model));
+    }
+    str_trim(g_sys_param.tts_model);
+
     // Persona and Memory (optional): free texts, edited in PERSONA.TXT and MEMORY.TXT
     free(g_sys_param.persona);
     g_sys_param.persona = read_text(my_handle, "Persona");
@@ -520,6 +537,9 @@ static const struct {
     { "Languages", CONFIG_ASSISTANT_LANGUAGES },
     { "Chat_model", CONFIG_ASSISTANT_CHAT_MODEL },
     { "Voice", CONFIG_ASSISTANT_TTS_VOICE },
+    { "Mistral_voice", CONFIG_ASSISTANT_MISTRAL_VOICE },
+    { "Stt_model", CONFIG_ASSISTANT_STT_MODEL },
+    { "Tts_model", CONFIG_ASSISTANT_TTS_MODEL },
     { "Scroll_speed", STR(CONFIG_ASSISTANT_REPLY_SCROLL_CPS) },
     { "Scroll_mode", CONFIG_ASSISTANT_SCROLL_MODE },
     { "OpenRouter_free", CONFIG_ASSISTANT_OPENROUTER_FREE },

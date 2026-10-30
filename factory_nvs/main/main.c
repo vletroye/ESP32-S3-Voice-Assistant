@@ -243,6 +243,10 @@ void app_main(void)
         nvs_init_str_if_missing("Volume", number);
         // Voice of the answers (same default as the assistant's ASSISTANT_TTS_VOICE)
         nvs_init_str_if_missing("Voice", CONFIG_ASSISTANT_TTS_VOICE);
+        // Transcription and speech models ([stt] and [tts] of AGENTS.INI), and the voice of Mistral's speech
+        nvs_init_str_if_missing("Stt_model", CONFIG_ASSISTANT_STT_MODEL);
+        nvs_init_str_if_missing("Tts_model", CONFIG_ASSISTANT_TTS_MODEL);
+        nvs_init_str_if_missing("Mistral_voice", CONFIG_ASSISTANT_MISTRAL_VOICE);
         // Notes the assistant was asked to remember ("souviens-toi que ..."): edited in MEMORY.TXT
         nvs_init_str_if_missing("Memory", "");
         // Where the user lives: 2-letter country code (BE, FR...) and town, for the web search and the model

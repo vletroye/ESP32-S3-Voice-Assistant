@@ -56,6 +56,9 @@ typedef struct {
     int end_speech_ms;                /* Silence after which the question is considered finished. */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
     char voice[VOICE_SIZE];           /* OpenAI voice reading the answers (marin, cedar...). */
+    char mistral_voice[48];           /* Mistral voice reading the answers (fr_marie_neutral...). */
+    char stt_model[MODEL_SIZE];       /* Transcription model ([stt] of AGENTS.INI). */
+    char tts_model[MODEL_SIZE];       /* Speech model ([tts] of AGENTS.INI). */
     char country[COUNTRY_SIZE];       /* Where the user lives: ISO 3166-1 alpha-2 code ("BE"), "" if unknown. */
     char city[CITY_SIZE];             /* Where the user lives: town ("Evere"), "" if unknown. */
     char homey_url[HOMEY_URL_SIZE];   /* MCP server of a Homey Pro on the local network, "" if none. */

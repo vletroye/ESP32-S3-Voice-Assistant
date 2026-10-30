@@ -269,6 +269,9 @@ static void settings_voice_changed_cb(lv_event_t *e)
     settings_save_str("Voice", voice);
     sys_param_t *param = settings_get_parameter();
     strlcpy(param->voice, voice, sizeof(param->voice));
+    if (strcmp(assistant_tts_provider(), "openai") != 0) {
+        return;     // kept for OpenAI's speech: another one speaks now (its voices: "change de voix")
+    }
     tts_stream_set_voice(voice);
 
     char name[24];

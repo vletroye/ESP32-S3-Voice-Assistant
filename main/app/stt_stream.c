@@ -3,18 +3,18 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Streaming speech-to-text with the OpenAI Realtime API, transcription-only session (WebSocket).
+ * Streaming speech-to-text over a Realtime WebSocket, the protocol of the service chosen ([stt] of AGENTS.INI)
+ * given by its backend (ai_provider_openai_stt.c, ai_provider_mistral_stt.c).
  *
- * The WebSocket stays open (connected at boot, reconnected after any error or server close), so
- * that listening never waits for a TLS handshake. Each listening session is a "turn" on it:
+ * Each listening session is a "turn":
  *
- *   input_audio_buffer.clear
  *   detect task (AFE output, 16 kHz) -> stt_stream_write() -> audio buffer (PSRAM)
- *   -> [stt task] 16 kHz -> 24 kHz, base64 -> input_audio_buffer.append
- *   end of speech (local VAD) -> input_audio_buffer.commit -> ...transcription.completed
+ *   -> [stt task] (16 kHz -> 24 kHz for OpenAI), base64 -> append messages
+ *   end of speech (local VAD) -> commit message -> ... final transcript
  *
- * gpt-live-transcribe has no server-side VAD: the end of speech is detected on the device.
- * Billing is by audio duration: audio is only sent during a turn, an idle connection sends none.
+ * OpenAI's WebSocket stays open (connected at boot, reconnected after any error or server close), so that
+ * listening never waits for a TLS handshake; Mistral's session lasts a question: opened when listening starts
+ * (the audio is buffered meanwhile) and closed once transcribed. The end of speech is detected on the device.
  */
 
 #include <stdio.h>
@@ -36,8 +36,8 @@
 #include "cJSON.h"
 #include "app_wifi.h"
 #include "stt_stream.h"
+#include "stt_backend.h"
 
-#define STT_URI                 "wss://api.openai.com/v1/realtime?intent=transcription"
 #define STT_INPUT_RATE          16000
 #define STT_AUDIO_BUFFER_BYTES  (10 * STT_INPUT_RATE * 2)   /* 10 s of audio while (re)connecting */
 /*
@@ -76,9 +76,17 @@ static volatile bool s_awaiting = false;    /* commit sent, waiting for the fina
 static bool s_overflow_logged = false;
 static stt_partial_cb_t s_on_partial = NULL;
 
+static const stt_backend_t *s_backend = NULL;
+static char *s_uri = NULL;
 static char *s_auth_header = NULL;
 static char *s_model = NULL;
 static char *s_language = NULL;
+/* Service, model or key changed by stt_stream_configure(): a new connection (applied by the stt task) */
+static volatile bool s_reconfigure = false;
+/* Audio sent in the current turn (16 kHz samples), for a service billed by duration */
+static size_t s_turn_sent_samples = 0;
+/* Time from the commit to the final transcript of the last turn (model test) */
+static int s_last_final_ms = -1;
 /* Language requested by stt_stream_set_language(), applied by the connection task */
 static char s_pending_language[8];
 static volatile bool s_language_change = false;
@@ -152,8 +160,59 @@ static size_t upsample(upsampler_t *u, const int16_t *in, size_t n, int16_t *out
 
 /* ---------- received events (WebSocket task) ---------- */
 
-/* The last transcription refused for lack of OpenAI credit */
+/* The last transcription refused for lack of credit */
 static volatile bool s_no_credit = false;
+
+void stt_backend_delta(const char *text)
+{
+    /* Deltas of a turn that is over (late events) are ignored */
+    if (s_turn_active && append(&s_partial, &s_partial_len, &s_partial_cap, text, strlen(text)) && s_on_partial) {
+        s_on_partial(s_partial);
+    }
+}
+
+void stt_backend_final(const char *text, int in_tokens, int out_tokens, double seconds)
+{
+    // Billed: tokens of audio heard (in) and of text written (out), or the duration of the audio heard, counted
+    // as STT_TOKENS_PER_SECOND tokens (so that a price per million tokens applies)
+    if (in_tokens || out_tokens) {
+        costs_add_tokens(COST_STT, s_model, in_tokens, 0, 0, out_tokens);
+    } else {
+        if (seconds < 0) {
+            seconds = (double)s_turn_sent_samples / STT_INPUT_RATE;
+        }
+        costs_add_tokens(COST_STT, s_model, (int)(seconds * STT_TOKENS_PER_SECOND), 0, 0, 0);
+    }
+    if (!s_awaiting) {
+        return;
+    }
+    free(s_transcript);
+    s_transcript = strdup(text ? text : (s_partial_len ? s_partial : ""));
+    s_awaiting = false;
+    s_turn_active = false;
+    s_last_final_ms = (int)((esp_timer_get_time() - s_commit_us) / 1000);
+    ESP_LOGI(TAG, "final transcript %lld ms after commit: \"%s\"", (esp_timer_get_time() - s_commit_us) / 1000,
+             s_transcript ? s_transcript : "");
+    s_no_credit = false;
+    xEventGroupSetBits(s_events, EV_TRANSCRIPT);
+}
+
+void stt_backend_failed(const char *code, const char *message)
+{
+    ESP_LOGE(TAG, "%s error: %s: %s", s_backend ? s_backend->name : "?", code && code[0] ? code : "-",
+             message ? message : "-");
+    // The credit exhausted: "insufficient_quota", "You exceeded your current quota...", 402...
+    const char *c = code ? code : "";
+    const char *m = message ? message : "";
+    s_no_credit = strstr(c, "quota") || strcmp(c, "402") == 0 || strcasestr(m, "quota") ||
+                  strcasestr(m, "billing") || strcasestr(m, "credit");
+    if (s_awaiting || s_turn_active) {
+        s_awaiting = false;
+        s_turn_active = false;
+        s_capturing = false;
+        xEventGroupSetBits(s_events, EV_FAILED);
+    }
+}
 
 static void handle_message(const char *text)
 {
@@ -164,56 +223,10 @@ static void handle_message(const char *text)
     }
     const cJSON *type = cJSON_GetObjectItem(json, "type");
     const char *t = cJSON_IsString(type) ? type->valuestring : "";
-
-    if (strcmp(t, "conversation.item.input_audio_transcription.delta") == 0) {
-        /* Deltas of a turn that is over (late events) are ignored */
-        const cJSON *delta = cJSON_GetObjectItem(json, "delta");
-        if (s_turn_active && cJSON_IsString(delta) &&
-                append(&s_partial, &s_partial_len, &s_partial_cap, delta->valuestring, strlen(delta->valuestring)) &&
-                s_on_partial) {
-            s_on_partial(s_partial);
-        }
-    } else if (strcmp(t, "conversation.item.input_audio_transcription.completed") == 0) {
-        // Billed: tokens of audio heard (in) and of text written (out), or the duration of the audio heard,
-        // counted as STT_TOKENS_PER_SECOND tokens (so that a price per million tokens applies)
-        const cJSON *usage = cJSON_GetObjectItem(json, "usage");
-        const cJSON *in = cJSON_GetObjectItem(usage, "input_tokens");
-        const cJSON *out = cJSON_GetObjectItem(usage, "output_tokens");
-        const cJSON *seconds = cJSON_GetObjectItem(usage, "seconds");
-        if (cJSON_IsNumber(in) || cJSON_IsNumber(out)) {
-            costs_add_tokens(COST_STT, s_model, cJSON_IsNumber(in) ? in->valueint : 0, 0, 0,
-                             cJSON_IsNumber(out) ? out->valueint : 0);
-        } else if (cJSON_IsNumber(seconds)) {
-            costs_add_tokens(COST_STT, s_model, (int)(seconds->valuedouble * STT_TOKENS_PER_SECOND), 0, 0, 0);
-        }
-        const cJSON *transcript = cJSON_GetObjectItem(json, "transcript");
-        if (s_awaiting && cJSON_IsString(transcript)) {
-            free(s_transcript);
-            s_transcript = strdup(transcript->valuestring);
-            s_awaiting = false;
-            s_turn_active = false;
-            ESP_LOGI(TAG, "final transcript %lld ms after commit: \"%s\"",
-                     (esp_timer_get_time() - s_commit_us) / 1000, s_transcript);
-            s_no_credit = false;
-            xEventGroupSetBits(s_events, EV_TRANSCRIPT);
-        }
-    } else if (strcmp(t, "conversation.item.input_audio_transcription.failed") == 0 || strcmp(t, "error") == 0) {
-        const cJSON *error = cJSON_GetObjectItem(json, "error");
-        const cJSON *code = cJSON_GetObjectItem(error, "code");
-        const cJSON *message = cJSON_GetObjectItem(error, "message");
-        ESP_LOGE(TAG, "%s: %s: %s", t, cJSON_IsString(code) ? code->valuestring : "-",
-                 cJSON_IsString(message) ? message->valuestring : "-");
-        // The OpenAI credit exhausted: "insufficient_quota", "You exceeded your current quota..."
-        const char *c = cJSON_IsString(code) ? code->valuestring : "";
-        const char *m = cJSON_IsString(message) ? message->valuestring : "";
-        s_no_credit = strstr(c, "quota") || strcasestr(m, "quota") || strcasestr(m, "billing");
-        if (s_awaiting) {
-            s_awaiting = false;
-            s_turn_active = false;
-            xEventGroupSetBits(s_events, EV_FAILED);
-        }
-    } else if (strcmp(t, "session.created") == 0 || strcmp(t, "session.updated") == 0) {
+    if (strcmp(t, "session.created") == 0 || strcmp(t, "session.updated") == 0) {
         ESP_LOGI(TAG, "%s", t);
+    } else if (s_backend) {
+        s_backend->on_message(json, t);
     }
     cJSON_Delete(json);
 }
@@ -258,17 +271,23 @@ static void ws_event_handler(void *arg, esp_event_base_t base, int32_t event_id,
 
 static esp_websocket_client_handle_t create_client(void)
 {
+    if (!s_uri || !s_auth_header) {
+        return NULL;
+    }
     esp_websocket_client_config_t config = {
-        .uri = STT_URI,
+        .uri = s_uri,
         .headers = s_auth_header,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .task_stack = STT_WS_TASK_STACK,
         .task_name = "stt_ws",
         .task_prio = 5,
         .buffer_size = STT_WS_BUFFER_SIZE,
-        /* Reconnect after errors and after a close by the server (e.g. maximum session duration) */
-        .disable_auto_reconnect = false,
-        .enable_close_reconnect = true,
+        /*
+         * Reconnect after errors and after a close by the server (e.g. maximum session duration); a session per
+         * turn is not reconnected (its audio is lost with it)
+         */
+        .disable_auto_reconnect = s_backend && s_backend->session_per_turn,
+        .enable_close_reconnect = !(s_backend && s_backend->session_per_turn),
         .reconnect_timeout_ms = STT_RECONNECT_MS,
         .network_timeout_ms = 10000,
     };
@@ -299,33 +318,20 @@ static bool send_json(esp_websocket_client_handle_t client, const char *text, si
     return esp_websocket_client_send_text(client, text, len, pdMS_TO_TICKS(5000)) == (int)len;
 }
 
+/* The service's session configuration, if it has one */
 static bool send_session_update(esp_websocket_client_handle_t client)
 {
-    cJSON *msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(msg, "type", "session.update");
-    cJSON *session = cJSON_AddObjectToObject(msg, "session");
-    cJSON_AddStringToObject(session, "type", "transcription");
-    cJSON *input = cJSON_AddObjectToObject(cJSON_AddObjectToObject(session, "audio"), "input");
-    cJSON *format = cJSON_AddObjectToObject(input, "format");
-    cJSON_AddStringToObject(format, "type", "audio/pcm");
-    cJSON_AddNumberToObject(format, "rate", 24000);
-    cJSON *transcription = cJSON_AddObjectToObject(input, "transcription");
-    cJSON_AddStringToObject(transcription, "model", s_model);
-    if (s_language) {
-        cJSON *languages = cJSON_AddArrayToObject(transcription, "languages");
-        cJSON_AddItemToArray(languages, cJSON_CreateString(s_language));
-    }
-    /* The end of speech is detected on the device (gpt-live-transcribe has no server VAD) */
-    cJSON_AddNullToObject(input, "turn_detection");
-    char *text = cJSON_PrintUnformatted(msg);
-    cJSON_Delete(msg);
-    bool ok = text && send_json(client, text, strlen(text));
+    char *text = s_backend->session_update ? s_backend->session_update(s_model, s_language) : NULL;
+    bool ok = !s_backend->session_update || (text && send_json(client, text, strlen(text)));
     free(text);
     return ok;
 }
 
 static bool send_simple(esp_websocket_client_handle_t client, const char *type)
 {
+    if (!type) {
+        return true;
+    }
     char text[64];
     int len = snprintf(text, sizeof(text), "{\"type\":\"%s\"}", type);
     return send_json(client, text, len);
@@ -333,12 +339,19 @@ static bool send_simple(esp_websocket_client_handle_t client, const char *type)
 
 static bool send_audio(esp_websocket_client_handle_t client, const int16_t *samples, size_t count)
 {
-    size_t n_out = upsample(&s_upsampler, samples, count, s_out);
-    static const char prefix[] = "{\"type\":\"input_audio_buffer.append\",\"audio\":\"";
+    // 24 kHz for OpenAI, the 16 kHz of the AFE as is for Mistral
+    const int16_t *pcm = samples;
+    size_t n_out = count;
+    if (s_backend->rate != STT_INPUT_RATE) {
+        n_out = upsample(&s_upsampler, samples, count, s_out);
+        pcm = s_out;
+    }
+    char prefix[64];
+    size_t prefix_len = snprintf(prefix, sizeof(prefix), "{\"type\":\"%s\",\"audio\":\"", s_backend->append_type);
     static const char suffix[] = "\"}";
     size_t b64_len = 0;
-    mbedtls_base64_encode(NULL, 0, &b64_len, (const unsigned char *)s_out, n_out * sizeof(int16_t));
-    size_t total = sizeof(prefix) - 1 + b64_len + sizeof(suffix);
+    mbedtls_base64_encode(NULL, 0, &b64_len, (const unsigned char *)pcm, n_out * sizeof(int16_t));
+    size_t total = prefix_len + b64_len + sizeof(suffix);
     if (total > s_message_cap) {
         char *p = heap_caps_realloc(s_message, total, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!p) {
@@ -347,12 +360,12 @@ static bool send_audio(esp_websocket_client_handle_t client, const int16_t *samp
         s_message = p;
         s_message_cap = total;
     }
-    memcpy(s_message, prefix, sizeof(prefix) - 1);
+    memcpy(s_message, prefix, prefix_len);
     size_t written = 0;
-    mbedtls_base64_encode((unsigned char *)s_message + sizeof(prefix) - 1, b64_len, &written,
-                          (const unsigned char *)s_out, n_out * sizeof(int16_t));
-    memcpy(s_message + sizeof(prefix) - 1 + written, suffix, sizeof(suffix));
-    return send_json(client, s_message, sizeof(prefix) - 1 + written + sizeof(suffix) - 1);
+    mbedtls_base64_encode((unsigned char *)s_message + prefix_len, b64_len, &written, (const unsigned char *)pcm,
+                          n_out * sizeof(int16_t));
+    memcpy(s_message + prefix_len + written, suffix, sizeof(suffix));
+    return send_json(client, s_message, prefix_len + written + sizeof(suffix) - 1);
 }
 
 static void drain_audio(void)
@@ -380,14 +393,34 @@ static void stt_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 
-    esp_websocket_client_handle_t client = create_client();
+    // A session per turn is opened when a turn starts
+    esp_websocket_client_handle_t client = s_backend->session_per_turn ? NULL : create_client();
     bool session_ready = false;             /* connected and session.update sent */
     int64_t down_since = esp_timer_get_time();
-    size_t turn_sent_samples = 0;
     int64_t end_of_speech_us = 0;
     size_t backlog_at_end = 0;
 
     for (;;) {
+        /* Another service, model or key: a new connection (the turn in progress, if any, is lost) */
+        if (s_reconfigure) {
+            if (client) {
+                destroy_client(client);
+            }
+            if (s_turn_active) {
+                fail_turn("transcription service changed");
+            }
+            session_ready = false;
+            client = s_backend->session_per_turn ? NULL : create_client();
+            down_since = esp_timer_get_time();
+            ESP_LOGI(TAG, "%s: %s", s_backend->name, s_model);
+            s_reconfigure = false;      // done: stt_stream_configure() returns
+        }
+        /* A session per turn: closed once its turn is over, opened again with the next */
+        if (s_backend->session_per_turn && client && !s_turn_active && !s_awaiting) {
+            destroy_client(client);
+            client = NULL;
+            session_ready = false;
+        }
         /* New language: the session configuration is sent again (no reconnection needed) */
         if (s_language_change) {
             s_language_change = false;
@@ -408,11 +441,12 @@ static void stt_task(void *arg)
             down_since = esp_timer_get_time();
             ESP_LOGW(TAG, "connection lost, reconnecting");
             /* Audio already sent in this turn is lost with the server session */
-            if (s_turn_active && (turn_sent_samples > 0 || s_awaiting)) {
+            if (s_turn_active && (s_turn_sent_samples > 0 || s_awaiting)) {
                 fail_turn("connection lost during the question");
             }
         }
-        if (!connected && esp_timer_get_time() - down_since > STT_RECREATE_AFTER_MS * 1000LL) {
+        if (!connected && (client || !s_backend->session_per_turn) &&
+                esp_timer_get_time() - down_since > STT_RECREATE_AFTER_MS * 1000LL) {
             ESP_LOGW(TAG, "still disconnected, recreating the WebSocket client");
             if (client) {
                 destroy_client(client);
@@ -429,7 +463,7 @@ static void stt_task(void *arg)
             drain_audio();
             xEventGroupClearBits(s_events, EV_COMMIT);
             if (session_ready) {
-                send_simple(client, "input_audio_buffer.clear");
+                send_simple(client, s_backend->clear_type);
             }
             continue;
         }
@@ -437,11 +471,16 @@ static void stt_task(void *arg)
             s_partial_len = 0;
             s_upsampler = (upsampler_t) {0};
             s_overflow_logged = false;
-            turn_sent_samples = 0;
+            s_turn_sent_samples = 0;
             end_of_speech_us = 0;
             /* Leftovers of an abandoned turn must not prefix this question (a new session is empty) */
             if (session_ready) {
-                send_simple(client, "input_audio_buffer.clear");
+                send_simple(client, s_backend->clear_type);
+            }
+            /* A session per turn: opened now, the audio waits in the buffer */
+            if (s_backend->session_per_turn && !client) {
+                down_since = esp_timer_get_time();
+                client = create_client();
             }
         }
 
@@ -468,7 +507,7 @@ static void stt_task(void *arg)
                                         pdMS_TO_TICKS(STT_POLL_MS));
         if (n >= sizeof(int16_t)) {
             if (send_audio(client, s_in, n / sizeof(int16_t))) {
-                turn_sent_samples += n / sizeof(int16_t);
+                s_turn_sent_samples += n / sizeof(int16_t);
             } else {
                 fail_turn("audio not sent");
             }
@@ -476,12 +515,12 @@ static void stt_task(void *arg)
             xEventGroupClearBits(s_events, EV_COMMIT);
             s_commit_us = esp_timer_get_time();
             s_awaiting = true;
-            if (!send_simple(client, "input_audio_buffer.commit")) {
+            if (!send_simple(client, s_backend->commit_type)) {
                 fail_turn("commit not sent");
                 continue;
             }
             ESP_LOGI(TAG, "committed %u ms of audio; at the end of speech %u ms were still to send, sent in %lld ms",
-                     (unsigned)(turn_sent_samples * 1000 / STT_INPUT_RATE),
+                     (unsigned)(s_turn_sent_samples * 1000 / STT_INPUT_RATE),
                      (unsigned)(backlog_at_end * 1000 / STT_INPUT_RATE), (s_commit_us - end_of_speech_us) / 1000);
         }
     }
@@ -506,15 +545,35 @@ void stt_stream_set_language(const char *language)
     s_language_change = true;
 }
 
-void stt_stream_configure(const char *api_key, const char *model, const char *language)
+void stt_stream_configure(const stt_backend_t *backend, const char *api_key, const char *model,
+                          const char *language)
 {
     char *header = NULL;
     asprintf(&header, "Authorization: Bearer %s\r\n", api_key);
-    free(s_auth_header);
+    char *uri = backend->uri(model);
+    // Taken by the stt task at its next loop: the old strings stay valid until it has reconnected
+    char *old_header = s_auth_header;
+    char *old_uri = s_uri;
     s_auth_header = header;
+    s_uri = uri;
     replace_str(&s_model, model);
-    replace_str(&s_language, language);
-    ESP_LOGI(TAG, "model: %s, language: %s", s_model ? s_model : "-", s_language ? s_language : "-");
+    if (language) {
+        replace_str(&s_language, language);
+    }
+    bool change = (s_backend != NULL);
+    s_backend = backend;
+    ESP_LOGI(TAG, "%s model: %s, language: %s", backend->name, s_model ? s_model : "-",
+             s_language ? s_language : "-");
+    if (change) {
+        // Applied by the stt task (closing the old connection can take a second): a turn started before that
+        // would be lost with it
+        s_reconfigure = true;
+        for (int i = 0; i < 100 && s_reconfigure; i++) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+    free(old_header);
+    free(old_uri);
 
     /* The connection task starts once configured; it connects as soon as the Wi-Fi is up */
     static bool task_started = false;
@@ -566,6 +625,37 @@ char *stt_stream_finish(uint32_t timeout_ms)
         ESP_LOGE(TAG, "No transcript (%s)", (bits & EV_FAILED) ? "error" : "timeout");
         xEventGroupSetBits(s_events, EV_ABORT);
     }
+    return text;
+}
+
+char *stt_stream_test(const int16_t *audio, size_t samples, int *ms)
+{
+    *ms = -1;
+    if (!stt_stream_wait_connected(s_backend && s_backend->session_per_turn ? 0 : 10000) &&
+            !(s_backend && s_backend->session_per_turn)) {
+        return NULL;
+    }
+    stt_stream_start(NULL);
+    // A session per turn: opened now, measured from when it is up (as when the user speaks meanwhile)
+    if (s_backend->session_per_turn && !stt_stream_wait_connected(10000)) {
+        stt_stream_abort();
+        return NULL;
+    }
+    vTaskDelay(pdMS_TO_TICKS(300));     // the session configuration sent
+    size_t max = STT_AUDIO_BUFFER_BYTES / sizeof(int16_t) - 16;
+    if (samples > max) {
+        samples = max;
+    }
+    // Sent at the pace of speech (16 kHz, 100 ms blocks), as from the microphone: a realtime model transcribes as
+    // the audio comes, and given all at once it would still be working through it at the commit
+    for (size_t pos = 0; pos < samples; pos += 1600) {
+        stt_stream_write(audio + pos, samples - pos < 1600 ? samples - pos : 1600);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    // Measured from the commit (the audio all sent), as after the end of speech in use
+    s_last_final_ms = -1;
+    char *text = stt_stream_finish(20000);
+    *ms = text ? s_last_final_ms : -1;
     return text;
 }
 

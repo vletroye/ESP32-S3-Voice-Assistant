@@ -90,6 +90,25 @@ extern size_t llm_model_count;
  */
 void llm_load_models(void);
 
+/* Transcription and speech models of AGENTS.INI ([stt], [tts]), chosen by voice */
+typedef enum { LLM_SPEECH_STT, LLM_SPEECH_TTS } llm_speech_kind_t;
+
+typedef struct {
+    const char *id;         /* model id of the API ("gpt-live-transcribe", "voxtral-mini-tts-3-0") */
+    const char *label;      /* shown name */
+    const char *provider;   /* "openai", "mistral" */
+    const char *spoken;     /* said in the spoken list, and to choose it */
+} llm_speech_model_t;
+
+/** How many models of this kind */
+size_t llm_speech_count(llm_speech_kind_t kind);
+
+/** The model of this kind at this index (file order), NULL past the end */
+const llm_speech_model_t *llm_speech_model(llm_speech_kind_t kind, size_t index);
+
+/** The model of this kind with this id, NULL if not listed */
+const llm_speech_model_t *llm_speech_find(llm_speech_kind_t kind, const char *id);
+
 /** LLM_ERR_EFFORT: the effort refused ("low") and the values the model takes ("high, none") */
 extern char llm_effort_refused[16];
 extern char llm_effort_values[64];

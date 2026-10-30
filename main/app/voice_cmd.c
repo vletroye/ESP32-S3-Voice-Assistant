@@ -28,6 +28,7 @@
 #include "radio.h"
 #include "radio_browser.h"
 #include "file_radio_favorites.h"
+#include "ai_provider_mistral_tts.h"
 
 #define CMD_NORM_SIZE           160
 #define CMD_REPLY_SIZE          512
@@ -69,6 +70,9 @@ static PHRASE_LIST(s_change_model);
 static PHRASE_LIST(s_model_shortcut);
 static PHRASE_LIST(s_change_voice);
 static PHRASE_LIST(s_voice_shortcut);
+/* "Change de transcription", "change de synthèse vocale": the models of [stt] / [tts] of AGENTS.INI */
+static PHRASE_LIST(s_change_stt);
+static PHRASE_LIST(s_change_tts);
 /* A new conversation, as after "au revoir" (normalized: lowercase, apostrophes as spaces) */
 static PHRASE_LIST(s_new_conversation);
 /* Configuration files (normalized: "éditer" and "editer", "la config" and "le config" as often transcribed) */
@@ -96,6 +100,8 @@ typedef enum {
     ASKED_PROVIDER,
     ASKED_MODEL,
     ASKED_VOICE,
+    ASKED_STT,
+    ASKED_TTS,
     ASKED_COUNTRY,
     ASKED_CITY,
     CONFIRM_COUNTRY,        /* "Confirmes-tu ... ?": s_pending holds the country code */
@@ -744,30 +750,96 @@ static const struct {
     { "verse", { "vers", "verce", NULL } },
 };
 
+/*
+ * The voices offered: OpenAI's (tts_voices) or, while a Mistral speech model is used, its preset voices in the
+ * language in use (read from Mistral, kept until the speech or the language changes)
+ */
+#define VOICES_MAX  24
+static mistral_voice_t s_voices[VOICES_MAX];    /* slug: the voice id, name: as said and shown */
+static size_t s_voice_count = 0;
+static bool s_voices_mistral = false;
+static char s_voices_lang[8];
+
+static void load_voices(void)
+{
+    bool mistral = strcmp(assistant_tts_provider(), "mistral") == 0;
+    const char *lang = app_lang_get()->code;
+    if (s_voice_count && mistral == s_voices_mistral && strcmp(lang, s_voices_lang) == 0) {
+        return;
+    }
+    s_voices_mistral = mistral;
+    strlcpy(s_voices_lang, lang, sizeof(s_voices_lang));
+    s_voice_count = 0;
+    if (mistral) {
+        sys_param_t *param = settings_get_parameter();
+        s_voice_count = mistral_tts_voices(param->mistral_key, lang, s_voices, VOICES_MAX);
+        for (size_t i = 0; i < s_voice_count; i++) {
+            // "Marie - Neutral" -> "Marie Neutral"
+            for (char *dash; (dash = strstr(s_voices[i].name, " - "));) {
+                memmove(dash + 1, dash + 3, strlen(dash + 3) + 1);
+            }
+        }
+        if (s_voice_count == 0) {
+            // The list could not be read: the voice in use alone
+            strlcpy(s_voices[0].slug, param->mistral_voice, sizeof(s_voices[0].slug));
+            strlcpy(s_voices[0].name, param->mistral_voice, sizeof(s_voices[0].name));
+            s_voice_count = 1;
+        }
+        return;
+    }
+    for (size_t i = 0; i < tts_voice_count && i < VOICES_MAX; i++) {
+        strlcpy(s_voices[i].slug, tts_voices[i], sizeof(s_voices[i].slug));
+        strlcpy(s_voices[i].name, tts_voices[i], sizeof(s_voices[i].name));
+        s_voices[i].name[0] = toupper((unsigned char)s_voices[i].name[0]);
+        s_voice_count++;
+    }
+}
+
+/* The voice in use (its id) */
+static const char *current_voice(void)
+{
+    sys_param_t *param = settings_get_parameter();
+    return s_voices_mistral ? param->mistral_voice : param->voice;
+}
+
 /* Voice number (1-based) said in the text: its name, else a number; 0 if none */
 static int find_voice(const char *norm)
 {
-    for (size_t i = 0; i < tts_voice_count; i++) {
-        if (has_word(norm, tts_voices[i])) {
-            return (int)i + 1;
+    load_voices();
+    // The voice whose name has the most of its words said ("marie neutral" before "marie")
+    int best = 0, best_hits = 0;
+    for (size_t i = 0; i < s_voice_count; i++) {
+        char name[48];
+        app_text_normalize(s_voices[i].name, name, sizeof(name));
+        int hits = 0;
+        for (char *word = strtok(name, " "); word; word = strtok(NULL, " ")) {
+            hits += has_word(norm, word);
         }
-        for (size_t j = 0; j < sizeof(s_voice_heard) / sizeof(s_voice_heard[0]); j++) {
-            if (strcmp(s_voice_heard[j].voice, tts_voices[i]) != 0) {
+        if (hits > best_hits) {
+            best = (int)i + 1;
+            best_hits = hits;
+        }
+        for (size_t j = 0; !s_voices_mistral && j < sizeof(s_voice_heard) / sizeof(s_voice_heard[0]); j++) {
+            if (strcmp(s_voice_heard[j].voice, s_voices[i].slug) != 0) {
                 continue;
             }
             for (size_t k = 0; k < 4 && s_voice_heard[j].heard[k]; k++) {
-                if (has_word(norm, s_voice_heard[j].heard[k])) {
-                    return (int)i + 1;
+                if (has_word(norm, s_voice_heard[j].heard[k]) && !best_hits) {
+                    best = (int)i + 1;
+                    best_hits = 1;
                 }
             }
         }
+    }
+    if (best) {
+        return best;
     }
     for (const char *const *one = phrases_of(&s_one_alone); *one; one++) {
         if (strcmp(norm, *one) == 0) {
             return 1;
         }
     }
-    return search_number(norm, false, (int)tts_voice_count);
+    return search_number(norm, false, (int)s_voice_count);
 }
 
 /* After "prends la voix": only a voice name or a number ("la voix est trop forte" is not a command) */
@@ -785,29 +857,21 @@ static bool is_voice_only(const char *rest)
     return word[0] && find_voice(word) && is_only(rest, word);
 }
 
-/* Voice name as spoken and shown: "Cedar" */
-static void voice_display_name(const char *voice, char *out, size_t size)
-{
-    strlcpy(out, voice, size);
-    out[0] = toupper((unsigned char)out[0]);
-}
-
 /* "Voici les voix disponibles. 1, Marin, celle que j'utilise. 2, Cedar. ... Dites son numéro ou son nom." */
 static char *voice_list(void)
 {
     const app_lang_t *lang = app_lang_get();
-    const char *current = settings_get_parameter()->voice;
+    load_voices();
+    const char *current = current_voice();
     char *out = malloc(CMD_REPLY_SIZE);
     if (!out) {
         return NULL;
     }
     strlcpy(out, lang->voice_ask_intro, CMD_REPLY_SIZE);
-    for (size_t i = 0; i < tts_voice_count; i++) {
-        char name[24];
-        voice_display_name(tts_voices[i], name, sizeof(name));
+    for (size_t i = 0; i < s_voice_count; i++) {
         size_t n = strlen(out);
-        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", (unsigned)(i + 1), name,
-                 strcmp(tts_voices[i], current) == 0 ? lang->voice_current : "");
+        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", (unsigned)(i + 1), s_voices[i].name,
+                 strcmp(s_voices[i].slug, current) == 0 ? lang->voice_current : "");
     }
     strlcat(out, VOICE_CMD_LIST_END " ", CMD_REPLY_SIZE);
     strlcat(out, lang->voice_ask_question, CMD_REPLY_SIZE);
@@ -821,29 +885,123 @@ static voice_cmd_t choose_voice(const char *norm, char **reply)
     int number = find_voice(norm);
     char *text = NULL;
     if (number == 0) {
-        asprintf(&text, lang->voice_unknown, (int)tts_voice_count);
+        asprintf(&text, lang->voice_unknown, (int)s_voice_count);
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
-    const char *voice = tts_voices[number - 1];
-    char name[24];
-    voice_display_name(voice, name, sizeof(name));
+    const char *voice = s_voices[number - 1].slug;
+    const char *name = s_voices[number - 1].name;
     sys_param_t *param = settings_get_parameter();
-    if (strcmp(voice, param->voice) == 0) {
+    if (strcmp(voice, current_voice()) == 0) {
         asprintf(&text, lang->voice_already, name);
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
-    if (settings_save_str("Voice", voice) != ESP_OK) {
-        asprintf(&text, lang->voice_unknown, (int)tts_voice_count);
+    // A voice of each speech service: Voice (OpenAI), Mistral_voice
+    if (settings_save_str(s_voices_mistral ? "Mistral_voice" : "Voice", voice) != ESP_OK) {
+        asprintf(&text, lang->voice_unknown, (int)s_voice_count);
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
     ESP_LOGI(TAG, "voice %s saved", voice);
-    strlcpy(param->voice, voice, sizeof(param->voice));
+    if (s_voices_mistral) {
+        strlcpy(param->mistral_voice, voice, sizeof(param->mistral_voice));
+    } else {
+        strlcpy(param->voice, voice, sizeof(param->voice));
+    }
     tts_stream_set_voice(voice);
     ui_ctrl_settings_sync();
     asprintf(&text, lang->voice_sample, name);
+    *reply = text ? text : reply_dup("");
+    return VOICE_CMD_ANSWERED;
+}
+
+/* ---------- transcription and speech models ([stt], [tts] of AGENTS.INI) ---------- */
+
+static const char *speech_current(llm_speech_kind_t kind)
+{
+    sys_param_t *param = settings_get_parameter();
+    return kind == LLM_SPEECH_STT ? param->stt_model : param->tts_model;
+}
+
+/* "Quelle transcription voulez-vous :: 1, OpenAI, celle que j'utilise. 2, Voxtral." (format: its %s, the list) */
+static char *speech_list(llm_speech_kind_t kind, const char *format)
+{
+    const app_lang_t *lang = app_lang_get();
+    char list[256] = "";
+    for (size_t i = 0; i < llm_speech_count(kind); i++) {
+        const llm_speech_model_t *m = llm_speech_model(kind, i);
+        size_t n = strlen(list);
+        snprintf(list + n, sizeof(list) - n, "%s%u, %s%s.", i ? " " : "", (unsigned)(i + 1), m->spoken,
+                 strcmp(m->id, speech_current(kind)) == 0 ? lang->speech_current : "");
+    }
+    char *text = NULL;
+    asprintf(&text, format, list);
+    return text ? text : reply_dup("");
+}
+
+/* Model number (1-based) said: a word of its spoken name or of its shown name ("voxtral", "mistral"), else a
+ * number; 0 if none */
+static int find_speech(llm_speech_kind_t kind, const char *norm)
+{
+    size_t count = llm_speech_count(kind);
+    for (size_t i = 0; i < count; i++) {
+        const llm_speech_model_t *m = llm_speech_model(kind, i);
+        const char *names[] = { m->spoken, m->label, m->provider };
+        for (size_t k = 0; k < sizeof(names) / sizeof(names[0]); k++) {
+            char name[48];
+            app_text_normalize(names[k], name, sizeof(name));
+            char *word = strtok(name, " ");
+            if (word && has_word(norm, word)) {
+                return (int)i + 1;
+            }
+        }
+    }
+    return search_number(norm, false, (int)count);
+}
+
+/* "Change de transcription" / "change de synthèse vocale": the models listed, the one said chosen and applied */
+static voice_cmd_t ask_speech(llm_speech_kind_t kind, const char *format, char **reply)
+{
+    s_asked = kind == LLM_SPEECH_STT ? ASKED_STT : ASKED_TTS;
+    s_asked_us = esp_timer_get_time();
+    *reply = speech_list(kind, format);
+    return VOICE_CMD_ANSWERED;
+}
+
+static voice_cmd_t choose_speech(llm_speech_kind_t kind, const char *norm, char **reply)
+{
+    const app_lang_t *lang = app_lang_get();
+    int number = find_speech(kind, norm);
+    if (number == 0) {
+        return ask_speech(kind, lang->speech_unknown, reply);
+    }
+    const llm_speech_model_t *m = llm_speech_model(kind, number - 1);
+    char *text = NULL;
+    if (strcmp(m->id, speech_current(kind)) == 0) {
+        asprintf(&text, lang->speech_already, m->spoken);
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_ANSWERED;
+    }
+    sys_param_t *param = settings_get_parameter();
+    if (strcmp(m->provider, "mistral") == 0 && !param->mistral_key[0]) {
+        asprintf(&text, lang->speech_no_key, "Mistral", "Mistral_key");
+        *reply = text ? text : reply_dup("");
+        return VOICE_CMD_ANSWERED;
+    }
+    if (settings_save_str(kind == LLM_SPEECH_STT ? "Stt_model" : "Tts_model", m->id) != ESP_OK) {
+        *reply = reply_dup(lang->speech_unknown);
+        return VOICE_CMD_ANSWERED;
+    }
+    ESP_LOGI(TAG, "%s model %s saved", kind == LLM_SPEECH_STT ? "transcription" : "speech", m->id);
+    // Applied at once: this answer is already spoken by the new speech service
+    if (kind == LLM_SPEECH_STT) {
+        assistant_set_stt(m->id);
+    } else {
+        assistant_set_tts(m->id);
+        s_voice_count = 0;      // its voices, the next time they are listed
+    }
+    asprintf(&text, kind == LLM_SPEECH_STT ? lang->stt_switched : lang->tts_switched, m->spoken);
     *reply = text ? text : reply_dup("");
     return VOICE_CMD_ANSWERED;
 }
@@ -1003,7 +1161,7 @@ void voice_cmd_init(void)
     phrase_list_t *lists[] = {
         &s_goodbyes, &s_list_models, &s_test_models, &s_fastest_models, &s_radio_station, &s_radio_music,
         &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
-        &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut,
+        &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut, &s_change_stt, &s_change_tts,
         &s_new_conversation, &s_edit_config, &s_restart, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
     };
@@ -1257,6 +1415,9 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     if (recent && asked == ASKED_VOICE) {
         return choose_voice(norm, reply);
     }
+    if (recent && (asked == ASKED_STT || asked == ASKED_TTS)) {
+        return choose_speech(asked == ASKED_STT ? LLM_SPEECH_STT : LLM_SPEECH_TTS, norm, reply);
+    }
     if (recent && asked == ASKED_COUNTRY) {
         char code[3];
         if (!country_find(norm, code, sizeof(code))) {
@@ -1356,6 +1517,15 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         }
         llm_provider_t provider = find_provider(norm + len);
         return provider == LLM_PROVIDER_COUNT ? ask_provider(reply) : ask_model(provider, reply);
+    }
+    // "Change de transcription" / "change de synthèse vocale" ("pour Voxtral": chosen at once)
+    bool change_stt = starts_with(norm, phrases_of(&s_change_stt), &len);
+    if (change_stt || starts_with(norm, phrases_of(&s_change_tts), &len)) {
+        llm_speech_kind_t kind = change_stt ? LLM_SPEECH_STT : LLM_SPEECH_TTS;
+        if (norm[len] && find_speech(kind, norm + len)) {
+            return choose_speech(kind, norm + len, reply);
+        }
+        return ask_speech(kind, change_stt ? app_lang_get()->stt_ask : app_lang_get()->tts_ask, reply);
     }
     if (starts_with(norm, phrases_of(&s_change_voice), &len)) {
         // "Change de voix pour Cedar": the voice may already be given

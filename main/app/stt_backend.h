@@ -1,0 +1,57 @@
+/*
+ * SPDX-FileCopyrightText: 2026
+ *
+ * SPDX-License-Identifier: CC0-1.0
+ *
+ * A transcription service (ai_provider_<name>_stt.c) for stt_stream.c: the protocol of its Realtime WebSocket.
+ * stt_stream.c keeps the connection, the audio and the turns; the service says how to talk to its server and
+ * reads its messages, reporting what they say with the stt_backend_...() functions.
+ */
+
+#pragma once
+
+#include <stdbool.h>
+#include "cJSON.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct stt_backend {
+    const char *name;           /* "openai", "mistral" (logs) */
+    int rate;                   /* sample rate of the audio sent: 24000 (resampled from 16 kHz) or 16000 */
+    /* "wss://..." for this model (allocated) */
+    char *(*uri)(const char *model);
+    /* The session configuration sent once connected (allocated JSON), NULL for none */
+    char *(*session_update)(const char *model, const char *language);
+    const char *append_type;    /* message carrying base64 audio: {"type": append_type, "audio": "..."} */
+    const char *clear_type;     /* message dropping the audio of an abandoned turn, NULL for none */
+    const char *commit_type;    /* message ending the audio of the turn */
+    /*
+     * The server ends its session with the turn: connected when a turn starts (the audio is buffered meanwhile)
+     * and closed after it, nothing open while the assistant sleeps
+     */
+    bool session_per_turn;
+    /* A message received (type: its "type") */
+    void (*on_message)(const cJSON *json, const char *type);
+};
+
+/** Text of the turn received so far (a delta, appended) */
+void stt_backend_delta(const char *text);
+
+/**
+ * @brief The turn is transcribed.
+ *
+ * @param text       The whole transcript, or NULL for the deltas received
+ * @param in_tokens  Billed tokens of audio heard (with out_tokens), or 0 to count its duration
+ * @param out_tokens Billed tokens of text written
+ * @param seconds    Duration of the audio billed, < 0 for the duration of the audio sent
+ */
+void stt_backend_final(const char *text, int in_tokens, int out_tokens, double seconds);
+
+/** The turn failed (code and message as the server gave them, for the log and the lack of credit) */
+void stt_backend_failed(const char *code, const char *message);
+
+#ifdef __cplusplus
+}
+#endif

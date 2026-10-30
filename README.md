@@ -205,7 +205,8 @@ settings of the [Quick start](#quick-start).
   models through OpenRouter, free ones included. Change it from the Settings screen or by voice ("change de
   modèle" / "change the model", "utilise le modèle 3" / "use model 3"); the models offered are listed in a file you can edit.
 - **Six languages** (French, English, Dutch, German, Spanish, Italian), switched by voice ("parle anglais", "speak
-  French") or from the Settings screen; other languages can be added.
+  French") or from the Settings screen; other languages can be added (see
+  [Adding a new language, step by step](#adding-a-new-language-step-by-step)).
 - **Choose the voice**: 10 OpenAI voices, or Mistral's natural voices for each language, with an emotion and a
   pace if you like ("change de voix" / "change the voice", "prends la voix Cedar" / "use the voice Cedar").
 - **It knows things around you**: the date and time, the weather (Open-Meteo), the latest news (web search), your

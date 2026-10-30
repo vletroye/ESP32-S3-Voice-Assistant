@@ -570,8 +570,9 @@ static void ini_gen_from_nvs(const char *part, const char *name)
     int used_count = 0;
     size_t layout_len = 0;
     char *layout = NULL;
+    // A layout without any key (CONFIG.INI emptied on the PC, to get a clean one): as if there were none
     if (nvs_get_str(nvs, INI_LAYOUT_KEY, NULL, &layout_len) == ESP_OK && (layout = (char *)malloc(layout_len)) &&
-            nvs_get_str(nvs, INI_LAYOUT_KEY, layout, &layout_len) == ESP_OK) {
+            nvs_get_str(nvs, INI_LAYOUT_KEY, layout, &layout_len) == ESP_OK && strchr(layout, '=')) {
         ini_gen_from_layout(nvs, layout, used, &used_count);
     } else {
         ini_insert_section(name);

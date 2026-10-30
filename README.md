@@ -150,9 +150,15 @@ settings, see [Updating the firmware](#updating-the-firmware).
 
    With an OpenAI key only, leave out `Claude_key` and also set `Chat_model = gpt-6-luna` (an OpenAI model answers
    instead of Claude; no web search, weather or home automation, see [step 1](#1-what-you-need)).
-3. **Save** the file and **wait until the copy is finished** (Windows may take a few seconds), then press
-   **Restart** at the bottom right of the BOX's screen.
-4. The BOX restarts, connects to the Wi-Fi, and shows a welcome screen with the first steps. It is ready.
+3. **Save** the file, then **wait about 10 seconds** before going on. Saving on the PC is not enough: the PC
+   still has to copy the file into the BOX, and it may do it a little later (Windows often waits a few seconds).
+   If the BOX restarts before the copy is finished, the file is lost or cut.
+4. Press **Restart** at the bottom right of the BOX's screen.
+5. The BOX restarts, connects to the Wi-Fi, and shows a welcome screen with the first steps. It is ready.
+
+**If `CONFIG.INI` looks damaged** (lines cut or mixed up, odd characters): empty it (or delete it), save, wait,
+and press **Restart**. At the next configuration mode, the BOX writes a clean `CONFIG.INI` again from the settings
+it holds (Wi-Fi and keys included, if they were saved before); fill in what is missing.
 
 You can come back to the configuration mode at any time: tap the gear icon, then the folder-and-gear icon at the
 top right, then **OK** (or say "**édite la config**" / "**edit the config**" with the BOX connected to the PC).
@@ -181,7 +187,7 @@ The voice commands handled by the device itself are listed in the [User guide](#
 | "The … credit is used up" | Add credit on the provider's site. |
 | It does not react to "Bonjour ESP" | Speak a little louder, about 1 m away; or touch the screen. |
 | The answer is cut or stutters | The Internet connection is slow; it says so on screen. |
-| `CONFIG.INI` changes are lost | Wait until the copy is really finished before pressing **Restart**. |
+| `CONFIG.INI` changes are lost, or the file looks damaged | After saving, wait about 10 seconds before pressing **Restart** (the PC copies the file into the BOX a little after saving). A damaged file: empty it, save, wait, **Restart**: a clean one comes back at the next configuration mode. |
 
 To start again from scratch, see the **factory reset** in [The Settings screen](#on-the-device-settings-screen).
 
@@ -582,8 +588,12 @@ USB drive named "ESP-BOX" holding these files:
 | `SPEED.TXT` | Results of the model test (written by the device) | SPIFFS | factory reset (erased) |
 | `RADIO.TXT` | Favourite radios (see [Radio](#favourites-radiotxt)) | SPIFFS | kept by the soft reset, factory reset (erased) |
 
-- Edit a file, save it, **wait until the copy is finished** (Windows may delay the write; a `LANG_` file takes
-  tens of seconds), then press **Restart** (bottom right of the screen).
+- Edit a file, save it, then **wait before pressing Restart** (bottom right of the screen): saving on the PC is not
+  enough, the PC copies the file into the BOX a little later. About 10 seconds for `CONFIG.INI`, up to tens of
+  seconds for a large file such as `LANG_<XX>.TXT`. Restarting too early loses or cuts the file.
+- A damaged `CONFIG.INI`: empty it (or delete it), save, wait and press **Restart**; the next configuration mode
+  writes a clean one again from the settings the BOX holds. Any other file given with the firmware, emptied, is
+  installed again at the next start.
 - The text files of SPIFFS can hold up to 32,767 characters each, `CONFIG.INI` 4,096 and `MEMORY.TXT` about
   3,900. The drive shows up to 64 files of SPIFFS (12 languages × 3 files, plus the others above).
 - `CONFIG.INI` only takes its own keys: a line read while the PC was still writing the file (old and new sectors

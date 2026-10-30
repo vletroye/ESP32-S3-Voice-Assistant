@@ -23,6 +23,7 @@
 #include "tts_stream.h"
 #include "settings.h"
 #include "assistant.h"
+#include "voice_cmd.h"
 #include "file_costs.h"
 #include "radio.h"
 #include "app_ui_radio.h"
@@ -120,13 +121,21 @@ static void cancel_double_tap_cb(lv_event_t *e)
     }
 }
 
-/* Double tap on the answer: same as the wake word (the reply stops, the assistant listens) */
+/*
+ * Double tap on the answer: same as the wake word (the reply stops, the assistant listens); on a question of a
+ * voice command (language, model...): the command is dropped, back to sleep
+ */
 static void reply_double_tap_cb(lv_event_t *e)
 {
     static int64_t last_tap_us = 0;
     int64_t now = esp_timer_get_time();
     if (now - last_tap_us <= DOUBLE_TAP_MS * 1000LL) {
         last_tap_us = 0;
+        if (voice_cmd_waiting_answer()) {
+            ESP_LOGI(TAG, "double tap: question of the voice command dropped");
+            assistant_cancel();
+            return;
+        }
         ESP_LOGI(TAG, "double tap: reply stopped, listening");
         app_sr_start_once();
     } else {
@@ -155,6 +164,7 @@ static void listen_label_set_text(const char *text)
 
 
 static lv_obj_t *s_model_dropdown = NULL;
+static void head_icons_refresh(void);
 
 /* Position of a language in the dropdown (Languages of CONFIG.INI); English, or the first, when not offered */
 static uint16_t settings_language_index(const char *code)
@@ -628,6 +638,8 @@ void ui_ctrl_settings_sync(void)
             lv_dropdown_set_selected(s_model_dropdown, i);
         }
     }
+    // The provider's icon on the robot's forehead (model changed, or set at start-up after the screens were made)
+    head_icons_refresh();
     // Speech models changed by voice ("change de synthèse vocale"), then their voices ("change de voix")
     speech_options_refresh(&s_settings_speech[0]);
     speech_options_refresh(&s_settings_speech[1]);

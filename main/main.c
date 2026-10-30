@@ -274,6 +274,10 @@ static void on_reply_audio(tts_event_t event)
     }
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();
+    if (s_cancelled) {
+        // Dropped by a double tap (a question of a voice command among others): asleep already, no listening
+        return;
+    }
     if (record_flag) {
         // Reply interrupted by a new listening session (wake word or touch)
         return;
@@ -765,6 +769,7 @@ void assistant_cancel(void)
 {
     ESP_LOGI(TAG, "Cancelled by a double tap");
     s_cancelled = true;
+    voice_cmd_cancel_question();    // a voice command's question (language, model...): its answer no longer awaited
     app_sr_cancel();        // listening: ended as without speech
     llm_cancel();           // thinking: the answer's stream is left
     tts_stream_cancel();
@@ -1088,6 +1093,8 @@ void app_main()
     assistant_set_stt(NULL);
     ESP_ERROR_CHECK(tts_stream_init());
     assistant_set_tts(NULL);
+    // The screens were made before: the provider's icon on the robot's forehead, the Settings screen
+    ui_ctrl_settings_sync();
 
     for (int seconds = 0; ; seconds++) {
         vTaskDelay(pdMS_TO_TICKS(1000));

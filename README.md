@@ -158,7 +158,10 @@ which has been largely rewritten.
 3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP"
    (not after a volume change, which sends it back to sleep).
 4. To interrupt an answer, say "Bonjour ESP" again or **double-tap** the screen: it stops and listens. A double tap
-   while "J'écoute …" or "Je réfléchis …" is shown drops the question: back to sleep, nothing said.
+   while "J'écoute …" or "Je réfléchis …" is shown drops the question: back to sleep, nothing said. When a voice
+   command has asked something (which language, provider, model, voice, town…), a double tap, while the question
+   is spoken or while its answer is listened for, drops the command: back to sleep, and the next words are no
+   longer taken as its answer.
 5. Without speech, it goes back to sleep (no API call is made for silence).
 6. Saying just "**Au revoir**" (or another closing phrase, see below) sends it back to sleep at once, without
    an answer and without listening again, and clears the saved conversation: the next one starts afresh.

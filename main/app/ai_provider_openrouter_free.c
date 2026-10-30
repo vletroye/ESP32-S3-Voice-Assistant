@@ -3,9 +3,10 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Free models of OpenRouter, read from its live list (GET /api/v1/models, ~800 KB) at most once a day: those
- * whose prompt and completion prices are "0", answering text to text (no code or moderation model), the most
- * recent first, plus "openrouter/free" (OpenRouter picks a free model for each question). The list is kept on
+ * Free models of OpenRouter, read from its live list at most once a day (GET /api/v1/models, only the free ones,
+ * ~30 KB, the most used first: tokens processed in the last week): those whose prompt and completion prices are
+ * "0", answering text to text (no code or moderation model), in that order, plus "openrouter/free" (OpenRouter
+ * picks a free model for each question). The list is kept on
  * SPIFFS, so that the models are offered at start-up and when OpenRouter cannot be reached. OpenRouter_free (off:
  * the list is not read) and Free_models (how many) of CONFIG.INI; [openrouter_free_exclude] of AGENTS.INI. More
  * candidates than offered are kept, so that a change of these applies at the next start, without reading again.
@@ -25,14 +26,16 @@
 #include "settings.h"
 #include "ai_provider_openrouter_free.h"
 
-#define FREE_MODELS_URL         "https://openrouter.ai/api/v1/models"
+#define FREE_MODELS_URL         "https://openrouter.ai/api/v1/models?sort=most-popular&max_price=0&max_output_price=0"
+/* Written in the kept list: a list of an older firmware (the most recent first) is read again */
+#define FREE_ORDER              "most-popular"
 #define FREE_CACHE_FILE         "/spiffs/or_free.json"
 #define FREE_REFRESH_S          (24 * 3600)
 #define FREE_TIMEOUT_MS         20000
 #define FREE_READ_CHUNK         1024
 /* One model of the list, at most (the largest is ~4 KB) */
 #define FREE_OBJECT_MAX         (12 * 1024)
-/* The most recent free models kept from the list (candidates; Free_models of them offered, the excluded ones left
+/* The most used free models kept from the list (candidates; Free_models of them offered, the excluded ones left
  * out), plus the automatic choice */
 #define FREE_MODELS_KEPT        24
 #define FREE_CACHE_MAX          4096
@@ -46,7 +49,6 @@ static time_t s_fetched = 0;
 typedef struct {
     char *id;
     char *name;
-    long long created;
 } candidate_t;
 
 /* Reading of the list: its models are parsed one at a time */
@@ -100,7 +102,7 @@ static bool is_chat_model(const cJSON *m)
     return text_in && text_out && !strstr(i, "code") && !strstr(i, "safety") && !strstr(i, "guard");
 }
 
-/* A whole model read: kept if free, among the most recent ones */
+/* A whole model read: kept if free, in the order of the list (the most used first) */
 static void on_model(reader_t *r)
 {
     r->models++;
@@ -108,27 +110,11 @@ static void on_model(reader_t *r)
     if (!m) {
         return;
     }
-    if (is_chat_model(m)) {
-        const cJSON *created = cJSON_GetObjectItem(m, "created");
+    if (is_chat_model(m) && r->found_count < FREE_MODELS_KEPT) {
         const cJSON *name = cJSON_GetObjectItem(m, "name");
-        long long when = cJSON_IsNumber(created) ? (long long)created->valuedouble : 0;
-        // Insertion among the kept ones, most recent first
-        int pos = r->found_count;
-        while (pos > 0 && r->found[pos - 1].created < when) {
-            pos--;
-        }
-        if (pos < FREE_MODELS_KEPT) {
-            if (r->found_count == FREE_MODELS_KEPT) {
-                free(r->found[FREE_MODELS_KEPT - 1].id);
-                free(r->found[FREE_MODELS_KEPT - 1].name);
-                r->found_count--;
-            }
-            memmove(&r->found[pos + 1], &r->found[pos], (r->found_count - pos) * sizeof(candidate_t));
-            r->found[pos].id = strdup(cJSON_GetObjectItem(m, "id")->valuestring);
-            r->found[pos].name = short_name(cJSON_IsString(name) ? name->valuestring : r->found[pos].id);
-            r->found[pos].created = when;
-            r->found_count++;
-        }
+        candidate_t *c = &r->found[r->found_count++];
+        c->id = strdup(cJSON_GetObjectItem(m, "id")->valuestring);
+        c->name = short_name(cJSON_IsString(name) ? name->valuestring : c->id);
     }
     cJSON_Delete(m);
 }
@@ -177,7 +163,7 @@ static int offered_free(int count)
     return count - (llm_free_excluded(FREE_AUTO_ID) ? 0 : 1);
 }
 
-/* The models chosen, given to llm.c: the most recent free ones, then the automatic choice; false when there were
+/* The models chosen, given to llm.c: the most used free ones, then the automatic choice; false when there were
  * not enough candidates for Free_models */
 static bool apply(const char *const *ids, const char *const *names, int n)
 {
@@ -214,6 +200,7 @@ static void save_cache(reader_t *r)
 {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "fetched", (double)s_fetched);
+    cJSON_AddStringToObject(root, "order", FREE_ORDER);
     cJSON *list = cJSON_AddArrayToObject(root, "models");
     for (int i = 0; i < r->found_count; i++) {
         cJSON *m = cJSON_CreateObject();
@@ -251,7 +238,10 @@ void openrouter_free_init(void)
     cJSON *root = cJSON_Parse(text);
     free(text);
     const cJSON *fetched = cJSON_GetObjectItem(root, "fetched");
-    s_fetched = cJSON_IsNumber(fetched) ? (time_t)fetched->valuedouble : 0;
+    const cJSON *order = cJSON_GetObjectItem(root, "order");
+    // A list in another order (older firmware: the most recent first) is used until it is read again, soon
+    bool same_order = cJSON_IsString(order) && strcmp(order->valuestring, FREE_ORDER) == 0;
+    s_fetched = (same_order && cJSON_IsNumber(fetched)) ? (time_t)fetched->valuedouble : 0;
     const char *ids[FREE_MODELS_KEPT];
     const char *names[FREE_MODELS_KEPT];
     int count = 0;
@@ -279,8 +269,9 @@ bool openrouter_free_refresh(void)
     time_t now = time(NULL);
     struct tm t;
     localtime_r(&now, &t);
-    if (!settings_get_parameter()->openrouter_free) {
-        return false;   // OpenRouter_free = off: the list is not read
+    const sys_param_t *param = settings_get_parameter();
+    if (!param->openrouter_free || param->free_models == 0) {
+        return false;   // OpenRouter_free = off, or Free_models = 0: the list is not read
     }
     if (t.tm_year + 1900 < 2024 || (s_fetched && now - s_fetched < FREE_REFRESH_S)) {
         return false;   // clock not set yet, or read less than a day ago

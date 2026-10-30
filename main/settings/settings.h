@@ -52,7 +52,7 @@ typedef struct {
     char languages[160];              /* Languages offered: "FR:Français, EN:English" */
     char currency[8];                 /* Of the prices of AGENTS.INI and of the costs: "EUR", "USD"... */
     bool openrouter_free;             /* Free OpenRouter models read from its live list (once a day). */
-    int free_models;                  /* How many of them are offered (1..15), besides "openrouter/free". */
+    int free_models;                  /* How many of them are offered (0..5, the most used), besides "openrouter/free". */
     int end_speech_ms;                /* Silence after which the question is considered finished. */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */
     char voice[VOICE_SIZE];           /* Voice reading the answers: its name in [voices] of AGENTS.INI (Marin, Lea...). */

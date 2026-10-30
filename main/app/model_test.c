@@ -44,11 +44,12 @@ static const char *TAG = "model_test";
 static volatile bool s_running = false;
 static volatile bool s_pending = false;
 
-/* The slow free models asked about after the test, and the next one */
+/* The slow or unavailable free models asked about after the test, and the next one */
 typedef struct {
     char id[80];
     char name[48];
     int avg_ms;
+    char status[64];        /* not available in this test: why ("unavailable: busy"), "" if it answered */
 } slow_model_t;
 /* PSRAM (internal RAM is scarce): LLM_OPENROUTER_FREE_MAX entries, allocated by the first test */
 static slow_model_t *s_slow = NULL;
@@ -476,8 +477,9 @@ static void classify(cJSON *times)
     llm_save_speeds(speeds);
 }
 
-/* ---------- slow free models: exclude them? ---------- */
+/* ---------- slow or unavailable free models: exclude them? ---------- */
 
+/* The free models that did not answer in this test, or answer slower than MODEL_TEST_SLOW_FREE_MS on average */
 static void find_slow_free(const cJSON *times)
 {
     s_slow_count = 0;
@@ -485,16 +487,22 @@ static void find_slow_free(const cJSON *times)
     if (!s_slow && !(s_slow = heap_caps_calloc(LLM_OPENROUTER_FREE_MAX, sizeof(slow_model_t), MALLOC_CAP_SPIRAM))) {
         return;
     }
+    int unavailable = 0;
     for (size_t i = llm_agents_count(); i < llm_model_count && s_slow_count < LLM_OPENROUTER_FREE_MAX; i++) {
         const cJSON *e = cJSON_GetObjectItem(times, llm_models[i].id);
-        if (number_of(e, "n") > 0 && number_of(e, "avg") > MODEL_TEST_SLOW_FREE_MS) {
+        const cJSON *status = cJSON_GetObjectItem(e, "status");
+        bool failed = cJSON_IsString(status) && strcmp(status->valuestring, "ok") != 0;
+        if (failed || (number_of(e, "n") > 0 && number_of(e, "avg") > MODEL_TEST_SLOW_FREE_MS)) {
             slow_model_t *s = &s_slow[s_slow_count++];
             strlcpy(s->id, llm_models[i].id, sizeof(s->id));
             strlcpy(s->name, llm_models[i].spoken, sizeof(s->name));
             s->avg_ms = (int)number_of(e, "avg");
+            strlcpy(s->status, failed ? status->valuestring : "", sizeof(s->status));
+            unavailable += failed;
         }
     }
-    ESP_LOGI(TAG, "%d free model(s) slower than %d ms on average", s_slow_count, MODEL_TEST_SLOW_FREE_MS);
+    ESP_LOGI(TAG, "%d free model(s) not available, %d slower than %d ms on average", unavailable,
+             s_slow_count - unavailable, MODEL_TEST_SLOW_FREE_MS);
 }
 
 static void spoken_seconds(char *buf, size_t size, int ms, bool short_unit);
@@ -505,6 +513,10 @@ bool model_test_exclusion_question(char *buf, size_t size)
         return false;
     }
     const slow_model_t *s = &s_slow[s_slow_next];
+    if (s->status[0]) {
+        snprintf(buf, size, app_lang_get()->exclude_ask_unavailable, s->name);
+        return true;
+    }
     char time_text[32];
     spoken_seconds(time_text, sizeof(time_text), s->avg_ms, false);
     snprintf(buf, size, app_lang_get()->exclude_ask, s->name, time_text);
@@ -518,8 +530,12 @@ void model_test_exclusion_answer(bool yes)
     }
     const slow_model_t *s = &s_slow[s_slow_next++];
     if (yes) {
-        char comment[48];
-        snprintf(comment, sizeof(comment), "%.1f s on average (model test)", s->avg_ms / 1000.0);
+        char comment[80];
+        if (s->status[0]) {
+            snprintf(comment, sizeof(comment), "%s (model test)", s->status);
+        } else {
+            snprintf(comment, sizeof(comment), "%.1f s on average (model test)", s->avg_ms / 1000.0);
+        }
         llm_free_exclude_add(s->id, comment);
         s_free_reload = true;
     }
@@ -667,7 +683,7 @@ static void test_run(void)
             assistant_say(text);
             cJSON_Delete(times);
             free(screen);
-            ESP_LOGI(TAG, "Test done, slow free models asked about");
+            ESP_LOGI(TAG, "Test done, slow or unavailable free models asked about");
             return;
         }
         // The list stays on screen a while, then back to sleep (unless someone speaks meanwhile)

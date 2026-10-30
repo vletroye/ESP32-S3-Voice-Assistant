@@ -65,6 +65,7 @@ typedef struct {
     const char *test_done;          /* %s fastest */
     const char *test_none;
     const char *exclude_ask;        /* %s spoken name, %s its mean time: exclude it? */
+    const char *exclude_ask_unavailable;    /* %s spoken name: not available in the test, exclude it? */
     const char *exclude_yes;        /* before the next question */
     const char *exclude_no;
     const char *exclude_finished;   /* after the last answer */

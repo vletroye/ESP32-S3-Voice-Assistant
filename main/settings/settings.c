@@ -303,8 +303,11 @@ esp_err_t settings_read_parameter_from_nvs(void)
                                   strcmp(value, "0") != 0 && strcasecmp(value, "false") != 0;
     len = sizeof(value);
     g_sys_param.free_models = CONFIG_ASSISTANT_FREE_MODELS;
-    if (nvs_get_str(my_handle, "Free_models", value, &len) == ESP_OK && atoi(value) > 0) {
-        g_sys_param.free_models = atoi(value) > 15 ? 15 : atoi(value);
+    if (nvs_get_str(my_handle, "Free_models", value, &len) == ESP_OK) {
+        str_trim(value);
+        if (isdigit((unsigned char)value[0])) {
+            g_sys_param.free_models = atoi(value) > 5 ? 5 : atoi(value);     // 0: none (Free (auto) aside)
+        }
     }
 
     // Screen off after this many seconds without presence (BOX-3-SENSOR radar), 0: never

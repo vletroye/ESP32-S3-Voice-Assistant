@@ -117,6 +117,7 @@ static const lang_field_t s_fields[] = {
     { "test_done", offsetof(app_lang_t, test_done), FIELD_TEXT, 1 },
     { "test_none", offsetof(app_lang_t, test_none), FIELD_TEXT, 1 },
     { "exclude_ask", offsetof(app_lang_t, exclude_ask), FIELD_TEXT, 1 },
+    { "exclude_ask_unavailable", offsetof(app_lang_t, exclude_ask_unavailable), FIELD_TEXT, 1 },
     { "exclude_yes", offsetof(app_lang_t, exclude_yes), FIELD_TEXT, 1 },
     { "exclude_no", offsetof(app_lang_t, exclude_no), FIELD_TEXT, 1 },
     { "exclude_finished", offsetof(app_lang_t, exclude_finished), FIELD_TEXT, 1 },

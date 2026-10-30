@@ -6,7 +6,7 @@ Sonar**, or a model reached through **OpenRouter**) answers out loud, about **2.
 also plays internet radios, remembers what you ask it to, gives the weather, searches the web and can drive a
 Homey home automation box.
 
-It speaks **French, English, Dutch, German, Spanish and Italian** (French by default), and other languages can be
+It speaks **French, English, Dutch, German, Spanish and Italian** (English by default), and other languages can be
 added.
 
 This page has four parts:
@@ -74,7 +74,9 @@ been largely rewritten.
   - an **OpenAI** key: always needed, it hears you (transcription) and speaks (voice);
   - an **Anthropic** key for Claude, which answers by default.
 
-  With the OpenAI key alone, the assistant works too: choose an OpenAI model for the answers (see step 4).
+  With the OpenAI key alone, the assistant works too, But the OpenAI model will be answering **without using the tools** 
+  web search, weather or home automation. If you prefer alternatives to Anthropic's Models to use these tools (Gemini, Mistral, Grok, Perplexity,
+  OpenRouter), look at what each one can do in [Models and costs](#models-and-costs).
 
 ### 2. Get the API keys
 
@@ -136,16 +138,18 @@ settings, see [Updating the firmware](#updating-the-firmware).
    Claude_key = sk-ant-...
    ```
 
-   Optional, but useful now: the language (`fr` by default; `en`, `nl`, `de`, `es` or `it`), your country (2
-   letters: local news and web results) and your town (weather and local questions):
+   Optional, but useful now: the language (English, `en`, by default; `fr`, `nl`, `de`, `es` or `it` for French,
+   Dutch, German, Spanish or Italian), your country (2 letters: local news and web results) and your town (weather
+   and local questions), for example:
 
    ```ini
-   Language = en
+   Language = fr
    Country = BE
    City = Brussels
    ```
 
-   With an OpenAI key only, also set `Chat_model = gpt-6-luna` (an OpenAI model answers instead of Claude).
+   With an OpenAI key only, leave out `Claude_key` and also set `Chat_model = gpt-6-luna` (an OpenAI model answers
+   instead of Claude; no web search, weather or home automation, see [step 1](#1-what-you-need)).
 3. **Save** the file and **wait until the copy is finished** (Windows may take a few seconds), then press
    **Restart** at the bottom right of the BOX's screen.
 4. The BOX restarts, connects to the Wi-Fi, and shows a welcome screen with the first steps. It is ready.
@@ -282,7 +286,7 @@ At the bottom left of this Configuration screen (the one opened from Settings), 
 Tapping one stops the countdown and asks for a confirmation:
 
 - **Soft reset** (circular arrows): the settings of `CONFIG.INI` go back to their defaults (language, model,
-  voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`, `Base_url`,
+  voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`,
   `Claude_key`, `Gemini_key`, `OpenRouter_key`, `XAI_key`, `Mistral_key`, `Perplexity_key`) and Homey (`Homey_url`, `Homey_key`); the
   `PERSO_<XX>.TXT` files, `MEMORY.TXT` and the comments of `CONFIG.INI` are kept. The `VOICE_<XX>.TXT` and
   `LANG_<XX>.TXT` of the six languages given with the firmware (FR, EN, NL, DE, ES, IT), `COUNTRY.TXT` and
@@ -600,7 +604,6 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 
 | Key | Role | Example |
 | --- | --- | --- |
-| `Base_url` | OpenAI API URL | `https://api.openai.com/v1/` |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`, `gemini-3.8-flash`… |
 | `Stt_model` | Transcription model, one of `[stt]` of `AGENTS.INI` (also set by voice: "change de transcription"); a Mistral model without `Mistral_key` falls back to OpenAI | `gpt-live-transcribe`, `voxtral-mini-transcribe-realtime-3-0` |
 | `Tts_model` | Speech synthesis model, one of `[tts]` (also set by voice: "change de synthèse vocale"); same fallback | `gpt-realtime-2.1-mini`, `voxtral-mini-tts-3-0` |
@@ -608,7 +611,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
 | `Scroll_speed` | Reading speed of the answer on screen, in characters per second (5 to 60): the text scrolls with the speech. Higher = faster | `16` |
 | `Scroll_mode` | How the answer scrolls: `line` moves one whole line at a time when the voice reaches it, `smooth` scrolls continuously | `line` |
-| `Language` | Assistant language, one of the codes of `Languages` (also set from the Settings screen or by voice) | `fr`, `en`, `de`… |
+| `Language` | Assistant language, one of the codes of `Languages` (also set from the Settings screen or by voice) | `en` (default), `fr`, `de`… |
 | `Languages` | Languages offered (Settings screen, voice): `CODE:name` separated by commas, the code being the 2-letter ISO 639-1 code the transcription expects. FR, EN, NL, DE, ES and IT have their files in the firmware; another language added here gets its files, made from the English ones, at the next start (see [Languages](#languages-lang_xxtxt)) | `FR:Français, EN:English, NL:Nederlands, DE:Deutsch, ES:Español, IT:Italiano` |
 | `Country` | Where you live: 2-letter ISO code, for the web search and the model (also set by voice) | `BE`, `FR`… |
 | `City` | Your town (also set by voice) | `Evere` |
@@ -624,7 +627,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Mistral_key` | Mistral AI key (section `[mistral]` of `AGENTS.INI`, and the Voxtral transcription and speech), empty for none | |
 | `Perplexity_key` | Perplexity key, with paid credit (section `[perplexity]` of `AGENTS.INI`), empty for none | `pplx-…` |
 | `OpenRouter_free` | `on`: the free OpenRouter models are read from its live list once a day; `off`: not read (only Free (auto)) | `on` |
-| `Free_models` | How many free OpenRouter models are offered (1 to 15), the most recent ones, besides Free (auto); see the exclusions of `AGENTS.INI` | `6` |
+| `Free_models` | How many free OpenRouter models are offered (0 to 5; 0: none, the list is not read), the most used ones, besides Free (auto); the excluded ones (`AGENTS.INI`) are not counted: the next ones take their place | `3` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
@@ -684,15 +687,17 @@ How to read this table:
 - **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three
   default models were among the most used on OpenRouter in October 2026 (prices as shown there then); change them
   in the `[openrouter]` section of `AGENTS.INI`.
-- **Free OpenRouter models**, read from its live list (`GET https://openrouter.ai/api/v1/models`, ~800 KB, read
-  model by model) at most once a day, while the assistant sleeps: those whose `pricing.prompt` and
-  `pricing.completion` are `"0"`, text in and text only out, without code or moderation models; the **most
-  recent** ones (`Free_models` in `CONFIG.INI`, 6 by default, 15 at most), plus **Free (auto)**
+- **Free OpenRouter models**, read from its live list at most once a day, while the assistant sleeps
+  (`GET https://openrouter.ai/api/v1/models?sort=most-popular&max_price=0&max_output_price=0`: only the free
+  models, ~30 KB, the **most used first**, by tokens processed in the last week): those whose `pricing.prompt` and
+  `pricing.completion` are `"0"`, text in and text only out, without code or moderation models; the first ones
+  (`Free_models` in `CONFIG.INI`, 3 by default, 0 to 5; 0 offers none and does not read the list), plus
+  **Free (auto)**
   (`openrouter/free`: OpenRouter picks a free model for each question). They come after the other OpenRouter
   models, shown as "… (free)". `OpenRouter_free = off` stops reading the list (only Free (auto) is offered).
   Models listed in the **`[openrouter_free_exclude]`** section of `AGENTS.INI` (slow, poor answers…) are never
-  offered: the next most recent ones take their place. The 24 most recent free models of the last list read are
-  kept in `/spiffs/or_free.json` (offered at start-up, and when OpenRouter cannot be reached: tried again an hour
+  offered and are not counted: the next most used ones take their place. The 24 first free models of the last list
+  read are kept in `/spiffs/or_free.json` (a list kept by an older firmware, sorted by date, is read again at once) (offered at start-up, and when OpenRouter cannot be reached: tried again an hour
   later), so that a change of `Free_models` or of the exclusions applies at the next start; when they are not
   enough, the list is read again at the next opportunity. They still need `OpenRouter_key`, and have usage limits
   (about 50 requests a day without bought credit).
@@ -860,10 +865,12 @@ conversation nor tools** but with the same instructions. The model chosen and it
   the range (between the fastest and the slowest mean) nearest the fastest, `slow` in the third nearest the
   slowest, `average` otherwise. A single very slow model widens the range and makes the others `fast`. The free
   models are not in `AGENTS.INI` and do not count. Comments and other lines of the file are kept.
-- Then, for each **free OpenRouter model slower than 5 s on average**, the assistant asks: "Le modèle gratuit
-  Flint fait 7,2 secondes en moyenne. Dois-je l'exclure ?" and listens. "Oui" adds it to
-  `[openrouter_free_exclude]` of `AGENTS.INI` (with its time as a comment), "non" keeps it; then it asks about
-  the next one. Any other sentence ends the questions (and is answered as usual); the answer can also be given
+- Then, for each **free OpenRouter model slower than 5 s on average** or **not available in this test**, the
+  assistant asks: "Le modèle gratuit Flint fait 7,2 secondes en moyenne. Dois-je l'exclure ?" / "Le modèle gratuit
+  Flint n'était pas disponible. Dois-je l'exclure ?" (`exclude_ask_unavailable` of `LANG_<XX>.TXT`) and listens.
+  "Oui" adds it to `[openrouter_free_exclude]` of `AGENTS.INI` (with its time, or why it was not available, as a
+  comment), "non" keeps it; then it asks about the next one. The models of the other sections of `AGENTS.INI`
+  are never excluded. Any other sentence ends the questions (and is answered as usual); the answer can also be given
   within 30 s after "Bonjour ESP". Once answered, the free models offered are chosen again at once: an excluded
   model is replaced by the next most recent one (`MODEL_TEST_SLOW_FREE_MS` in `model_test.c`).
 - **Speech models first**: each model of `[tts]` says `speech_test_phrase` of `LANG_<XX>.TXT` ("Bonjour, je
@@ -1430,14 +1437,14 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 
 | Option | Default | Role |
 | --- | --- | --- |
-| `CONFIG_ASSISTANT_LANGUAGE` | `fr` | Language when `Language` is not set |
+| `CONFIG_ASSISTANT_LANGUAGE` | `en` | Language when `Language` is not set |
 | `CONFIG_ASSISTANT_LANGUAGES` | `FR:Français, EN:English, NL:Nederlands, DE:Deutsch, ES:Español, IT:Italiano` | Languages offered when `Languages` is not set |
 | `CONFIG_ASSISTANT_CHAT_MODEL` | `claude-haiku-5-5` | Model when `Chat_model` is not set |
 | `CONFIG_ASSISTANT_STT_MODEL` | `gpt-live-transcribe` | Transcription model when `Stt_model` is not set |
 | `CONFIG_ASSISTANT_END_OF_SPEECH_MS` | `900` | Silence that ends the question |
 | `CONFIG_ASSISTANT_TTS_MODEL` | `gpt-realtime-2.1-mini` | Speech synthesis model when `Tts_model` is not set |
 | `CONFIG_ASSISTANT_TTS_VOICE` | `marin` | Voice (a name of `[voices]`) when `Voice` is not set |
-| `CONFIG_ASSISTANT_OPENAI_URL` | `https://api.openai.com/v1/` | `Base_url` of a new `CONFIG.INI` |
+| `CONFIG_ASSISTANT_OPENAI_URL` | `https://api.openai.com/v1/` | OpenAI's API (GPT answers, transcription, speech); not in `CONFIG.INI` (OpenAI's European endpoint: `https://eu.api.openai.com/v1/`) |
 | `CONFIG_ASSISTANT_SHOW_CLOCK` | `on` | Clock on the sleep screen when `Show_clock` is not set |
 | `CONFIG_ASSISTANT_CURRENCY` | `EUR` | Currency when `Currency` is not set |
 | `CONFIG_ASSISTANT_SLEEP_AFTER_CMD` | `off` | Sleep after a local voice command when `Sleep_after_cmd` is not set |
@@ -1448,7 +1455,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
 | `CONFIG_ASSISTANT_OPENROUTER_FREE` | `on` | Free OpenRouter models read when `OpenRouter_free` is not set |
-| `CONFIG_ASSISTANT_FREE_MODELS` | `6` | Free OpenRouter models offered when `Free_models` is not set |
+| `CONFIG_ASSISTANT_FREE_MODELS` | `3` | Free OpenRouter models offered when `Free_models` is not set (0 to 5) |
 | `CONFIG_ASSISTANT_CONFIRM_OFF` | `socket` | Homey classes confirmed before being turned off when `Confirm_off` is not set |
 | `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |

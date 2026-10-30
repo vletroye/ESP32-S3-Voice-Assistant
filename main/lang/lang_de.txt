@@ -102,12 +102,15 @@ test_none = Test beendet, aber kein Modell hat geantwortet. Die Einzelheiten ste
 # %s spoken name, %s its mean time: exclude it?
 exclude_ask = Das kostenlose Modell %s braucht im Durchschnitt %s. Soll ich es ausschließen?
 
+# %s spoken name: not available in the test, exclude it?
+exclude_ask_unavailable = Das kostenlose Modell %s war nicht verfügbar. Soll ich es ausschließen?
+
 # before the next question
 exclude_yes = Es ist ausgeschlossen.
 exclude_no = In Ordnung, ich behalte es.
 
 # after the last answer
-exclude_finished = Das war das letzte langsame Modell.
+exclude_finished = Das war das letzte.
 
 # "quels sont les modèles les plus rapides", %s: "Haiku (0,8 seconde), Flash-Lite (1,1 seconde) et Luna (1,4 seconde)"
 fastest_models = Die schnellsten Modelle sind %s.

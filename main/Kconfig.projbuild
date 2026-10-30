@@ -10,7 +10,7 @@ menu "Example Configuration"
 
     config ASSISTANT_LANGUAGE
         string "Default assistant language"
-        default "fr"
+        default "en"
         help
             ISO-639-1 code (fr, en, ...) used for speech transcription, the assistant's
             answers and the on-screen texts. Overridden by the "Language" key of the
@@ -133,10 +133,10 @@ menu "Example Configuration"
 
     config ASSISTANT_FREE_MODELS
         int "Free OpenRouter models offered"
-        default 6
-        range 1 15
+        default 3
+        range 0 5
         help
-            The most recent free models of OpenRouter's live list offered, besides "openrouter/free".
+            The most used free models of OpenRouter's live list offered (0: none), besides "openrouter/free".
             Default of Free_models in CONFIG.INI, which takes precedence.
 
     config ASSISTANT_CONFIRM_OFF

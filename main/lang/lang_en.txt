@@ -101,12 +101,15 @@ test_none = Test finished, but no model answered. The details are in SPEED.TXT.
 # %s spoken name, %s its mean time: exclude it?
 exclude_ask = The free model %s takes %s on average. Should I exclude it?
 
+# %s spoken name: not available in the test, exclude it?
+exclude_ask_unavailable = The free model %s was not available. Should I exclude it?
+
 # before the next question
 exclude_yes = It is excluded.
 exclude_no = All right, I keep it.
 
 # after the last answer
-exclude_finished = That was the last slow model.
+exclude_finished = That was the last one.
 
 # "quels sont les modèles les plus rapides", %s: "Haiku (0,8 seconde), Flash-Lite (1,1 seconde) et Luna (1,4 seconde)"
 fastest_models = The fastest models are %s.

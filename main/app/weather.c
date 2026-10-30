@@ -17,7 +17,7 @@
 #include "cJSON.h"
 #include "llm_sse.h"
 #include "weather.h"
-#include "app_memory.h"
+#include "file_memory.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 

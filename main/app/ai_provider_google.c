@@ -17,8 +17,8 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
-#include "gemini_chat.h"
-#include "costs.h"
+#include "ai_provider_google.h"
+#include "file_costs.h"
 #include "llm_sse.h"
 
 #define GEMINI_BASE_URL             "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -100,13 +100,15 @@ void gemini_chat_reset(void)
 /* Map an API error to the error kinds shown to the user */
 static llm_error_t classify_error(int status, const char *api_status, const char *message)
 {
+    // First: prepaid credits depleted, billing not enabled (sometimes with PERMISSION_DENIED)
+    if (message && (strcasestr(message, "billing") || strcasestr(message, "credit") ||
+                    strcasestr(message, "prepay"))) {
+        return LLM_ERR_CREDIT;
+    }
     if (status == 401 || status == 403 || (message && strstr(message, "API key")) ||
             (api_status && (strcmp(api_status, "UNAUTHENTICATED") == 0 ||
                             strcmp(api_status, "PERMISSION_DENIED") == 0))) {
         return LLM_ERR_AUTH;
-    }
-    if (message && (strstr(message, "billing") || strstr(message, "credit"))) {
-        return LLM_ERR_CREDIT;
     }
     if (status == 429 || status >= 500 || (api_status && (strcmp(api_status, "RESOURCE_EXHAUSTED") == 0 ||
                                                            strcmp(api_status, "UNAVAILABLE") == 0))) {

@@ -11,7 +11,7 @@
 #include <strings.h>
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "persona.h"
+#include "file_persona.h"
 
 #define PERSONA_FILE_FORMAT     "/spiffs/persona_%s.txt"
 #define PERSONA_FILE_MAX        16384   /* as on the configuration drive */

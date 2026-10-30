@@ -3,8 +3,9 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * xAI client (Grok models): Chat Completions API (OpenAI-compatible) with server-sent events, the conversation
- * kept on the device and sent with each request.
+ * Mistral AI client (Mistral Small, Medium, Large...): Chat Completions API (OpenAI-like) with
+ * server-sent events, the conversation kept on the device and sent with each request. Mistral rejects the fields
+ * it does not know: no stream_options (the usage comes with the last chunk anyway).
  */
 
 #include <stdio.h>
@@ -17,22 +18,25 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
-#include "xai_chat.h"
-#include "costs.h"
+#include "ai_provider_mistral.h"
+#include "file_costs.h"
 #include "llm_sse.h"
 
-#define XAI_URL              "https://api.x.ai/v1/chat/completions"
-/* A tiny free answer (the key's details): opens the TLS connection in advance */
-#define XAI_PREWARM_URL      "https://api.x.ai/v1/api-key"
+#define MISTRAL_URL          "https://api.mistral.ai/v1/chat/completions"
+/* A tiny free answer (the model's card): opens the TLS connection in advance */
+#define MISTRAL_MODELS_URL   "https://api.mistral.ai/v1/models/"
 /* Counts the reasoning tokens too: room for a short spoken answer after a little reasoning */
-#define XAI_MAX_TOKENS       2048
-#define XAI_TIMEOUT_MS       30000
-#define XAI_READ_CHUNK       512
+#define MISTRAL_MAX_TOKENS   2048
+#define MISTRAL_TIMEOUT_MS   30000
+#define MISTRAL_READ_CHUNK   512
+#define MISTRAL_URL_SIZE     160
 /* History kept for follow-up questions, cut in one go to keep its start (and the providers' caches) stable */
-#define XAI_HISTORY_MAX_MSGS 24
-#define XAI_HISTORY_TRIM_TO  12
+#define MISTRAL_HISTORY_MAX_MSGS 24
+#define MISTRAL_HISTORY_TRIM_TO  12
 
-static const char *TAG = "xai";
+static const char *TAG = "mistral";
+
+static char s_prewarm_url[MISTRAL_URL_SIZE];
 
 static char *s_auth = NULL;             /* "Bearer <key>" */
 static char *s_model = NULL;
@@ -67,41 +71,43 @@ static void replace_str(char **dst, const char *src)
     *dst = (src && src[0]) ? strdup(src) : NULL;
 }
 
-esp_err_t xai_chat_init(const char *api_key, const char *model, const char *instructions, const char *effort)
+esp_err_t mistral_chat_init(const char *api_key, const char *model, const char *instructions, const char *effort)
 {
     ESP_RETURN_ON_FALSE(api_key && api_key[0] && model && model[0], ESP_ERR_INVALID_ARG, TAG,
                         "API key and model required");
     replace_str(&s_model, model);
+    snprintf(s_prewarm_url, sizeof(s_prewarm_url), "%s%s", MISTRAL_MODELS_URL, s_model);
     free(s_auth);
     s_auth = malloc(strlen(api_key) + 8);
     ESP_RETURN_ON_FALSE(s_auth, ESP_ERR_NO_MEM, TAG, "no memory");
     sprintf(s_auth, "Bearer %s", api_key);
     replace_str(&s_instructions, instructions);
     replace_str(&s_effort, (effort && strcmp(effort, "-") != 0) ? effort : NULL);
-    xai_chat_reset();
+    mistral_chat_reset();
     ESP_LOGI(TAG, "model: %s, reasoning effort: %s, streaming", s_model, s_effort ? s_effort : "(default)");
     return ESP_OK;
 }
 
-void xai_chat_set_instructions(const char *instructions)
+void mistral_chat_set_instructions(const char *instructions)
 {
     replace_str(&s_instructions, instructions);
 }
 
-void xai_chat_reset(void)
+void mistral_chat_reset(void)
 {
     cJSON_Delete(s_messages);
     s_messages = cJSON_CreateArray();
 }
 
-/* Map an API error to the error kinds shown to the user (a team without credit gets a 403 that says so) */
+/* Map an API error to the error kinds shown to the user */
 static llm_error_t classify_error(int code, const char *message)
 {
-    if (code == 402 || (message && (strcasestr(message, "credit") || strcasestr(message, "spending limit")))) {
+    if (code == 402 || (message && (strcasestr(message, "credit") || strcasestr(message, "billing") ||
+                                    strcasestr(message, "payment") || strcasestr(message, "quota")))) {
         return LLM_ERR_CREDIT;
     }
-    if (code == 400 && message && strcasestr(message, "api key")) {
-        return LLM_ERR_AUTH;    // "Incorrect API key provided"
+    if (message && strcasestr(message, "api key")) {
+        return LLM_ERR_AUTH;    // {"detail": "Invalid API Key"} (after the credit: checked first)
     }
     if (code == 401 || code == 403) {
         return LLM_ERR_AUTH;
@@ -113,13 +119,19 @@ static llm_error_t classify_error(int code, const char *message)
 }
 
 /*
- * {"code": "...", "error": "message"} (xAI's HTTP errors) or {"error": {"code", "message"}} (OpenAI style, also
- * in the stream)
+ * {"detail": "message"} (authentication), {"object": "error", "message", "type", "code"} (Mistral's errors) or
+ * {"error": {"message", "code"}}
  */
 static llm_error_t error_from_json(int status, const cJSON *json)
 {
     const cJSON *api_error = cJSON_GetObjectItem(json, "error");
-    const cJSON *message = cJSON_IsString(api_error) ? api_error : cJSON_GetObjectItem(api_error, "message");
+    if (!cJSON_IsObject(api_error)) {
+        api_error = json;
+    }
+    const cJSON *message = cJSON_GetObjectItem(api_error, "message");
+    if (!cJSON_IsString(message)) {
+        message = cJSON_GetObjectItem(json, "detail");
+    }
     const cJSON *code = cJSON_GetObjectItem(api_error, "code");
     int code_num = cJSON_IsNumber(code) ? code->valueint : status;
     const char *text = cJSON_IsString(message) ? message->valuestring : NULL;
@@ -127,18 +139,42 @@ static llm_error_t error_from_json(int status, const cJSON *json)
     return classify_error(code_num, text);
 }
 
+/*
+ * "reasoning_effort low is not supported for this model, supported values: [<ReasoningEffort.high: 'high'>,
+ * <ReasoningEffort.none: 'none'>]": the effort of AGENTS.INI is to be corrected; the values it takes, "high, none",
+ * in llm_effort_values
+ */
+static bool effort_refused(const char *body)
+{
+    const char *values = strstr(body, "reasoning_effort") ? strstr(body, "supported values") : NULL;
+    if (!values) {
+        return false;
+    }
+    strlcpy(llm_effort_refused, s_effort, sizeof(llm_effort_refused));
+    llm_effort_values[0] = '\0';
+    for (const char *q = strstr(values, ": '"); q; q = strstr(q + 1, ": '")) {
+        const char *start = q + 3;
+        const char *end = strchr(start, '\'');
+        if (!end) {
+            break;
+        }
+        size_t len = strlen(llm_effort_values);
+        snprintf(llm_effort_values + len, sizeof(llm_effort_values) - len, "%s%.*s", len ? ", " : "",
+                 (int)(end - start), start);
+    }
+    return true;
+}
+
 static char *build_request(void)
 {
     cJSON *req = cJSON_CreateObject();
     cJSON_AddStringToObject(req, "model", s_model);
     cJSON_AddBoolToObject(req, "stream", true);
-    cJSON_AddNumberToObject(req, "max_tokens", XAI_MAX_TOKENS);
+    cJSON_AddNumberToObject(req, "max_tokens", MISTRAL_MAX_TOKENS);
     if (s_effort) {
-        // Reasoning kept short (the answer is spoken; its text is not returned); "-" in AGENTS.INI leaves it out
-        // for the models that reject the parameter
+        // Reasoning kept short or left out ("none"): the answer is spoken; "-" in AGENTS.INI does not send it
         cJSON_AddStringToObject(req, "reasoning_effort", s_effort);
     }
-    cJSON_AddItemToObject(cJSON_AddObjectToObject(req, "stream_options"), "include_usage", cJSON_CreateTrue());
     /* The instructions, then the history (referenced, not copied: it stays owned by s_messages) */
     cJSON *messages = cJSON_AddArrayToObject(req, "messages");
     if (s_instructions) {
@@ -158,6 +194,20 @@ static char *build_request(void)
 
 /* ---------- SSE event handling ---------- */
 
+static void add_text(stream_t *st, const char *text)
+{
+    if (!text[0]) {
+        return;
+    }
+    llm_buf_append(&st->text, text, strlen(text));
+    if (!st->first_text_us) {
+        st->first_text_us = esp_timer_get_time();
+    }
+    if (st->on_text) {
+        st->on_text(text, st->ctx);
+    }
+}
+
 static void sse_dispatch(const char *data, void *ctx)
 {
     stream_t *st = (stream_t *)ctx;
@@ -171,7 +221,8 @@ static void sse_dispatch(const char *data, void *ctx)
         return;
     }
     const cJSON *api_error = cJSON_GetObjectItem(json, "error");
-    if (cJSON_IsObject(api_error) || cJSON_IsString(api_error)) {
+    const cJSON *object = cJSON_GetObjectItem(json, "object");
+    if (cJSON_IsObject(api_error) || (cJSON_IsString(object) && strcmp(object->valuestring, "error") == 0)) {
         st->error = error_from_json(200, json);
         st->done = true;
         cJSON_Delete(json);
@@ -179,13 +230,17 @@ static void sse_dispatch(const char *data, void *ctx)
     }
     const cJSON *choice = cJSON_GetArrayItem(cJSON_GetObjectItem(json, "choices"), 0);
     const cJSON *content = cJSON_GetObjectItem(cJSON_GetObjectItem(choice, "delta"), "content");
-    if (cJSON_IsString(content) && content->valuestring[0]) {
-        llm_buf_append(&st->text, content->valuestring, strlen(content->valuestring));
-        if (!st->first_text_us) {
-            st->first_text_us = esp_timer_get_time();
-        }
-        if (st->on_text) {
-            st->on_text(content->valuestring, st->ctx);
+    if (cJSON_IsString(content)) {
+        add_text(st, content->valuestring);
+    } else if (cJSON_IsArray(content)) {
+        // A reasoning model: [{"type": "thinking", ...}, {"type": "text", "text": "..."}], the thinking left out
+        const cJSON *part;
+        cJSON_ArrayForEach(part, content) {
+            const cJSON *type = cJSON_GetObjectItem(part, "type");
+            const cJSON *part_text = cJSON_GetObjectItem(part, "text");
+            if (cJSON_IsString(type) && strcmp(type->valuestring, "text") == 0 && cJSON_IsString(part_text)) {
+                add_text(st, part_text->valuestring);
+            }
         }
     }
     const cJSON *finish = cJSON_GetObjectItem(choice, "finish_reason");
@@ -220,9 +275,9 @@ static esp_http_client_handle_t get_client(void)
 {
     if (!s_client) {
         esp_http_client_config_t config = {
-            .url = XAI_URL,
+            .url = MISTRAL_URL,
             .method = HTTP_METHOD_POST,
-            .timeout_ms = XAI_TIMEOUT_MS,
+            .timeout_ms = MISTRAL_TIMEOUT_MS,
             .crt_bundle_attach = esp_crt_bundle_attach,
             .keep_alive_enable = true,
         };
@@ -266,7 +321,7 @@ static esp_err_t send_request(const char *body, int *status)
     return ESP_FAIL;
 }
 
-void xai_chat_prewarm(void)
+void mistral_chat_prewarm(void)
 {
     if (!s_auth) {
         return;
@@ -276,7 +331,7 @@ void xai_chat_prewarm(void)
     if (!client) {
         return;
     }
-    esp_http_client_set_url(client, XAI_PREWARM_URL);
+    esp_http_client_set_url(client, s_prewarm_url);
     esp_http_client_set_method(client, HTTP_METHOD_GET);
     int status = -1;
     if (esp_http_client_open(client, 0) == ESP_OK && esp_http_client_fetch_headers(client) >= 0) {
@@ -287,7 +342,7 @@ void xai_chat_prewarm(void)
         }
     }
     if (status == 200 && esp_http_client_is_complete_data_received(client)) {
-        esp_http_client_set_url(client, XAI_URL);
+        esp_http_client_set_url(client, MISTRAL_URL);
         esp_http_client_set_method(client, HTTP_METHOD_POST);
     } else {
         drop_client();
@@ -298,21 +353,21 @@ void xai_chat_prewarm(void)
 /* Keep the history short; older exchanges are dropped in user/assistant pairs */
 static void trim_history(void)
 {
-    if (cJSON_GetArraySize(s_messages) <= XAI_HISTORY_MAX_MSGS) {
+    if (cJSON_GetArraySize(s_messages) <= MISTRAL_HISTORY_MAX_MSGS) {
         return;
     }
-    while (cJSON_GetArraySize(s_messages) > XAI_HISTORY_TRIM_TO) {
+    while (cJSON_GetArraySize(s_messages) > MISTRAL_HISTORY_TRIM_TO) {
         cJSON_DeleteItemFromArray(s_messages, 0);
         cJSON_DeleteItemFromArray(s_messages, 0);
     }
 }
 
-const cJSON *xai_chat_history(void)
+const cJSON *mistral_chat_history(void)
 {
     return s_messages;
 }
 
-void xai_chat_set_history(cJSON *messages)
+void mistral_chat_set_history(cJSON *messages)
 {
     cJSON_Delete(s_messages);
     s_messages = messages;
@@ -327,7 +382,7 @@ static void add_message(const char *role, const char *text)
     cJSON_AddItemToArray(s_messages, msg);
 }
 
-llm_error_t xai_chat_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
+llm_error_t mistral_chat_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
 {
     if (full_text) {
         *full_text = NULL;
@@ -360,13 +415,20 @@ llm_error_t xai_chat_stream(const char *text, llm_text_cb_t on_text, void *ctx, 
         goto end;
     }
 
-    char chunk[XAI_READ_CHUNK];
+    char chunk[MISTRAL_READ_CHUNK];
     int n;
     if (status != 200) {
         /* Errors before streaming are a plain JSON body */
         llm_buf_t err_body = {0};
         while ((n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
             llm_buf_append(&err_body, chunk, n);
+        }
+        if (status == 400 && s_effort && err_body.len && effort_refused(err_body.p)) {
+            ESP_LOGE(TAG, "HTTP 400: %.300s", err_body.p);
+            st.error = LLM_ERR_EFFORT;
+            llm_buf_free(&err_body);
+            drop_client();
+            goto end;
         }
         cJSON *json = err_body.len ? cJSON_Parse(err_body.p) : NULL;
         if (json) {
@@ -411,8 +473,7 @@ llm_error_t xai_chat_stream(const char *text, llm_text_cb_t on_text, void *ctx, 
         }
     }
 
-    // The reasoning tokens are billed as output; counted in completion_tokens or only in total_tokens, depending
-    // on the model: the output billed is what total_tokens holds beyond the prompt
+    // The reasoning tokens are billed as output: the output billed is what total_tokens holds beyond the prompt
     int billed_out = st.output_tokens;
     if (st.total_tokens > st.input_tokens + st.output_tokens) {
         billed_out = st.total_tokens - st.input_tokens;

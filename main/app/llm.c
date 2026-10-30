@@ -16,11 +16,13 @@
 #include "esp_log.h"
 #include "cJSON.h"
 #include "llm.h"
-#include "claude_client.h"
-#include "openai_chat.h"
-#include "gemini_chat.h"
-#include "openrouter_chat.h"
-#include "xai_chat.h"
+#include "ai_provider_anthropic.h"
+#include "ai_provider_openai.h"
+#include "ai_provider_google.h"
+#include "ai_provider_openrouter.h"
+#include "ai_provider_xai.h"
+#include "ai_provider_mistral.h"
+#include "ai_provider_perplexity.h"
 #include "tools.h"
 
 static const char *TAG = "llm";
@@ -71,6 +73,8 @@ static const struct {
     { "google", LLM_PROVIDER_GEMINI },
     { "openrouter", LLM_PROVIDER_OPENROUTER },
     { "xai", LLM_PROVIDER_XAI },
+    { "mistral", LLM_PROVIDER_MISTRAL },
+    { "perplexity", LLM_PROVIDER_PERPLEXITY },
 };
 
 /* Without the blanks around it (in place) */
@@ -457,6 +461,35 @@ static const char *section_line(const char *text, const char *header)
     return NULL;
 }
 
+/*
+ * A line of the firmware's [per_call] missing in the [per_call] of AGENTS.INI (written by an older firmware):
+ * inserted under its header
+ */
+static bool add_missing_call(const char *text, const char *id)
+{
+    const char *header = section_line(text, "[" PER_CALL_SECTION "]");
+    const char *def_header = section_line(s_agents_default_start, "[" PER_CALL_SECTION "]");
+    const char *def_line = def_header ? strstr(def_header, id) : NULL;
+    if (!header || !def_line || strstr(header, id)) {
+        return false;
+    }
+    const char *def_end = strchr(def_line, '\n');
+    const char *after = strchr(header, '\n');
+    if (!def_end || !after) {
+        return false;
+    }
+    FILE *f = fopen(AGENTS_FILE, "w");
+    if (!f) {
+        return false;
+    }
+    fwrite(text, 1, (size_t)(after + 1 - text), f);
+    fwrite(def_line, 1, (size_t)(def_end + 1 - def_line), f);
+    fputs(after + 1, f);
+    fclose(f);
+    ESP_LOGI(TAG, "%s added to %s", id, AGENTS_FILE);
+    return true;
+}
+
 /* A section of the firmware's file missing in AGENTS.INI (written by an older firmware): appended to it */
 static bool add_missing_section(const char *text, const char *section)
 {
@@ -521,11 +554,15 @@ void llm_load_models(void)
         }
         ESP_LOGI(TAG, "%s %s (%u bytes)", ok ? "Installed" : "Could not install", AGENTS_FILE, (unsigned)len);
     } else {
-        // A file of an older firmware: the sections added since, and the prices of the models it lacks
+        // A file of an older firmware: the sections added since, and the prices of the models it lacks. The
+        // [per_call] line first: it rewrites the file from text, which the sections appended would not be in
+        add_missing_call(text, "perplexity:web_search");
         add_missing_section(text, FREE_EXCLUDE_SECTION);
         add_missing_section(text, SPEECH_SECTION);
         add_missing_section(text, PER_CALL_SECTION);
         add_missing_section(text, "xai");          // Grok models, offered since xAI is supported
+        add_missing_section(text, "mistral");      // and the providers added since
+        add_missing_section(text, "perplexity");
         rewrite_agents(NULL);
     }
     free(text);
@@ -675,6 +712,8 @@ static char *s_openai_url = NULL;
 static char *s_gemini_key = NULL;
 static char *s_openrouter_key = NULL;
 static char *s_xai_key = NULL;
+static char *s_mistral_key = NULL;
+static char *s_perplexity_key = NULL;
 static char *s_system = NULL;
 static bool s_ready = false;
 static char s_model[64];
@@ -701,16 +740,27 @@ llm_provider_t llm_provider_of(const char *model)
     if (strncmp(model, "grok-", 5) == 0) {
         return LLM_PROVIDER_XAI;
     }
+    if (strncmp(model, "mistral-", 8) == 0 || strncmp(model, "magistral-", 10) == 0 ||
+            strncmp(model, "ministral-", 10) == 0) {
+        return LLM_PROVIDER_MISTRAL;
+    }
+    if (strncmp(model, "sonar", 5) == 0) {
+        return LLM_PROVIDER_PERPLEXITY;
+    }
     return LLM_PROVIDER_CLAUDE;
 }
 
 const char *llm_provider_name(llm_provider_t provider)
 {
     return provider == LLM_PROVIDER_OPENAI ? "GPT" : provider == LLM_PROVIDER_GEMINI ? "Gemini" :
-           provider == LLM_PROVIDER_OPENROUTER ? "OpenRouter" : provider == LLM_PROVIDER_XAI ? "Grok" : "Claude";
+           provider == LLM_PROVIDER_OPENROUTER ? "OpenRouter" : provider == LLM_PROVIDER_XAI ? "Grok" :
+           provider == LLM_PROVIDER_MISTRAL ? "Mistral" : provider == LLM_PROVIDER_PERPLEXITY ? "Perplexity" : "Claude";
 }
 
 /* Effort of a listed model; "low" for a model only known from CONFIG.INI (accepted by every recent model) */
+char llm_effort_refused[16];
+char llm_effort_values[64];
+
 static const char *effort_of(const char *model)
 {
     for (size_t i = 0; i < llm_model_count; i++) {
@@ -726,7 +776,9 @@ static const cJSON *history_get(void)
     return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_history() :
            s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_history() :
            s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_history() :
-           s_provider == LLM_PROVIDER_XAI ? xai_chat_history() : claude_client_history();
+           s_provider == LLM_PROVIDER_XAI ? xai_chat_history() :
+           s_provider == LLM_PROVIDER_MISTRAL ? mistral_chat_history() :
+           s_provider == LLM_PROVIDER_PERPLEXITY ? perplexity_chat_history() : claude_client_history();
 }
 
 /* Give a conversation (taken over) to the client of the current provider */
@@ -740,6 +792,10 @@ static void history_set(cJSON *messages)
         openrouter_chat_set_history(messages);
     } else if (s_provider == LLM_PROVIDER_XAI) {
         xai_chat_set_history(messages);
+    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
+        mistral_chat_set_history(messages);
+    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
+        perplexity_chat_set_history(messages);
     } else {
         claude_client_set_history(messages);
     }
@@ -846,6 +902,20 @@ static esp_err_t client_init(const char *model, bool tools)
         } else {
             ret = xai_chat_init(s_xai_key, model, s_system, effort_of(model));
         }
+    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
+        if (s_mistral_key[0] == '\0') {
+            ESP_LOGW(TAG, "No Mistral_key configured for %s", model);
+            ret = ESP_ERR_INVALID_ARG;
+        } else {
+            ret = mistral_chat_init(s_mistral_key, model, s_system, effort_of(model));
+        }
+    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
+        if (s_perplexity_key[0] == '\0') {
+            ESP_LOGW(TAG, "No Perplexity_key configured for %s", model);
+            ret = ESP_ERR_INVALID_ARG;
+        } else {
+            ret = perplexity_chat_init(s_perplexity_key, model, s_system, effort_of(model));
+        }
     } else if (s_claude_key[0] == '\0') {
         ESP_LOGW(TAG, "No Claude_key configured for %s", model);
         ret = ESP_ERR_INVALID_ARG;
@@ -860,7 +930,7 @@ static esp_err_t client_init(const char *model, bool tools)
 
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
                    const char *gemini_key, const char *openrouter_key, const char *xai_key,
-                   const char *system_prompt)
+                   const char *mistral_key, const char *perplexity_key, const char *system_prompt)
 {
     // Called again when the model is changed at run time: wait for an answer being generated
     if (s_lock) {
@@ -872,6 +942,8 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
     keep(&s_gemini_key, gemini_key);
     keep(&s_openrouter_key, openrouter_key);
     keep(&s_xai_key, xai_key);
+    keep(&s_mistral_key, mistral_key);
+    keep(&s_perplexity_key, perplexity_key);
     keep(&s_system, system_prompt);
     s_provider = llm_provider_of(model);
     esp_err_t ret = client_init(model, true);
@@ -904,6 +976,10 @@ void llm_set_system_prompt(const char *system_prompt)
         openrouter_chat_set_instructions(system_prompt);
     } else if (s_provider == LLM_PROVIDER_XAI) {
         xai_chat_set_instructions(system_prompt);
+    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
+        mistral_chat_set_instructions(system_prompt);
+    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
+        perplexity_chat_set_instructions(system_prompt);
     } else {
         claude_client_set_system(system_prompt);
     }
@@ -943,6 +1019,8 @@ static llm_error_t client_stream(const char *text, llm_text_cb_t on_text, void *
            : s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_stream(text, on_text, ctx, full_text)
            : s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_stream(text, on_text, ctx, full_text)
            : s_provider == LLM_PROVIDER_XAI ? xai_chat_stream(text, on_text, ctx, full_text)
+           : s_provider == LLM_PROVIDER_MISTRAL ? mistral_chat_stream(text, on_text, ctx, full_text)
+           : s_provider == LLM_PROVIDER_PERPLEXITY ? perplexity_chat_stream(text, on_text, ctx, full_text)
            : claude_client_stream(text, on_text, ctx, full_text);
 }
 
@@ -1024,6 +1102,10 @@ void llm_prewarm(void)
         openrouter_chat_prewarm();
     } else if (s_provider == LLM_PROVIDER_XAI) {
         xai_chat_prewarm();
+    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
+        mistral_chat_prewarm();
+    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
+        perplexity_chat_prewarm();
     } else {
         claude_client_prewarm();
     }
@@ -1043,6 +1125,10 @@ void llm_reset(void)
         openrouter_chat_reset();
     } else if (s_provider == LLM_PROVIDER_XAI) {
         xai_chat_reset();
+    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
+        mistral_chat_reset();
+    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
+        perplexity_chat_reset();
     } else {
         claude_client_reset();
     }

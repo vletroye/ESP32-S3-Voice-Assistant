@@ -26,12 +26,12 @@
 #include "app_audio.h"
 #include "app_wifi.h"
 #include "settings.h"
-#include "app_lang.h"
+#include "file_lang.h"
 #include "llm.h"
-#include "app_memory.h"
+#include "file_memory.h"
 #include "voice_cmd.h"
-#include "phrases.h"
-#include "openrouter_free.h"
+#include "file_phrases.h"
+#include "ai_provider_openrouter_free.h"
 #include "app_presence.h"
 #include "assistant.h"
 #include "app_volume.h"
@@ -43,12 +43,12 @@
 #include "stt_stream.h"
 #include "cJSON.h"
 #include "model_test.h"
-#include "costs.h"
-#include "persona.h"
-#include "country.h"
+#include "file_costs.h"
+#include "file_persona.h"
+#include "file_country.h"
 #include "radio.h"
 #include "radio_browser.h"
-#include "radio_favorites.h"
+#include "file_radio_favorites.h"
 
 #define LISTEN_SPEAK_PANEL_DELAY_MS     2000
 /* Maximum wait for the final transcript after the end of speech */
@@ -65,6 +65,17 @@ static int64_t s_reply_t0 = 0;
 /* Time to read what the reply shows but does not say (a list after "::"), in ms: the listen panel waits for it */
 static uint32_t s_unread_ms = 0;
 #define UNREAD_MAX_MS   20000
+/* Characters of the reply shown (answer, or local message), for its reading time when it could not be spoken */
+static size_t s_shown_chars = 0;
+/* The reply itself is the "no OpenAI credit" message (not added again under it) */
+static bool s_no_credit_shown = false;
+
+/* Time to read these characters at the scrolling speed of the answers (Scroll_speed), at most UNREAD_MAX_MS */
+static uint32_t reading_ms(size_t chars)
+{
+    uint32_t ms = chars * 1000 / (sys_param->scroll_cps > 0 ? sys_param->scroll_cps : 16);
+    return ms > UNREAD_MAX_MS ? UNREAD_MAX_MS : ms;
+}
 /*
  * Flash writes pause the tasks running from flash (microphone feed included): the conversation is saved once
  * nothing has been heard or played for this long, i.e. after the follow-up listening, not during it
@@ -229,7 +240,16 @@ static void on_reply_audio(tts_event_t event)
     // TTS_EVENT_DONE: the whole reply has been spoken
     ESP_LOGI(TAG, "[timing] reply spoken, %lld ms after the transcription", elapsed_ms(s_reply_t0));
     s_reply_active = false;
-    if (tts_stream_reply_was_choppy()) {
+    if (tts_stream_no_credit()) {
+        // Nothing spoken: the OpenAI credit of the speech is exhausted, said on screen (it cannot be spoken); the
+        // whole reply is to be read before the listen panel comes
+        size_t chars = s_shown_chars;
+        if (!s_no_credit_shown) {
+            ui_ctrl_reply_append_notice(app_lang_get()->speech_no_credit);
+            chars += strlen(app_lang_get()->speech_no_credit);
+        }
+        s_unread_ms = reading_ms(chars);
+    } else if (tts_stream_reply_was_choppy()) {
         // Speech cut or sentences lost: the answer stays readable on screen, say why it was heard badly
         ui_ctrl_reply_append_notice(app_lang_get()->voice_choppy);
     }
@@ -275,7 +295,7 @@ static void on_reply_audio(tts_event_t event)
         // Keep listening so that the conversation can continue without the wake word
         // A list shown but not read: listened to already, the reply stays shown while it is read
         if (s_unread_ms > 0) {
-            ESP_LOGI(TAG, "Listening, the reply stays shown %u ms to read its list", (unsigned)s_unread_ms);
+            ESP_LOGI(TAG, "Listening, the reply stays shown %u ms to be read", (unsigned)s_unread_ms);
         }
         app_sr_start_followup(CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS + s_unread_ms, s_unread_ms);
         return;
@@ -347,6 +367,8 @@ static void reply_begin(void)
     s_reply_local_cmd = false;
     s_reply_goodbye = false;
     s_unread_ms = 0;
+    s_shown_chars = 0;
+    s_no_credit_shown = false;
     tts_stream_begin(on_reply_audio);
 }
 
@@ -398,8 +420,8 @@ static void speak_message(const char *message)
     if (shown && spoken) {
         // The characters not said, read at the scrolling speed of the answers (Scroll_speed)
         size_t unread = strlen(shown) - strlen(spoken);
-        s_unread_ms = unread * 1000 / (sys_param->scroll_cps > 0 ? sys_param->scroll_cps : 16);
-        s_unread_ms = s_unread_ms > UNREAD_MAX_MS ? UNREAD_MAX_MS : s_unread_ms;
+        s_unread_ms = reading_ms(unread);
+        s_shown_chars = strlen(shown);
     }
     sentence_splitter_init(&s_splitter, on_sentence, NULL);
     sentence_splitter_feed(&s_splitter, shown && spoken ? spoken : message);
@@ -430,7 +452,7 @@ static char *build_system_prompt(void)
         snprintf(location, sizeof(location), lang->location_line, where);
     }
     const char *home = sys_param->homey_url[0] ? lang->home_line : "";
-    // Identity, personality and instructions of PERSO_<LANG>.TXT, then what the working requires (app_lang.c),
+    // Identity, personality and instructions of PERSO_<LANG>.TXT, then what the working requires (file_lang.c),
     // the location, the home and the notes to remember
     const char *parts[] = {
         persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY), persona_get(PERSONA_INSTRUCTIONS),
@@ -454,7 +476,7 @@ static char *build_system_prompt(void)
     return prompt;
 }
 
-/* Instructions of the speech synthesis: read word for word (app_lang.c), then the [voice] of PERSO_<LANG>.TXT */
+/* Instructions of the speech synthesis: read word for word (file_lang.c), then the [voice] of PERSO_<LANG>.TXT */
 static char *build_tts_instructions(void)
 {
     char *text = NULL;
@@ -646,6 +668,7 @@ void assistant_set_model(const char *model)
     char *prompt = build_system_prompt();
     llm_init(model, sys_param->claude_key, sys_param->key, sys_param->url,
              sys_param->gemini_key, sys_param->openrouter_key, sys_param->xai_key,
+             sys_param->mistral_key, sys_param->perplexity_key,
              prompt ? prompt : app_lang_get()->system_prompt);
     free(prompt);
     llm_set_location(sys_param->country, sys_param->city);
@@ -705,7 +728,9 @@ void assistant_listen_end(void)
         return;
     }
     if (NULL == text) {
-        speak_message(app_lang_get()->stt_error);
+        // Not understood, or the transcription refused for lack of OpenAI credit (shown: it cannot be spoken either)
+        speak_message(stt_stream_no_credit() ? app_lang_get()->speech_no_credit : app_lang_get()->stt_error);
+        s_no_credit_shown = stt_stream_no_credit();
         return;
     }
 
@@ -789,7 +814,9 @@ void assistant_listen_end(void)
     ui_ctrl_reply_set_logo(llm_provider() == LLM_PROVIDER_OPENAI ? UI_CTRL_LOGO_OPENAI :
                            llm_provider() == LLM_PROVIDER_GEMINI ? UI_CTRL_LOGO_GEMINI :
                            llm_provider() == LLM_PROVIDER_OPENROUTER ? UI_CTRL_LOGO_OPENROUTER :
-                           llm_provider() == LLM_PROVIDER_XAI ? UI_CTRL_LOGO_XAI : UI_CTRL_LOGO_CLAUDE);
+                           llm_provider() == LLM_PROVIDER_XAI ? UI_CTRL_LOGO_XAI :
+                           llm_provider() == LLM_PROVIDER_MISTRAL ? UI_CTRL_LOGO_MISTRAL :
+                           llm_provider() == LLM_PROVIDER_PERPLEXITY ? UI_CTRL_LOGO_PERPLEXITY : UI_CTRL_LOGO_CLAUDE);
     char *question = with_current_time(text);
     llm_error_t llm_err = s_cancelled ? LLM_ERR_OTHER : llm_stream(question ? question : text, on_llm_text, &view,
                                                                   &response);
@@ -811,10 +838,23 @@ void assistant_listen_end(void)
         sentence_splitter_discard(&s_splitter);
         ui_ctrl_reply_set_logo(UI_CTRL_LOGO_LOCAL);
         reply_begin();
-        const char *message = app_lang_get()->llm_errors[llm_provider()][llm_err];
+        char *effort_message = NULL;
+        if (llm_err == LLM_ERR_EFFORT) {
+            // "Le modèle Mistral Medium 3.5 refuse le niveau de raisonnement low. Dans AGENTS.INI, mettez : high, none."
+            const char *model = sys_param->chat_model;
+            for (size_t i = 0; i < llm_model_count; i++) {
+                if (strcmp(llm_models[i].id, sys_param->chat_model) == 0) {
+                    model = llm_models[i].label;
+                }
+            }
+            asprintf(&effort_message, app_lang_get()->error_effort, model, llm_effort_refused, llm_effort_values);
+        }
+        const char *message = effort_message ? effort_message :
+                              app_lang_get()->llm_errors[llm_provider()][llm_err == LLM_ERR_EFFORT ? LLM_ERR_OTHER : llm_err];
         tts_stream_say(message);
         free(response);
         response = strdup(message);
+        free(effort_message);
         if (view.text) {
             view.text[prefix_len] = '\0';
             view.len = prefix_len;
@@ -823,6 +863,7 @@ void assistant_listen_end(void)
         ESP_LOGW(TAG, "Chat error %d: speaking \"%s\"", llm_err, response ? response : "");
     }
     reply_view_refresh(&view);
+    s_shown_chars = view.len;
     free(view.text);
 
     tts_stream_end();
@@ -950,6 +991,7 @@ void app_main()
     char *system_prompt = build_system_prompt();
     llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,
              sys_param->gemini_key, sys_param->openrouter_key, sys_param->xai_key,
+             sys_param->mistral_key, sys_param->perplexity_key,
              system_prompt ? system_prompt : app_lang_get()->system_prompt);
     free(system_prompt);
     llm_set_location(sys_param->country, sys_param->city);

@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-#include "costs.h"
+#include "file_costs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -188,6 +188,14 @@ static size_t s_audio_bytes = 0;
 /* Quality of the current reply: speech run dry in the middle of a sentence, sentences lost */
 static volatile unsigned s_cuts = 0;
 static volatile bool s_failed = false;
+/* The speech refused for lack of credit (insufficient_quota): said on screen after the reply */
+static volatile bool s_no_credit = false;
+
+/* An OpenAI error saying the credit is exhausted */
+static bool is_no_credit(const char *text)
+{
+    return text && (strstr(text, "insufficient_quota") || strcasestr(text, "quota") || strcasestr(text, "billing"));
+}
 /* The connection is to be recreated before the next sentence (response stalled, request not sent) */
 static bool s_reconnect = false;
 static char s_response_status[24];
@@ -331,6 +339,16 @@ static void handle_message(const char *text)
         }
         const cJSON *status = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "status");
         strlcpy(s_response_status, cJSON_IsString(status) ? status->valuestring : "?", sizeof(s_response_status));
+        if (strcmp(s_response_status, "completed") != 0) {
+            // Why: {"type": "failed", "error": {"type", "code", "message"}} (quota, rate limit, model...)
+            const cJSON *details = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "status_details");
+            char *why = details ? cJSON_PrintUnformatted(details) : NULL;
+            ESP_LOGE(TAG, "response %s: %.300s", s_response_status, why ? why : "(no details)");
+            if (is_no_credit(why)) {
+                s_no_credit = true;
+            }
+            free(why);
+        }
         s_response_active = false;
         xEventGroupSetBits(s_events, EV_RESPONSE_DONE);
     } else if (strcmp(t, "error") == 0) {
@@ -339,6 +357,10 @@ static void handle_message(const char *text)
         const cJSON *message = cJSON_GetObjectItem(error, "message");
         ESP_LOGE(TAG, "error: %s: %s", cJSON_IsString(code) ? code->valuestring : "-",
                  cJSON_IsString(message) ? message->valuestring : "-");
+        if (is_no_credit(cJSON_IsString(code) ? code->valuestring : NULL) ||
+                is_no_credit(cJSON_IsString(message) ? message->valuestring : NULL)) {
+            s_no_credit = true;
+        }
         if (s_response_active) {
             strlcpy(s_response_status, "error", sizeof(s_response_status));
             s_response_active = false;
@@ -735,6 +757,11 @@ const char *const tts_voices[] = {
 };
 const size_t tts_voice_count = sizeof(tts_voices) / sizeof(tts_voices[0]);
 
+bool tts_stream_no_credit(void)
+{
+    return s_no_credit;
+}
+
 bool tts_stream_reply_was_choppy(void)
 {
     return s_failed || s_cuts >= TTS_CHOPPY_CUTS;
@@ -774,6 +801,7 @@ void tts_stream_begin(tts_event_cb_t cb)
     s_generation++;
     s_cuts = 0;
     s_failed = false;
+    s_no_credit = false;
     drop_queued_sentences();
     s_flush = true;
     s_event_cb = cb;

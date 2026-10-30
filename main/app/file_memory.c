@@ -11,9 +11,9 @@
 #include <string.h>
 #include <time.h>
 #include "esp_log.h"
-#include "app_memory.h"
-#include "phrases.h"
-#include "app_lang.h"
+#include "file_memory.h"
+#include "file_phrases.h"
+#include "file_lang.h"
 #include "settings.h"
 
 /* NVS strings are limited to 4000 bytes, NUL included */
@@ -24,7 +24,7 @@
 
 static const char *TAG = "memory";
 
-/* Phrase lists: their patterns are in the phrase files, in the section named after the variable (phrases.h) */
+/* Phrase lists: their patterns are in the phrase files, in the section named after the variable (file_phrases.h) */
 static PHRASE_LIST(s_remember);
 static PHRASE_LIST(s_forget);
 static PHRASE_LIST(s_forget_all);

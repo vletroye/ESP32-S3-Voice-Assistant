@@ -12,7 +12,7 @@
  * Spaces left double or at the ends by an empty part are removed. Patterns are written as normalized by
  * app_text_normalize() (lowercase, accents kept, apostrophes and hyphens as spaces).
  *
- * Only the files of the languages of app_lang.c are read. A list takes the phrases of the current language
+ * Only the files of the languages of file_lang.c are read. A list takes the phrases of the current language
  * (a section missing there is taken from the English file); a list declared for all languages takes the
  * phrases of every language (e.g. "change la langue" works whatever the language). The files given with the
  * firmware (main/phrases/) are installed when missing or emptied. The phrases are given longest first: a
@@ -27,8 +27,8 @@
 extern "C" {
 #endif
 
-/* Languages read from app_lang.c, at most */
-#define PHRASES_LANG_MAX    12      /* LANG_MAX of app_lang.h */
+/* Languages read from file_lang.c, at most */
+#define PHRASES_LANG_MAX    12      /* LANG_MAX of file_lang.h */
 
 typedef struct {
     const char *name;           /* its section in the phrase files: the name of the variable */
@@ -43,7 +43,7 @@ typedef struct {
 
 /**
  * @brief Install the phrase files given with the firmware where missing or emptied, and read the files of
- *        every language of app_lang.c. Once, at start-up, after SPIFFS is mounted, from a task whose stack is
+ *        every language of file_lang.c. Once, at start-up, after SPIFFS is mounted, from a task whose stack is
  *        in internal RAM (flash access).
  */
 void phrases_init(void);

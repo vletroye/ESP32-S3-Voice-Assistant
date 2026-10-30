@@ -433,8 +433,8 @@ static void directory_written(const uint8_t *data)
                 continue;   // CONFIG.INI emptied: nothing to save
             }
             if (d->size == 0) {
-                // Emptied (no cluster any more): saved empty, the assistant installs the original file again
-                s_where[i].known = false;
+                // Emptied (no cluster any more): saved empty, the assistant installs the original file again. Where
+                // it was is kept: an editor empties a file before writing it again, often in the same clusters
                 char *dummy = text_dummy(fid);
                 if (dummy) {
                     dummy[0] = '\0';

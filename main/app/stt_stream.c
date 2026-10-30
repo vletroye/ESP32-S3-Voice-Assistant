@@ -20,7 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-#include "costs.h"
+#include "file_costs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -152,6 +152,9 @@ static size_t upsample(upsampler_t *u, const int16_t *in, size_t n, int16_t *out
 
 /* ---------- received events (WebSocket task) ---------- */
 
+/* The last transcription refused for lack of OpenAI credit */
+static volatile bool s_no_credit = false;
+
 static void handle_message(const char *text)
 {
     cJSON *json = cJSON_Parse(text);
@@ -191,6 +194,7 @@ static void handle_message(const char *text)
             s_turn_active = false;
             ESP_LOGI(TAG, "final transcript %lld ms after commit: \"%s\"",
                      (esp_timer_get_time() - s_commit_us) / 1000, s_transcript);
+            s_no_credit = false;
             xEventGroupSetBits(s_events, EV_TRANSCRIPT);
         }
     } else if (strcmp(t, "conversation.item.input_audio_transcription.failed") == 0 || strcmp(t, "error") == 0) {
@@ -199,6 +203,10 @@ static void handle_message(const char *text)
         const cJSON *message = cJSON_GetObjectItem(error, "message");
         ESP_LOGE(TAG, "%s: %s: %s", t, cJSON_IsString(code) ? code->valuestring : "-",
                  cJSON_IsString(message) ? message->valuestring : "-");
+        // The OpenAI credit exhausted: "insufficient_quota", "You exceeded your current quota..."
+        const char *c = cJSON_IsString(code) ? code->valuestring : "";
+        const char *m = cJSON_IsString(message) ? message->valuestring : "";
+        s_no_credit = strstr(c, "quota") || strcasestr(m, "quota") || strcasestr(m, "billing");
         if (s_awaiting) {
             s_awaiting = false;
             s_turn_active = false;
@@ -559,6 +567,11 @@ char *stt_stream_finish(uint32_t timeout_ms)
         xEventGroupSetBits(s_events, EV_ABORT);
     }
     return text;
+}
+
+bool stt_stream_no_credit(void)
+{
+    return s_no_credit;
 }
 
 bool stt_stream_has_text(void)

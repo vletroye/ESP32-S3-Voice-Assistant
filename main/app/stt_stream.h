@@ -61,6 +61,9 @@ char *stt_stream_finish(uint32_t timeout_ms);
  */
 bool stt_stream_has_text(void);
 
+/** The last transcription refused for lack of OpenAI credit (insufficient_quota) */
+bool stt_stream_no_credit(void);
+
 /**
  * @brief Wait until the session is connected (or failed / ended).
  *

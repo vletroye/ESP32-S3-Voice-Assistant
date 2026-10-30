@@ -200,6 +200,9 @@ void app_main(void)
         nvs_init_str_if_missing("OpenRouter_key", "");
         // xAI key, for the Grok models (section [xai] of AGENTS.INI)
         nvs_init_str_if_missing("XAI_key", "");
+        // Mistral AI and Perplexity keys (sections [mistral] and [perplexity] of AGENTS.INI)
+        nvs_init_str_if_missing("Mistral_key", "");
+        nvs_init_str_if_missing("Perplexity_key", "");
         // Free OpenRouter models: read from its live list (on / off) and how many offered
         nvs_init_str_if_missing("OpenRouter_free", CONFIG_ASSISTANT_OPENROUTER_FREE);
         char free_models[8];

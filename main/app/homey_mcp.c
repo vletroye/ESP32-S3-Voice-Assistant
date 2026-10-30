@@ -22,7 +22,7 @@
 #define HOMEY_MAX_BODY          (512 * 1024)
 /*
  * Results given to the model, after the useless fields are removed (the room list is ~3,600 characters, the
- * home briefing ~6,600); the conversation keeps a shortened copy once answered (claude_client.c)
+ * home briefing ~6,600); the conversation keeps a shortened copy once answered (ai_provider_anthropic.c)
  */
 #define HOMEY_MAX_RESULT        12000
 #define HOMEY_PROTOCOL          "2025-06-18"

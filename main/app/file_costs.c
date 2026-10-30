@@ -17,9 +17,9 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "cJSON.h"
-#include "app_lang.h"
+#include "file_lang.h"
 #include "llm.h"
-#include "costs.h"
+#include "file_costs.h"
 
 #define COSTS_FILE          "/spiffs/costs.json"
 #define COSTS_TMP_FILE      "/spiffs/costs.tmp"
@@ -31,7 +31,8 @@
 
 /*
  * Price of the tokens read from / written to the cache, as a share of the price of the tokens read: Anthropic
- * 10 % / 125 %, OpenAI 10 %, Google 25 %, xAI 25 %; OpenRouter depends on the provider behind it (25 % taken)
+ * 10 % / 125 %, OpenAI 10 %, Google 25 %, xAI 25 %, Mistral 10 %, Perplexity 25 %; OpenRouter depends on the
+ * provider behind it (25 % taken)
  */
 static const struct {
     double read;
@@ -42,6 +43,8 @@ static const struct {
     [LLM_PROVIDER_GEMINI] = { 0.25, 1.00 },
     [LLM_PROVIDER_OPENROUTER] = { 0.25, 1.00 },
     [LLM_PROVIDER_XAI] = { 0.25, 1.00 },
+    [LLM_PROVIDER_MISTRAL] = { 0.10, 1.00 },
+    [LLM_PROVIDER_PERPLEXITY] = { 0.25, 1.00 },
 };
 
 static const char *TAG = "costs";

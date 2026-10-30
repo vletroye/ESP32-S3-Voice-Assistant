@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Chat model answering the questions: Claude (Anthropic), GPT (OpenAI), Gemini (Google), Grok (xAI) or a model
- * reached through OpenRouter, chosen by the model id.
+ * Chat model answering the questions: Claude (Anthropic), GPT (OpenAI), Gemini (Google), Grok (xAI), Mistral
+ * (Mistral AI), Sonar (Perplexity) or a model reached through OpenRouter, chosen by the model id.
  */
 
 #pragma once
@@ -24,6 +24,8 @@ typedef enum {
     LLM_PROVIDER_GEMINI,
     LLM_PROVIDER_OPENROUTER,
     LLM_PROVIDER_XAI,
+    LLM_PROVIDER_MISTRAL,
+    LLM_PROVIDER_PERPLEXITY,
     LLM_PROVIDER_COUNT,
 } llm_provider_t;
 
@@ -36,6 +38,8 @@ typedef enum {
     LLM_ERR_BUSY,           /* Rate limited or overloaded (429, 5xx) */
     LLM_ERR_REFUSAL,        /* Request declined by the model's safeguards */
     LLM_ERR_OTHER,          /* Any other error (invalid request, unexpected response) */
+    LLM_ERR_EFFORT,         /* The reasoning effort of AGENTS.INI refused by the model: llm_effort_refused,
+                               llm_effort_values (one text for every provider, not in llm_errors) */
 } llm_error_t;
 
 /**
@@ -73,7 +77,7 @@ typedef struct {
 } llm_stats_t;
 extern llm_stats_t llm_last_stats;
 
-/* The models of AGENTS.INI (llm_load_models()), then the free OpenRouter ones (openrouter_free.c) */
+/* The models of AGENTS.INI (llm_load_models()), then the free OpenRouter ones (ai_provider_openrouter_free.c) */
 #define LLM_FILE_MODELS_MAX         32
 #define LLM_OPENROUTER_FREE_MAX     16      /* Free_models (at most 15) and "openrouter/free" */
 extern llm_model_t *llm_models;      /* PSRAM, allocated by llm_load_models() */
@@ -85,6 +89,10 @@ extern size_t llm_model_count;
  *        task whose stack is in internal RAM.
  */
 void llm_load_models(void);
+
+/** LLM_ERR_EFFORT: the effort refused ("low") and the values the model takes ("high, none") */
+extern char llm_effort_refused[16];
+extern char llm_effort_values[64];
 
 /**
  * @brief Replace the free OpenRouter models offered, put after the models of AGENTS.INI. The strings are copied.
@@ -131,11 +139,12 @@ llm_error_t llm_probe(const llm_model_t *model, const char *question, llm_stats_
 
 /**
  * Provider serving a model id: its section of AGENTS.INI; for a model not listed, "vendor/model" is OpenRouter,
- * "gpt-..." and "o<digit>..." are OpenAI, "gemini-..." Google, "grok-..." xAI, anything else Claude
+ * "gpt-..." and "o<digit>..." are OpenAI, "gemini-..." Google, "grok-..." xAI, "mistral-...", "magistral-...",
+ * "ministral-..." Mistral AI, "sonar..." Perplexity, anything else Claude
  */
 llm_provider_t llm_provider_of(const char *model);
 
-/** Provider name as said to the user ("Claude", "GPT", "Gemini", "OpenRouter", "Grok") */
+/** Provider name as said to the user ("Claude", "GPT", "Gemini", "OpenRouter", "Grok", "Mistral", "Perplexity") */
 const char *llm_provider_name(llm_provider_t provider);
 
 /**
@@ -148,11 +157,13 @@ const char *llm_provider_name(llm_provider_t provider);
  * @param gemini_key      Gemini key (may be empty when no Gemini model is used)
  * @param openrouter_key  OpenRouter key (may be empty when no OpenRouter model is used)
  * @param xai_key         xAI key (may be empty when no Grok model is used)
+ * @param mistral_key     Mistral AI key (may be empty when no Mistral model is used)
+ * @param perplexity_key  Perplexity key (may be empty when no Perplexity model is used)
  * @param system_prompt   Instructions sent with every request
  */
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
                    const char *gemini_key, const char *openrouter_key, const char *xai_key,
-                   const char *system_prompt);
+                   const char *mistral_key, const char *perplexity_key, const char *system_prompt);
 
 /** Replace the instructions (e.g. after a note was remembered); the conversation is kept */
 void llm_set_system_prompt(const char *system_prompt);

@@ -81,8 +81,9 @@ qu est ce qu on (écoute|ecoute)
 
 [s_test_models]
 # Pose la même question à chaque modèle et mesure son temps de réponse (SPEED.TXT, vitesse dans AGENTS.INI)
-test[e][r] (les|tes|le|ton) mod(è|e)le[s]
-(lance|fais|fait) (le|un) test (des|de|du) mod(è|e)le[s]
+test[e][r] (les|tes|le|ton|des|mes) mod(è|e)le[s]
+[(lance|fais|fait) ](le|un) test (des|de|du) mod(è|e)le[s]
+test (des|de|du) mod(è|e)le[s]
 
 [s_fastest_models]
 # Les 3 modèles les plus rapides selon les tests (« teste les modèles »), avec leur temps moyen

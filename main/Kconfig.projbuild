@@ -18,7 +18,7 @@ menu "Example Configuration"
 
     config ASSISTANT_LANGUAGES
         string "Languages offered (code:name, comma-separated)"
-        default "FR:Français, EN:English"
+        default "FR:Français, EN:English, NL:Nederlands, DE:Deutsch, ES:Español, IT:Italiano"
         help
             The languages of the Settings screen and of "change la langue". Each one has its files on the
             configuration drive (LANG_<CODE>.TXT, VOICE_<CODE>.TXT, PERSO_<CODE>.TXT), made from the English

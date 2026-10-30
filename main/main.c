@@ -274,6 +274,10 @@ static void on_reply_audio(tts_event_t event)
     }
     // A volume asked during the reply ("parle plus fort"): the codec can be written now that it is silent
     app_volume_apply_pending();
+    if (s_cancelled) {
+        // Dropped by a double tap (a question of a voice command among others): asleep already, no listening
+        return;
+    }
     if (record_flag) {
         // Reply interrupted by a new listening session (wake word or touch)
         return;
@@ -534,7 +538,7 @@ void assistant_request_restore(bool factory)
     s_restore_requested = true;
 }
 
-/* Files written by the assistant, removed by the factory reset (CONFIG.BKP kept, sounds of the image too) */
+/* Files written by the assistant, removed by the factory reset (sounds of the image kept) */
 static const char *const s_user_files[] = {
     "history.json", "history.tmp", "places.json", "or_free.json", "record.wav", "model_times.json", "speed.txt", "log.txt",
     "costs.json", "costs.tmp", "costs.txt", "radio.txt", "radio.txt.tmp",
@@ -542,7 +546,7 @@ static const char *const s_user_files[] = {
 
 /* Languages whose files are given with the firmware: a soft reset restores them; those of a language added by the
  * user (its translation) are kept */
-static const char *const s_firmware_languages[] = { "fr", "en" };
+static const char *const s_firmware_languages[] = { "fr", "en", "nl", "de", "es", "it" };
 
 /* "phrases_de.txt" is a file of a language (prefix "phrases_", "lang_" or "persona_"), of the firmware's ones? */
 static bool language_file(const char *name, bool *firmware, bool *persona)
@@ -765,6 +769,7 @@ void assistant_cancel(void)
 {
     ESP_LOGI(TAG, "Cancelled by a double tap");
     s_cancelled = true;
+    voice_cmd_cancel_question();    // a voice command's question (language, model...): its answer no longer awaited
     app_sr_cancel();        // listening: ended as without speech
     llm_cancel();           // thinking: the answer's stream is left
     tts_stream_cancel();
@@ -997,6 +1002,10 @@ void app_main()
     sys_param = settings_get_parameter();
 
     bsp_spiffs_mount();
+    // The backup of CONFIG.INI made by the factory reset of an older firmware (keys included): no longer kept
+    if (remove("/spiffs/config.bkp") == 0) {
+        ESP_LOGI(TAG, "CONFIG.BKP removed");
+    }
     // The languages offered (Languages of CONFIG.INI), then the texts of the language (LANG_<CODE>.TXT on SPIFFS)
     app_lang_init(sys_param->languages);
     app_lang_set(sys_param->lang);
@@ -1084,6 +1093,8 @@ void app_main()
     assistant_set_stt(NULL);
     ESP_ERROR_CHECK(tts_stream_init());
     assistant_set_tts(NULL);
+    // The screens were made before: the provider's icon on the robot's forehead, the Settings screen
+    ui_ctrl_settings_sync();
 
     for (int seconds = 0; ; seconds++) {
         vTaskDelay(pdMS_TO_TICKS(1000));

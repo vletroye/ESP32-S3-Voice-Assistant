@@ -89,9 +89,6 @@ esp_err_t settings_save_str(const char *key, const char *value);
 /** Erase a configuration value (e.g. "Persona", moved to the files of the languages) */
 esp_err_t settings_erase_key(const char *key);
 
-/** CONFIG.BKP of the configuration drive: CONFIG.INI (and PERSONA.TXT, MEMORY.TXT) saved by the factory reset */
-#define SETTINGS_BACKUP_FILE    "/spiffs/config.bkp"
-
 /**
  * @brief Soft reset: the settings of CONFIG.INI back to their defaults, except the Wi-Fi, the API keys and Homey
  *        (Persona, Memory and the comments of CONFIG.INI are kept too). Applied at the next start (the caller
@@ -100,8 +97,6 @@ esp_err_t settings_erase_key(const char *key);
 esp_err_t settings_restore_defaults(void);
 
 /**
- * @brief Factory reset: every setting erased (Wi-Fi, keys, Persona, Memory included). CONFIG.INI is first saved to
- *        SETTINGS_BACKUP_FILE when it differs from the firmware's (otherwise an earlier backup is kept); nothing is
- *        erased if that backup fails.
+ * @brief Factory reset: every setting erased (Wi-Fi, keys, Persona, Memory included).
  */
 esp_err_t settings_factory_wipe(void);

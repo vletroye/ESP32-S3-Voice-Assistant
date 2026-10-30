@@ -1,0 +1,248 @@
+# Frases de los comandos de voz, en español (archivo VOICE_ES.TXT del disco de configuración).
+# Cada sección [s_...] lleva el nombre de la lista del código que rellena; un patrón por línea.
+# Patrones: [parte opcional], (opción|otra opción), anidados si hace falta: [[tengo ]una ]otra pregunta
+# Escribir en minúsculas, con los acentos, apóstrofos y guiones como espacios, sin signos de puntuación (ni ¿ ni ¡).
+# Una sección que falta se toma del archivo inglés; una sección vacía desactiva el comando.
+# Las líneas que empiezan por # son comentarios. Archivo vaciado: vuelve a su versión original.
+
+[s_goodbyes]
+# Dichas solas, devuelven el asistente al reposo sin respuesta (conversación borrada);
+# si la respuesta del asistente termina con una de ellas, también se pone en reposo después de decirla
+adiós[ esp]
+adios[ esp]
+hasta (luego|pronto|mañana|la vista|otra)[ esp]
+chao[ esp]
+ciao
+nos vemos[ esp]
+buenas noches[ esp]
+(que tengas|feliz) (buen día|buena tarde|buena noche|buenas noches)[ esp]
+(adiós|adios|hasta luego|hasta mañana)[ esp][ y] (que tengas|feliz) (buen día|buena tarde|buena noche|buenas noches)[ esp]
+
+[s_change_lang]
+cambia[r] (el|de|tu) idioma
+cambia[r] (la|de|tu) lengua
+otro idioma
+
+[s_lang_shortcut]
+habla[ en]
+hablemos[ en]
+pasa a[l]
+cambia a[l]
+responde en
+contesta en
+
+[s_radio_station]
+# Radio: una emisora por su nombre ("pon la radio Cadena SER"), buscada en Radio-Browser
+(pon|ponme|reproduce|enciende) la radio
+(pon|ponme|reproduce) la emisora
+[quiero ]escuchar la radio
+
+[s_radio_music]
+# Radio: un género o un país ("pon jazz", "pon música clásica", "pon música italiana")
+(pon|ponme|reproduce) [un poco de ]música[ (de estilo|del estilo|estilo|de género|género)]
+(pon|ponme|reproduce) (un poco de|algo de)
+
+[s_radio_next]
+# Radio: la emisora siguiente de la lista (solo cuando una radio suena o está en pausa)
+siguiente
+[la ](radio|emisora) siguiente
+(pon|ponme|pasa a) la siguiente[ (radio|emisora)]
+
+[s_radio_previous]
+anterior
+[la ](radio|emisora) anterior
+(pon|ponme|vuelve a) la anterior[ (radio|emisora)]
+
+[s_radio_stop]
+# Radio: parada, sin reanudar al pasar a reposo (solo cuando una radio suena o está en pausa)
+para
+stop
+(para|apaga|quita|detén|deten) (la|esta) (radio|música|musica)
+
+[s_radio_resume]
+(vuelve a poner|reanuda|enciende otra vez) la (radio|música|musica)
+
+[s_radio_fav_add]
+# Radio: la emisora actual añadida a los favoritos (RADIO.TXT)
+(añade|anade|agrega|guarda|pon) (esta|la) (radio|emisora) (a|en) [mis ]favoritos
+(añádela|anadela|agrégala|agregala|guárdala|guardala|ponla) (a|en) [mis ]favoritos
+
+[s_radio_fav_remove]
+(quita|elimina|borra|saca) (esta|la) (radio|emisora) de [mis ]favoritos
+(quítala|quitala|elimínala|eliminala|bórrala|borrala|sácala|sacala) de [mis ]favoritos
+
+[s_radio_favorites]
+# Radio: los favoritos, uno tras otro ("siguiente")
+(pon|ponme|reproduce) mis favoritos
+(pon|ponme|reproduce) (mis|una de mis) (radios|emisoras|radio|emisora) favorita[s]
+
+[s_radio_what]
+# Radio: la emisora y el título que suenan
+qué (radio|emisora) es[ esta]
+que (radio|emisora) es[ esta]
+qué (está sonando|suena|estamos escuchando)
+que (esta sonando|suena|estamos escuchando)
+(qué|que|cuál es|cual es) (esta canción|esta cancion|este tema|esta música|esta musica)
+
+[s_test_models]
+# Hace la misma pregunta a cada modelo y mide su tiempo de respuesta (SPEED.TXT, velocidad en AGENTS.INI)
+prueba (los|tus|el|tu) modelo[s]
+(haz|lanza|empieza) (la|una) prueba (de los|de tus|del) modelo[s]
+(testea|testear) (los|tus) modelos
+
+[s_fastest_models]
+# Los 3 modelos más rápidos según las pruebas ("prueba los modelos"), con su tiempo medio
+(cuáles|cuales) son los modelos más rápidos
+(cuál|cual) es el modelo más rápido
+(qué|que) modelo[s] (es|son) [el |los ]más rápido[s]
+(dime|dame) (el|los) modelo[s] más rápido[s]
+(el|los) modelo[s] más rápido[s]
+(cuáles|cuales) son los modelos mas rapidos
+(cuál|cual) es el modelo mas rapido
+
+[s_list_models]
+# Lee, por proveedor, los nombres cortos de los modelos de AGENTS.INI (y los modelos gratuitos de OpenRouter)
+dame la lista (de todos (los|tus)|de los|de tus) modelos[ (disponibles|compatibles)]
+(enumera|lista) [todos ](los|tus) modelos[ (disponibles|compatibles)]
+dime (tus|los) modelos[ (disponibles|compatibles)]
+(cuáles|cuales) son (los|tus) modelos[ (disponibles|compatibles)]
+(qué|que) modelos (tienes|admites|hay)
+
+[s_change_model]
+cambia[r] (de|el|tu) modelo
+otro modelo
+
+[s_model_shortcut]
+(usa|utiliza|coge|elige) el modelo
+pasa al modelo
+modelo[ número| numero]
+
+[s_change_voice]
+cambia[r] (de|la|tu|mi) voz
+otra voz
+
+[s_voice_shortcut]
+(usa|utiliza|pon|elige) la voz
+pasa a la voz
+[la ]voz[ número| numero]
+
+[s_change_stt]
+cambia[r] (de|la|tu) transcripción
+cambia[r] (de|la|tu) transcripcion
+cambia[r] (de|el|tu) reconocimiento de voz
+cambia[r] (de|el) (stt|s t t)
+
+[s_change_tts]
+cambia[r] (de|la|tu) síntesis de voz
+cambia[r] (de|la|tu) sintesis de voz
+cambia[r] (de|el) (tts|t t s)
+cambia[r] (de|el|tu) motor de voz
+
+[s_new_conversation]
+(empecemos|empieza|comencemos|empezamos) una nueva (conversación|conversacion|charla)
+(empecemos|empezamos|volvamos a empezar) de cero
+nueva (conversación|conversacion|charla)
+[tengo ]otra pregunta
+(pasemos|pasamos) a otra cosa
+hablemos de otra cosa
+(cambiemos|cambiamos) de tema
+cambio de tema
+
+[s_edit_config]
+# "config" y "configuración": como la transcripción los escribe a menudo
+quiero (editar|modificar|cambiar|abrir) (la|el|los archivos de) (config|configuración|configuracion)
+(edita|modifica|abre) (la|el|los archivos de) (config|configuración|configuracion)
+[(pasa al|pasa a|entra en el) ]modo (de configuración|de configuracion|configuración|configuracion)
+
+[s_restart]
+# Dicha sola (o con "por favor"): el asistente se reinicia
+(reinicia|reiníciate|reiniciate)
+(haz|lanza) un reinicio
+reinicio
+reiniciar
+
+[s_clock_on]
+# Dicha sola: la hora y la fecha se muestran en la pantalla de reposo (Show_clock de CONFIG.INI)
+(muestra|enseña|ensena|pon|activa) (la hora|el reloj)
+(muestra|enseña|ensena|pon) la fecha y la hora
+
+[s_clock_off]
+# Dicha sola: la hora y la fecha ya no se muestran en la pantalla de reposo
+(oculta|esconde|quita|desactiva|apaga) (la hora|el reloj)
+(oculta|esconde|quita) la fecha y la hora
+no muestres (la hora|el reloj)
+ya no muestres (la hora|el reloj)
+
+[s_open_settings]
+(abre|muestra|enseña) (los ajustes|la configuración|la configuracion)
+ve a los ajustes
+
+[s_change_country]
+cambia[r] (mi|de|el) país
+cambia[r] (mi|de|el) pais
+
+[s_change_city]
+cambia[r] (mi|de|la) ciudad
+
+[s_answer_prefix]
+# Palabras antes del nombre en una respuesta ("vivo en Evere"), ignoradas; los artículos se quedan ("La Haya")
+vivo en
+(mi ciudad|mi país|mi pais) es
+es
+en
+
+[s_yes]
+sí
+si
+claro
+exacto
+exactamente
+[lo ]confirmo
+confirmado
+eso es
+vale
+de acuerdo
+ok[ay]
+por supuesto
+desde luego
+absolutamente
+correcto
+afirmativo
+
+[s_no]
+# Respuesta negativa a una pregunta (excluir un modelo lento tras la prueba de los modelos)
+no
+no hace falta
+no es necesario
+para nada
+(guárdalo|guardalo|mantenlo|quédatelo|quedatelo)
+no lo excluyas
+nunca
+
+[s_courtesy]
+# Palabras admitidas tras la respuesta de un atajo ("habla inglés por favor")
+por favor
+ahora
+
+[s_one_alone]
+# "un" / "una" solo valen 1 dichos solos: en otro lugar son artículos
+[el ](un|una)
+
+[s_remember]
+(recuerda|acuérdate de|acuerdate de)[ bien] que
+no olvides que
+(apunta|anota) que
+(memoriza|guarda) que
+
+[s_forget]
+olvida[ el hecho de] que
+
+[s_forget_all]
+olvida todo
+olvídalo todo
+olvidalo todo
+(borra|vacía|vacia)[ toda] tu memoria
+
+[s_list]
+dime[ todo] lo que (has memorizado|recuerdas|has guardado)
+(qué|que) (has memorizado|recuerdas|has guardado)

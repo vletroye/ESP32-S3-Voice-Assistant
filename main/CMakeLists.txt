@@ -22,14 +22,26 @@ idf_component_register(
     EMBED_TXTFILES
         "phrases/phrases_fr.txt"
         "phrases/phrases_en.txt"
+        "phrases/phrases_nl.txt"
+        "phrases/phrases_de.txt"
+        "phrases/phrases_es.txt"
+        "phrases/phrases_it.txt"
         # Models offered (AGENTS.INI), installed on SPIFFS when missing (main/app/llm.c)
         "agents/agents.ini"
         # Who the assistant is, per language (PERSO_FR.TXT...), installed on SPIFFS when missing (main/app/file_persona.c)
         "persona/persona_fr.txt"
         "persona/persona_en.txt"
+        "persona/persona_nl.txt"
+        "persona/persona_de.txt"
+        "persona/persona_es.txt"
+        "persona/persona_it.txt"
         # Texts of the assistant, per language (LANG_FR.TXT...), installed on SPIFFS when missing (main/app/file_lang.c)
         "lang/lang_fr.txt"
         "lang/lang_en.txt"
+        "lang/lang_nl.txt"
+        "lang/lang_de.txt"
+        "lang/lang_es.txt"
+        "lang/lang_it.txt"
         # Countries known by voice, names per language (COUNTRY.TXT), installed on SPIFFS when missing (main/app/file_country.c)
         "lang/country.txt"
 )

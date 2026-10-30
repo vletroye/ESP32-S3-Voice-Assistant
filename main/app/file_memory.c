@@ -85,7 +85,12 @@ void app_text_normalize(const char *text, char *out, size_t size)
         unsigned char next = (unsigned char)p[1];
         if (c >= 0xC2 && c <= 0xDF && (next & 0xC0) == 0x80) {
             uint32_t cp = letter_lower(((uint32_t)(c & 0x1F) << 6) | (next & 0x3F));
-            if (cp < 0x80) {
+            if ((cp >= 0xA0 && cp <= 0xBF && cp != 0xAA && cp != 0xB5 && cp != 0xBA) || cp == 0xD7 || cp == 0xF7) {
+                // Not a letter: ¿ ¡ « » ° × ÷... ("¿cuáles" is "cuáles")
+                if (n > 0 && out[n - 1] != ' ') {
+                    out[n++] = ' ';
+                }
+            } else if (cp < 0x80) {
                 out[n++] = (char)cp;
             } else if (n + 2 < size) {
                 out[n++] = (char)(0xC0 | (cp >> 6));

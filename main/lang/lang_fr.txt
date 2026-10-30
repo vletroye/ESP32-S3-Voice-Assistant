@@ -338,6 +338,8 @@ settings_title = Réglages
 settings_language = Langue
 settings_model = Modèle
 settings_voice = Voix
+settings_tts = TTS
+settings_stt = STT
 
 # Spoken with a voice just chosen, %s = its name
 voice_sample = Bonjour, je suis %s. Ma voix vous plaît ?
@@ -350,12 +352,12 @@ settings_saved = Enregistré.
 
 # Configuration screen, icon "soft reset": its confirmation
 soft_title = Réinitialisation douce
-soft_text = Remettre les réglages par défaut et les fichiers d'origine (VOICE_ et LANG_ FR/EN, COUNTRY.TXT, AGENTS.INI) ? Le Wi-Fi, les clés API, Homey, les PERSO_xx.TXT, MEMORY.TXT et les fichiers des langues ajoutées sont gardés. Puis l'appareil redémarre.
+soft_text = Remettre les réglages par défaut et les fichiers d'origine (VOICE_ et LANG_ FR/EN/NL/DE/ES/IT, COUNTRY.TXT, AGENTS.INI) ? Le Wi-Fi, les clés API, Homey, les PERSO_xx.TXT, MEMORY.TXT et les fichiers des langues ajoutées sont gardés. Puis l'appareil redémarre.
 soft_yes = Réinitialiser
 
 # icon "factory reset": its confirmation
 factory_title = Remise à zéro complète
-factory_text = TOUT effacer : Wi-Fi, clés API, Homey, MEMORY.TXT, réglages, conversation, fichiers de toutes les langues (VOICE_, LANG_, PERSO_), COUNTRY.TXT ? CONFIG.INI est d'abord copié dans CONFIG.BKP. Puis mode configuration (PC branché) ou redémarrage.
+factory_text = TOUT effacer : Wi-Fi, clés API, Homey, MEMORY.TXT, réglages, conversation, fichiers de toutes les langues (VOICE_, LANG_, PERSO_), COUNTRY.TXT ? Puis mode configuration (PC branché) ou redémarrage.
 factory_yes = Tout effacer
 
 # both: cancel

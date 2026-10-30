@@ -1,0 +1,260 @@
+# Sätze der Sprachbefehle, auf Deutsch (Datei VOICE_DE.TXT des Konfigurationslaufwerks).
+# Jeder Abschnitt [s_...] trägt den Namen der Liste im Code, die er füllt; ein Muster pro Zeile.
+# Muster: [optionaler Teil], (Wahl|andere Wahl), bei Bedarf verschachtelt: [[ich habe ]noch ]eine andere frage
+# In Kleinbuchstaben schreiben, Umlaute und Akzente behalten, Apostrophe und Bindestriche als Leerzeichen, ohne
+# Satzzeichen.
+# Ein fehlender Abschnitt wird aus der englischen Datei genommen; ein leerer Abschnitt schaltet den Befehl ab.
+# Zeilen, die mit # beginnen, sind Kommentare. Geleerte Datei: auf ihre ursprüngliche Version zurückgesetzt.
+
+[s_goodbyes]
+# Allein gesagt, schicken sie den Assistenten ohne Antwort in den Ruhezustand (Gespräch gelöscht);
+# endet die Antwort des Assistenten mit einem von ihnen, geht er nach dem Sprechen ebenfalls schlafen
+auf wiedersehen[ esp]
+tschüss[ esp]
+tschüs[ esp]
+ciao
+bis (bald|später|morgen|dann)[ esp]
+gute nacht[ esp]
+(schönen|einen schönen) (tag|abend|nachmittag)[ noch][ esp]
+(auf wiedersehen|tschüss|bis bald|bis morgen)[ esp][ und] (schönen|einen schönen) (tag|abend|nachmittag)[ esp]
+
+[s_change_lang]
+(ändere|wechsle|wechsel)[ (die|deine)] sprache
+(sprache ändern|sprache wechseln)
+andere sprache
+
+[s_lang_shortcut]
+sprich[ auf]
+sprechen wir[ auf]
+rede[ auf]
+antworte (auf|in)
+(wechsle|wechsel) (zu|auf|ins)
+
+[s_radio_station]
+# Radio: ein Sender nach seinem Namen ("spiele das Radio Bayern 3"), gesucht in Radio-Browser
+(spiele|spiel|starte|start) [mir ](das radio|den sender|radio)
+[ich will |ich möchte ]radio hören
+
+[s_radio_music]
+# Radio: ein Genre oder ein Land ("spiele Jazz", "spiele klassische Musik", "spiele italienische Musik")
+(spiele|spiel|mach|leg) [mir ][etwas |ein bisschen ]musik[ (im stil|aus dem genre|genre)]
+(spiele|spiel) [mir ](etwas|ein bisschen)
+
+[s_radio_next]
+# Radio: der nächste Sender der Liste (nur wenn ein Radio läuft oder unterbrochen ist)
+nächster
+nächste
+weiter
+[der ]nächste (sender|radiosender)
+(spiele|spiel|geh zum|gehe zum) [den ]nächsten[ (sender|radiosender)]
+
+[s_radio_previous]
+vorheriger
+vorherige
+zurück
+[der ]vorherige (sender|radiosender)
+(spiele|spiel|geh zurück zum|gehe zurück zum) [den ]vorherigen[ (sender|radiosender)]
+
+[s_radio_stop]
+# Radio: gestoppt, beim Ruhezustand nicht fortgesetzt (nur wenn ein Radio läuft oder unterbrochen ist)
+stopp
+stop
+(stoppe|stopp|beende) (das|dieses) (radio|musik)
+(stoppe|stopp|beende) die musik
+(schalte|mach) (das radio|die musik) aus
+
+[s_radio_resume]
+(schalte|mach) (das radio|die musik) wieder an
+(setze|setz) (das radio|die musik) fort
+
+[s_radio_fav_add]
+# Radio: der aktuelle Sender zu den Favoriten hinzugefügt (RADIO.TXT)
+(füge|füg) (dieses|das) radio zu [meinen ]favoriten hinzu
+(füge|füg) (diesen|den) sender zu [meinen ]favoriten hinzu
+(füge|füg) (ihn|es) zu [meinen ]favoriten hinzu
+(speichere|speicher) (dieses radio|diesen sender|das radio|den sender) (in|bei) [meinen ]favoriten
+
+[s_radio_fav_remove]
+(entferne|lösche|nimm) (dieses|das) radio aus [meinen ]favoriten
+(entferne|lösche|nimm) (diesen|den) sender aus [meinen ]favoriten
+(entferne|lösche|nimm) (ihn|es) aus [meinen ]favoriten
+
+[s_radio_favorites]
+# Radio: die Favoriten, einer nach dem anderen ("nächster")
+(spiele|spiel|starte) [mir ]meine favoriten
+(spiele|spiel|starte) [mir ](meinen|einen meiner) (lieblingssender|lieblingsradio)
+(spiele|spiel|starte) [mir ]meine (lieblingssender|lieblingsradios)
+
+[s_radio_what]
+# Radio: der Sender und der Titel, die gerade laufen
+welcher (sender|radiosender) ist das
+was läuft (gerade|da)
+was hören wir[ gerade]
+was ist das für ein (lied|titel|song)
+welches lied ist das
+
+[s_test_models]
+# Stellt jedem Modell dieselbe Frage und misst seine Antwortzeit (SPEED.TXT, Geschwindigkeit in AGENTS.INI)
+teste (die|deine) modelle
+(starte|start|mach|mache) [einen ](test der modelle|modelltest)
+
+[s_fastest_models]
+# Die 3 schnellsten Modelle laut den Tests ("teste die Modelle"), mit ihrer durchschnittlichen Zeit
+(welche|was) (sind|ist) (die|das) schnellste[n] modell[e]
+welche[s] modell[e] (ist|sind) am schnellsten
+(nenne|nenn|sag) mir (die|das) schnellste[n] modell[e]
+(die|das) schnellste[n] modell[e]
+
+[s_list_models]
+# Liest pro Anbieter die kurzen Namen der Modelle von AGENTS.INI (und die kostenlosen Modelle von OpenRouter)
+gib mir die liste (aller|der|deiner) modelle
+(nenne|nenn|liste) [mir ][alle ](die|deine) modelle[ auf]
+gib mir (deine|die) modelle
+(welche|was) (sind|sind die) (die|deine) modelle
+welche modelle (unterstützt du|hast du|gibt es|sind verfügbar)
+
+[s_change_model]
+(ändere|wechsle|wechsel)[ (das|dein)] modell
+(modell ändern|modell wechseln)
+anderes modell
+
+[s_model_shortcut]
+(nimm|verwende|benutze|nutze) [das ]modell
+(wechsle|wechsel|geh) zu[m] modell
+modell[ nummer]
+
+[s_change_voice]
+(ändere|wechsle|wechsel)[ (die|deine|meine)] stimme
+(stimme ändern|stimme wechseln)
+[eine ]andere stimme
+
+[s_voice_shortcut]
+(nimm|verwende|benutze|wähle) die stimme
+(wechsle|wechsel|geh) zu der stimme
+[die ]stimme[ nummer]
+
+[s_change_stt]
+(ändere|wechsle|wechsel)[ (die|deine)] transkription
+(ändere|wechsle|wechsel)[ (die|deine)] spracherkennung
+(ändere|wechsle|wechsel)[ (die|das)] (stt|s t t)
+
+[s_change_tts]
+(ändere|wechsle|wechsel)[ (die|deine)] sprachsynthese
+(ändere|wechsle|wechsel)[ (die|das)] (tts|t t s)
+(ändere|wechsle|wechsel)[ (die|deine)] (sprachausgabe|stimmengine|stimm engine)
+
+[s_new_conversation]
+(lass uns|wir) ein neues gespräch (beginnen|anfangen|starten)
+(beginne|starte|fang) ein neues gespräch[ an]
+neues gespräch
+[ich habe ][noch ]eine andere frage
+andere frage
+(lass uns|wir fangen) (von vorne|neu) an[fangen]
+lass uns über etwas anderes (reden|sprechen)
+lass uns das thema wechseln
+wir wechseln das thema
+themenwechsel
+anderes thema
+
+[s_edit_config]
+# "config" und "konfiguration": wie die Transkription sie oft schreibt
+ich (will|möchte) die (config|konfiguration|konfigurationsdateien) (bearbeiten|ändern|öffnen)
+(bearbeite|öffne|ändere) die (config|konfiguration|konfigurationsdateien)
+[wechsle in den |geh in den ](konfigurationsmodus|konfigurations modus)
+
+[s_restart]
+# Allein gesagt (oder mit "bitte"): der Assistent startet neu
+(starte|start) (neu|dich neu)
+neustart
+(mach|mache|führe) einen neustart[ durch]
+neu starten
+
+[s_clock_on]
+# Allein gesagt: Uhrzeit und Datum werden auf dem Ruhebildschirm angezeigt (Show_clock von CONFIG.INI)
+(zeige|zeig) die (uhrzeit|uhr)[ an]
+(zeige|zeig) (das datum und die uhrzeit|datum und uhrzeit)[ an]
+(schalte|mach) die uhr (an|ein)
+
+[s_clock_off]
+# Allein gesagt: Uhrzeit und Datum werden auf dem Ruhebildschirm nicht mehr angezeigt
+(verstecke|versteck|blende) die (uhrzeit|uhr)[ aus]
+(verstecke|versteck|blende) (das datum und die uhrzeit|datum und uhrzeit)[ aus]
+(schalte|mach) die uhr aus
+(zeige|zeig) die (uhrzeit|uhr) nicht mehr[ an]
+
+[s_open_settings]
+(öffne|zeige|zeig) die einstellungen
+geh[e] (zu den|in die) einstellungen
+
+[s_change_country]
+(ändere|wechsle|wechsel)[ (mein|das)] land
+
+[s_change_city]
+(ändere|wechsle|wechsel)[ (meine|die)] stadt
+(ändere|wechsle|wechsel)[ (meinen|den)] wohnort
+
+[s_answer_prefix]
+# Wörter vor dem Namen in einer Antwort ("ich wohne in Evere"), übergangen; die Artikel bleiben ("Den Haag")
+ich wohne in
+(meine stadt|mein wohnort|mein land) ist
+es ist
+das ist
+in
+
+[s_yes]
+ja
+jawohl
+genau
+richtig
+[ich ]bestätige[ es]
+bestätigt
+das stimmt
+stimmt
+einverstanden
+okay
+ok
+gut
+klar
+natürlich
+sicher
+absolut
+korrekt
+
+[s_no]
+# Negative Antwort auf eine Frage (ein langsames Modell nach dem Test der Modelle ausschließen)
+nein
+nö
+nee
+nicht nötig
+auf keinen fall
+(behalte|behalt) es
+schließ es nicht aus
+niemals
+
+[s_courtesy]
+# Wörter, die nach der Antwort einer Abkürzung erlaubt sind ("sprich Englisch bitte")
+bitte
+jetzt
+
+[s_one_alone]
+# "ein" / "eine" gelten nur allein gesagt als 1: anderswo sind es Artikel
+(ein|eine|einen)
+[die ]nummer eins
+
+[s_remember]
+(merke|merk) dir[ gut] dass
+(vergiss|vergesse) nicht dass
+(notiere|notier) dass
+(speichere|speicher) dass
+
+[s_forget]
+(vergiss|vergesse)[ die tatsache] dass
+
+[s_forget_all]
+(vergiss|vergesse) alles
+(lösche|leere) dein[en] (gedächtnis|speicher)
+
+[s_list]
+(sag|sage|erzähl) mir[ alles] was du dir gemerkt hast
+was hast du dir gemerkt
+woran erinnerst du dich

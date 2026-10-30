@@ -1032,6 +1032,19 @@ bool voice_cmd_waiting_answer(void)
     return s_asked != ASKED_NOTHING;
 }
 
+void voice_cmd_cancel_question(void)
+{
+    if (s_asked == ASKED_NOTHING) {
+        return;
+    }
+    ESP_LOGI(TAG, "question of the voice command cancelled");
+    if (s_asked == CONFIRM_EXCLUDE) {
+        model_test_exclusions_drop();
+    }
+    s_asked = ASKED_NOTHING;
+    s_asked_us = 0;
+}
+
 void voice_cmd_expect_exclusion(void)
 {
     s_asked = CONFIRM_EXCLUDE;

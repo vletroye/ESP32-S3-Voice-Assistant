@@ -1,0 +1,247 @@
+# Zinnen van de spraakopdrachten, in het Nederlands (bestand VOICE_NL.TXT van de configuratieschijf).
+# Elke sectie [s_...] draagt de naam van de lijst in de code die ze vult; één patroon per regel.
+# Patronen: [optioneel deel], (keuze|andere keuze), zo nodig genest: [[ik heb ]nog ]een andere vraag
+# Schrijf in kleine letters, accenten behouden, apostrofs en koppeltekens als spaties, zonder leestekens.
+# Een ontbrekende sectie wordt uit het Engelse bestand genomen; een lege sectie schakelt de opdracht uit.
+# Regels die met # beginnen zijn commentaar. Leeggemaakt bestand: teruggezet naar de oorspronkelijke versie.
+
+[s_goodbyes]
+# Alleen gezegd sturen ze de assistent zonder antwoord terug naar de slaapstand (gesprek gewist);
+# als het antwoord van de assistent ermee eindigt, gaat hij ook slapen nadat hij het gezegd heeft
+tot (ziens|straks|later|morgen|gauw)[ esp]
+dag[ esp]
+doei[ esp]
+ciao
+welterusten[ esp]
+slaap lekker[ esp]
+[nog ]een fijne (dag|avond|middag)[ esp]
+tot (ziens|straks|later|morgen|gauw)[ esp][ en] [nog ]een fijne (dag|avond|middag)[ esp]
+
+[s_change_lang]
+(verander|wijzig|wissel)[ (de|van|je)] taal
+andere taal
+
+[s_lang_shortcut]
+spreek[ in het]
+praat[ in het]
+antwoord in het
+schakel over (naar|op)[ het]
+
+[s_radio_station]
+# Radio: een zender op naam ("speel de radio Radio 538"), gezocht in Radio-Browser
+(speel|zet|start|draai) [voor mij ]de (radio|zender)
+[ik wil ]luisteren naar de radio
+
+[s_radio_music]
+# Radio: een genre of een land ("speel wat jazz", "speel wat klassieke muziek", "speel Italiaanse muziek")
+(speel|zet|draai) [voor mij ][wat |een beetje ]muziek[ (in de stijl|van het genre|genre)]
+(speel|draai) [voor mij ](wat|een beetje)
+
+[s_radio_next]
+# Radio: de volgende zender van de lijst (alleen als een radio speelt of onderbroken is)
+volgende
+[de ]volgende (radio|zender)
+(speel|zet|ga naar) de volgende[ (radio|zender)]
+
+[s_radio_previous]
+vorige
+[de ]vorige (radio|zender)
+(speel|zet|ga terug naar) de vorige[ (radio|zender)]
+
+[s_radio_stop]
+# Radio: gestopt, niet hervat bij de slaapstand (alleen als een radio speelt of onderbroken is)
+stop
+stop (de|deze) (radio|muziek)
+(zet|doe) (de|deze) (radio|muziek) uit
+stop met de (radio|muziek)
+
+[s_radio_resume]
+(zet|doe) de (radio|muziek) (weer|terug) aan
+(hervat|herstart) de (radio|muziek)
+
+[s_radio_fav_add]
+# Radio: de huidige zender toegevoegd aan de favorieten (RADIO.TXT)
+(voeg|zet) (deze|de) (radio|zender) (toe aan|bij|in) [mijn ]favorieten
+(voeg|zet) (hem|het) (toe aan|bij|in) [mijn ]favorieten
+
+[s_radio_fav_remove]
+(verwijder|haal) (deze|de) (radio|zender) (uit|van) [mijn ]favorieten
+(verwijder|haal) (hem|het) (uit|van) [mijn ]favorieten
+
+[s_radio_favorites]
+# Radio: de favorieten, de ene na de andere ("volgende")
+(speel|zet|start) [voor mij ]mijn favorieten
+(speel|zet|start) [voor mij ](mijn|een van mijn) favoriete (radio|radio s|zender|zenders)
+
+[s_radio_what]
+# Radio: de zender en de titel die nu spelen
+welke (radio|zender) is (dit|het)
+wat speelt er[ nu]
+wat is dit voor (liedje|nummer|muziek)
+welk (liedje|nummer) is dit
+waar luisteren we naar
+
+[s_test_models]
+# Stelt elk model dezelfde vraag en meet de antwoordtijd (SPEED.TXT, snelheid in AGENTS.INI)
+test (de|je|het) model[len]
+(start|doe) [een ]test van (de|je) modellen
+(start|doe) de modeltest
+
+[s_fastest_models]
+# De 3 snelste modellen volgens de tests ("test de modellen"), met hun gemiddelde tijd
+(wat|welke) (zijn|is) de snelste model[len]
+welk[e] model[len] (is|zijn) [het ]snelst[e]
+(geef|zeg|noem) (me|mij) de snelste model[len]
+de snelste model[len]
+
+[s_list_models]
+# Leest per aanbieder de korte namen van de modellen van AGENTS.INI (en de gratis modellen van OpenRouter)
+geef (me|mij) (de|een) lijst (van alle|van de|van je) modellen
+noem [al ](de|je) modellen[ op]
+som [al ](de|je) modellen op
+geef (me|mij) (je|de) modellen
+(wat|welke) (zijn|zijn er) (de|je) modellen
+welke modellen (heb je|ondersteun je|zijn er|zijn beschikbaar)
+
+[s_change_model]
+(verander|wijzig|wissel)[ (van|het|je)] model
+ander model
+
+[s_model_shortcut]
+(gebruik|neem) [het ]model
+(schakel over naar|ga naar) [het ]model
+model[ nummer]
+
+[s_change_voice]
+(verander|wijzig|wissel)[ (van|de|je|mijn)] stem
+[een ]andere stem
+
+[s_voice_shortcut]
+(gebruik|neem|kies) de stem
+(schakel over naar|ga naar) de stem
+[de ]stem[ nummer]
+
+[s_change_stt]
+(verander|wijzig|wissel)[ (van|de|je)] transcriptie
+(verander|wijzig|wissel)[ (van|de|je)] spraakherkenning
+(verander|wijzig|wissel)[ (van|de)] (stt|s t t)
+
+[s_change_tts]
+(verander|wijzig|wissel)[ (van|de|je)] spraaksynthese
+(verander|wijzig|wissel)[ (van|de)] (tts|t t s)
+(verander|wijzig|wissel)[ (van|de|je)] (stemmotor|spraakmotor)
+
+[s_new_conversation]
+(laten we|we) een nieuw gesprek beginnen
+(begin|start) een nieuw gesprek
+nieuw gesprek
+[ik heb ][nog ]een andere vraag
+andere vraag
+laten we (opnieuw|van voren af aan) beginnen
+laten we over iets anders praten
+laten we van onderwerp veranderen
+ander onderwerp
+
+[s_edit_config]
+# "config" en "configuratie": zoals de transcriptie ze vaak schrijft
+ik wil de (config|configuratie|configuratiebestanden) (bewerken|aanpassen|wijzigen|openen)
+(bewerk|open|wijzig) de (config|configuratie|configuratiebestanden)
+[ga naar ][de ](configuratiemodus|configuratie modus)
+
+[s_restart]
+# Alleen gezegd (of met "alsjeblieft"): de assistent herstart
+(herstart|reboot)[ jezelf]
+start opnieuw[ op]
+(doe|voer) een herstart[ uit]
+herstarten
+
+[s_clock_on]
+# Alleen gezegd: de tijd en de datum worden getoond op het slaapscherm (Show_clock van CONFIG.INI)
+toon de (tijd|klok)
+laat de (tijd|klok) zien
+zet de klok aan
+toon de datum en [de ]tijd
+
+[s_clock_off]
+# Alleen gezegd: de tijd en de datum worden niet meer getoond op het slaapscherm
+verberg de (tijd|klok)
+zet de klok uit
+toon de (tijd|klok) niet meer
+verberg de datum en [de ]tijd
+
+[s_open_settings]
+(open|toon) de instellingen
+ga naar de instellingen
+
+[s_change_country]
+(verander|wijzig)[ (mijn|het|van)] land
+
+[s_change_city]
+(verander|wijzig)[ (mijn|de|van)] (stad|woonplaats)
+
+[s_answer_prefix]
+# Woorden vóór de naam in een antwoord ("ik woon in Evere"), genegeerd; de lidwoorden blijven ("Den Haag")
+ik woon in
+(mijn stad|mijn woonplaats|mijn land) is
+het is
+dat is
+in
+
+[s_yes]
+ja
+jawel
+jazeker
+klopt
+dat klopt
+precies
+[ik ]bevestig[ het]
+bevestigd
+akkoord
+oké
+ok[ay]
+goed
+zeker
+natuurlijk
+absoluut
+correct
+inderdaad
+
+[s_no]
+# Negatief antwoord op een vraag (een traag model uitsluiten na de test van de modellen)
+nee
+neen
+nee hoor
+niet nodig
+zeker niet
+(hou|houd) het
+sluit het niet uit
+nooit
+
+[s_courtesy]
+# Woorden die na het antwoord van een snelkoppeling mogen ("spreek Engels alsjeblieft")
+alsjeblieft
+alstublieft
+nu
+
+[s_one_alone]
+# "een" telt alleen als 1 als het alleen gezegd wordt: elders is het een lidwoord
+(een|één|eén)
+nummer (een|één|eén)
+
+[s_remember]
+onthoud[ goed] dat
+vergeet niet dat
+noteer dat
+memoriseer dat
+sla op dat
+
+[s_forget]
+vergeet[ het feit] dat
+
+[s_forget_all]
+vergeet alles
+(wis|leeg) [heel ]je geheugen
+
+[s_list]
+(zeg|vertel) (me|mij) [alles ]wat je (hebt onthouden|hebt gememoriseerd|onthouden hebt|weet)
+wat heb je (onthouden|gememoriseerd)

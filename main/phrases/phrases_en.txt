@@ -1,6 +1,6 @@
 # Phrases of the voice commands, in English (file VOICE_EN.TXT of the configuration drive).
 # Each [s_...] section is named after the list of the code it fills; one pattern per line.
-# Patterns: [optional part], (choice|other choice), nested if needed: [[i have ]an ]other question
+# Patterns: [optional part], (choice|other choice), nested if needed: [i have ]another question
 # Write in lowercase, accents kept, apostrophes and hyphens as spaces ("let s"), no punctuation.
 # English is also the fallback: a section missing in another language's file is taken from here.
 # An empty section disables the command. Lines starting with # are comments. Emptied file: restored.
@@ -9,77 +9,80 @@
 # Said alone, they send the assistant back to sleep without an answer (conversation cleared);
 # when the assistant's answer ends with one of them, it also goes to sleep after saying it
 goodbye[ esp]
-good (bye|night)
 bye[ (bye|esp)]
+see you[ (soon|later|tomorrow)][ esp]
+good night[ esp]
+have a (nice|good) (day|evening|night|afternoon)[ esp]
+goodbye[ esp][ and] have a (nice|good) (day|evening|night|afternoon)[ esp]
 
 [s_change_lang]
-change [the ]language
-switch [the ]language
+change[ (the|your)] language
+switch[ the] language
 
 [s_lang_shortcut]
 speak[ in]
+let s speak[ in]
 switch to
 answer in
 
 [s_radio_station]
-# Radio: a station by its name ("play the radio Nostalgie"), searched in Radio-Browser
-(play|put on|turn on|start) [the ]radio
-(play|put on) [the ]station
+# Radio: a station by its name ("play the radio BBC"), searched in Radio-Browser
+(play|put on|turn on|start) [me ][the ]radio
+(play|put on|start) [me ][the ]station
 [i want to ]listen to the radio
 
 [s_radio_music]
-# Radio: a genre or a country ("play some jazz", "play italian music", "play english rock")
-(play|put on) [me ][some ]music
+# Radio: a genre or a country ("play some jazz", "play some classical music", "play italian music")
+(play|put on|start) [me ][some ]music
 (play|put on) [me ]some
 
 [s_radio_next]
 # Radio: the next station of the list (only while a radio plays or is suspended)
 next
-next (radio|station)
-(play|skip to) the next [(radio|station)]
-skip [(this|the) (radio|station)]
+[the ]next (radio|station)
+(play|put on|skip to|go to) the next[ (radio|station)]
 
 [s_radio_previous]
 previous
-previous (radio|station)
-(play|go back to) the previous [(radio|station)]
+[the ]previous (radio|station)
+(play|put on|go back to) the previous[ (radio|station)]
 
 [s_radio_stop]
 # Radio: stopped, not resumed when the assistant sleeps (only while a radio plays or is suspended)
 stop
-stop the (radio|music)
-turn off the (radio|music)
+stop (the|this) (radio|music)
+(turn off|switch off|cut) (the|this) (radio|music)
 
 [s_radio_resume]
-(resume|restart|turn the radio back on) [the (radio|music)]
+(resume|restart|turn back on|put back on) the (radio|music)
 
 [s_radio_fav_add]
 # Radio: the current station added to the favourites (RADIO.TXT)
-(add|put) (this|the) (radio|station) (to|in|into) [my ](favourites|favorites)
+(add|put|keep) (this|the) (radio|station) (to|in|into) [my ](favourites|favorites)
 (add|put) it (to|in|into) [my ](favourites|favorites)
 
 [s_radio_fav_remove]
-remove (this|the) (radio|station) from [my ](favourites|favorites)
-remove it from [my ](favourites|favorites)
+(remove|delete|take) (this|the) (radio|station) (from|out of) my (favourites|favorites)
+(remove|delete|take) it (from|out of) my (favourites|favorites)
 
 [s_radio_favorites]
 # Radio: the favourites, one after the other ("next")
-play my (favourites|favorites)
-play my favo[u]rite (radio|station)[s]
-play one of my favo[u]rite (radios|stations)
+(play|put on|start) [me ]my (favourites|favorites)
+(play|put on|start) [me ](my|one of my) favo[u]rite (radio|station)[s]
 
 [s_radio_what]
 # Radio: the station and the title being played
+(what|which) (radio|station) is (this|it|playing)
 what s playing
 what is playing
-what (song|station) is this
-which station is this
-what is this song
+what are we listening to
+what (s|is) this (song|track|music)
 
 [s_test_models]
 # Asks every model the same question and measures its answer time (SPEED.TXT, speed in AGENTS.INI)
-test (the|your) models
-run (the|a) model test
+test (the|your|a) model[s]
+(run|do|start) (the|a) model[s] test
+(run|do|start) (the|a) test of (the|your) model[s]
 
 [s_fastest_models]
 # The 3 fastest models according to the tests ("test the models"), with their mean time
@@ -90,86 +93,89 @@ the fastest model[s]
 
 [s_list_models]
 # Reads, by provider, the short names of the models of AGENTS.INI (and the free OpenRouter models)
-give me the list of [all ](the|your) models
-list [all ](the|your) models
-what models (do you support|are available)
-which models (do you support|are available)
+give me the list of [all ](the|your) models[ (available|supported)]
+list [all ](the|your) models[ (available|supported)]
+give me (your|the) models[ (available|supported)]
+(what|which) (are|is) (the|your) models[ (available|supported)]
+(what|which) models (do you support|are available)
 
 [s_change_model]
-change [the ]model
-switch [the ]model
+change[ (the|your)] model
+switch[ the] model
 
 [s_model_shortcut]
-use [the ]model
-switch to model
+(use|take) the model
+switch to [the ]model
 model[ number]
 
 [s_change_voice]
-change [(the|your) ]voice
-switch [the ]voice
+change[ (the|your|my)] voice
+switch[ the] voice
 another voice
 
 [s_voice_shortcut]
-use [the ]voice
-switch to [the ]voice
-voice[ number]
+(use|take|put on|choose) the voice
+switch to the voice
+[the ]voice[ number]
 
 [s_change_stt]
-change [the ]transcription
-change [the ]speech recognition
-change [the ](stt|s t t)
+change[ (the|your)] transcription
+change[ (the|your)] speech recognition
+change[ the] (stt|s t t)
 
 [s_change_tts]
-change [the ]speech synthesis
-change [the ](tts|t t s)
-change [the ]voice engine
+change[ (the|your)] speech synthesis
+change[ the] (tts|t t s)
+change[ (the|your)] voice engine
 
 [s_new_conversation]
-[let s ]start a new conversation
-new (conversation|chat)
+[let s ](start|begin) a new (discussion|conversation|chat)
+(let s start|start) (again|over) from scratch
+new (discussion|conversation|chat)
 [i have ]another question
-let s move on
+let s move on[ to something else]
 let s talk about something else
 let s change the subject
 change of subject
 
 [s_edit_config]
-[i want to ]edit the config[uration][ files]
-open the config[uration] files
-configuration mode
+# "edit the config" and "the configuration": as the transcription often writes them
+i want to (edit|change|modify) the config[uration][ files]
+(edit|modify|open) the config[uration][ files]
+[switch to ]configuration mode
 
 [s_restart]
 # Said alone (or with "please"): the assistant restarts
-restart[ yourself]
-reboot[ yourself]
+(restart|reboot)[ yourself]
+(do|start) a (restart|reboot)
 
 [s_clock_on]
 # Said alone: the time and date are shown on the sleep screen (Show_clock of CONFIG.INI)
-(show|display) the (time|clock)
-turn (on the clock|the clock on)
+(show|display|turn on) the (time|clock)
+(show|display) the date and [the ]time
+turn the clock on
 
 [s_clock_off]
 # Said alone: the time and date are no longer shown on the sleep screen
-hide the (time|clock)
-turn (off the clock|the clock off)
+(hide|remove|turn off) the (time|clock)
+(hide|remove) the date and [the ]time
+turn the clock off
 (do not|don t) show the (time|clock)
 
 [s_open_settings]
-(open|show)[ the] settings
-display the settings
+(open|show|display)[ the] settings
 go to the settings
 
 [s_change_country]
-change (my|the) country
+change[ (my|the)] country
 
 [s_change_city]
-change (my|the) city
-change my town
+change[ (my|the)] (city|town)
 
 [s_answer_prefix]
-# Words before the name in an answer ("I live in Evere"), skipped
+# Words before the name in an answer ("I live in Evere"), skipped; the articles stay ("The Hague")
 i live in
-my (city|country) is
+(my city|my town|my country) is
 it is
 it s
 in
@@ -178,17 +184,26 @@ in
 yes
 yeah
 yep
+exact[ly]
+[i ]confirm
+confirmed
+that s (it|right|fine)
+all right
 ok[ay]
+of course
 sure
-right
+absolutely
 correct
+affirmative
 
 [s_no]
 # Negative answer to a question (exclude a slow model after the model test)
 no
 nope
+no need
+(certainly|definitely) not
 keep it
-don t
+don t exclude it
 never
 
 [s_courtesy]
@@ -197,21 +212,22 @@ please
 now
 
 [s_one_alone]
-# Empty: "one" is a number in every position (the numbers are in the code)
+# Empty: "one" is a number in every position (numbers of LANG_EN.TXT)
 
 [s_remember]
-[please ]remember that
+[please ]remember[ well] that
+keep in mind that
 don t forget that
 note that
-memorize that
+memori(z|s)e that
 
 [s_forget]
-forget that
+forget[ the fact] that
 
 [s_forget_all]
 forget everything
+(erase|clear|wipe)[ all] your memory
 
 [s_list]
-tell me everything you remember
-what do you remember
-what have you memorized
+tell me (everything|what) you (have memorized|have memorised|remember)
+what (have you memorized|have you memorised|do you remember)

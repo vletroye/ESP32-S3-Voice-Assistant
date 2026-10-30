@@ -57,6 +57,9 @@ bool voice_cmd_is_goodbye(const char *text);
 /** The last reply asked the user a question (provider, model, town...): its answer is listened for */
 bool voice_cmd_waiting_answer(void);
 
+/** That question is dropped (double tap): its answer is no longer listened for */
+void voice_cmd_cancel_question(void);
+
 /** The next answer is about excluding a slow free model (model test): yes / no */
 void voice_cmd_expect_exclusion(void);
 

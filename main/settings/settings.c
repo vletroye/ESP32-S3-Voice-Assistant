@@ -439,20 +439,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     }
     str_trim(g_sys_param.tts_model);
 
-    // Persona and Memory (optional): free texts, edited in PERSONA.TXT and MEMORY.TXT
-    free(g_sys_param.persona);
-    g_sys_param.persona = read_text(my_handle, "Persona");
-    if (g_sys_param.persona) {
-        // Its comment lines stay in the file only: the assistant gets the rest
-        char *persona = settings_text_without_comments(g_sys_param.persona);
-        if (persona) {
-            free(g_sys_param.persona);
-            g_sys_param.persona = persona[0] ? persona : NULL;
-            if (!persona[0]) {
-                free(persona);
-            }
-        }
-    }
+    // Memory (optional): free text, edited in MEMORY.TXT
     free(g_sys_param.memory);
     g_sys_param.memory = read_text(my_handle, "Memory");
 
@@ -485,8 +472,7 @@ esp_err_t settings_read_parameter_from_nvs(void)
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
     ESP_LOGI(TAG, "stored Base URL:%s", g_sys_param.url);
     ESP_LOGI(TAG, "volume:%d, country:%s, city:%s", g_sys_param.volume, g_sys_param.country, g_sys_param.city);
-    ESP_LOGI(TAG, "voice:%s, persona: %d chars, memory: %d chars", g_sys_param.voice,
-             g_sys_param.persona ? (int)strlen(g_sys_param.persona) : 0,
+    ESP_LOGI(TAG, "voice:%s, memory: %d chars", g_sys_param.voice,
              g_sys_param.memory ? (int)strlen(g_sys_param.memory) : 0);
     ESP_LOGI(TAG, "language:%s, answer scrolling: %d characters/s, %s", g_sys_param.lang, g_sys_param.scroll_cps,
              g_sys_param.scroll_smooth ? "smooth" : "line by line");
@@ -509,11 +495,11 @@ sys_param_t *settings_get_parameter(void)
     return &g_sys_param;
 }
 
-/* Kept by the soft reset: Wi-Fi, API keys, Homey, PERSONA.TXT, MEMORY.TXT, comments of CONFIG.INI */
+/* Kept by the soft reset: Wi-Fi, API keys, Homey, MEMORY.TXT, comments of CONFIG.INI */
 static const char *const s_kept_keys[] = {
     "ssid", "password", "ChatGPT_key", "Claude_key", "Gemini_key", "OpenRouter_key", "XAI_key",
     "Mistral_key", "Perplexity_key", "Deepgram_key",
-    "Homey_url", "Homey_key", "Persona", "Memory", "Config_layout",
+    "Homey_url", "Homey_key", "Memory", "Config_layout",
 };
 
 static bool is_kept_key(const char *key)

@@ -1042,8 +1042,6 @@ rapide.
   per section (a blank line starts a new paragraph); `#` lines are comments. A missing section takes the firmware's
   text, an empty one stays empty. The files given with the firmware (`main/persona/`) are installed when missing or
   emptied; a factory reset erases them, a soft reset keeps them.
-- The `PERSONA.TXT` of an older firmware (NVS key `Persona`) is moved once into the `[personnalité]` of the file of
-  the language in use, then its key is erased.
 
 ### 3.6 `MEMORY.TXT`: long-term memory notes
 

@@ -151,41 +151,18 @@ static void parse(const char *text, char *out[PERSONA_SECTIONS])
     }
 }
 
-/* The firmware's file, the old PERSONA.TXT (if any) as its [personality] */
-static bool install(const char *code, const char *path, const char *old_persona)
+/* The firmware's file */
+static void install(const char *code, const char *path)
 {
     const char *def = default_text(code);
-    if (!def) {
-        return false;
-    }
-    FILE *f = fopen(path, "w");
+    FILE *f = def ? fopen(path, "w") : NULL;
     if (!f) {
         ESP_LOGE(TAG, "Could not install %s", path);
-        return false;
+        return;
     }
-    bool moved = false;
-    // The personality section: its header, its comment lines, then the old text, before the next section
-    const char *header = NULL;
-    for (const char *p = def; (p = strchr(p, '[')) != NULL; p++) {
-        const char *close = strchr(p, ']');
-        if ((p == def || p[-1] == '\n') && close && section_of(p + 1, (size_t)(close - p - 1)) == PERSONA_PERSONALITY) {
-            header = p;
-            break;
-        }
-    }
-    const char *next = header ? strstr(header, "\n[") : NULL;
-    if (old_persona && old_persona[0] && next) {
-        // "...comment\n" + the old text + "\n" + "\n[next section]..."
-        fwrite(def, 1, (size_t)(next + 1 - def), f);
-        fprintf(f, "%s\n", old_persona);
-        fputs(next, f);
-        moved = true;
-    } else {
-        fputs(def, f);
-    }
+    fputs(def, f);
     fclose(f);
-    ESP_LOGI(TAG, "Installed %s%s", path, moved ? " (with the personality of PERSONA.TXT)" : "");
-    return moved;
+    ESP_LOGI(TAG, "Installed %s", path);
 }
 
 bool persona_create(const char *code, const char *name)
@@ -212,24 +189,17 @@ bool persona_create(const char *code, const char *name)
     return true;
 }
 
-bool persona_init(const char *lang_code, const char *old_persona)
+void persona_init(void)
 {
-    // The old PERSONA.TXT goes to the file of the language in use (French for a language without its own file)
-    const char *migrate = default_text(lang_code) ? lang_code : "fr";
-    bool moved = false;
     for (size_t i = 0; i < sizeof(s_defaults) / sizeof(s_defaults[0]); i++) {
         char path[48];
         snprintf(path, sizeof(path), PERSONA_FILE_FORMAT, s_defaults[i].code);
         char *text = read_file(path);
         if (is_blank(text)) {
-            bool here = strcasecmp(s_defaults[i].code, migrate) == 0;
-            moved |= install(s_defaults[i].code, path, here ? old_persona : NULL);
-        } else if (strcasecmp(s_defaults[i].code, migrate) == 0 && old_persona && old_persona[0]) {
-            moved = true;   // a file of this firmware already there: the old text was moved before
+            install(s_defaults[i].code, path);
         }
         free(text);
     }
-    return moved;
 }
 
 void persona_load(const char *lang_code)

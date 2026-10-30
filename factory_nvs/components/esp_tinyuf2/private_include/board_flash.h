@@ -77,9 +77,8 @@ extern char *_ini_file;
 extern char *_ini_file_dummy;
 
 /*
- * [Voice assistant] Text files edited from the PC, with several lines: PERSONA.TXT and MEMORY.TXT stored in NVS
- * strings (keys "Persona", "Memory"; limited to 4000 bytes) instead of CONFIG.INI, whose lines and size are too
- * short for them, and the phrase files of the voice commands, stored on SPIFFS (/spiffs/phrases_<code>.txt,
+ * [Voice assistant] Text files edited from the PC, with several lines: MEMORY.TXT stored in an NVS string (key
+ * "Memory"; limited to 4000 bytes) instead of CONFIG.INI, whose lines and size are too short for it, and the phrase files of the voice commands, stored on SPIFFS (/spiffs/phrases_<code>.txt,
  * shown as VOICE_<CODE>.TXT; one per language found there, at most UF2_PHRASE_FILES_MAX).
  */
 #define CFG_UF2_TEXT_FILE_SIZE       32768   /* LANG_<CODE>.TXT is about 18 KB (in PSRAM, 2 buffers per file) */

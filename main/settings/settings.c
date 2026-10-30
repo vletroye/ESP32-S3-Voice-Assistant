@@ -292,22 +292,26 @@ esp_err_t settings_read_parameter_from_nvs(void)
     }
     str_trim(g_sys_param.currency);
 
-    // Free OpenRouter models: read from its live list or not, and how many offered
-    char value[8] = CONFIG_ASSISTANT_OPENROUTER_FREE;
-    len = sizeof(value);
-    if (nvs_get_str(my_handle, "OpenRouter_free", value, &len) != ESP_OK) {
-        strlcpy(value, CONFIG_ASSISTANT_OPENROUTER_FREE, sizeof(value));
-    }
-    str_trim(value);
-    g_sys_param.openrouter_free = strcasecmp(value, "off") != 0 && strcasecmp(value, "no") != 0 &&
-                                  strcmp(value, "0") != 0 && strcasecmp(value, "false") != 0;
+    // Free OpenRouter models offered (0 to 5, the most used; 0: none, the list is not read). An older version's
+    // "on" / "off" (until the configuration mode merges it): "off" is 0, "on" its Free_models
+    char value[8] = "";
     len = sizeof(value);
     g_sys_param.free_models = CONFIG_ASSISTANT_FREE_MODELS;
-    if (nvs_get_str(my_handle, "Free_models", value, &len) == ESP_OK) {
+    if (nvs_get_str(my_handle, "OpenRouter_free", value, &len) == ESP_OK) {
         str_trim(value);
         if (isdigit((unsigned char)value[0])) {
-            g_sys_param.free_models = atoi(value) > 5 ? 5 : atoi(value);     // 0: none (Free (auto) aside)
+            g_sys_param.free_models = atoi(value);
+        } else if (!strcasecmp(value, "off") || !strcasecmp(value, "no") || !strcasecmp(value, "false")) {
+            g_sys_param.free_models = 0;
+        } else {
+            len = sizeof(value);
+            if (nvs_get_str(my_handle, "Free_models", value, &len) == ESP_OK && isdigit((unsigned char)value[0])) {
+                g_sys_param.free_models = atoi(value);
+            }
         }
+    }
+    if (g_sys_param.free_models > 5) {
+        g_sys_param.free_models = 5;
     }
 
     // Screen off after this many seconds without presence (BOX-3-SENSOR radar), 0: never

@@ -51,7 +51,6 @@ typedef struct {
     bool read_lists;                  /* Lists of the voice commands read aloud, not only shown (after "::"). */
     char languages[160];              /* Languages offered: "FR:Français, EN:English" */
     char currency[8];                 /* Of the prices of AGENTS.INI and of the costs: "EUR", "USD"... */
-    bool openrouter_free;             /* Free OpenRouter models read from its live list (once a day). */
     int free_models;                  /* How many of them are offered (0..5, the most used), besides "openrouter/free". */
     int end_speech_ms;                /* Silence after which the question is considered finished. */
     bool scroll_smooth;               /* Answer scrolls continuously (true) or one line at a time (false). */

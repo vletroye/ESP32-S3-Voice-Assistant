@@ -7,8 +7,8 @@
  * ~30 KB, the most used first: tokens processed in the last week): those whose prompt and completion prices are
  * "0", answering text to text (no code or moderation model), in that order, plus "openrouter/free" (OpenRouter
  * picks a free model for each question). The list is kept on
- * SPIFFS, so that the models are offered at start-up and when OpenRouter cannot be reached. OpenRouter_free (off:
- * the list is not read) and Free_models (how many) of CONFIG.INI; [openrouter_free_exclude] of AGENTS.INI. More
+ * SPIFFS, so that the models are offered at start-up and when OpenRouter cannot be reached. OpenRouter_free of
+ * CONFIG.INI: how many are offered (0: none, the list is not read); [openrouter_free_exclude] of AGENTS.INI. More
  * candidates than offered are kept, so that a change of these applies at the next start, without reading again.
  */
 
@@ -35,7 +35,7 @@
 #define FREE_READ_CHUNK         1024
 /* One model of the list, at most (the largest is ~4 KB) */
 #define FREE_OBJECT_MAX         (12 * 1024)
-/* The most used free models kept from the list (candidates; Free_models of them offered, the excluded ones left
+/* The most used free models kept from the list (candidates; OpenRouter_free of them offered, the excluded ones left
  * out), plus the automatic choice */
 #define FREE_MODELS_KEPT        24
 #define FREE_CACHE_MAX          4096
@@ -164,11 +164,11 @@ static int offered_free(int count)
 }
 
 /* The models chosen, given to llm.c: the most used free ones, then the automatic choice; false when there were
- * not enough candidates for Free_models */
+ * not enough candidates for OpenRouter_free */
 static bool apply(const char *const *ids, const char *const *names, int n)
 {
     const sys_param_t *param = settings_get_parameter();
-    int wanted = param->openrouter_free ? param->free_models : 0;
+    int wanted = param->free_models;
     llm_model_t models[LLM_OPENROUTER_FREE_MAX];
     // Kept while the models are offered; PSRAM (internal RAM is scarce)
     static char (*labels)[64] = NULL;
@@ -270,8 +270,8 @@ bool openrouter_free_refresh(void)
     struct tm t;
     localtime_r(&now, &t);
     const sys_param_t *param = settings_get_parameter();
-    if (!param->openrouter_free || param->free_models == 0) {
-        return false;   // OpenRouter_free = off, or Free_models = 0: the list is not read
+    if (param->free_models == 0) {
+        return false;   // OpenRouter_free = 0: the list is not read
     }
     if (t.tm_year + 1900 < 2024 || (s_fetched && now - s_fetched < FREE_REFRESH_S)) {
         return false;   // clock not set yet, or read less than a day ago

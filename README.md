@@ -626,8 +626,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `XAI_key` | xAI key (answers of the Grok models, section `[xai]` of `AGENTS.INI`), empty for none | `xai-…` |
 | `Mistral_key` | Mistral AI key (section `[mistral]` of `AGENTS.INI`, and the Voxtral transcription and speech), empty for none | |
 | `Perplexity_key` | Perplexity key, with paid credit (section `[perplexity]` of `AGENTS.INI`), empty for none | `pplx-…` |
-| `OpenRouter_free` | `on`: the free OpenRouter models are read from its live list once a day; `off`: not read (only Free (auto)) | `on` |
-| `Free_models` | How many free OpenRouter models are offered (0 to 5; 0: none, the list is not read), the most used ones, besides Free (auto); the excluded ones (`AGENTS.INI`) are not counted: the next ones take their place | `3` |
+| `OpenRouter_free` | How many free OpenRouter models are offered, `0` to `5`: the most used ones of its live list (read once a day), besides Free (auto); the excluded ones (`AGENTS.INI`) are not counted, the next ones take their place. `0`: none, the list is not read (only Free (auto)). Replaces the `OpenRouter_free = on / off` and `Free_models` of older versions, merged into it by the configuration mode (`off` → `0`, `on` → the value of `Free_models`) | `3` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
@@ -691,14 +690,14 @@ How to read this table:
   (`GET https://openrouter.ai/api/v1/models?sort=most-popular&max_price=0&max_output_price=0`: only the free
   models, ~30 KB, the **most used first**, by tokens processed in the last week): those whose `pricing.prompt` and
   `pricing.completion` are `"0"`, text in and text only out, without code or moderation models; the first ones
-  (`Free_models` in `CONFIG.INI`, 3 by default, 0 to 5; 0 offers none and does not read the list), plus
+  (`OpenRouter_free` in `CONFIG.INI`, 3 by default, 0 to 5; 0 offers none and does not read the list), plus
   **Free (auto)**
   (`openrouter/free`: OpenRouter picks a free model for each question). They come after the other OpenRouter
-  models, shown as "… (free)". `OpenRouter_free = off` stops reading the list (only Free (auto) is offered).
+  models, shown as "… (free)". `OpenRouter_free = 0` stops reading the list (only Free (auto) is offered).
   Models listed in the **`[openrouter_free_exclude]`** section of `AGENTS.INI` (slow, poor answers…) are never
   offered and are not counted: the next most used ones take their place. The 24 first free models of the last list
   read are kept in `/spiffs/or_free.json` (a list kept by an older firmware, sorted by date, is read again at once) (offered at start-up, and when OpenRouter cannot be reached: tried again an hour
-  later), so that a change of `Free_models` or of the exclusions applies at the next start; when they are not
+  later), so that a change of `OpenRouter_free` or of the exclusions applies at the next start; when they are not
   enough, the list is read again at the next opportunity. They still need `OpenRouter_key`, and have usage limits
   (about 50 requests a day without bought credit).
 - **Grok** (xAI): one key from console.x.ai (prepaid credit). The xAI API is OpenAI-compatible (Chat Completions);
@@ -1454,8 +1453,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_RADIO_TREBLE` | `-6` | Treble of the radio when `Radio_treble` is not set |
 | `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
-| `CONFIG_ASSISTANT_OPENROUTER_FREE` | `on` | Free OpenRouter models read when `OpenRouter_free` is not set |
-| `CONFIG_ASSISTANT_FREE_MODELS` | `3` | Free OpenRouter models offered when `Free_models` is not set (0 to 5) |
+| `CONFIG_ASSISTANT_FREE_MODELS` | `3` | Free OpenRouter models offered when `OpenRouter_free` is not set (0 to 5; 0: none, the list is not read) |
 | `CONFIG_ASSISTANT_CONFIRM_OFF` | `socket` | Homey classes confirmed before being turned off when `Confirm_off` is not set |
 | `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |

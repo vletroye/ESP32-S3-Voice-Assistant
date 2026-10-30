@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -191,11 +192,27 @@ void app_main(void)
         // Mistral AI and Perplexity keys (sections [mistral] and [perplexity] of AGENTS.INI)
         nvs_init_str_if_missing("Mistral_key", "");
         nvs_init_str_if_missing("Perplexity_key", "");
-        // Free OpenRouter models: read from its live list (on / off) and how many offered
-        nvs_init_str_if_missing("OpenRouter_free", CONFIG_ASSISTANT_OPENROUTER_FREE);
+        // Free OpenRouter models offered (0 to 5; 0: none). An older version's OpenRouter_free = on / off and
+        // Free_models merged into it ("off": 0, "on": its Free_models); Free_models is then erased as unknown
         char free_models[8];
+        size_t free_len = sizeof(free_models);
+        if (nvs_get_str(my_handle, "OpenRouter_free", free_models, &free_len) == ESP_OK &&
+                !isdigit((unsigned char)free_models[0])) {
+            bool off = !strcasecmp(free_models, "off") || !strcasecmp(free_models, "no") ||
+                       !strcasecmp(free_models, "false");
+            free_len = sizeof(free_models);
+            if (off) {
+                strlcpy(free_models, "0", sizeof(free_models));
+            } else if (nvs_get_str(my_handle, "Free_models", free_models, &free_len) != ESP_OK ||
+                       !isdigit((unsigned char)free_models[0])) {
+                snprintf(free_models, sizeof(free_models), "%d", CONFIG_ASSISTANT_FREE_MODELS);
+            }
+            ESP_ERROR_CHECK(nvs_set_str(my_handle, "OpenRouter_free", free_models));
+            ESP_ERROR_CHECK(nvs_commit(my_handle));
+            ESP_LOGI(TAG, "OpenRouter_free and Free_models merged: OpenRouter_free = %s", free_models);
+        }
         snprintf(free_models, sizeof(free_models), "%d", CONFIG_ASSISTANT_FREE_MODELS);
-        nvs_init_str_if_missing("Free_models", free_models);
+        nvs_init_str_if_missing("OpenRouter_free", free_models);
         // Reading speed of the answer on screen, in characters per second
         char scroll_speed[8];
         snprintf(scroll_speed, sizeof(scroll_speed), "%d", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);

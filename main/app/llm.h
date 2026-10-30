@@ -79,7 +79,7 @@ extern llm_stats_t llm_last_stats;
 
 /* The models of AGENTS.INI (llm_load_models()), then the free OpenRouter ones (ai_provider_openrouter_free.c) */
 #define LLM_FILE_MODELS_MAX         32
-#define LLM_OPENROUTER_FREE_MAX     6       /* Free_models (at most 5) and "openrouter/free" */
+#define LLM_OPENROUTER_FREE_MAX     6       /* OpenRouter_free (at most 5) and "openrouter/free" */
 extern llm_model_t *llm_models;      /* PSRAM, allocated by llm_load_models() */
 extern size_t llm_model_count;
 

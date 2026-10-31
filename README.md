@@ -667,7 +667,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
-| `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never) | `10` |
+| `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
 | `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
 | `Radio_treble` | Treble of the radio (above about 3 kHz), in dB, from `-12` to `6`: negative softens them on the small speaker, `0` leaves the sound as it is (also changed from the radio screen) | `-6` |
@@ -1541,7 +1541,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_RADIO_RESUME` | `on` | Radio resumed after a conversation when `Radio_resume` is not set |
 | `CONFIG_ASSISTANT_RADIO_LEVEL` | `-16` | Level of the radio stations when `Radio_level` is not set |
 | `CONFIG_ASSISTANT_RADIO_TREBLE` | `-6` | Treble of the radio when `Radio_treble` is not set |
-| `CONFIG_ASSISTANT_SCREEN_OFF_S` | `10` | Screen off without presence when `Screen_off_s` is not set |
+| `CONFIG_ASSISTANT_SCREEN_OFF_S` | `120` | Screen off without presence when `Screen_off_s` is not set |
 | `CONFIG_ASSISTANT_SCROLL_MODE` | `line` | Answer scrolling when `Scroll_mode` is not set |
 | `CONFIG_ASSISTANT_FREE_MODELS` | `3` | Free OpenRouter models offered when `OpenRouter_free` is not set (0 to 5; 0: none, the list is not read) |
 | `CONFIG_ASSISTANT_CONFIRM_OFF` | `socket` | Homey classes confirmed before being turned off when `Confirm_off` is not set |
@@ -1661,7 +1661,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   shown on the **robot's forehead** (asleep, listening, thinking), above the screen of its eyes, which it follows
   when the robot looks aside (`HEAD_LOGO_GAP_Y`, `HEAD_LOGO_X` in `app_ui_ctrl.c`).
 - **Screen off when nobody is there** (with the ESP32-S3-BOX-3-SENSOR dock): its presence radar switches the
-  screen off after `Screen_off_s` seconds without presence (10 by default) while the assistant sleeps on its
+  screen off after `Screen_off_s` seconds without presence (120 by default; each presence starts the count again) while the assistant sleeps on its
   clock, and on again when someone comes, at the wake word or at a touch. It closes like an iris (a black ring
   growing from the edges to the centre in 0.6 s, the backlight fading out meanwhile) and opens from the centre in
   0.3 s; someone coming back while it closes opens it again at once. Only the backlight: the wake word keeps

@@ -14,7 +14,7 @@
  *
  * OpenAI's WebSocket stays open (connected at boot, reconnected after any error or server close), so that
  * listening never waits for a TLS handshake; Mistral's and Deepgram's sessions last a question: opened when
- * listening starts
+ * listening starts; Groq has no WebSocket: the audio of the question is kept, then sent in one request at its end
  * (the audio is buffered meanwhile) and closed once transcribed. The end of speech is detected on the device.
  */
 
@@ -80,6 +80,7 @@ static stt_partial_cb_t s_on_partial = NULL;
 static const stt_backend_t *s_backend = NULL;
 static char *s_uri = NULL;
 static char *s_auth_header = NULL;
+static char *s_api_key = NULL;      /* for an HTTP service (transcribe) */
 static char *s_model = NULL;
 static char *s_language = NULL;
 /* Service, model or key changed by stt_stream_configure(): a new connection (applied by the stt task) */
@@ -395,6 +396,85 @@ static void fail_turn(const char *reason)
     xEventGroupSetBits(s_events, EV_FAILED);
 }
 
+/* ---------- an HTTP service: the audio of the turn sent at once (stt task) ---------- */
+
+/* At most this much of a question is sent (the rest is left out) */
+#define STT_BATCH_MAX_SAMPLES   (60 * STT_INPUT_RATE)
+
+static int16_t *s_batch = NULL;     /* PSRAM, grown as the question goes on */
+static size_t s_batch_len = 0;
+static size_t s_batch_cap = 0;
+
+static void batch_append(const int16_t *samples, size_t count)
+{
+    if (s_batch_len + count > STT_BATCH_MAX_SAMPLES) {
+        count = STT_BATCH_MAX_SAMPLES - s_batch_len;
+    }
+    if (s_batch_len + count > s_batch_cap) {
+        size_t cap = s_batch_cap ? s_batch_cap * 2 : 10 * STT_INPUT_RATE;
+        while (cap < s_batch_len + count) {
+            cap *= 2;
+        }
+        int16_t *p = heap_caps_realloc(s_batch, cap * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!p) {
+            return;
+        }
+        s_batch = p;
+        s_batch_cap = cap;
+    }
+    memcpy(s_batch + s_batch_len, samples, count * sizeof(int16_t));
+    s_batch_len += count;
+}
+
+/* A loop of the stt task for an HTTP service: the audio kept, then transcribed at the end of speech */
+static void batch_step(void)
+{
+    EventBits_t commands = xEventGroupClearBits(s_events, EV_TURN_START | EV_ABORT);
+    if (commands & EV_ABORT) {
+        s_turn_active = false;
+        s_awaiting = false;
+        drain_audio();
+        xEventGroupClearBits(s_events, EV_COMMIT);
+        s_batch_len = 0;
+        return;
+    }
+    if (commands & EV_TURN_START) {
+        s_partial_len = 0;
+        s_overflow_logged = false;
+        s_turn_sent_samples = 0;
+        s_batch_len = 0;
+    }
+    if (!s_turn_active || s_awaiting) {
+        vTaskDelay(pdMS_TO_TICKS(STT_POLL_MS));
+        return;
+    }
+    EventBits_t bits = xEventGroupGetBits(s_events);
+    size_t n = xStreamBufferReceive(s_audio, s_in, STT_MAX_CHUNK_SAMPLES * sizeof(int16_t), pdMS_TO_TICKS(STT_POLL_MS));
+    if (n >= sizeof(int16_t)) {
+        batch_append(s_in, n / sizeof(int16_t));
+        s_turn_sent_samples += n / sizeof(int16_t);
+        return;
+    }
+    if (!(bits & EV_COMMIT) || !xStreamBufferIsEmpty(s_audio)) {
+        return;
+    }
+    xEventGroupClearBits(s_events, EV_COMMIT);
+    s_commit_us = esp_timer_get_time();
+    s_awaiting = true;
+    char error[160] = "";
+    double billed_s = -1;
+    char *text = s_backend->transcribe(s_model, s_language, s_api_key ? s_api_key : "", s_batch, s_batch_len,
+                                       &billed_s, error, sizeof(error));
+    ESP_LOGI(TAG, "%u ms of audio sent", (unsigned)(s_batch_len * 1000 / STT_INPUT_RATE));
+    s_batch_len = 0;
+    if (text) {
+        stt_backend_final(text, 0, 0, billed_s);
+        free(text);
+    } else {
+        stt_backend_failed(NULL, error[0] ? error : "no transcript");
+    }
+}
+
 static void stt_task(void *arg)
 {
     /* Nothing to do before the network is up */
@@ -402,8 +482,12 @@ static void stt_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 
-    // A session per turn is opened when a turn starts
-    esp_websocket_client_handle_t client = s_backend->session_per_turn ? NULL : create_client();
+    // A session per turn is opened when a turn starts; an HTTP service has none, always ready
+    esp_websocket_client_handle_t client = (s_backend->session_per_turn || s_backend->transcribe) ? NULL :
+                                           create_client();
+    if (s_backend->transcribe) {
+        xEventGroupSetBits(s_events, EV_CONNECTED);
+    }
     bool session_ready = false;             /* connected and session.update sent */
     int64_t down_since = esp_timer_get_time();
     int64_t end_of_speech_us = 0;
@@ -419,7 +503,13 @@ static void stt_task(void *arg)
                 fail_turn("transcription service changed");
             }
             session_ready = false;
-            client = s_backend->session_per_turn ? NULL : create_client();
+            s_batch_len = 0;
+            if (s_backend->transcribe) {
+                xEventGroupSetBits(s_events, EV_CONNECTED);
+            } else {
+                xEventGroupClearBits(s_events, EV_CONNECTED);
+            }
+            client = (s_backend->session_per_turn || s_backend->transcribe) ? NULL : create_client();
             down_since = esp_timer_get_time();
             ESP_LOGI(TAG, "%s: %s", s_backend->name, s_model);
             s_reconfigure = false;      // done: stt_stream_configure() returns
@@ -436,6 +526,10 @@ static void stt_task(void *arg)
             replace_str(&s_language, s_pending_language);
             session_ready = false;
             ESP_LOGI(TAG, "language: %s", s_language);
+        }
+        if (s_backend->transcribe) {
+            batch_step();
+            continue;
         }
         /* ----- connection supervision ----- */
         bool connected = client && esp_websocket_client_is_connected(client) &&
@@ -563,6 +657,7 @@ void stt_stream_configure(const stt_backend_t *backend, const char *api_key, con
     // reconnected
     char *old_header = s_auth_header;
     s_auth_header = header;
+    replace_str(&s_api_key, api_key);
     replace_str(&s_model, model);
     if (language) {
         replace_str(&s_language, language);

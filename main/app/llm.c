@@ -740,6 +740,9 @@ void llm_load_models(void)
         add_missing_provider(STT_SECTION, "deepgram");     // Deepgram's models and voices, added since
         add_missing_provider(TTS_SECTION, "deepgram");
         add_missing_provider(VOICES_SECTION, "deepgram");
+        add_missing_provider(STT_SECTION, "groq");         // Groq and ElevenLabs, added since
+        add_missing_provider(TTS_SECTION, "elevenlabs");
+        add_missing_provider(VOICES_SECTION, "elevenlabs");
         add_missing_provider(TTS_SECTION, "openrouter");   // speech through OpenRouter, added since
         add_missing_provider(VOICES_SECTION, "deepgram/aura-2");
         rewrite_agents(NULL);

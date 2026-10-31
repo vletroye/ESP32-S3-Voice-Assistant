@@ -88,7 +88,7 @@ been largely rewritten.
 Everyday use costs little: with the defaults (Claude Haiku), about **$0.15 for 1,000 answers**, plus the
 transcription and the voice (a few cents per hour of conversation). The device shows what it spends (see
 [Costs](#333-costs-coststxt-and-the-cost-on-screen)). Other providers (Google Gemini, Mistral, xAI Grok, Perplexity,
-OpenRouter for the answers; Mistral and Deepgram for the transcription and the voice) can be added later, each with
+OpenRouter for the answers; Mistral, Deepgram, Groq and ElevenLabs for the transcription and the voice) can be added later, each with
 its own key.
 
 The keys stay **only on your device** (its flash memory): they are never sent anywhere but to their provider, and
@@ -308,7 +308,7 @@ Tapping one stops the countdown and asks for a confirmation:
 
 - **Soft reset** (circular arrows): the settings of `CONFIG.INI` go back to their defaults (language, model,
   voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`,
-  `Claude_key`, `Gemini_key`, `OpenRouter_key`, `XAI_key`, `Mistral_key`, `Perplexity_key`, `Deepgram_key`) and Homey (`Homey_url`, `Homey_key`); the
+  `Claude_key`, `Gemini_key`, `OpenRouter_key`, `XAI_key`, `Mistral_key`, `Perplexity_key`, `Deepgram_key`, `Groq_key`, `ElevenLabs_key`) and Homey (`Homey_url`, `Homey_key`); the
   `PERSO_<XX>.TXT` files, `MEMORY.TXT` and the comments of `CONFIG.INI` are kept. The `VOICE_<XX>.TXT` and
   `LANG_<XX>.TXT` of the six languages given with the firmware (FR, EN, NL, DE, ES, IT), `COUNTRY.TXT` and
   `AGENTS.INI` are replaced by the versions of the firmware (your changes to them are lost); the files of a
@@ -640,7 +640,7 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | Key | Role | Example |
 | --- | --- | --- |
 | `Chat_model` | Model answering the questions | `claude-haiku-5-5`, `gpt-6-luna`, `gemini-3.8-flash`… |
-| `Stt_model` | Transcription model, one of `[stt]` of `AGENTS.INI` (also set by voice: "change de transcription" / "change the transcription"); a Mistral or Deepgram model without its key (`Mistral_key`, `Deepgram_key`) falls back to OpenAI | `gpt-live-transcribe`, `voxtral-mini-transcribe-realtime-3-0`, `nova-3`, `nova-2` |
+| `Stt_model` | Transcription model, one of `[stt]` of `AGENTS.INI` (also set by voice: "change de transcription" / "change the transcription"); a model whose provider has no key (`Mistral_key`, `Deepgram_key`, `Groq_key`…) falls back to OpenAI | `gpt-live-transcribe`, `voxtral-mini-transcribe-realtime-3-0`, `nova-3`, `nova-2`, `whisper-large-v3-turbo` |
 | `Tts_model` | Speech synthesis model, one of `[tts]` (also set by voice: "change de synthèse vocale" / "change the speech synthesis"); same fallback | `gpt-realtime-2.1-mini`, `voxtral-mini-tts-3-0` |
 | `Voice` | Voice of the answers: a name of `[voices]` in `AGENTS.INI` (also set from the Settings screen or by voice: "change de voix" / "change the voice"). A voice of another speech provider, or that does not speak the language in use: the first one of `[voices]` that does is used (the setting is kept) | `Marin`, `Cedar`, `Lea`… |
 | `ssid`, `password` | Wi-Fi (WPA2 minimum) | |
@@ -662,6 +662,8 @@ does not hold are added in the order of the table below (`s_ini_key_order` in `b
 | `Mistral_key` | Mistral AI key (section `[mistral]` of `AGENTS.INI`, and the Voxtral transcription and speech), empty for none | |
 | `Perplexity_key` | Perplexity key, with paid credit (section `[perplexity]` of `AGENTS.INI`), empty for none | `pplx-…` |
 | `Deepgram_key` | Deepgram key (console.deepgram.com), for its transcription (Nova-3, Nova-2) and speech (Aura-2) of `[stt]` and `[tts]`, empty for none | |
+| `Groq_key` | Groq key (console.groq.com), for its Whisper transcription of `[stt]`, empty for none | `gsk_…` |
+| `ElevenLabs_key` | ElevenLabs key (elevenlabs.io, Developers → API keys), for its speech of `[tts]`, empty for none | `sk_…` |
 | `OpenRouter_free` | How many free OpenRouter models are offered, `0` to `5`: the most used ones of its live list (read once a day), besides Free (auto); the excluded ones (`AGENTS.INI`) are not counted, the next ones take their place. `0`: none, the list is not read (only Free (auto)). Replaces the `OpenRouter_free = on / off` and `Free_models` of older versions, merged into it by the configuration mode (`off` → `0`, `on` → the value of `Free_models`) | `3` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
@@ -776,6 +778,8 @@ How to read this table:
 | `voxtral-mini-transcribe-realtime-3-0` | Mistral (`Mistral_key`) | $0.008 a minute | a session per question | not measured |
 | `nova-3` | Deepgram (`Deepgram_key`) | $0.0077 a minute | a session per question | 0.4 s |
 | `nova-2` | Deepgram (`Deepgram_key`) | ≈ $0.0058 a minute | a session per question | not measured |
+| `whisper-large-v3-turbo` | Groq (`Groq_key`) | $0.04 an hour, at least 10 s billed per question (≈ $0.0001) | no streaming: the audio of the question sent at its end | not measured |
+| `whisper-large-v3` | Groq (`Groq_key`) | $0.111 an hour, at least 10 s billed per question | the same | not measured |
 
 - The six languages of the firmware are understood by every model; the language in use is given to them.
 - A session per question is opened when listening starts (its audio is buffered meanwhile): nothing is open while
@@ -790,6 +794,7 @@ speech synthesis", or page 2 of the Settings screen; the voice itself is chosen 
 | `gpt-realtime-2.1-mini` (default) | OpenAI (`ChatGPT_key`) | $0.60 per 1M text tokens, $20 per 1M audio tokens | 10, every language (Marin by default) | 0.9 s |
 | `voxtral-mini-tts-3-0` | Mistral (`Mistral_key`) | $13 per 1M characters | 36: French 4, English 11, Dutch, German, Spanish and Italian 1 each, and 17 for 15 other languages | 0.7 to 1 s |
 | `aura-2` | Deepgram (`Deepgram_key`) | $30 per 1M characters | 18: French 2 (Agathe, Hector), English 4, Dutch, German, Spanish and Italian 3 each | 0.4 s (1.8 s to reconnect after a long pause, done while you speak) |
+| `eleven_flash_v2_5` | ElevenLabs (`ElevenLabs_key`) | 0.5 credit a character (≈ $0.09 per 1,000 characters with the Creator plan) | those of your account, added to `[voices]` (the default ones end on 31/12/2026); 32 languages | not measured |
 | `deepgram/aura-2` | OpenRouter (`OpenRouter_key`) | $30 per 1M characters (Deepgram's price through OpenRouter) | the same 18 Aura-2 voices | 0.7 to 0.9 s (MP3, decoded on the device; 1.8 to 2.0 s from the transcript to the first sound) |
 
 - With Mistral, each voice can have an emotion and a pace; OpenAI reads them in its instructions; Deepgram has
@@ -1372,6 +1377,7 @@ flowchart LR
 | Transcription (OpenAI) | OpenAI Realtime, `gpt-live-transcribe` | WebSocket kept open, AFE output resampled to 24 kHz and streamed continuously |
 | Transcription (Mistral) | Mistral Voxtral Realtime, `voxtral-mini-transcribe-realtime-3-0` | One WebSocket session per question, opened when listening starts (the audio is buffered meanwhile): `session.update` (PCM 16 kHz, language in use), `input_audio.append`, `input_audio.end` → `transcription.text.delta`, `transcription.done` |
 | Transcription (Deepgram) | Deepgram live `wss://api.deepgram.com/v1/listen`, `nova-3` or `nova-2` | One WebSocket session per question (header `Authorization: Token …`; model, language in use, `linear16` 16 kHz, `smart_format` in the URL): the audio in binary frames, `{"type":"CloseStream"}` at the end of speech → `Results` (`is_final` pieces, joined) then `Metadata` (all transcribed; its `duration` is billed) |
+| Transcription (Groq) | Groq `POST /openai/v1/audio/transcriptions`, `whisper-large-v3-turbo` or `whisper-large-v3` | No streaming transcription at Groq: the audio of the question is kept on the device (PSRAM, up to 60 s), then sent at the end of speech as a 16 kHz WAV (multipart form: model, language in use, `response_format=json`, `temperature=0`) → `{"text": …}`; at least 10 s billed per request |
 | Answer (Claude) | Anthropic Messages API | `stream: true`, effort `low`, thinking off when the model allows it, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working); prompt cache: an explicit breakpoint on the instructions (tools + system, ~8,400 tokens, read again by the first question of a new conversation within 5 minutes) plus automatic caching of the conversation |
 | Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working) |
 | Answer (OpenRouter) | OpenRouter Chat Completions API (OpenAI-compatible) | `stream: true`, `reasoning.effort` `low` with `exclude` (not returned), 6 to 12 exchanges of history kept on the device (cut in blocks) |
@@ -1383,6 +1389,7 @@ flowchart LR
 | Speech synthesis (Mistral) | Mistral `POST /v1/audio/speech`, `voxtral-mini-tts-3-0`, a voice of `[voices]` (Lea in French) | One streamed request per sentence, the sentences already waiting joined to it (up to 600 characters: a request takes 0.7 to 1 s to start, and its audio comes only ~1.15 times faster than spoken), with the emotion and pace tags of the voice before it (`response_format: wav`, `stream: true`: server-sent events of base64 16-bit audio at 24 kHz); 600 ms of audio kept in reserve before playing; connection kept alive, events read in 4 KB blocks, and warmed up while the user speaks when unused for 30 s |
 | Speech synthesis (OpenRouter) | OpenRouter `POST /api/v1/audio/speech` (OpenAI-compatible), a model of `[tts]` with the provider `openrouter` (`deepgram/aura-2`), a voice of `[voices]` of that model | One request per sentence (`response_format: mp3`: a few KB a second instead of the 48 of 16-bit PCM at 24 kHz, as the services behind OpenRouter are far), the sentences waiting joined to it (up to 600 characters) and 600 ms in reserve; the MP3 comes as it is made (first bytes 0.7 to 0.9 s after the request, measured with Aura-2) and is decoded on the device by the radio's decoder (24 kHz mono for Aura-2; another rate is brought to 16 kHz); connection kept alive and warmed up while the user speaks |
 | Speech synthesis (Deepgram) | Deepgram `POST /v1/speak`, Aura-2, a voice of `[voices]` (Agathe in French) | One request per sentence, the voice as its `model` (`aura-2-agathe-fr`), 8-bit mu-law audio at 16 kHz (`encoding=mulaw`, `sample_rate=16000`, `container=none`: 16 KB a second, as Deepgram is far, ~90 ms, and the TCP window of the device small; 16-bit 24 kHz audio, 48 KB a second, came slower than spoken) decoded and played as it comes; connection kept alive, warmed up while the user speaks when unused for 30 s |
+| Speech synthesis (ElevenLabs) | ElevenLabs `POST /v1/text-to-speech/<voice id>/stream?output_format=pcm_16000`, `eleven_flash_v2_5`, a voice of the account in `[voices]` | One request per sentence (header `xi-api-key`), 16-bit audio at 16 kHz played as it comes; without a voice for the language in use, the first ElevenLabs voice of `[voices]`; connection kept alive, warmed up while the user speaks when unused for 30 s |
 | Playback | local | 24 → 16 kHz resampling, short fade-out at the end of each sentence (no click), I2S fixed at 16 kHz (shared with the mics) |
 
 The stages overlap: FreeRTOS tasks are chained through queues (model text → sentences → synthesis →
@@ -1450,11 +1457,13 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `ai_provider_mistral_tts.c` | Mistral Voxtral speech (HTTP server-sent events, WAV 16-bit, keep-alive), emotion and pace tags before each sentence |
 | `ai_provider_openrouter_tts.c` | Speech through OpenRouter's audio API (any model of `[tts]` with the provider `openrouter`): MP3 streamed, decoded on the device (`esp_audio_codec`), keep-alive, warm-up |
 | `ai_provider_deepgram_tts.c` | Deepgram Aura-2 speech (HTTP, 16 kHz mu-law audio streamed and decoded, keep-alive), the voice as the model |
+| `ai_provider_elevenlabs_tts.c` | ElevenLabs speech (HTTP, 16 kHz PCM streamed, keep-alive), the voice of the account in the URL |
 | `stt_stream.c` | Transcription engine shared by the services: audio buffer in PSRAM, resampling when needed, connection kept or opened per question, transcript; transcription of a recorded sentence for the model test |
 | `stt_backend.h` | Interface of a transcription service (URL, `session.update`, message types, events) |
 | `ai_provider_openai_stt.c` | OpenAI Realtime transcription (24 kHz, permanent WebSocket) |
 | `ai_provider_mistral_stt.c` | Mistral Voxtral Realtime transcription (16 kHz, a session per question, language sent) |
 | `ai_provider_deepgram_stt.c` | Deepgram Nova live transcription (16 kHz binary audio, a session per question, `CloseStream` then `Metadata`) |
+| `ai_provider_groq_stt.c` | Groq Whisper transcription (no WebSocket: the audio of the question kept, then sent as a WAV in one request) |
 | `file_lang.c` | Texts of the device per language (`main/lang/lang_<code>.txt`, installed on SPIFFS as `LANG_<CODE>.TXT`): UI texts, model instructions, error messages; languages offered (`Languages`), files of a language added |
 | `file_country.c` | Countries known by voice and their names per language (`main/lang/country.txt`, `COUNTRY.TXT`) |
 | `file_persona.c` | Who the assistant is, per language (`main/persona/persona_<code>.txt`, `PERSO_<XX>.TXT`): identity, personality, instructions, voice |

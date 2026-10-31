@@ -36,6 +36,12 @@ struct stt_backend {
     bool session_per_turn;
     /* A message received (type: its "type") */
     void (*on_message)(const cJSON *json, const char *type);
+    /*
+     * An HTTP service (Groq), NULL for a WebSocket one: the audio of the turn (16 kHz) is kept, then sent at once at
+     * its end. Returns the text (allocated), NULL on failure (error: why); billed_s: the seconds billed.
+     */
+    char *(*transcribe)(const char *model, const char *language, const char *api_key, const int16_t *pcm,
+                        size_t samples, double *billed_s, char *error, size_t error_size);
 };
 
 /** Text of the turn received so far (a delta, appended) */

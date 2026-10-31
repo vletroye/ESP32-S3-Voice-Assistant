@@ -33,6 +33,7 @@ typedef struct tts_backend tts_backend_t;
 extern const tts_backend_t tts_backend_openai;
 extern const tts_backend_t tts_backend_mistral;
 extern const tts_backend_t tts_backend_deepgram;
+extern const tts_backend_t tts_backend_elevenlabs;
 extern const tts_backend_t tts_backend_openrouter;
 
 /**

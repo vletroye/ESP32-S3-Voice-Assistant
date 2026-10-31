@@ -194,7 +194,7 @@ static const lang_field_t s_fields[] = {
     { "speech_no_key", offsetof(app_lang_t, speech_no_key), FIELD_TEXT, 1 },
     { "stt_switched", offsetof(app_lang_t, stt_switched), FIELD_TEXT, 1 },
     { "tts_switched", offsetof(app_lang_t, tts_switched), FIELD_TEXT, 1 },
-    { "speech_no_credit", offsetof(app_lang_t, speech_no_credit), FIELD_TEXT, 1 },
+    { "speech_refused", offsetof(app_lang_t, speech_refused), FIELD_TEXT, 1 },
     { "home_line", offsetof(app_lang_t, home_line), FIELD_TEXT, 1 },
     { "weekdays", offsetof(app_lang_t, weekdays), FIELD_LIST, 7 },
     { "now_format", offsetof(app_lang_t, now_format), FIELD_TEXT, 1 },

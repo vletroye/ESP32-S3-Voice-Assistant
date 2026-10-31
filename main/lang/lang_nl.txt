@@ -265,8 +265,9 @@ new_conversation = Goed, ik luister.
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Verbinding te traag: de stem kon niet vloeiend worden voorgelezen.)
 
-# shown (it cannot be spoken) when the transcription or the speech of OpenAI is refused for lack of credit
-speech_no_credit = (Het OpenAI-tegoed is op: de transcriptie en de stem werken niet meer. Voeg tegoed toe op platform.openai.com.)
+# shown (it cannot be spoken) when the service of the transcription or the speech refuses (no credit left,
+# plan too small); %s: the service ("ElevenLabs")
+speech_refused = (%s weigert de transcriptie of de stem: tegoed op, of een abonnement dat het niet toelaat. Controleer je account bij deze aanbieder.)
 
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Roep voor elke vraag over het huis (kamers, apparaten, hun toestand, sferen, flows, aanwezigheid, verbruik) telkens de tools van de Homey aan: oudere resultaten in het gesprek kunnen ingekort of verouderd zijn, antwoord nooit uit het geheugen. Roep voor de lijst van de kamers zones_list aan. Als de gebruiker om een actie vraagt (aanzetten, uitzetten, instellen, een sfeer activeren, een flow starten), antwoord dan in een paar woorden: "Klaar." als alles gelukt is, zeg anders kort wat niet gelukt is en stel de enige nuttige vraag om verder te gaan. Beschrijf de apparaten, de tools of de stappen niet, stel niets anders voor.

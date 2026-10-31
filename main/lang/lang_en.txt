@@ -264,8 +264,9 @@ new_conversation = All right, I'm listening.
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Connection too slow: the voice could not be read smoothly.)
 
-# shown (it cannot be spoken) when the transcription or the speech of OpenAI is refused for lack of credit
-speech_no_credit = (The OpenAI credit is used up: the transcription and the voice no longer work. Add credit on platform.openai.com.)
+# shown (it cannot be spoken) when the service of the transcription or the speech refuses (no credit left,
+# plan too small); %s: the service ("ElevenLabs")
+speech_refused = (%s refuses the transcription or the voice: no credit left, or a plan that does not allow it. Check your account with this provider.)
 
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = For any question about the home (rooms, devices, their state, moods, flows, presence, consumption), call the Homey tools every time: older results of the conversation may be shortened or out of date, never answer from memory. For the list of rooms, call zones_list. When the user asks for an action (switch on, switch off, set, activate a mood, start a flow), answer in a few words: "Done." if everything worked, else say briefly what did not work and ask the only useful question to go on. Do not describe the devices, the tools or the steps, do not offer anything else.

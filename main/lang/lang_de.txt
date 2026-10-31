@@ -265,8 +265,9 @@ new_conversation = In Ordnung, ich höre zu.
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Verbindung zu langsam: die Stimme konnte nicht flüssig vorgelesen werden.)
 
-# shown (it cannot be spoken) when the transcription or the speech of OpenAI is refused for lack of credit
-speech_no_credit = (Das OpenAI-Guthaben ist aufgebraucht: die Transkription und die Stimme funktionieren nicht mehr. Lade Guthaben auf platform.openai.com auf.)
+# shown (it cannot be spoken) when the service of the transcription or the speech refuses (no credit left,
+# plan too small); %s: the service ("ElevenLabs")
+speech_refused = (%s verweigert die Transkription oder die Stimme: Guthaben aufgebraucht oder Abo nicht ausreichend. Prüfe dein Konto bei diesem Anbieter.)
 
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Rufe bei jeder Frage zum Zuhause (Räume, Geräte, ihr Zustand, Stimmungen, Flows, Anwesenheit, Verbrauch) jedes Mal die Werkzeuge der Homey auf: ältere Ergebnisse des Gesprächs können gekürzt oder veraltet sein, antworte nie aus dem Gedächtnis. Für die Liste der Räume rufe zones_list auf. Wenn der Benutzer um eine Aktion bittet (einschalten, ausschalten, einstellen, eine Stimmung aktivieren, einen Flow starten), antworte in wenigen Worten: "Erledigt." wenn alles geklappt hat, sonst sag kurz, was nicht geklappt hat, und stelle die einzige nützliche Frage, um weiterzumachen. Beschreibe weder die Geräte noch die Werkzeuge noch die Schritte, schlage nichts anderes vor.

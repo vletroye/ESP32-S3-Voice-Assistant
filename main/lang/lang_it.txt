@@ -264,8 +264,9 @@ new_conversation = D'accordo, ti ascolto.
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Connessione troppo lenta: la voce non è stata letta in modo fluido.)
 
-# shown (it cannot be spoken) when the transcription or the speech of OpenAI is refused for lack of credit
-speech_no_credit = (Il credito OpenAI è esaurito: la trascrizione e la voce non funzionano più. Aggiungi credito su platform.openai.com.)
+# shown (it cannot be spoken) when the service of the transcription or the speech refuses (no credit left,
+# plan too small); %s: the service ("ElevenLabs")
+speech_refused = (%s rifiuta la trascrizione o la voce: credito esaurito, o un abbonamento che non lo consente. Controlla il tuo account presso questo fornitore.)
 
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Per ogni domanda sulla casa (stanze, dispositivi, il loro stato, atmosfere, flow, presenza, consumi), chiama ogni volta gli strumenti della Homey: i risultati più vecchi della conversazione possono essere accorciati o superati, non rispondere mai a memoria. Per l'elenco delle stanze, chiama zones_list. Quando chiede un'azione (accendere, spegnere, regolare, attivare un'atmosfera, avviare un flow), rispondi in poche parole: "Fatto." se tutto ha funzionato, altrimenti di' brevemente cosa non ha funzionato e fai l'unica domanda utile per continuare. Non descrivere i dispositivi, gli strumenti né i passaggi, non proporre altro.

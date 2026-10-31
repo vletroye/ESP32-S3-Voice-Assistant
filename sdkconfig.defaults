@@ -58,3 +58,6 @@ CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS=4000
 
 # Main task: app_main reads files and JSON at start-up (3584 by default overflowed)
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# HTTP Upgrade answer of a WebSocket: ElevenLabs (Cloudflare) sends more than 1 KB of headers
+CONFIG_WS_BUFFER_SIZE=4096

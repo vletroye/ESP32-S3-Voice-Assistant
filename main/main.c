@@ -152,6 +152,7 @@ static void reply_view_refresh(reply_view_t *v)
 /* Streaming callback: refresh the screen at most every REPLY_UI_REFRESH_US */
 static void on_sentence(const char *sentence, void *ctx);
 static void speak_message(const char *message);
+static char *speech_refused_text(llm_speech_kind_t kind);
 
 static void on_llm_text(const char *delta, void *ctx)
 {
@@ -244,12 +245,14 @@ static void on_reply_audio(tts_event_t event)
     ESP_LOGI(TAG, "[timing] reply spoken, %lld ms after the transcription", elapsed_ms(s_reply_t0));
     s_reply_active = false;
     if (tts_stream_no_credit()) {
-        // Nothing spoken: the OpenAI credit of the speech is exhausted, said on screen (it cannot be spoken); the
-        // whole reply is to be read before the listen panel comes
+        // Nothing spoken: the speech service refused (no credit, plan too small), said on screen (it cannot be
+        // spoken); the whole reply is to be read before the listen panel comes
         size_t chars = s_shown_chars;
         if (!s_no_credit_shown) {
-            ui_ctrl_reply_append_notice(app_lang_get()->speech_no_credit);
-            chars += strlen(app_lang_get()->speech_no_credit);
+            char *refused = speech_refused_text(LLM_SPEECH_TTS);
+            ui_ctrl_reply_append_notice(refused ? refused : "");
+            chars += refused ? strlen(refused) : 0;
+            free(refused);
         }
         s_unread_ms = reading_ms(chars);
     } else if (tts_stream_reply_was_choppy()) {
@@ -753,6 +756,21 @@ static const llm_speech_model_t *speech_choice(llm_speech_kind_t kind, const cha
     return m;
 }
 
+/* "(ElevenLabs refuse la voix...)": the service of the transcription or the speech in use named (allocated) */
+static char *speech_refused_text(llm_speech_kind_t kind)
+{
+    const char *key;
+    const llm_speech_model_t *m = speech_choice(kind, kind == LLM_SPEECH_STT ? sys_param->stt_model :
+                                                sys_param->tts_model, &key);
+    const char *p = m ? m->provider : "openai";
+    const char *name = strcmp(p, "mistral") == 0 ? "Mistral" : strcmp(p, "deepgram") == 0 ? "Deepgram" :
+                       strcmp(p, "openrouter") == 0 ? "OpenRouter" : strcmp(p, "groq") == 0 ? "Groq" :
+                       strcmp(p, "elevenlabs") == 0 ? "ElevenLabs" : "OpenAI";
+    char *text = NULL;
+    asprintf(&text, app_lang_get()->speech_refused, name);
+    return text;
+}
+
 const char *assistant_tts_provider(void)
 {
     const char *key;
@@ -858,8 +876,10 @@ void assistant_listen_end(void)
         return;
     }
     if (NULL == text) {
-        // Not understood, or the transcription refused for lack of OpenAI credit (shown: it cannot be spoken either)
-        speak_message(stt_stream_no_credit() ? app_lang_get()->speech_no_credit : app_lang_get()->stt_error);
+        // Not understood, or the transcription service refused (no credit...): shown, it cannot be spoken either
+        char *refused = stt_stream_no_credit() ? speech_refused_text(LLM_SPEECH_STT) : NULL;
+        speak_message(refused ? refused : app_lang_get()->stt_error);
+        free(refused);
         s_no_credit_shown = stt_stream_no_credit();
         return;
     }

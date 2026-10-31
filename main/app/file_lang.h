@@ -145,7 +145,7 @@ typedef struct {
     const char *speech_no_key;      /* %s: provider, %s: its key in CONFIG.INI */
     const char *stt_switched;       /* %s: spoken name */
     const char *tts_switched;       /* %s: spoken name (said with the new speech) */
-    const char *speech_no_credit;   /* shown when the transcription or the speech (OpenAI) has no credit left */
+    const char *speech_refused;     /* %s service: shown when the transcription or the speech refuses (no credit...) */
     const char *home_line;          /* in the instructions when a Homey is set: ask it, do not answer from memory */
     /* Day abbreviations of the clock under the sleeping robot, Sunday first */
     const char *weekdays[7];

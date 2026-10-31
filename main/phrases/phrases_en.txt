@@ -87,6 +87,7 @@ test (the|your|my) model[s] (in use|currently in use)
 [s_test_provider]
 # Tests the models of a provider: its name may follow ("test the models of Google"), else it is asked
 test (the|your|all) model[s] (of|from|by)
+test all (the|your) model[s] (of|from|by)
 test (a|one|the) provider
 
 [s_test_models]

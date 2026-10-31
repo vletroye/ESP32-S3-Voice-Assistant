@@ -90,6 +90,7 @@ test[e][r] (les|tes|mes|des|de|du|le|ton) mod(è|e)le[s] (actuel[s]|courant[s]|u
 # Teste les modèles d'un fournisseur : son nom peut suivre (« teste les modèles de Google »), sinon il est demandé
 test[e][r] (les|tes|des|mes|de|du) mod(è|e)le[s] (d un|du|de|d|chez)
 [(lance|fais|fait) ](le|un) test (des|de|du) mod(è|e)le[s] (d un|du|de|d|chez)
+test[e][r] tous (les|tes|mes) mod(è|e)le[s] (d un|du|de|d|chez)
 test[e][r] (un|le|ce) fournisseur
 
 [s_test_models]

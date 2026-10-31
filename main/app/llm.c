@@ -974,15 +974,18 @@ static const llm_model_t *model_of(const char *id)
 #define LLM_HISTORY_TMP_FILE    "/spiffs/history.tmp"
 
 static llm_provider_t s_provider = LLM_PROVIDER_CLAUDE;
+/* The client of each provider (ai_provider_<name>.c) */
+static const llm_backend_t *const s_backends[LLM_PROVIDER_COUNT] = {
+    [LLM_PROVIDER_CLAUDE] = &llm_backend_claude,
+    [LLM_PROVIDER_OPENAI] = &llm_backend_openai,
+    [LLM_PROVIDER_GEMINI] = &llm_backend_gemini,
+    [LLM_PROVIDER_OPENROUTER] = &llm_backend_openrouter,
+    [LLM_PROVIDER_XAI] = &llm_backend_xai,
+    [LLM_PROVIDER_MISTRAL] = &llm_backend_mistral,
+    [LLM_PROVIDER_PERPLEXITY] = &llm_backend_perplexity,
+};
 /* Keys and instructions of llm_init(): the model test configures other models with them */
-static char *s_claude_key = NULL;
-static char *s_openai_key = NULL;
-static char *s_openai_url = NULL;
-static char *s_gemini_key = NULL;
-static char *s_openrouter_key = NULL;
-static char *s_xai_key = NULL;
-static char *s_mistral_key = NULL;
-static char *s_perplexity_key = NULL;
+static char *s_keys[LLM_PROVIDER_COUNT];
 static char *s_system = NULL;
 static bool s_ready = false;
 static char s_model[64];
@@ -1040,34 +1043,20 @@ static const char *effort_of(const char *model)
     return "low";
 }
 
+static const llm_backend_t *backend(void)
+{
+    return s_backends[s_provider];
+}
+
 static const cJSON *history_get(void)
 {
-    return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_history() :
-           s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_history() :
-           s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_history() :
-           s_provider == LLM_PROVIDER_XAI ? xai_chat_history() :
-           s_provider == LLM_PROVIDER_MISTRAL ? mistral_chat_history() :
-           s_provider == LLM_PROVIDER_PERPLEXITY ? perplexity_chat_history() : claude_client_history();
+    return backend()->history(backend()->state);
 }
 
 /* Give a conversation (taken over) to the client of the current provider */
 static void history_set(cJSON *messages)
 {
-    if (s_provider == LLM_PROVIDER_OPENAI) {
-        openai_chat_set_history(messages);
-    } else if (s_provider == LLM_PROVIDER_GEMINI) {
-        gemini_chat_set_history(messages);
-    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
-        openrouter_chat_set_history(messages);
-    } else if (s_provider == LLM_PROVIDER_XAI) {
-        xai_chat_set_history(messages);
-    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
-        mistral_chat_set_history(messages);
-    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
-        perplexity_chat_set_history(messages);
-    } else {
-        claude_client_set_history(messages);
-    }
+    backend()->set_history(backend()->state, messages);
 }
 
 /* Reload the conversation saved for the same model (another model's history has another format) */
@@ -1147,54 +1136,19 @@ static void keep(char **dst, const char *src)
 /* The client of the model's provider (s_provider) configured for it, with the keys and instructions kept */
 static esp_err_t client_init(const char *model, bool tools)
 {
-    esp_err_t ret;
-    if (s_provider == LLM_PROVIDER_OPENAI) {
-        ret = openai_chat_init(s_openai_url, s_openai_key, model, s_system, effort_of(model));
-    } else if (s_provider == LLM_PROVIDER_GEMINI) {
-        if (s_gemini_key[0] == '\0') {
-            ESP_LOGW(TAG, "No Gemini_key configured for %s", model);
-            ret = ESP_ERR_INVALID_ARG;
-        } else {
-            ret = gemini_chat_init(s_gemini_key, model, s_system, effort_of(model));
-        }
-    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
-        if (s_openrouter_key[0] == '\0') {
-            ESP_LOGW(TAG, "No OpenRouter_key configured for %s", model);
-            ret = ESP_ERR_INVALID_ARG;
-        } else {
-            ret = openrouter_chat_init(s_openrouter_key, model, s_system, effort_of(model));
-        }
-    } else if (s_provider == LLM_PROVIDER_XAI) {
-        if (s_xai_key[0] == '\0') {
-            ESP_LOGW(TAG, "No XAI_key configured for %s", model);
-            ret = ESP_ERR_INVALID_ARG;
-        } else {
-            ret = xai_chat_init(s_xai_key, model, s_system, effort_of(model));
-        }
-    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
-        if (s_mistral_key[0] == '\0') {
-            ESP_LOGW(TAG, "No Mistral_key configured for %s", model);
-            ret = ESP_ERR_INVALID_ARG;
-        } else {
-            ret = mistral_chat_init(s_mistral_key, model, s_system, effort_of(model));
-        }
-    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
-        if (s_perplexity_key[0] == '\0') {
-            ESP_LOGW(TAG, "No Perplexity_key configured for %s", model);
-            ret = ESP_ERR_INVALID_ARG;
-        } else {
-            ret = perplexity_chat_init(s_perplexity_key, model, s_system, effort_of(model));
-        }
-    } else if (s_claude_key[0] == '\0') {
-        ESP_LOGW(TAG, "No Claude_key configured for %s", model);
-        ret = ESP_ERR_INVALID_ARG;
-    } else {
+    const llm_backend_t *b = backend();
+    const char *key = s_keys[s_provider];
+    if (!key || key[0] == '\0') {
+        ESP_LOGW(TAG, "No %s configured for %s", b->key_name, model);
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (s_provider == LLM_PROVIDER_CLAUDE) {
         const llm_model_t *listed = model_of(model);
-        ret = claude_client_init(s_claude_key, model, s_system, effort_of(model), listed ? listed->thinking : NULL);
+        claude_client_set_thinking(listed ? listed->thinking : NULL);
         // Tools (weather, volume...): offered to Claude only for now; none for the model test
         claude_client_set_tools(tools ? tools_definitions() : NULL, tools ? tools_run : NULL);
     }
-    return ret;
+    return b->init(b->state, key, model, s_system, effort_of(model));
 }
 
 esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
@@ -1205,14 +1159,19 @@ esp_err_t llm_init(const char *model, const char *claude_key, const char *openai
     if (s_lock) {
         xSemaphoreTake(s_lock, portMAX_DELAY);
     }
-    keep(&s_claude_key, claude_key);
-    keep(&s_openai_key, openai_key);
-    keep(&s_openai_url, openai_base_url);
-    keep(&s_gemini_key, gemini_key);
-    keep(&s_openrouter_key, openrouter_key);
-    keep(&s_xai_key, xai_key);
-    keep(&s_mistral_key, mistral_key);
-    keep(&s_perplexity_key, perplexity_key);
+    const char *keys[LLM_PROVIDER_COUNT] = {
+        [LLM_PROVIDER_CLAUDE] = claude_key,
+        [LLM_PROVIDER_OPENAI] = openai_key,
+        [LLM_PROVIDER_GEMINI] = gemini_key,
+        [LLM_PROVIDER_OPENROUTER] = openrouter_key,
+        [LLM_PROVIDER_XAI] = xai_key,
+        [LLM_PROVIDER_MISTRAL] = mistral_key,
+        [LLM_PROVIDER_PERPLEXITY] = perplexity_key,
+    };
+    for (int p = 0; p < LLM_PROVIDER_COUNT; p++) {
+        keep(&s_keys[p], keys[p]);
+    }
+    openai_chat_set_base_url(openai_base_url);
     keep(&s_system, system_prompt);
     s_provider = llm_provider_of(model);
     esp_err_t ret = client_init(model, true);
@@ -1237,21 +1196,7 @@ void llm_set_system_prompt(const char *system_prompt)
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     keep(&s_system, system_prompt);
-    if (s_provider == LLM_PROVIDER_OPENAI) {
-        openai_chat_set_instructions(system_prompt);
-    } else if (s_provider == LLM_PROVIDER_GEMINI) {
-        gemini_chat_set_instructions(system_prompt);
-    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
-        openrouter_chat_set_instructions(system_prompt);
-    } else if (s_provider == LLM_PROVIDER_XAI) {
-        xai_chat_set_instructions(system_prompt);
-    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
-        mistral_chat_set_instructions(system_prompt);
-    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
-        perplexity_chat_set_instructions(system_prompt);
-    } else {
-        claude_client_set_system(system_prompt);
-    }
+    backend()->set_instructions(backend()->state, system_prompt);
     xSemaphoreGive(s_lock);
 }
 
@@ -1284,13 +1229,7 @@ llm_provider_t llm_provider(void)
 /* The question to the client of the current provider (s_lock held) */
 static llm_error_t client_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
 {
-    return s_provider == LLM_PROVIDER_OPENAI ? openai_chat_stream(text, on_text, ctx, full_text)
-           : s_provider == LLM_PROVIDER_GEMINI ? gemini_chat_stream(text, on_text, ctx, full_text)
-           : s_provider == LLM_PROVIDER_OPENROUTER ? openrouter_chat_stream(text, on_text, ctx, full_text)
-           : s_provider == LLM_PROVIDER_XAI ? xai_chat_stream(text, on_text, ctx, full_text)
-           : s_provider == LLM_PROVIDER_MISTRAL ? mistral_chat_stream(text, on_text, ctx, full_text)
-           : s_provider == LLM_PROVIDER_PERPLEXITY ? perplexity_chat_stream(text, on_text, ctx, full_text)
-           : claude_client_stream(text, on_text, ctx, full_text);
+    return backend()->stream(backend()->state, text, on_text, ctx, full_text);
 }
 
 llm_error_t llm_probe(const llm_model_t *model, const char *question, llm_stats_t *stats)
@@ -1363,21 +1302,7 @@ void llm_prewarm(void)
     if (!s_ready) {
         return;
     }
-    if (s_provider == LLM_PROVIDER_OPENAI) {
-        openai_chat_prewarm();
-    } else if (s_provider == LLM_PROVIDER_GEMINI) {
-        gemini_chat_prewarm();
-    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
-        openrouter_chat_prewarm();
-    } else if (s_provider == LLM_PROVIDER_XAI) {
-        xai_chat_prewarm();
-    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
-        mistral_chat_prewarm();
-    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
-        perplexity_chat_prewarm();
-    } else {
-        claude_client_prewarm();
-    }
+    backend()->prewarm(backend()->state);
 }
 
 void llm_reset(void)
@@ -1386,21 +1311,7 @@ void llm_reset(void)
         return;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    if (s_provider == LLM_PROVIDER_OPENAI) {
-        openai_chat_reset();
-    } else if (s_provider == LLM_PROVIDER_GEMINI) {
-        gemini_chat_reset();
-    } else if (s_provider == LLM_PROVIDER_OPENROUTER) {
-        openrouter_chat_reset();
-    } else if (s_provider == LLM_PROVIDER_XAI) {
-        xai_chat_reset();
-    } else if (s_provider == LLM_PROVIDER_MISTRAL) {
-        mistral_chat_reset();
-    } else if (s_provider == LLM_PROVIDER_PERPLEXITY) {
-        perplexity_chat_reset();
-    } else {
-        claude_client_reset();
-    }
+    backend()->reset(backend()->state);
     s_dirty = false;
     xSemaphoreGive(s_lock);
     remove(LLM_HISTORY_FILE);

@@ -13,15 +13,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "esp_log.h"
-#include "llm.h"
 #include "esp_check.h"
-#include "esp_timer.h"
-#include "esp_http_client.h"
-#include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "ai_provider_perplexity.h"
 #include "file_costs.h"
-#include "llm_sse.h"
+#include "llm_common.h"
 
 #define PERPLEXITY_URL                  "https://api.perplexity.ai/v1/agent"
 /* A tiny free answer (the list of models): opens the TLS connection in advance */
@@ -32,12 +28,6 @@
 #define PERPLEXITY_SEARCH_RESULTS       5
 /* Longest source mark taken out of the text: "[12, 13]" */
 #define PERPLEXITY_MARK_MAX             12
-#define PERPLEXITY_TIMEOUT_MS           30000
-#define PERPLEXITY_READ_CHUNK           512
-/* History kept for follow-up questions: the last 10 exchanges (user + assistant messages) */
-#define PERPLEXITY_HISTORY_MAX_MSGS     24
-/* Past the maximum, cut down to this size in one go, so that the start (and the prompt cache) stays */
-#define PERPLEXITY_HISTORY_TRIM_TO      12
 
 static const char *TAG = "perplexity";
 
@@ -48,13 +38,11 @@ static char *s_effort = NULL;
 /* Conversation history: [{role, content}], sent with each request (nothing is stored on Perplexity's side) */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */
-static esp_http_client_handle_t s_client = NULL;
+static llm_http_t s_http = { .url = PERPLEXITY_URL, .key_header = "Authorization" };
 
 typedef struct {
-    llm_text_cb_t on_text;
-    void *ctx;
+    llm_answer_t answer;
     llm_sse_t sse;
-    llm_buf_t text;             /* whole answer text */
     char status[24];            /* "completed", "incomplete", "failed" */
     bool refused;
     bool done;                  /* response.completed / incomplete / failed received */
@@ -63,45 +51,36 @@ typedef struct {
     size_t mark_len;
     int searches;               /* web searches made (billed per call) */
 
-    int64_t start_us;
-    int64_t first_text_us;
     int input_tokens;
     int cached_tokens;
     int output_tokens;
     int reasoning_tokens;
 } stream_t;
 
-static void replace_str(char **dst, const char *src)
+static void perplexity_reset(void *state)
 {
-    free(*dst);
-    *dst = (src && src[0]) ? strdup(src) : NULL;
+    llm_history_reset(&s_messages);
 }
 
-esp_err_t perplexity_chat_init(const char *api_key, const char *model, const char *instructions, const char *effort)
+static esp_err_t perplexity_init(void *state, const char *api_key, const char *model, const char *instructions,
+                                 const char *effort)
 {
     ESP_RETURN_ON_FALSE(api_key && api_key[0] && model && model[0], ESP_ERR_INVALID_ARG, TAG,
                         "API key and model required");
-    replace_str(&s_model, model);
-    free(s_auth);
-    s_auth = malloc(strlen(api_key) + 8);
-    ESP_RETURN_ON_FALSE(s_auth, ESP_ERR_NO_MEM, TAG, "no memory");
-    sprintf(s_auth, "Bearer %s", api_key);
-    replace_str(&s_instructions, instructions);
-    replace_str(&s_effort, (effort && strcmp(effort, "-") != 0) ? effort : NULL);
-    perplexity_chat_reset();
+    llm_str_set(&s_model, model);
+    ESP_RETURN_ON_FALSE(llm_bearer_set(&s_auth, api_key), ESP_ERR_NO_MEM, TAG, "no memory");
+    s_http.tag = TAG;
+    s_http.key = s_auth;
+    llm_str_set(&s_instructions, instructions);
+    llm_str_set(&s_effort, (effort && strcmp(effort, "-") != 0) ? effort : NULL);
+    perplexity_reset(state);
     ESP_LOGI(TAG, "model: %s, reasoning effort: %s, streaming", s_model, s_effort ? s_effort : "(default)");
     return ESP_OK;
 }
 
-void perplexity_chat_set_instructions(const char *instructions)
+static void perplexity_set_instructions(void *state, const char *instructions)
 {
-    replace_str(&s_instructions, instructions);
-}
-
-void perplexity_chat_reset(void)
-{
-    cJSON_Delete(s_messages);
-    s_messages = cJSON_CreateArray();
+    llm_str_set(&s_instructions, instructions);
 }
 
 /* Map an API error to the error kinds shown to the user */
@@ -127,8 +106,11 @@ static llm_error_t classify_error(int status, const char *code, const char *mess
  * {"error": {"message", "type", "code": 401}} (HTTP errors, "response.failed") or {"code", "message"} ("error"
  * event); the code is the HTTP status, or a name
  */
-static llm_error_t error_from_json(int status, const cJSON *json)
+static llm_error_t error_from_json(const void *ctx, int status, const cJSON *json)
 {
+    if (!json) {
+        return classify_error(status, NULL, NULL);
+    }
     const cJSON *api_error = cJSON_GetObjectItem(json, "error");
     if (!cJSON_IsObject(api_error)) {
         api_error = json;
@@ -217,20 +199,7 @@ static void on_response_end(stream_t *st, const cJSON *response)
 /* Text given to the answer (shown, spoken and kept) */
 static void emit_text(stream_t *st, const char *text, size_t len)
 {
-    if (len == 0) {
-        return;
-    }
-    llm_buf_append(&st->text, text, len);
-    if (!st->first_text_us) {
-        st->first_text_us = esp_timer_get_time();
-    }
-    if (st->on_text) {
-        char *piece = strndup(text, len);
-        if (piece) {
-            st->on_text(piece, st->ctx);
-            free(piece);
-        }
-    }
+    llm_answer_add(&st->answer, text, len);
 }
 
 /* The source marks ("[1]", "[2, 3]") taken out, even when a delta cuts them; "[" followed by other text kept */
@@ -290,9 +259,9 @@ static void sse_dispatch(const char *data, void *ctx)
     } else if (strcmp(t, "response.failed") == 0) {
         const cJSON *response = cJSON_GetObjectItem(json, "response");
         on_response_end(st, response);
-        st->error = error_from_json(200, response);
+        st->error = error_from_json(NULL, 200, response);
     } else if (strcmp(t, "error") == 0) {
-        st->error = error_from_json(200, json);
+        st->error = error_from_json(NULL, 200, json);
         st->done = true;
     }
     /* Other events (created, in_progress, output_item, reasoning, search queries and results...) are ignored */
@@ -301,119 +270,24 @@ static void sse_dispatch(const char *data, void *ctx)
 
 /* ---------- HTTP ---------- */
 
-static esp_http_client_handle_t get_client(void)
+static void perplexity_prewarm(void *state)
 {
-    if (!s_client) {
-        esp_http_client_config_t config = {
-            .url = PERPLEXITY_URL,
-            .method = HTTP_METHOD_POST,
-            .timeout_ms = PERPLEXITY_TIMEOUT_MS,
-            .crt_bundle_attach = esp_crt_bundle_attach,
-            .keep_alive_enable = true,
-        };
-        s_client = esp_http_client_init(&config);
-        if (s_client) {
-            esp_http_client_set_header(s_client, "Content-Type", "application/json");
-            esp_http_client_set_header(s_client, "Accept", "text/event-stream");
-        }
-    }
-    if (s_client) {
-        esp_http_client_set_header(s_client, "Authorization", s_auth);
-    }
-    return s_client;
+    // A free request with a small answer (the models): it opens the TLS connection
+    llm_http_prewarm(&s_http, PERPLEXITY_PREWARM_URL, NULL, 0);
 }
 
-static void drop_client(void)
-{
-    if (s_client) {
-        esp_http_client_close(s_client);
-        esp_http_client_cleanup(s_client);
-        s_client = NULL;
-    }
-}
-
-/* Open the request and send the body; retried once on a fresh connection if a kept-alive one went stale */
-static esp_err_t send_request(const char *body, int *status)
-{
-    size_t len = strlen(body);
-    for (int attempt = 0; attempt < 2; attempt++) {
-        esp_http_client_handle_t client = get_client();
-        ESP_RETURN_ON_FALSE(client, ESP_ERR_NO_MEM, TAG, "Failed to init http client");
-        if (esp_http_client_open(client, len) == ESP_OK &&
-                esp_http_client_write(client, body, len) == (int)len &&
-                esp_http_client_fetch_headers(client) >= 0) {
-            *status = esp_http_client_get_status_code(client);
-            return ESP_OK;
-        }
-        ESP_LOGW(TAG, "Request failed (attempt %d), reconnecting", attempt + 1);
-        drop_client();
-    }
-    return ESP_FAIL;
-}
-
-void perplexity_chat_prewarm(void)
-{
-    if (!s_auth) {
-        return;
-    }
-    int64_t t0 = esp_timer_get_time();
-    esp_http_client_handle_t client = get_client();
-    if (!client) {
-        return;
-    }
-    /* A free request with a small answer (the models): it opens the TLS connection */
-    esp_http_client_set_url(client, PERPLEXITY_PREWARM_URL);
-    esp_http_client_set_method(client, HTTP_METHOD_GET);
-    int status = -1;
-    if (esp_http_client_open(client, 0) == ESP_OK && esp_http_client_fetch_headers(client) >= 0) {
-        status = esp_http_client_get_status_code(client);
-        /* Read the body to its end, so that it is not read as the start of the next response */
-        char discard[256];
-        while (esp_http_client_read(client, discard, sizeof(discard)) > 0) {
-        }
-    }
-    if (status == 200 && esp_http_client_is_complete_data_received(client)) {
-        esp_http_client_set_url(client, PERPLEXITY_URL);
-        esp_http_client_set_method(client, HTTP_METHOD_POST);
-    } else {
-        drop_client();
-    }
-    ESP_LOGI(TAG, "prewarm: HTTP %d in %lld ms", status, (esp_timer_get_time() - t0) / 1000);
-}
-
-/* Keep the history short; older exchanges are dropped in user/assistant pairs */
-static void trim_history(void)
-{
-    if (cJSON_GetArraySize(s_messages) <= PERPLEXITY_HISTORY_MAX_MSGS) {
-        return;
-    }
-    while (cJSON_GetArraySize(s_messages) > PERPLEXITY_HISTORY_TRIM_TO) {
-        cJSON_DeleteItemFromArray(s_messages, 0);
-        cJSON_DeleteItemFromArray(s_messages, 0);
-    }
-}
-
-const cJSON *perplexity_chat_history(void)
+static const cJSON *perplexity_history(void *state)
 {
     return s_messages;
 }
 
-void perplexity_chat_set_history(cJSON *messages)
+static void perplexity_set_history(void *state, cJSON *messages)
 {
-    cJSON_Delete(s_messages);
-    s_messages = messages;
-    trim_history();
+    llm_history_set(&s_messages, messages);
 }
 
-static void add_message(const char *role, const char *text)
-{
-    cJSON *msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(msg, "role", role);
-    cJSON_AddStringToObject(msg, "content", text);
-    cJSON_AddItemToArray(s_messages, msg);
-}
-
-llm_error_t perplexity_chat_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
+static llm_error_t perplexity_stream(void *state, const char *text, llm_text_cb_t on_text, void *ctx,
+                                     char **full_text)
 {
     if (full_text) {
         *full_text = NULL;
@@ -423,108 +297,87 @@ llm_error_t perplexity_chat_stream(const char *text, llm_text_cb_t on_text, void
     }
 
     stream_t st = {
-        .on_text = on_text,
-        .ctx = ctx,
         .sse = { .on_event = sse_dispatch },
         .error = LLM_OK,
-        .start_us = esp_timer_get_time(),
     };
     st.sse.ctx = &st;
+    llm_answer_begin(&st.answer, on_text, ctx);
     int status = 0;
     char *body = NULL;
 
     /* Append the question; removed again if the exchange fails */
-    add_message("user", text);
+    int start_count = cJSON_GetArraySize(s_messages);
+    llm_history_add(s_messages, "user", text);
 
     body = build_request();
     if (!body) {
         st.error = LLM_ERR_OTHER;
         goto end;
     }
-    if (send_request(body, &status) != ESP_OK) {
+    if (llm_http_send(&s_http, body, &status) != ESP_OK) {
         st.error = LLM_ERR_NETWORK;
         goto end;
     }
-
-    char chunk[PERPLEXITY_READ_CHUNK];
-    int n;
     if (status != 200) {
-        /* Errors before streaming are a plain JSON body */
-        llm_buf_t err_body = {0};
-        while ((n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
-            llm_buf_append(&err_body, chunk, n);
-        }
-        cJSON *json = err_body.len ? cJSON_Parse(err_body.p) : NULL;
-        if (json) {
-            st.error = error_from_json(status, json);
-            cJSON_Delete(json);
-        } else {
-            ESP_LOGE(TAG, "HTTP %d: %.300s", status, err_body.len ? err_body.p : "(empty)");
-            st.error = classify_error(status, NULL, NULL);
-        }
-        llm_buf_free(&err_body);
-        drop_client();
+        st.error = llm_http_error(&s_http, status, error_from_json, NULL, NULL);
         goto end;
     }
 
-    while (!st.done && !llm_cancelled() && (n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
-        llm_sse_feed(&st.sse, chunk, n);
-    }
+    llm_http_stream(&s_http, &st.sse, &st.done);
     if (st.error == LLM_OK && !st.done) {
         ESP_LOGE(TAG, "Stream ended before response.completed");
         st.error = LLM_ERR_NETWORK;
     }
-    if (st.error == LLM_OK) {
-        /* Read the end of the chunked body so that the connection can be reused for the next question */
-        while (esp_http_client_read(s_client, chunk, sizeof(chunk)) > 0) {
-        }
-    }
-    if (st.error != LLM_OK || !esp_http_client_is_complete_data_received(s_client)) {
-        /* The connection is not in a reusable state */
-        drop_client();
-    }
+    llm_http_finish(&s_http, st.error == LLM_OK);
 
     if (st.error == LLM_OK) {
-        if (st.refused && st.text.len == 0) {
+        if (st.refused && st.answer.text.len == 0) {
             ESP_LOGW(TAG, "Request declined (refusal)");
             st.error = LLM_ERR_REFUSAL;
         } else if (strcmp(st.status, "incomplete") == 0) {
             ESP_LOGW(TAG, "Answer truncated (incomplete)");
         }
-        if (st.error == LLM_OK && st.text.len == 0) {
+        if (st.error == LLM_OK && st.answer.text.len == 0) {
             ESP_LOGE(TAG, "No text in answer (status: %s)", st.status);
             st.error = LLM_ERR_OTHER;
         }
     }
 
-    int64_t now = esp_timer_get_time();
-    ESP_LOGI(TAG, "first text after %lld ms, total %lld ms, status: %s, tokens in %d (cached %d), out %d "
-             "(reasoning %d), %d web search(es)", st.first_text_us ? (st.first_text_us - st.start_us) / 1000 : -1LL,
-             (now - st.start_us) / 1000, st.status[0] ? st.status : "-", st.input_tokens, st.cached_tokens,
-             st.output_tokens, st.reasoning_tokens, st.searches);
+    ESP_LOGI(TAG, "first text after %d ms, total %d ms, status: %s, tokens in %d (cached %d), out %d "
+             "(reasoning %d), %d web search(es)", llm_answer_first_ms(&st.answer), llm_answer_total_ms(&st.answer),
+             st.status[0] ? st.status : "-", st.input_tokens, st.cached_tokens, st.output_tokens,
+             st.reasoning_tokens, st.searches);
     // output_tokens counts the reasoning too
-    llm_last_stats = (llm_stats_t) {
-        st.first_text_us ? (int)((st.first_text_us - st.start_us) / 1000) : -1, (int)((now - st.start_us) / 1000),
-        st.output_tokens - st.reasoning_tokens, st.reasoning_tokens
-    };
+    llm_answer_stats(&st.answer, st.output_tokens - st.reasoning_tokens, st.reasoning_tokens);
     // input_tokens counts the cached ones; output_tokens the reasoning (billed too)
     costs_add_tokens(COST_LLM, s_model, st.input_tokens - st.cached_tokens, st.cached_tokens, 0, st.output_tokens);
     costs_add_calls("perplexity:web_search", st.searches);
 
 end:
     if (st.error == LLM_OK) {
-        add_message("assistant", st.text.p);
-        trim_history();
+        llm_history_add(s_messages, "assistant", st.answer.text.p);
+        llm_history_trim(s_messages, NULL);
         if (full_text) {
-            *full_text = st.text.p;
-            st.text.p = NULL;
+            *full_text = st.answer.text.p;
+            st.answer.text.p = NULL;
         }
     } else {
         /* Drop the unanswered question so that the history keeps alternating user/assistant */
-        cJSON_DeleteItemFromArray(s_messages, cJSON_GetArraySize(s_messages) - 1);
+        llm_history_drop_from(s_messages, start_count);
     }
     llm_sse_free(&st.sse);
-    llm_buf_free(&st.text);
+    llm_buf_free(&st.answer.text);
     free(body);
     return st.error;
 }
+
+const llm_backend_t llm_backend_perplexity = {
+    .key_name = "Perplexity_key",
+    .init = perplexity_init,
+    .set_instructions = perplexity_set_instructions,
+    .reset = perplexity_reset,
+    .history = perplexity_history,
+    .set_history = perplexity_set_history,
+    .prewarm = perplexity_prewarm,
+    .stream = perplexity_stream,
+};

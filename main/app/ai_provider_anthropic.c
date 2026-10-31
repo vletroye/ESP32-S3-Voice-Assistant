@@ -12,15 +12,11 @@
 #include <string.h>
 #include <inttypes.h>
 #include "esp_log.h"
-#include "llm.h"
 #include "esp_check.h"
-#include "esp_timer.h"
-#include "esp_http_client.h"
-#include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "ai_provider_anthropic.h"
 #include "file_costs.h"
-#include "llm_sse.h"
+#include "llm_common.h"
 
 #define CLAUDE_URL              "https://api.anthropic.com/v1/messages"
 /* Prewarm: the model's description, which also tells whether it can search the web */
@@ -36,16 +32,6 @@
 #define CLAUDE_API_VERSION      "2023-06-01"
 /* Spoken answers are short; the ceiling leaves room for Opus' thinking, which cannot be disabled */
 #define CLAUDE_MAX_TOKENS       2048
-#define CLAUDE_TIMEOUT_MS       30000
-#define CLAUDE_READ_CHUNK       512
-/* History kept for follow-up questions: about the last 10 exchanges (user + assistant messages) */
-#define CLAUDE_HISTORY_MAX_MSGS 24
-/*
- * Past the maximum, the history is cut down to this size in one go: its start then stays the same for several
- * questions, and so does the prompt cache (dropping the oldest exchange at every question changes the prefix
- * and makes every request rewrite the cache)
- */
-#define CLAUDE_HISTORY_TRIM_TO  12
 /* Tool calls answered per question, before giving up */
 #define CLAUDE_MAX_TOOL_ROUNDS  3
 
@@ -60,6 +46,8 @@ static const cJSON *s_tools = NULL;
 static claude_tool_runner_t s_tool_runner = NULL;
 /* thinking.type sent with each request, NULL to leave the parameter out */
 static const char *s_thinking = NULL;
+/* thinking of AGENTS.INI for the next init ("default": left to the model), "" to choose it from the name */
+static char s_thinking_set[24];
 /* Web search: 1 the model supports it, 0 not, -1 not known yet (read by the prewarm) */
 static int s_web_search = -1;
 /* user_location of the web search ("BE", "Evere"), empty if unknown */
@@ -70,7 +58,8 @@ static volatile int s_web_search_calls = 0;
 /* Conversation history: user messages and assistant contents built from the stream */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */
-static esp_http_client_handle_t s_client = NULL;
+static const char *const s_headers[] = { "anthropic-version", CLAUDE_API_VERSION, NULL };
+static llm_http_t s_http = { .url = CLAUDE_URL, .key_header = "x-api-key", .headers = s_headers };
 
 /* ---------- stream state ---------- */
 
@@ -84,12 +73,9 @@ typedef enum {
 } block_type_t;
 
 typedef struct {
-    llm_text_cb_t on_text;
-    void *ctx;
-
+    llm_answer_t answer;            /* the text of this round */
     llm_sse_t sse;
 
-    llm_buf_t text;                 /* whole answer text */
     llm_buf_t block;                /* current content block (text, thinking or tool input JSON) */
     llm_buf_t signature;            /* signature of the current thinking block */
     block_type_t block_type;
@@ -103,38 +89,40 @@ typedef struct {
     bool done;                  /* message_stop received */
     llm_error_t error;
 
-    int64_t start_us;
-    int64_t first_text_us;
     int input_tokens;
     int cache_read_tokens;
     int cache_write_tokens;
     int output_tokens;
 } stream_t;
 
-static void replace_str(char **dst, const char *src)
+void claude_client_set_thinking(const char *thinking)
 {
-    free(*dst);
-    *dst = (src && src[0]) ? strdup(src) : NULL;
+    strlcpy(s_thinking_set, thinking ? thinking : "", sizeof(s_thinking_set));
 }
 
-esp_err_t claude_client_init(const char *api_key, const char *model, const char *system_prompt, const char *effort,
-                             const char *thinking)
+static void claude_reset(void *state)
+{
+    llm_history_reset(&s_messages);
+}
+
+static esp_err_t claude_init(void *state, const char *api_key, const char *model, const char *system_prompt,
+                             const char *effort)
 {
     ESP_RETURN_ON_FALSE(api_key && api_key[0] && model && model[0], ESP_ERR_INVALID_ARG, TAG, "API key and model required");
-    replace_str(&s_api_key, api_key);
-    replace_str(&s_model, model);
-    replace_str(&s_system, system_prompt);
-    replace_str(&s_effort, effort);
-    claude_client_reset();
+    llm_str_set(&s_api_key, api_key);
+    s_http.tag = TAG;
+    s_http.key = s_api_key;
+    llm_str_set(&s_model, model);
+    llm_str_set(&s_system, system_prompt);
+    llm_str_set(&s_effort, effort);
+    claude_reset(state);
     s_web_search = -1;      // capability of the new model, read by the next prewarm
     /*
      * Thinking set in AGENTS.INI ("default": left to the model), else from the name: Haiku accepts "disabled";
      * Sonnet rejects it but only thinks between tool calls with "between_tools"; Opus cannot turn thinking off,
      * the parameter is left out.
      */
-    static char s_thinking_set[24];
-    if (thinking && thinking[0]) {
-        strlcpy(s_thinking_set, thinking, sizeof(s_thinking_set));
+    if (s_thinking_set[0]) {
         s_thinking = strcmp(s_thinking_set, "default") == 0 ? NULL : s_thinking_set;
     } else if (strstr(s_model, "haiku")) {
         s_thinking = "disabled";
@@ -161,15 +149,9 @@ esp_err_t claude_client_init(const char *api_key, const char *model, const char 
     return ESP_OK;
 }
 
-void claude_client_set_system(const char *system_prompt)
+static void claude_set_system(void *state, const char *system_prompt)
 {
-    replace_str(&s_system, system_prompt);
-}
-
-void claude_client_reset(void)
-{
-    cJSON_Delete(s_messages);
-    s_messages = cJSON_CreateArray();
+    llm_str_set(&s_system, system_prompt);
 }
 
 /* Map an API error to the error kinds shown to the user */
@@ -192,8 +174,11 @@ static llm_error_t classify_error(int status, const char *type, const char *mess
     return LLM_ERR_OTHER;
 }
 
-static llm_error_t error_from_json(int status, const cJSON *json)
+static llm_error_t error_from_json(const void *ctx, int status, const cJSON *json)
 {
+    if (!json) {
+        return classify_error(status, NULL, NULL);
+    }
     const cJSON *api_error = cJSON_GetObjectItem(json, "error");
     const cJSON *type = cJSON_GetObjectItem(api_error, "type");
     const cJSON *message = cJSON_GetObjectItem(api_error, "message");
@@ -300,8 +285,8 @@ static void on_block_start(stream_t *st, const cJSON *block)
             s_web_search_calls++;
         }
         /* The search runs now: what was said so far ("Je regarde.") is spoken meanwhile */
-        if (st->on_text) {
-            st->on_text(NULL, st->ctx);
+        if (st->answer.on_text) {
+            st->answer.on_text(NULL, st->answer.ctx);
         }
     } else if (strcmp(type->valuestring, "web_search_tool_result") == 0) {
         /* Complete in the start event (results with their encrypted content) */
@@ -331,13 +316,7 @@ static void on_block_delta(stream_t *st, const cJSON *delta)
         if (cJSON_IsString(text) && text->valuestring[0]) {
             size_t n = strlen(text->valuestring);
             llm_buf_append(&st->block, text->valuestring, n);
-            llm_buf_append(&st->text, text->valuestring, n);
-            if (!st->first_text_us) {
-                st->first_text_us = esp_timer_get_time();
-            }
-            if (st->on_text) {
-                st->on_text(text->valuestring, st->ctx);
-            }
+            llm_answer_add(&st->answer, text->valuestring, n);
         }
     } else if (strcmp(type->valuestring, "thinking_delta") == 0) {
         const cJSON *thinking = cJSON_GetObjectItem(delta, "thinking");
@@ -444,7 +423,7 @@ static void sse_dispatch(const char *data, void *ctx)
         st->done = true;
     } else if (strcmp(t, "error") == 0) {
         /* Error sent inside the stream (e.g. overloaded_error) */
-        st->error = error_from_json(200, json);
+        st->error = error_from_json(NULL, 200, json);
         st->done = true;
     }
     /* "ping" and unknown event types are ignored */
@@ -453,108 +432,26 @@ static void sse_dispatch(const char *data, void *ctx)
 
 /* ---------- HTTP ---------- */
 
-static esp_http_client_handle_t get_client(void)
+static void claude_prewarm(void *state)
 {
-    if (!s_client) {
-        esp_http_client_config_t config = {
-            .url = CLAUDE_URL,
-            .method = HTTP_METHOD_POST,
-            .timeout_ms = CLAUDE_TIMEOUT_MS,
-            .crt_bundle_attach = esp_crt_bundle_attach,
-            .keep_alive_enable = true,
-        };
-        s_client = esp_http_client_init(&config);
-        if (s_client) {
-            esp_http_client_set_header(s_client, "Content-Type", "application/json");
-            esp_http_client_set_header(s_client, "anthropic-version", CLAUDE_API_VERSION);
-            esp_http_client_set_header(s_client, "Accept", "text/event-stream");
-        }
-    }
-    if (s_client) {
-        esp_http_client_set_header(s_client, "x-api-key", s_api_key);
-    }
-    return s_client;
-}
-
-static void drop_client(void)
-{
-    if (s_client) {
-        esp_http_client_close(s_client);
-        esp_http_client_cleanup(s_client);
-        s_client = NULL;
-    }
-}
-
-/* Open the request and send the body; retried once on a fresh connection if a kept-alive one went stale */
-static esp_err_t send_request(const char *body, int *status)
-{
-    size_t len = strlen(body);
-    for (int attempt = 0; attempt < 2; attempt++) {
-        esp_http_client_handle_t client = get_client();
-        ESP_RETURN_ON_FALSE(client, ESP_ERR_NO_MEM, TAG, "Failed to init http client");
-        if (esp_http_client_open(client, len) == ESP_OK &&
-                esp_http_client_write(client, body, len) == (int)len &&
-                esp_http_client_fetch_headers(client) >= 0) {
-            *status = esp_http_client_get_status_code(client);
-            return ESP_OK;
-        }
-        ESP_LOGW(TAG, "Request failed (attempt %d), reconnecting", attempt + 1);
-        drop_client();
-    }
-    return ESP_FAIL;
-}
-
-void claude_client_prewarm(void)
-{
-    if (!s_api_key) {
-        return;
-    }
-    int64_t t0 = esp_timer_get_time();
-    esp_http_client_handle_t client = get_client();
-    if (!client) {
-        return;
-    }
     /*
      * A free request with a small answer (the model's description): it opens the TLS connection, kept alive
      * for the question, and tells whether the model can search the web
      */
     char url[128];
-    snprintf(url, sizeof(url), CLAUDE_MODELS_URL "%s", s_model);
-    esp_http_client_set_url(client, url);
-    esp_http_client_set_method(client, HTTP_METHOD_GET);
-    int status = -1;
-    if (esp_http_client_open(client, 0) == ESP_OK && esp_http_client_fetch_headers(client) >= 0) {
-        status = esp_http_client_get_status_code(client);
-        /*
-         * Read the body to its end: esp_http_client_flush_response() can leave a small body that came
-         * with the headers in the connection, where it would be read as the start of the next response
-         */
-        llm_buf_t body = {0};
-        char chunk[256];
-        int n;
-        while ((n = esp_http_client_read(client, chunk, sizeof(chunk))) > 0) {
-            if (body.len < CLAUDE_MODEL_INFO_MAX) {
-                llm_buf_append(&body, chunk, n);
-            }
-        }
-        cJSON *info = (status == 200 && body.len) ? cJSON_Parse(body.p) : NULL;
-        if (info && s_web_search < 0) {
-            const cJSON *supported = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(
-                                         cJSON_GetObjectItem(info, "capabilities"), "server_tools"), "web_search"),
-                                     "supported");
-            s_web_search = cJSON_IsTrue(supported) ? 1 : 0;
-            ESP_LOGI(TAG, "web search: %s", s_web_search ? "available" : "not supported by this model");
-        }
-        cJSON_Delete(info);
-        llm_buf_free(&body);
+    snprintf(url, sizeof(url), CLAUDE_MODELS_URL "%s", s_model ? s_model : "");
+    llm_buf_t body = {0};
+    int status = llm_http_prewarm(&s_http, url, &body, CLAUDE_MODEL_INFO_MAX);
+    cJSON *info = (status == 200 && body.len) ? cJSON_Parse(body.p) : NULL;
+    if (info && s_web_search < 0) {
+        const cJSON *supported = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(
+                                     cJSON_GetObjectItem(info, "capabilities"), "server_tools"), "web_search"),
+                                 "supported");
+        s_web_search = cJSON_IsTrue(supported) ? 1 : 0;
+        ESP_LOGI(TAG, "web search: %s", s_web_search ? "available" : "not supported by this model");
     }
-    if (status == 200 && esp_http_client_is_complete_data_received(client)) {
-        esp_http_client_set_url(client, CLAUDE_URL);
-        esp_http_client_set_method(client, HTTP_METHOD_POST);
-    } else {
-        drop_client();
-    }
-    ESP_LOGI(TAG, "prewarm: HTTP %d in %lld ms", status, (esp_timer_get_time() - t0) / 1000);
+    cJSON_Delete(info);
+    llm_buf_free(&body);
 }
 
 /* A user message holding tool results (cannot start the history: its tool calls would be missing) */
@@ -567,26 +464,20 @@ static bool is_tool_result_message(const cJSON *msg)
 }
 
 /*
- * Keep the history short: past CLAUDE_HISTORY_MAX_MSGS, older messages are dropped in user/assistant pairs down
- * to CLAUDE_HISTORY_TRIM_TO, and the history always starts with a question (not with the results of tools
- * called in a dropped exchange)
+ * Keep the history short (llm_history_trim), and starting with a question (not with the results of tools called
+ * in a dropped exchange)
  */
 static void trim_history(void)
 {
-    int keep = cJSON_GetArraySize(s_messages) > CLAUDE_HISTORY_MAX_MSGS ? CLAUDE_HISTORY_TRIM_TO : INT_MAX;
-    while (cJSON_GetArraySize(s_messages) > keep ||
-            (cJSON_GetArraySize(s_messages) > 0 && is_tool_result_message(cJSON_GetArrayItem(s_messages, 0)))) {
-        cJSON_DeleteItemFromArray(s_messages, 0);
-        cJSON_DeleteItemFromArray(s_messages, 0);
-    }
+    llm_history_trim(s_messages, is_tool_result_message);
 }
 
-const cJSON *claude_client_history(void)
+static const cJSON *claude_history(void *state)
 {
     return s_messages;
 }
 
-void claude_client_set_history(cJSON *messages)
+static void claude_set_history(void *state, cJSON *messages)
 {
     cJSON_Delete(s_messages);
     s_messages = messages;
@@ -643,61 +534,30 @@ static void stream_once(stream_t *st)
         st->error = LLM_ERR_OTHER;
         return;
     }
-    if (send_request(body, &status) != ESP_OK) {
+    if (llm_http_send(&s_http, body, &status) != ESP_OK) {
         free(body);
         st->error = LLM_ERR_NETWORK;
         return;
     }
     free(body);
-
-    char chunk[CLAUDE_READ_CHUNK];
-    int n;
     if (status != 200) {
-        /* Errors before streaming are a plain JSON body */
-        llm_buf_t err_body = {0};
-        while ((n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
-            llm_buf_append(&err_body, chunk, n);
-        }
-        cJSON *json = err_body.len ? cJSON_Parse(err_body.p) : NULL;
-        if (json) {
-            st->error = error_from_json(status, json);
-            cJSON_Delete(json);
-        } else {
-            ESP_LOGE(TAG, "HTTP %d: %.300s", status, err_body.len ? err_body.p : "(empty)");
-            st->error = classify_error(status, NULL, NULL);
-        }
-        llm_buf_free(&err_body);
-        drop_client();
+        st->error = llm_http_error(&s_http, status, error_from_json, NULL, NULL);
         return;
     }
 
-    while (!st->done && !llm_cancelled() && (n = esp_http_client_read(s_client, chunk, sizeof(chunk))) > 0) {
-        llm_sse_feed(&st->sse, chunk, n);
-    }
+    llm_http_stream(&s_http, &st->sse, &st->done);
     if (st->error == LLM_OK && !st->done) {
         ESP_LOGE(TAG, "Stream ended before message_stop");
         st->error = LLM_ERR_NETWORK;
     }
-    if (st->error == LLM_OK) {
-        /* Read the end of the chunked body so that the connection can be reused for the next question */
-        while (esp_http_client_read(s_client, chunk, sizeof(chunk)) > 0) {
-        }
-    }
-    if (st->error != LLM_OK || !esp_http_client_is_complete_data_received(s_client)) {
-        /* The connection is not in a reusable state */
-        drop_client();
-    }
+    llm_http_finish(&s_http, st->error == LLM_OK);
 
-    int64_t now = esp_timer_get_time();
-    ESP_LOGI(TAG, "first text after %lld ms, total %lld ms, stop: %s, tokens in %d (cache read %d, write %d), out %d",
-             st->first_text_us ? (st->first_text_us - st->start_us) / 1000 : -1LL, (now - st->start_us) / 1000,
+    ESP_LOGI(TAG, "first text after %d ms, total %d ms, stop: %s, tokens in %d (cache read %d, write %d), out %d",
+             llm_answer_first_ms(&st->answer), llm_answer_total_ms(&st->answer),
              st->stop_reason[0] ? st->stop_reason : "-", st->input_tokens, st->cache_read_tokens,
              st->cache_write_tokens, st->output_tokens);
     // output_tokens counts the thinking too (not given apart)
-    llm_last_stats = (llm_stats_t) {
-        st->first_text_us ? (int)((st->first_text_us - st->start_us) / 1000) : -1, (int)((now - st->start_us) / 1000),
-        st->output_tokens, -1
-    };
+    llm_answer_stats(&st->answer, st->output_tokens, -1);
     // Each round of the answer (tool calls) is billed: input_tokens leaves out the cache reads and writes
     costs_add_tokens(COST_LLM, s_model, st->input_tokens, st->cache_read_tokens, st->cache_write_tokens,
                      st->output_tokens);
@@ -812,7 +672,7 @@ static void add_message(const char *role, cJSON *content)
     cJSON_AddItemToArray(s_messages, msg);
 }
 
-llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
+static llm_error_t claude_stream(void *state, const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
 {
     if (full_text) {
         *full_text = NULL;
@@ -832,18 +692,16 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
 
     for (int round = 0; ; round++) {
         stream_t st = {
-            .on_text = on_text,
-            .ctx = ctx,
             .sse = { .on_event = sse_dispatch },
             .content = cJSON_CreateArray(),
             .error = LLM_OK,
-            .start_us = esp_timer_get_time(),
         };
         st.sse.ctx = &st;
+        llm_answer_begin(&st.answer, on_text, ctx);
         stream_once(&st);
         error = st.error;
-        if (st.text.len) {
-            llm_buf_append(&answer, st.text.p, st.text.len);
+        if (st.answer.text.len) {
+            llm_buf_append(&answer, st.answer.text.p, st.answer.text.len);
         }
         bool tool_use = (error == LLM_OK && strcmp(st.stop_reason, "tool_use") == 0);
         bool paused = (error == LLM_OK && strcmp(st.stop_reason, "pause_turn") == 0);
@@ -876,7 +734,7 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
         llm_sse_free(&st.sse);
         llm_buf_free(&st.block);
         llm_buf_free(&st.signature);
-        llm_buf_free(&st.text);
+        llm_buf_free(&st.answer.text);
 
         if (error != LLM_OK || (!tool_use && !paused)) {
             break;
@@ -914,10 +772,19 @@ llm_error_t claude_client_stream(const char *text, llm_text_cb_t on_text, void *
         }
     } else {
         /* Drop the unanswered exchange so that the history keeps alternating user/assistant */
-        while (cJSON_GetArraySize(s_messages) > start_count) {
-            cJSON_DeleteItemFromArray(s_messages, cJSON_GetArraySize(s_messages) - 1);
-        }
+        llm_history_drop_from(s_messages, start_count);
     }
     llm_buf_free(&answer);
     return error;
 }
+
+const llm_backend_t llm_backend_claude = {
+    .key_name = "Claude_key",
+    .init = claude_init,
+    .set_instructions = claude_set_system,
+    .reset = claude_reset,
+    .history = claude_history,
+    .set_history = claude_set_history,
+    .prewarm = claude_prewarm,
+    .stream = claude_stream,
+};

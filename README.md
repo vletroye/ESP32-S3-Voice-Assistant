@@ -1460,12 +1460,12 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `app_sr.c` | ESP-SR: AFE, wake word, speech and end-of-speech detection |
 | `app_audio.c` | Listening sessions, system sounds (wake beep preloaded in PSRAM) |
 | `stt_stream.c` | Live transcription (OpenAI Realtime, permanent WebSocket) |
-| `llm.c` | Models offered (read from `AGENTS.INI`, installed from `main/agents/agents.ini`) and dispatch to the provider of the chosen model |
+| `llm.c` | Models offered (read from `AGENTS.INI`, installed from `main/agents/agents.ini`) and dispatch to the provider of the chosen model, through its table (`llm_backend.h`: init, instructions, history, prewarm, stream); adding a provider is a line in that table |
+| `llm_common.c` | Helpers shared by the chat clients: settings strings, the conversation history (kept short in pairs, cut in one go for the prompt caches), the answer being streamed (first-word time, stats), the HTTPS connection kept alive (retry on a stale one, prewarm, error body, end of the stream) |
 | `ai_provider_anthropic.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
 | `ai_provider_openai.c` | GPT client (Responses API, SSE streaming), history |
-| `ai_provider_openrouter.c` | OpenRouter client (Chat Completions, SSE streaming), history kept on the device |
-| `ai_provider_xai.c` | xAI client for the Grok models (Chat Completions, SSE streaming), history kept on the device |
-| `ai_provider_mistral.c` | Mistral AI client (Chat Completions, SSE streaming, reasoning models' text parts), history kept on the device |
+| `ai_provider_chat_completions.c` | Client of the OpenAI-compatible Chat Completions APIs, shared by OpenRouter, xAI and Mistral: request, stream, errors (no credit, key, busy), reasoning effort refused, reasoning models' text parts, billing of the reasoning tokens |
+| `ai_provider_openrouter.c`, `ai_provider_xai.c`, `ai_provider_mistral.c` | What differs for each of them (`cc_config_t`): URLs, headers, how the reasoning and the usage are asked for, the words of a no-credit error |
 | `ai_provider_perplexity.c` | Perplexity client (Agent API, SSE streaming, web search, source marks taken out), history kept on the device |
 | `file_costs.c` | Costs: tokens and calls of each request priced with `AGENTS.INI`, by model, for today, this month, since the start and the last 12 months (`costs.json`, `COSTS.TXT`) |
 | `ai_provider_openrouter_free.c` | Free OpenRouter models from its live list (once a day, parsed model by model), kept on SPIFFS |

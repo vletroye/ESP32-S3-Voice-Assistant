@@ -244,20 +244,26 @@ static void on_reply_audio(tts_event_t event)
     // TTS_EVENT_DONE: the whole reply has been spoken
     ESP_LOGI(TAG, "[timing] reply spoken, %lld ms after the transcription", elapsed_ms(s_reply_t0));
     s_reply_active = false;
+    size_t chars = s_shown_chars;
     if (tts_stream_no_credit()) {
         // Nothing spoken: the speech service refused (no credit, plan too small), said on screen (it cannot be
-        // spoken); the whole reply is to be read before the listen panel comes
-        size_t chars = s_shown_chars;
+        // spoken)
         if (!s_no_credit_shown) {
             char *refused = speech_refused_text(LLM_SPEECH_TTS);
             ui_ctrl_reply_append_notice(refused ? refused : "");
             chars += refused ? strlen(refused) : 0;
             free(refused);
         }
-        s_unread_ms = reading_ms(chars);
     } else if (tts_stream_reply_was_choppy()) {
         // Speech cut or sentences lost: the answer stays readable on screen, say why it was heard badly
         ui_ctrl_reply_append_notice(app_lang_get()->voice_choppy);
+        chars += strlen(app_lang_get()->voice_choppy);
+    }
+    if (!ui_ctrl_reply_get_audio_start_flag()) {
+        // No audio at all (refused, network down): the text scrolls from now at the reading speed (Scroll_speed),
+        // the whole reply is to be read before the listen panel comes
+        s_unread_ms = reading_ms(chars);
+        ui_ctrl_reply_set_audio_start_flag(true);
     }
     voice_cmd_reply_spoken();
     if (s_restart_after_reply) {

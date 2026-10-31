@@ -174,9 +174,13 @@ err:
     return ret;
 }
 
-/* A sound being spoken must have left the speaker before a system sound starts (two writers would mix) */
-#define SOUND_WAIT_SILENCE_MS   50
-#define SOUND_WAIT_MAX_MS       300
+/*
+ * A sound being spoken must have left the speaker before a system sound starts (two writers would mix). The I2S
+ * DMA still holds ~96 ms of it once its last block is written: the beep waits for that, plus a short silence
+ * (right after the last syllable, it crackled)
+ */
+#define SOUND_WAIT_SILENCE_MS   150
+#define SOUND_WAIT_MAX_MS       600
 
 /* System sound loaded once in PSRAM as 16 kHz stereo samples: played in one write, without file reads */
 typedef struct {

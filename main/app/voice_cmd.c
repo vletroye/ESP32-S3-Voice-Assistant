@@ -1610,7 +1610,14 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         }
         return ask_test_provider(app_lang_get()->test_provider_ask, reply);
     }
-    if (starts_with(norm, phrases_of(&s_test_models), NULL)) {
+    if (starts_with(norm, phrases_of(&s_test_models), &len)) {
+        // A provider named after it, however it was transcribed ("teste les modèles Google"): its models only
+        llm_provider_t provider = find_provider(norm + len);
+        if (provider != LLM_PROVIDER_COUNT) {
+            // Without models in AGENTS.INI: the providers offered are shown
+            return model_count(provider) > 0 ? test_models(reply, MODEL_TEST_PROVIDER, provider) :
+                   ask_test_provider(app_lang_get()->test_provider_ask, reply);
+        }
         return test_models(reply, MODEL_TEST_ALL, LLM_PROVIDER_COUNT);
     }
     if (starts_with(norm, phrases_of(&s_list_models), NULL)) {

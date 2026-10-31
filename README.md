@@ -1483,6 +1483,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `sentence_splitter.c` | Splits the text into sentences (French-aware rules) |
 | `tts_stream.c` | Speech synthesis engine shared by the services: sentence queue (sentences waiting joined for a service that asks it), service and settings changed at run time, warm-up while the user speaks, audio reserve per service, resampling, fade-out and I2S playback; capture of the audio for the model test |
 | `tts_backend.h` | Interface of a speech synthesis service (`start`, `stop`, `upkeep`, `say`) and the helpers it calls back |
+| `tts_http.c` | Shared by the speech services asked by one HTTP request per sentence (Mistral, OpenRouter, Deepgram, ElevenLabs): connection kept alive (a stale one retried), error of a refused request (402: no credit), audio read in blocks (whole samples) and given to the service's decoder, reply cancelled or cut, cost, warm-up while the user speaks |
 | `ai_provider_openai_tts.c` | OpenAI Realtime speech (permanent WebSocket, one response per sentence) |
 | `ai_provider_mistral_tts.c` | Mistral Voxtral speech (HTTP server-sent events, WAV 16-bit, keep-alive), emotion and pace tags before each sentence |
 | `ai_provider_openrouter_tts.c` | Speech through OpenRouter's audio API (any model of `[tts]` with the provider `openrouter`): MP3 streamed, decoded on the device (`esp_audio_codec`), keep-alive, warm-up |

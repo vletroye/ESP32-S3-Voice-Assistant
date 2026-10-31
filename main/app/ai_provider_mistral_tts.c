@@ -11,34 +11,35 @@
  * WAV: 16-bit samples, half the bytes of "pcm" (32-bit floats): the stream comes faster than it is spoken. Its
  * header (first chunk) gives the sample format; without one, 32-bit floats and 16-bit integers are told apart on
  * the first audio. The events are read in blocks (an audio event is tens of KB: not byte by byte). The connection
- * is kept between sentences (keep-alive). Billed by the character
+ * is kept between sentences (keep-alive, tts_http.c). Billed by the character
  * ($13 a million): counted as a token a character. The voices and their emotion and pace tags come from [voices]
  * of AGENTS.INI; the tags ("[emotion=calm][pace=slow] ") are put before each sentence.
  */
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "esp_heap_caps.h"
-#include "esp_http_client.h"
-#include "esp_crt_bundle.h"
 #include "mbedtls/base64.h"
 #include "cJSON.h"
-#include "file_costs.h"
 #include "llm_sse.h"
 #include "tts_stream.h"
 #include "tts_backend.h"
-
-#define MISTRAL_TTS_URL         "https://api.mistral.ai/v1/audio/speech"
-#define MISTRAL_TTS_TIMEOUT_MS  15000
-#define MISTRAL_TTS_READ_CHUNK  4096
+#include "tts_http.h"
 
 static const char *TAG = "mistral_tts";
 
-static esp_http_client_handle_t s_client = NULL;
-static char *s_auth = NULL;
+static const char *const s_headers[] = { "Accept", "text/event-stream", NULL };
+
+static tts_http_t s_http = {
+    .tag = "mistral_tts",
+    .url = "https://api.mistral.ai/v1/audio/speech",
+    .key_header = "Authorization",
+    .key_format = "Bearer %s",
+    .headers = s_headers,
+};
 
 typedef struct {
     llm_buf_t line;             /* line of the event stream being assembled */
@@ -195,46 +196,13 @@ static void sse_dispatch(stream_t *st, const char *data)
     }
 }
 
-static void drop_client(void)
-{
-    if (s_client) {
-        esp_http_client_close(s_client);
-        esp_http_client_cleanup(s_client);
-        s_client = NULL;
-    }
-}
-
-static esp_http_client_handle_t get_client(void)
-{
-    if (!s_client) {
-        esp_http_client_config_t config = {
-            .url = MISTRAL_TTS_URL,
-            .method = HTTP_METHOD_POST,
-            .timeout_ms = MISTRAL_TTS_TIMEOUT_MS,
-            .crt_bundle_attach = esp_crt_bundle_attach,
-            .keep_alive_enable = true,
-        };
-        s_client = esp_http_client_init(&config);
-        if (s_client) {
-            esp_http_client_set_header(s_client, "Content-Type", "application/json");
-            esp_http_client_set_header(s_client, "Accept", "text/event-stream");
-        }
-    }
-    if (s_client) {
-        free(s_auth);
-        s_auth = NULL;
-        asprintf(&s_auth, "Bearer %s", tts_backend_settings()->api_key ? tts_backend_settings()->api_key : "");
-        esp_http_client_set_header(s_client, "Authorization", s_auth);
-    }
-    return s_client;
-}
-
 /*
  * The event stream read in blocks: each "data: ..." line is one event (Mistral sends one line per event); a
  * line is only copied when a block cuts it
  */
-static void feed(stream_t *st, char *bytes, size_t len)
+static void feed(void *ctx, char *bytes, size_t len)
 {
+    stream_t *st = ctx;
     while (len > 0) {
         char *nl = memchr(bytes, '\n', len);
         size_t n = nl ? (size_t)(nl - bytes) : len;
@@ -289,7 +257,7 @@ static void mistral_start(void)
 
 static void mistral_stop(void)
 {
-    drop_client();
+    tts_http_stop(&s_http);
     ESP_LOGI(TAG, "Mistral speech closed");
 }
 
@@ -297,95 +265,18 @@ static void mistral_upkeep(void)
 {
 }
 
-/* Last request answered (esp_timer us): a connection unused for long is likely closed by the server */
-static int64_t s_last_used_us = 0;
-#define MISTRAL_TTS_WARM_US     (30 * 1000000LL)
-
-/* A sentence, or with warm_up a request whose audio is dropped (nothing reported to the speech engine) */
+/* A sentence, or with warm_up a request whose audio is dropped */
 static void request(const char *text, uint32_t generation, bool warm_up)
 {
-    if (!warm_up) {
-        tts_backend_sentence_start(generation);
-    }
     stream_t st = {
         .generation = generation,
         .warm_up = warm_up,
     };
-    char *body = build_request(text);
-    int64_t start_us = esp_timer_get_time();
-    const char *status_text = "completed";
-    bool failed = false;
-    int status = -1;
-    for (int attempt = 0; body && attempt < 2; attempt++) {
-        esp_http_client_handle_t client = get_client();
-        size_t len = strlen(body);
-        if (client && esp_http_client_open(client, len) == ESP_OK && esp_http_client_write(client, body, len) == (int)len &&
-                esp_http_client_fetch_headers(client) >= 0) {
-            status = esp_http_client_get_status_code(client);
-            break;
-        }
-        drop_client();      // a kept-alive connection gone stale: once more on a fresh one
-    }
-    static char *chunk = NULL;     // the block read (PSRAM)
-    if (!chunk) {
-        chunk = heap_caps_malloc(MISTRAL_TTS_READ_CHUNK + 1, MALLOC_CAP_SPIRAM);
-    }
-    int n;
-    if (!chunk) {
-        status_text = "no memory";
-        failed = true;
-    } else if (status != 200) {
-        llm_buf_t err = {0};
-        while (s_client && status > 0 && (n = esp_http_client_read(s_client, chunk, MISTRAL_TTS_READ_CHUNK)) > 0) {
-            llm_buf_append(&err, chunk, n);
-        }
-        ESP_LOGE(TAG, "HTTP %d: %.300s", status, err.len ? err.p : "(no answer)");
-        if (status == 402 || tts_backend_is_no_credit(err.p)) {
-            tts_backend_no_credit();
-        }
-        llm_buf_free(&err);
-        drop_client();
-        status_text = "failed";
-        failed = (status <= 0);
-    } else {
-        while (!st.done && (n = esp_http_client_read(s_client, chunk, MISTRAL_TTS_READ_CHUNK)) > 0) {
-            if (!warm_up && generation != tts_backend_generation()) {
-                status_text = "cancelled";
-                break;
-            }
-            feed(&st, chunk, n);
-        }
-        int64_t ms = (esp_timer_get_time() - start_us) / 1000;
-        ESP_LOGI(TAG, "%s%u KB of audio received in %lld ms", warm_up ? "warm-up: " : "",
-                 (unsigned)(st.received / 1024), ms);
-        if (st.error[0]) {
-            ESP_LOGE(TAG, "error: %s", st.error);
-            if (tts_backend_is_no_credit(st.error)) {
-                tts_backend_no_credit();
-            }
-            status_text = "failed";
-        } else if (!st.done && strcmp(status_text, "cancelled") != 0 && !esp_http_client_is_complete_data_received(s_client)) {
-            status_text = "cut";
-            failed = true;
-        }
-        if (strcmp(status_text, "completed") == 0) {
-            while (esp_http_client_read(s_client, chunk, MISTRAL_TTS_READ_CHUNK) > 0) {
-            }
-        }
-        if (strcmp(status_text, "completed") != 0 || !esp_http_client_is_complete_data_received(s_client)) {
-            drop_client();
-        }
-        // Billed by the character: a token a character
-        costs_add_tokens(COST_TTS, tts_backend_settings()->model, (int)strlen(text), 0, 0, 0);
-        s_last_used_us = esp_timer_get_time();
-    }
-    if (!warm_up) {
-        tts_backend_sentence_end(status_text, failed);
-    }
+    tts_http_reader_t reader = { .on_bytes = feed, .ctx = &st, .done = &st.done, .error = st.error };
+    tts_http_request(&s_http, text, build_request(text), generation, warm_up, &reader);
     llm_buf_free(&st.line);
     free(st.pcm16);
     free(st.raw);
-    free(body);
 }
 
 static void mistral_say(const char *text, uint32_t generation)
@@ -398,14 +289,14 @@ static void mistral_say(const char *text, uint32_t generation)
  * about 3.5 s instead of 0.7 (TLS handshake, then the service slower to answer). A "." is synthesized meanwhile,
  * not played (a character: next to nothing).
  */
+static void warm_up(void)
+{
+    request(".", 0, true);
+}
+
 static void mistral_prewarm(void)
 {
-    if (s_client && esp_timer_get_time() - s_last_used_us < MISTRAL_TTS_WARM_US) {
-        return;
-    }
-    int64_t start_us = esp_timer_get_time();
-    request(".", 0, true);
-    ESP_LOGI(TAG, "warmed up in %lld ms", (esp_timer_get_time() - start_us) / 1000);
+    tts_http_prewarm(&s_http, warm_up);
 }
 
 const tts_backend_t tts_backend_mistral = {

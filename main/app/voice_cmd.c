@@ -1465,7 +1465,9 @@ static voice_cmd_t test_models(char **reply, model_test_scope_t scope, llm_provi
     } else if (scope == MODEL_TEST_LLM) {
         asprintf(&text, lang->test_llm_start, (int)llm_model_count);
     } else {
-        asprintf(&text, lang->test_start, (int)llm_model_count);
+        // The speech and transcription models are tested too
+        asprintf(&text, lang->test_start, (int)(llm_model_count + llm_speech_count(LLM_SPEECH_TTS) +
+                                                llm_speech_count(LLM_SPEECH_STT)));
     }
     *reply = text ? text : reply_dup("");
     model_test_set_scope(scope, provider);

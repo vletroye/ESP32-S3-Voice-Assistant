@@ -929,7 +929,8 @@ at 125 % (Anthropic).
 
 #### 3.3.4 Model test ("teste les modèles")
 
-Say "**teste les modèles**" ("test the models"): the assistant announces how many models it tests, then asks
+Say "**teste les modèles**" ("test the models"): the assistant announces how many models it tests (the speech and transcription models
+included), then asks
 each model of `AGENTS.INI`, then each free OpenRouter model, **the same question** ("Explique en exactement 5
 phrases comment se forme un arc-en-ciel.", `test_question` of `LANG_<XX>.TXT`), one after the other, **without the
 conversation nor tools** but with the same instructions. The model chosen and its conversation are not changed.

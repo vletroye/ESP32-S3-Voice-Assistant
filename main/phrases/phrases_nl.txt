@@ -81,6 +81,16 @@ wat is dit voor (liedje|nummer|muziek)
 welk (liedje|nummer) is dit
 waar luisteren we naar
 
+[s_test_current]
+# Test alleen de transcriptie, de spraak en het model in gebruik (voor s_test_models)
+test (de|je|het) (huidige|actieve) model[len]
+test (de|je|het) model[len] in gebruik
+
+[s_test_provider]
+# Test de modellen van een aanbieder: de naam kan volgen ("test de modellen van Google"), anders wordt hij gevraagd
+test (de|je|alle) modellen (van|bij)
+test (een|de) aanbieder
+
 [s_test_models]
 # Stelt elk model dezelfde vraag en meet de antwoordtijd (SPEED.TXT, snelheid in AGENTS.INI)
 test (de|je|het) model[len]

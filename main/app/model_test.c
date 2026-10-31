@@ -58,6 +58,34 @@ static volatile int s_slow_next = 0;
 /* An exclusion was added: the free models offered are chosen again (main task) */
 static volatile bool s_free_reload = false;
 static volatile bool s_cancel = false;
+/* The models of the test asked (model_test_set_scope) and of the one running */
+static model_test_scope_t s_next_scope = MODEL_TEST_ALL;
+static llm_provider_t s_next_provider = LLM_PROVIDER_COUNT;
+static model_test_scope_t s_scope = MODEL_TEST_ALL;
+static llm_provider_t s_provider = LLM_PROVIDER_COUNT;
+
+void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider)
+{
+    s_next_scope = scope;
+    s_next_provider = provider;
+}
+
+/* A chat model is part of the running test */
+static bool chat_tested(const llm_model_t *m)
+{
+    return s_scope == MODEL_TEST_ALL ||
+           (s_scope == MODEL_TEST_CURRENT && strcmp(m->id, settings_get_parameter()->chat_model) == 0) ||
+           (s_scope == MODEL_TEST_PROVIDER && llm_provider_of(m->id) == s_provider);
+}
+
+/* A speech model is part of the running test (none for a provider's test) */
+static bool speech_tested(llm_speech_kind_t kind, const llm_speech_model_t *m)
+{
+    const sys_param_t *param = settings_get_parameter();
+    return s_scope == MODEL_TEST_ALL ||
+           (s_scope == MODEL_TEST_CURRENT &&
+            strcmp(m->id, kind == LLM_SPEECH_STT ? param->stt_model : param->tts_model) == 0);
+}
 
 bool model_test_running(void)
 {
@@ -275,6 +303,9 @@ static void test_speech(char *screen, size_t screen_size)
 
     for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_TTS) && !s_cancel && s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
         const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_TTS, i);
+        if (!speech_tested(LLM_SPEECH_TTS, m)) {
+            continue;
+        }
         snprintf(name, sizeof(name), lang->test_tts_name, m->spoken);
         size_t line_start = strlen(screen);
         speech_line(screen, screen_size, name, NULL);
@@ -315,6 +346,9 @@ static void test_speech(char *screen, size_t screen_size)
     for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_STT) && audio && !s_cancel &&
             s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
         const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_STT, i);
+        if (!speech_tested(LLM_SPEECH_STT, m)) {
+            continue;
+        }
         snprintf(name, sizeof(name), lang->test_stt_name, m->spoken);
         size_t line_start = strlen(screen);
         speech_line(screen, screen_size, name, NULL);
@@ -486,6 +520,9 @@ static void find_slow_free(const cJSON *times)
     }
     int unavailable = 0;
     for (size_t i = llm_agents_count(); i < llm_model_count && s_slow_count < LLM_OPENROUTER_FREE_MAX; i++) {
+        if (!chat_tested(&llm_models[i])) {
+            continue;       // not tested this time: its status is an old one
+        }
         const cJSON *e = cJSON_GetObjectItem(times, llm_models[i].id);
         const cJSON *status = cJSON_GetObjectItem(e, "status");
         bool failed = cJSON_IsString(status) && strcmp(status->valuestring, "ok") != 0;
@@ -623,15 +660,23 @@ static void test_run(void)
     // The speech models first: the speech is free (the results of the chat models are then spoken while testing)
     if (screen) {
         test_speech(screen, screen_size);
-        strlcat(screen, "\n", screen_size);
+        if (screen[0]) {
+            strlcat(screen, "\n", screen_size);
+        }
     }
-    ESP_LOGI(TAG, "Testing %u models", (unsigned)count);
+    ESP_LOGI(TAG, "Testing %s models (%u offered)", s_scope == MODEL_TEST_ALL ? "all" :
+             s_scope == MODEL_TEST_CURRENT ? "the current" : llm_provider_name(s_provider), (unsigned)count);
     assistant_announce_begin();
 
+    int number = 0;
     for (size_t i = 0; i < count && !s_cancel && screen; i++) {
         const llm_model_t *m = &llm_models[i];
+        if (!chat_tested(m)) {
+            continue;
+        }
         size_t line_start = strlen(screen);
-        screen_line(screen, screen_size, line_start, (int)i + 1, m->spoken, NULL);
+        number++;
+        screen_line(screen, screen_size, line_start, number, m->spoken, NULL);
         assistant_show(screen);
         llm_stats_t st;
         llm_error_t err = llm_probe(m, lang->test_question, &st);
@@ -650,11 +695,11 @@ static void test_run(void)
                 best_ms = st.first_ms;
             }
             spoken_seconds(time_text, sizeof(time_text), st.first_ms, true);
-            screen_line(screen, screen_size, line_start, (int)i + 1, m->spoken, time_text);
+            screen_line(screen, screen_size, line_start, number, m->spoken, time_text);
             spoken_seconds(time_text, sizeof(time_text), st.first_ms, false);
             snprintf(text, sizeof(text), lang->test_result, m->spoken, time_text);
         } else {
-            screen_line(screen, screen_size, line_start, (int)i + 1, m->spoken, lang->test_unavailable_short);
+            screen_line(screen, screen_size, line_start, number, m->spoken, lang->test_unavailable_short);
             snprintf(text, sizeof(text), lang->test_unavailable, m->spoken);
         }
         assistant_show(screen);
@@ -666,12 +711,16 @@ static void test_run(void)
         classify(times);
         save_times(times);
         write_speed_file(times, lang->test_question);
-        if (best) {
+        // The fastest named when there was a choice (a single chat model: its result was said)
+        text[0] = '\0';
+        if (best && number > 1) {
             snprintf(text, sizeof(text), lang->test_done, best->spoken);
-        } else {
+        } else if (!best && number > 0) {
             strlcpy(text, lang->test_none, sizeof(text));
         }
-        assistant_announce(text);
+        if (text[0]) {
+            assistant_announce(text);
+        }
         assistant_announce_end();
         find_slow_free(times);
         if (!s_cancel && model_test_exclusion_question(text, sizeof(text))) {
@@ -702,6 +751,9 @@ void model_test_start(void)
         return;
     }
     s_cancel = false;
+    s_scope = s_next_scope;
+    s_provider = s_next_provider;
+    s_next_scope = MODEL_TEST_ALL;      // the next test, unless asked otherwise
     s_running = true;
     s_pending = true;
     s_slow_count = 0;

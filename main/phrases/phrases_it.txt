@@ -80,6 +80,15 @@ cosa (sta suonando|stiamo ascoltando|c è in onda)
 (che|quale) (canzone|brano|pezzo) è[ questo| questa]
 come si chiama (questa canzone|questo brano|questo pezzo)
 
+[s_test_current]
+# Prova solo la trascrizione, la sintesi e il modello in uso (prima di s_test_models)
+(prova|testa) (i|il|i tuoi|il tuo) modell(i|o) (attuale|attuali|in uso|correnti|corrente)
+
+[s_test_provider]
+# Prova i modelli di un fornitore: il suo nome può seguire (« prova i modelli di Google »), altrimenti viene chiesto
+(prova|testa) (i|i tuoi|tutti i) modelli (di|del|dell)
+(prova|testa) (un|il) fornitore
+
 [s_test_models]
 # Fa la stessa domanda a ogni modello e ne misura il tempo di risposta (SPEED.TXT, velocità in AGENTS.INI)
 (prova|testa) (i|il|il tuo) modell(i|o)

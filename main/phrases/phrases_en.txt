@@ -78,6 +78,17 @@ what is playing
 what are we listening to
 what (s|is) this (song|track|music)
 
+[s_test_current]
+# Tests only the transcription, speech and chat models in use (before s_test_models)
+test (the|your|my) (current|active) model[s]
+test (the|your|my) model[s] (in use|currently in use)
+(run|do|start) (the|a) test of (the|your) (current|active) model[s]
+
+[s_test_provider]
+# Tests the models of a provider: its name may follow ("test the models of Google"), else it is asked
+test (the|your|all) model[s] (of|from|by)
+test (a|one|the) provider
+
 [s_test_models]
 # Asks every model the same question and measures its answer time (SPEED.TXT, speed in AGENTS.INI)
 test (the|your|a) model[s]

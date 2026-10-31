@@ -51,6 +51,9 @@ static PHRASE_LIST_ALL_LANGUAGES(s_change_lang);
 static PHRASE_LIST_ALL_LANGUAGES(s_lang_shortcut);
 static PHRASE_LIST(s_list_models);
 static PHRASE_LIST(s_test_models);
+/* "Teste les modèles en cours", "teste les modèles de Google" (before s_test_models: "teste les modèles ...") */
+static PHRASE_LIST(s_test_current);
+static PHRASE_LIST(s_test_provider);
 /* Radio: a station ("joue la radio X"), a genre or a country ("joue du jazz"), and while one plays or is suspended:
  * next, previous, stop, resume, what is playing */
 static PHRASE_LIST(s_radio_station);
@@ -97,6 +100,7 @@ typedef enum {
     ASKED_NOTHING,
     ASKED_LANGUAGE,
     ASKED_PROVIDER,
+    ASKED_TEST_PROVIDER,    /* "teste les modèles d'un fournisseur": which one? */
     ASKED_MODEL,
     ASKED_VOICE,
     ASKED_STT,
@@ -1208,7 +1212,7 @@ bool voice_cmd_ends_with_goodbye(const char *sentence)
 void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
-        &s_goodbyes, &s_list_models, &s_test_models, &s_fastest_models, &s_radio_station, &s_radio_music,
+        &s_goodbyes, &s_list_models, &s_test_models, &s_test_current, &s_test_provider, &s_fastest_models, &s_radio_station, &s_radio_music,
         &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
         &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut, &s_change_stt, &s_change_tts,
         &s_new_conversation, &s_edit_config, &s_restart, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
@@ -1417,17 +1421,50 @@ static voice_cmd_t radio_command(const char *norm, char **reply)
     return VOICE_CMD_NONE;
 }
 
-/* "Teste les modèles": announced, then run once the reply is spoken */
-static voice_cmd_t test_models(char **reply)
+/* Spoken name of a speech model, its id if it is not in AGENTS.INI */
+static const char *speech_spoken(llm_speech_kind_t kind, const char *id)
 {
+    const llm_speech_model_t *m = llm_speech_find(kind, id);
+    return m ? m->spoken : id;
+}
+
+/*
+ * "Teste les modèles" (all), "teste les modèles en cours" (those in use), "teste les modèles de Google" (the chat
+ * models of a provider): announced, then run once the reply is spoken
+ */
+static voice_cmd_t test_models(char **reply, model_test_scope_t scope, llm_provider_t provider)
+{
+    const app_lang_t *lang = app_lang_get();
     if (model_test_running()) {
-        *reply = reply_dup(app_lang_get()->test_running);
+        *reply = reply_dup(lang->test_running);
         return VOICE_CMD_ANSWERED;
     }
-    char text[160];
-    snprintf(text, sizeof(text), app_lang_get()->test_start, (int)llm_model_count);
-    *reply = reply_dup(text);
+    char *text = NULL;
+    if (scope == MODEL_TEST_CURRENT) {
+        const sys_param_t *param = settings_get_parameter();
+        const char *chat = param->chat_model;
+        for (size_t i = 0; i < llm_model_count; i++) {
+            chat = strcmp(llm_models[i].id, param->chat_model) == 0 ? llm_models[i].spoken : chat;
+        }
+        asprintf(&text, lang->test_current_start, speech_spoken(LLM_SPEECH_STT, param->stt_model),
+                 speech_spoken(LLM_SPEECH_TTS, param->tts_model), chat);
+    } else if (scope == MODEL_TEST_PROVIDER) {
+        asprintf(&text, lang->test_provider_start, s_providers[provider].name, model_count(provider));
+    } else {
+        asprintf(&text, lang->test_start, (int)llm_model_count);
+    }
+    *reply = text ? text : reply_dup("");
+    model_test_set_scope(scope, provider);
     return VOICE_CMD_TEST_MODELS;
+}
+
+/* "Teste les modèles d'un fournisseur": the providers offered shown (not read, Read_lists), the one said tested */
+static voice_cmd_t ask_test_provider(const char *format, char **reply)
+{
+    s_asked = ASKED_TEST_PROVIDER;
+    s_asked_us = esp_timer_get_time();
+    *reply = provider_list(format);
+    return VOICE_CMD_ANSWERED;
 }
 
 voice_cmd_t voice_cmd_handle(const char *text, char **reply)
@@ -1457,6 +1494,13 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
             return VOICE_CMD_ANSWERED;
         }
         return ask_model(provider, reply);
+    }
+    if (recent && asked == ASKED_TEST_PROVIDER) {
+        llm_provider_t provider = find_provider_answer(norm);
+        if (provider == LLM_PROVIDER_COUNT || model_count(provider) == 0) {
+            return ask_test_provider(app_lang_get()->provider_unknown, reply);     // asked again
+        }
+        return test_models(reply, MODEL_TEST_PROVIDER, provider);
     }
     if (recent && asked == ASKED_MODEL) {
         return choose_model(norm, s_listed_provider, reply);
@@ -1494,7 +1538,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         bool no = has_any(norm, &s_no);
         bool yes = !no && has_any(norm, &s_yes);
         if (yes) {
-            return test_models(reply);
+            return test_models(reply, MODEL_TEST_ALL, LLM_PROVIDER_COUNT);
         }
         if (no) {
             *reply = reply_dup(app_lang_get()->test_declined);
@@ -1551,8 +1595,23 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         *reply = reply_dup(app_lang_get()->fastest_none);
         return VOICE_CMD_ANSWERED;
     }
+    if (starts_with(norm, phrases_of(&s_test_current), NULL)) {
+        return test_models(reply, MODEL_TEST_CURRENT, LLM_PROVIDER_COUNT);
+    }
+    if (starts_with(norm, phrases_of(&s_test_provider), &len)) {
+        // "Teste les modèles de Google": tested at once; else the providers are shown and one is asked
+        llm_provider_t provider = find_provider(norm + len);
+        if (provider != LLM_PROVIDER_COUNT && model_count(provider) > 0) {
+            return test_models(reply, MODEL_TEST_PROVIDER, provider);
+        }
+        if (model_test_running()) {
+            *reply = reply_dup(app_lang_get()->test_running);
+            return VOICE_CMD_ANSWERED;
+        }
+        return ask_test_provider(app_lang_get()->test_provider_ask, reply);
+    }
     if (starts_with(norm, phrases_of(&s_test_models), NULL)) {
-        return test_models(reply);
+        return test_models(reply, MODEL_TEST_ALL, LLM_PROVIDER_COUNT);
     }
     if (starts_with(norm, phrases_of(&s_list_models), NULL)) {
         *reply = models_by_provider();

@@ -93,6 +93,16 @@ was hören wir[ gerade]
 was ist das für ein (lied|titel|song)
 welches lied ist das
 
+[s_test_current]
+# Testet nur die aktuelle Transkription, Sprachausgabe und das aktuelle Modell (vor s_test_models)
+teste (die|deine) (aktuellen|jetzigen|benutzten) modelle
+teste (das|dein) (aktuelle|jetzige) modell
+
+[s_test_provider]
+# Testet die Modelle eines Anbieters: sein Name kann folgen ("teste die Modelle von Google"), sonst wird er gefragt
+teste (die|deine|alle) modelle (von|des|vom)
+teste (einen|den) anbieter
+
 [s_test_models]
 # Stellt jedem Modell dieselbe Frage und misst seine Antwortzeit (SPEED.TXT, Geschwindigkeit in AGENTS.INI)
 teste (die|deine) modelle

@@ -84,6 +84,16 @@ qué (está sonando|suena|estamos escuchando)
 que (esta sonando|suena|estamos escuchando)
 (qué|que|cuál es|cual es) (esta canción|esta cancion|este tema|esta música|esta musica)
 
+[s_test_current]
+# Prueba solo la transcripción, la síntesis y el modelo en uso (antes de s_test_models)
+prueba (los|tus|el|tu) modelo[s] (actual|actuales|en uso)
+(testea|testear) (los|tus) modelos (actuales|en uso)
+
+[s_test_provider]
+# Prueba los modelos de un proveedor: su nombre puede seguir (« prueba los modelos de Google »), si no se pregunta
+prueba (los|tus|todos los) modelos (de|del)
+prueba (un|el) proveedor
+
 [s_test_models]
 # Hace la misma pregunta a cada modelo y mide su tiempo de respuesta (SPEED.TXT, velocidad en AGENTS.INI)
 prueba (los|tus|el|tu) modelo[s]

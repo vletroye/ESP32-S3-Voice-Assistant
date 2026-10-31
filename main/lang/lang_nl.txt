@@ -86,6 +86,15 @@ test_stt_name = de transcriptie %s
 test_start = Ik test de %d modellen, één voor één.
 test_running = Er loopt al een test van de modellen.
 
+# "teste les modèles en cours": %s transcription, %s speech, %s chat model (spoken names)
+test_current_start = Ik test de modellen in gebruik: de transcriptie %s, de synthese %s en het model %s.
+
+# "teste les modèles d'un fournisseur": %s the numbered providers (shown, not read with Read_lists = off)
+test_provider_ask = Van welke aanbieder moet ik de modellen testen:: %s
+
+# %s: the provider, %d: number of its models
+test_provider_start = Ik test de modellen van %s, %d in totaal.
+
 # on screen, after the model's name
 test_unavailable_short = niet beschikbaar
 

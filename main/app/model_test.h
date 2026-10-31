@@ -4,17 +4,29 @@
  * SPDX-License-Identifier: CC0-1.0
  *
  * "Teste les modèles": the same question asked to every model offered (AGENTS.INI, then the free OpenRouter
- * ones), one after the other, without the conversation nor tools. The times are kept in SPEED.TXT (configuration
+ * ones), one after the other, without the conversation nor tools; or only to those in use, or to those of a
+ * provider (model_test_scope_t). The times are kept in SPEED.TXT (configuration
  * drive) and the speed of the models of AGENTS.INI (fast, average, slow) is written to that file.
  */
 
 #pragma once
 
 #include <stdbool.h>
+#include "llm.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* The models of a test */
+typedef enum {
+    MODEL_TEST_ALL,         /* "teste les modèles": the speech models, then every model offered */
+    MODEL_TEST_CURRENT,     /* "teste les modèles en cours": the transcription, speech and chat models in use */
+    MODEL_TEST_PROVIDER,    /* "teste les modèles d'Anthropic": the chat models of a provider */
+} model_test_scope_t;
+
+/** The models of the next test (provider: for MODEL_TEST_PROVIDER), kept until it is started */
+void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider);
 
 /** Ask for the test (nothing if one is running); it is run by model_test_poll() */
 void model_test_start(void);

@@ -229,7 +229,8 @@ settings of the [Quick start](#1-quick-start).
 - **Sleep screen** with the time and date, the volume and the Wi-Fi signal; with the BOX-3-SENSOR dock, the
   battery level and a screen that switches off when nobody is there.
 - **Model test**: "teste les modèles" / "test the models" measures how fast each model (and each voice) answers, and says which one is
-  the fastest.
+  the fastest; "teste les modèles en cours" / "test the current models" tests only those in use, "teste les modèles
+  de Google" / "test the models of Google" those of a provider.
 
 Every feature in detail: [Features in detail](#49-features-in-detail).
 
@@ -388,6 +389,8 @@ voice?"); the Settings screen follows.
 | Answer to that question (within 60 s after it) | its number ("2", "le deuxième") or its name: français · anglais · "en anglais s'il te plaît"… | its number ("2", "the second") or its name: French · English · "in English please"… |
 | Change the language directly | parle anglais · parle en anglais · parlons anglais · on parle anglais · passe en anglais · passe à l'anglais · réponds en anglais | speak French · speak in French · switch to French · answer in French |
 | Test the models: same question to each one, time to the first words spoken after each, results in `SPEED.TXT`, speed written to `AGENTS.INI` (see [Model test](#334-model-test-teste-les-modèles)) | teste les / tes modèles · lance / fais le / un test des modèles | test the / your models · run the / a model test |
+| Test only the models in use: the transcription, the speech and the chat model of the settings ("Je teste les modèles en cours : la transcription OpenAI, la synthèse ElevenLabs et le modèle Haiku." / "I am testing the models in use: …"; section `[s_test_current]`) | teste les modèles en cours / actuels · lance le test des modèles en cours | test the current / active models · test the models in use |
+| Test the chat models of a provider: named at once ("teste les modèles de Google"), or the providers are shown (not read, `Read_lists`) and "De quel fournisseur dois-je tester les modèles :" / "Which provider's models should I test:" is asked; the answer is its name or its number (section `[s_test_provider]`) | teste les modèles de / d' / du … · teste les modèles d'un fournisseur · teste un fournisseur | test the models of / from … · test a provider |
 | The fastest models: the 3 fastest offered, by their mean time over the model tests ("Les modèles les plus rapides sont Haiku (0,8 seconde)…" / "The fastest models are Haiku (0.8 second)…"); never tested: "Je n'ai pas encore testé les modèles. Veux-tu que je lance un test ?" / "I have not tested the models yet. Do you want me to run a test?", then "oui" / "yes" runs the test, "non" / "no" does not (section `[s_fastest_models]`) | quels sont les modèles les plus rapides · quel est le modèle le plus rapide · donne-moi / dis-moi les modèles les plus rapides · les modèles les plus rapides | what are the fastest models · which model is the fastest · tell me the fastest models · the fastest models |
 | List the models (read from `AGENTS.INI`, by provider, then the free OpenRouter ones: "Chez Anthropic, je supporte : Haiku, Sonnet et Opus. Chez OpenAI : …" / "At Anthropic, I support: Haiku, Sonnet and Opus. At OpenAI: …") | donne-moi la liste de tous les / tes modèles (disponibles / supportés) · donne-moi la liste des modèles · liste-moi (tous) les / tes modèles · donne-moi tes modèles · quels sont les / tes modèles | give me the list of (all) the / your models · list (all) the / your models · what / which models do you support · what / which models are available |
 | Change the model (asks the provider first, the providers that have models in `AGENTS.INI` numbered (the `%s` of `provider_ask`): "Quel fournisseur voulez-vous : 1, Anthropic. 2, OpenAI…" / "Which provider do you want: 1, Anthropic. 2, OpenAI…"; a provider with a single model is chosen at once, without listing it) | change de modèle · change le modèle · changer de modèle · changer le modèle · change ton modèle | change the model · change model · switch model · switch the model |
@@ -966,6 +969,14 @@ conversation nor tools** but with the same instructions. The model chosen and it
   synthesis with its own voice), before the next one. The speech settings in use are restored after; the results
   are in a second table of `SPEED.TXT`.
 - Each test costs one short answer of each paid model, and a sentence of each speech model.
+- **Fewer models**: "**teste les modèles en cours**" ("test the current models") tests only the transcription, the
+  speech and the chat model of the settings (the transcription is given the audio of that speech; if the speech
+  fails, there is nothing to transcribe). "**Teste les modèles de Google**" ("test the models of Google") tests the
+  chat models of that provider, without the speech models (for OpenRouter, its free models too); "teste les modèles
+  d'un fournisseur" shows the providers and asks which one (`test_provider_ask` of `LANG_<XX>.TXT`, the list after
+  its "::" not read unless `Read_lists = on`). Their results go into `SPEED.TXT` and the means as usual; the
+  fastest is named only when more than one chat model was tested, and only the free models tested this time can
+  be asked about for exclusion.
 
 ### 3.4 Voices: `[voices]` of `AGENTS.INI`
 

@@ -195,6 +195,31 @@ static const char *status_of(llm_error_t err)
     }
 }
 
+/* Why a model did not answer, as said to the user ("crédit épuisé ou modèle hors de ton offre") */
+static const char *reason_of(llm_error_t err)
+{
+    const app_lang_t *lang = app_lang_get();
+    switch (err) {
+    case LLM_ERR_NO_KEY: return lang->test_why_no_key;
+    case LLM_ERR_NETWORK: return lang->test_why_network;
+    case LLM_ERR_AUTH: return lang->test_why_auth;
+    case LLM_ERR_CREDIT: return lang->test_why_credit;
+    case LLM_ERR_BUSY: return lang->test_why_busy;
+    case LLM_ERR_REFUSAL: return lang->test_why_refused;
+    case LLM_ERR_EFFORT: return lang->test_why_effort;
+    default: return lang->test_why_other;
+    }
+}
+
+/* "Argon : non disponible, clé refusée." (into text; the first letter capitalized: "La synthèse Voxtral : ...") */
+static void unavailable_text(char *text, size_t size, const char *name, const char *reason)
+{
+    snprintf(text, size, app_lang_get()->test_unavailable_why, name, reason);
+    if ((unsigned char)text[0] < 0x80) {
+        text[0] = toupper((unsigned char)text[0]);
+    }
+}
+
 /* The result of a model; its mean time to the first words counts every successful test */
 static void record(cJSON *times, const llm_model_t *m, llm_error_t err, const llm_stats_t *st)
 {
@@ -241,6 +266,7 @@ static struct {
     int total_ms;           /* TTS: end of the audio */
     int words;              /* STT: % of the words of the sentence found in the transcript, -1 if none */
     char status[32];
+    const char *reason;     /* why it was not available, as said (LANG_<XX>.TXT), NULL if it was */
 } s_speech_results[SPEECH_RESULTS_MAX];
 static int s_speech_result_count = 0;
 
@@ -291,10 +317,7 @@ static void say_speech_result(int index)
         spoken_seconds(time_text, sizeof(time_text), s_speech_results[index].first_ms, false);
         snprintf(text, sizeof(text), lang->test_result, s_speech_results[index].name, time_text);
     } else {
-        snprintf(text, sizeof(text), lang->test_unavailable, s_speech_results[index].name);
-        if ((unsigned char)text[0] < 0x80) {
-            text[0] = toupper((unsigned char)text[0]);     // "La synthèse Voxtral : non disponible."
-        }
+        unavailable_text(text, sizeof(text), s_speech_results[index].name, s_speech_results[index].reason);
     }
     assistant_announce_begin();
     assistant_announce(text);
@@ -367,6 +390,7 @@ static void test_speech(char *screen, size_t screen_size)
         size_t got_samples = 0;
         bool ok = synthesize(m, &got, &got_samples, &r->first_ms, &r->total_ms);
         strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : "unavailable: no audio", sizeof(r->status));
+        r->reason = !key ? lang->test_why_no_key : ok ? NULL : lang->test_why_no_audio;
         ESP_LOGI(TAG, "TTS %s: %s, first audio %d ms, total %d ms, %u samples", m->id, r->status, r->first_ms,
                  r->total_ms, (unsigned)got_samples);
         if (ok && !audio) {
@@ -379,7 +403,7 @@ static void test_speech(char *screen, size_t screen_size)
         if (ok) {
             spoken_seconds(result, sizeof(result), r->first_ms, true);
         }
-        speech_line(screen, screen_size, name, ok ? result : lang->test_unavailable_short);
+        speech_line(screen, screen_size, name, ok ? result : r->reason);
         assistant_show(screen);
         if (!s_cancel) {
             // With the speech and voice of the settings (the test left its own)
@@ -415,6 +439,7 @@ static void test_speech(char *screen, size_t screen_size)
         }
         r->words = text ? words_found(lang->speech_test_phrase, text) : -1;
         strlcpy(r->status, !key ? "unavailable: no key" : text ? "ok" : "unavailable: no text", sizeof(r->status));
+        r->reason = !key ? lang->test_why_no_key : text ? NULL : lang->test_why_no_text;
         ESP_LOGI(TAG, "STT %s: %s, %d ms, %d %% of the words: \"%s\"", m->id, r->status, r->first_ms, r->words,
                  text ? text : "");
         free(text);
@@ -422,7 +447,7 @@ static void test_speech(char *screen, size_t screen_size)
         if (r->first_ms >= 0) {
             spoken_seconds(result, sizeof(result), r->first_ms, true);
         }
-        speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : lang->test_unavailable_short);
+        speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : (r->reason ? r->reason : lang->test_why_no_text));
         assistant_show(screen);
         if (!s_cancel) {
             say_speech_result(s_speech_result_count - 1);
@@ -754,8 +779,9 @@ static void test_run(void)
             spoken_seconds(time_text, sizeof(time_text), st.first_ms, false);
             snprintf(text, sizeof(text), lang->test_result, m->spoken, time_text);
         } else {
-            screen_line(screen, screen_size, line_start, number, m->spoken, lang->test_unavailable_short);
-            snprintf(text, sizeof(text), lang->test_unavailable, m->spoken);
+            const char *reason = reason_of(err == LLM_OK ? LLM_ERR_OTHER : err);
+            screen_line(screen, screen_size, line_start, number, m->spoken, reason);
+            unavailable_text(text, sizeof(text), m->spoken, reason);
         }
         assistant_show(screen);
         // Queued: spoken while the next model is tested

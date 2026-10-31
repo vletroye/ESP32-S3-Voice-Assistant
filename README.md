@@ -937,8 +937,11 @@ phrases comment se forme un arc-en-ciel.", `test_question` of `LANG_<XX>.TXT`), 
 conversation nor tools** but with the same instructions. The model chosen and its conversation are not changed.
 
 - The screen lists the models one line each as they are tested, numbered: "02 Sonnet…" while it is tested, then
-  "02 Sonnet : 1,2 s" (or "non disponible" without key, credit or answer); the last line stays visible. The
-  answers are not spoken, only each result: "Résultat de Sonnet : 1,2 seconde." / "Result of Sonnet: 1.2 seconds."
+  "02 Sonnet : 1,2 s", or why it is not available: "09 Argon : crédit épuisé ou modèle hors de ton offre" (the
+  `test_why_...` of `LANG_<XX>.TXT`: missing key, no answer, key refused, no credit or model not in the plan, service
+  busy, request refused, reasoning effort refused, error; no audio or no text for the speech models); the last line
+  stays visible. The answers are not spoken, only each result: "Résultat de Sonnet : 1,2 seconde." / "Result of
+  Sonnet: 1.2 seconds.", or "Argon : non disponible, clé refusée." / "Argon: not available, key refused."
   (queued: the next model is
   tested meanwhile, the speech of a result using a little of the network while it is measured), then at the end "Le
   modèle le plus rapide était Flash-Lite." / "The fastest model was Flash-Lite."; the list stays 15 s on screen, then the assistant sleeps. Saying

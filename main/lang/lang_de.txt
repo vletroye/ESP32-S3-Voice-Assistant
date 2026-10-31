@@ -103,14 +103,22 @@ test_llm_start = Ich teste die %d Sprachmodelle, eins nach dem anderen.
 # "teste le modèle Argon": %s its spoken name
 test_one_start = Ich teste das Modell %s.
 
-# on screen, after the model's name
-test_unavailable_short = nicht verfügbar
-
 # %s spoken name, %s time ("1,2 secondes")
 test_result = Ergebnis von %s: %s.
 
-# %s spoken name
-test_unavailable = %s: nicht verfügbar.
+# a model not available, %s spoken name, %s why (test_why_...)
+test_unavailable_why = %s: nicht verfügbar, %s.
+# why: on screen after the model's name, and said
+test_why_no_key = Schlüssel fehlt
+test_why_network = keine Antwort
+test_why_auth = Schlüssel abgelehnt
+test_why_credit = kein Guthaben oder Modell nicht in deinem Tarif
+test_why_busy = Dienst überlastet
+test_why_refused = Anfrage abgelehnt
+test_why_effort = Denkstufe abgelehnt
+test_why_other = Fehler
+test_why_no_audio = kein Ton
+test_why_no_text = kein Text
 
 # %s fastest
 test_done = Das schnellste Modell war %s.

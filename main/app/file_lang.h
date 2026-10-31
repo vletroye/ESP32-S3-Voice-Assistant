@@ -66,9 +66,19 @@ typedef struct {
     const char *test_llm_start;     /* "teste les modèles de LLM", %d: number of chat models */
     const char *test_one_start;     /* "teste le modèle Argon", %s: its spoken name */
     const char *test_running;
-    const char *test_unavailable_short; /* on screen, after the model's name */
     const char *test_result;        /* %s spoken name, %s time ("1,2 secondes") */
-    const char *test_unavailable;   /* %s spoken name */
+    const char *test_unavailable_why; /* %s spoken name, %s why (one of the test_why_...) */
+    /* Why a model was not available: on screen after its name, and said */
+    const char *test_why_no_key;
+    const char *test_why_network;
+    const char *test_why_auth;
+    const char *test_why_credit;
+    const char *test_why_busy;
+    const char *test_why_refused;
+    const char *test_why_effort;
+    const char *test_why_other;
+    const char *test_why_no_audio;  /* a speech model gave no audio */
+    const char *test_why_no_text;   /* a transcription model gave no text */
     const char *test_done;          /* %s fastest */
     const char *test_none;
     const char *exclude_ask;        /* %s spoken name, %s its mean time: exclude it? */

@@ -102,14 +102,22 @@ test_llm_start = I am testing the %d language models, one by one.
 # "teste le modèle Argon": %s its spoken name
 test_one_start = I am testing the model %s.
 
-# on screen, after the model's name
-test_unavailable_short = not available
-
 # %s spoken name, %s time ("1,2 secondes")
 test_result = Result of %s: %s.
 
-# %s spoken name
-test_unavailable = %s: not available.
+# a model not available, %s spoken name, %s why (test_why_...)
+test_unavailable_why = %s: not available, %s.
+# why: on screen after the model's name, and said
+test_why_no_key = missing key
+test_why_network = no answer
+test_why_auth = key refused
+test_why_credit = no credit, or model not in your plan
+test_why_busy = service busy
+test_why_refused = request refused
+test_why_effort = reasoning effort refused
+test_why_other = error
+test_why_no_audio = no audio
+test_why_no_text = no text
 
 # %s fastest
 test_done = The fastest model was %s.

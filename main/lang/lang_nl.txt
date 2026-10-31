@@ -103,14 +103,22 @@ test_llm_start = Ik test de %d taalmodellen, één voor één.
 # "teste le modèle Argon": %s its spoken name
 test_one_start = Ik test het model %s.
 
-# on screen, after the model's name
-test_unavailable_short = niet beschikbaar
-
 # %s spoken name, %s time ("1,2 secondes")
 test_result = Resultaat van %s: %s.
 
-# %s spoken name
-test_unavailable = %s: niet beschikbaar.
+# a model not available, %s spoken name, %s why (test_why_...)
+test_unavailable_why = %s: niet beschikbaar, %s.
+# why: on screen after the model's name, and said
+test_why_no_key = sleutel ontbreekt
+test_why_network = geen antwoord
+test_why_auth = sleutel geweigerd
+test_why_credit = geen tegoed of model niet in je abonnement
+test_why_busy = dienst overbelast
+test_why_refused = verzoek geweigerd
+test_why_effort = redeneerniveau geweigerd
+test_why_other = fout
+test_why_no_audio = geen geluid
+test_why_no_text = geen tekst
 
 # %s fastest
 test_done = Het snelste model was %s.

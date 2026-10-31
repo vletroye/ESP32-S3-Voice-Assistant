@@ -1346,7 +1346,7 @@ The phrases are made once per language, at start-up for the current one (`voice_
 `app_memory_init()`), at the first use after a change of language; the log shows
 `phrases: [s_edit_config] fr: 66 phrases from 3 patterns`. They are kept **longest first**, so that a phrase
 beginning another one never hides it ("parle" does not take "parle en anglais" from "parle en"). A pattern with
-unbalanced brackets, or standing for more than 256 phrases, is left out with an error in the log. Matching is the
+unbalanced brackets, or standing for more than 1024 phrases, is left out with an error in the log. Matching is the
 same as with plain lists (whole words, from the start of what is said) and costs nothing more at run time.
 
 ### 3.10 Home automation: Homey

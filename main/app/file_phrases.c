@@ -17,7 +17,7 @@
 #include "file_phrases.h"
 
 /* Phrases one pattern may stand for: far more than needed, a guard against a mistyped pattern */
-#define PHRASES_PER_PATTERN_MAX     256
+#define PHRASES_PER_PATTERN_MAX     1024
 #define PHRASE_MAX_LEN              160
 
 static const char *TAG = "phrases";

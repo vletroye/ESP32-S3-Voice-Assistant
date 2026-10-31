@@ -779,7 +779,6 @@ static llm_error_t claude_stream(void *state, const char *text, llm_text_cb_t on
 }
 
 const llm_backend_t llm_backend_claude = {
-    .key_name = "Claude_key",
     .init = claude_init,
     .set_instructions = claude_set_system,
     .reset = claude_reset,

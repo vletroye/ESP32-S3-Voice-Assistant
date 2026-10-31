@@ -26,4 +26,4 @@ static const cc_config_t s_config = {
 
 static cc_client_t s_client = { .config = &s_config };
 
-const llm_backend_t llm_backend_mistral = CC_BACKEND("Mistral_key", s_client);
+const llm_backend_t llm_backend_mistral = CC_BACKEND(s_client);

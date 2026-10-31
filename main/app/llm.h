@@ -194,26 +194,18 @@ llm_error_t llm_probe(const llm_model_t *model, const char *question, llm_stats_
  */
 llm_provider_t llm_provider_of(const char *model);
 
-/** Provider name as said to the user ("Claude", "GPT", "Gemini", "OpenRouter", "Grok", "Mistral", "Perplexity") */
+/** The name of the provider's chat models ("Claude", "GPT", "Gemini", "OpenRouter", "Grok"...), ai_providers.c */
 const char *llm_provider_name(llm_provider_t provider);
 
 /**
- * @brief Configure the client of the model's provider. The strings are copied.
+ * @brief Configure the client of the model's provider, with its key of the settings (ai_providers.c). The
+ *        strings are copied.
  *
  * @param model           Model id, e.g. "claude-haiku-5-5" or "gpt-6-luna"
- * @param claude_key      Anthropic key (may be empty when a GPT model is used)
- * @param openai_key      OpenAI key
  * @param openai_base_url OpenAI base URL ending with '/', e.g. "https://api.openai.com/v1/"
- * @param gemini_key      Gemini key (may be empty when no Gemini model is used)
- * @param openrouter_key  OpenRouter key (may be empty when no OpenRouter model is used)
- * @param xai_key         xAI key (may be empty when no Grok model is used)
- * @param mistral_key     Mistral AI key (may be empty when no Mistral model is used)
- * @param perplexity_key  Perplexity key (may be empty when no Perplexity model is used)
  * @param system_prompt   Instructions sent with every request
  */
-esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
-                   const char *gemini_key, const char *openrouter_key, const char *xai_key,
-                   const char *mistral_key, const char *perplexity_key, const char *system_prompt);
+esp_err_t llm_init(const char *model, const char *openai_base_url, const char *system_prompt);
 
 /** Replace the instructions (e.g. after a note was remembered); the conversation is kept */
 void llm_set_system_prompt(const char *system_prompt);

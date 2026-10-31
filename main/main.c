@@ -32,6 +32,7 @@
 #include "voice_cmd.h"
 #include "file_phrases.h"
 #include "ai_provider_openrouter_free.h"
+#include "ai_providers.h"
 #include "app_presence.h"
 #include "assistant.h"
 #include "app_volume.h"
@@ -691,59 +692,45 @@ void assistant_set_model(const char *model)
     llm_history_save();
     strlcpy(sys_param->chat_model, model, sizeof(sys_param->chat_model));
     char *prompt = build_system_prompt();
-    llm_init(model, sys_param->claude_key, sys_param->key, sys_param->url,
-             sys_param->gemini_key, sys_param->openrouter_key, sys_param->xai_key,
-             sys_param->mistral_key, sys_param->perplexity_key,
-             prompt ? prompt : app_lang_get()->system_prompt);
+    llm_init(model, sys_param->url, prompt ? prompt : app_lang_get()->system_prompt);
     free(prompt);
     llm_set_location(sys_param->country, sys_param->city);
     ui_ctrl_settings_sync();
     ESP_LOGI(TAG, "Model %s applied", model);
 }
 
+/* The provider of a speech model ([stt] / [tts] of AGENTS.INI), OpenAI's when unknown */
+static const ai_provider_t *speech_provider(const char *provider)
+{
+    const ai_provider_t *p = ai_provider_find(provider);
+    return p ? p : ai_provider_of_llm(LLM_PROVIDER_OPENAI);
+}
+
 const char *assistant_speech_key(const char *provider)
 {
-    if (strcmp(provider, "mistral") == 0) {
-        return sys_param->mistral_key;
-    }
-    if (strcmp(provider, "deepgram") == 0) {
-        return sys_param->deepgram_key;
-    }
-    if (strcmp(provider, "openrouter") == 0) {
-        return sys_param->openrouter_key;
-    }
-    if (strcmp(provider, "groq") == 0) {
-        return sys_param->groq_key;
-    }
-    if (strcmp(provider, "elevenlabs") == 0) {
-        return sys_param->elevenlabs_key;
-    }
-    return sys_param->key;
+    return ai_provider_key(speech_provider(provider));
 }
 
 const char *assistant_speech_key_name(const char *provider)
 {
-    return strcmp(provider, "mistral") == 0 ? "Mistral_key" :
-           strcmp(provider, "deepgram") == 0 ? "Deepgram_key" :
-           strcmp(provider, "openrouter") == 0 ? "OpenRouter_key" :
-           strcmp(provider, "groq") == 0 ? "Groq_key" :
-           strcmp(provider, "elevenlabs") == 0 ? "ElevenLabs_key" : "ChatGPT_key";
+    return speech_provider(provider)->key_name;
+}
+
+const char *assistant_speech_company(const char *provider)
+{
+    return speech_provider(provider)->company;
 }
 
 const struct stt_backend *assistant_stt_backend(const char *provider)
 {
-    return strcmp(provider, "mistral") == 0 ? &stt_backend_mistral :
-           strcmp(provider, "deepgram") == 0 ? &stt_backend_deepgram :
-           strcmp(provider, "groq") == 0 ? &stt_backend_groq :
-           strcmp(provider, "elevenlabs") == 0 ? &stt_backend_elevenlabs : &stt_backend_openai;
+    const ai_provider_t *p = speech_provider(provider);
+    return p->stt ? p->stt : &stt_backend_openai;
 }
 
 const struct tts_backend *assistant_tts_backend(const char *provider)
 {
-    return strcmp(provider, "mistral") == 0 ? &tts_backend_mistral :
-           strcmp(provider, "deepgram") == 0 ? &tts_backend_deepgram :
-           strcmp(provider, "openrouter") == 0 ? &tts_backend_openrouter :
-           strcmp(provider, "elevenlabs") == 0 ? &tts_backend_elevenlabs : &tts_backend_openai;
+    const ai_provider_t *p = speech_provider(provider);
+    return p->tts ? p->tts : &tts_backend_openai;
 }
 
 /*
@@ -768,12 +755,8 @@ static char *speech_refused_text(llm_speech_kind_t kind)
     const char *key;
     const llm_speech_model_t *m = speech_choice(kind, kind == LLM_SPEECH_STT ? sys_param->stt_model :
                                                 sys_param->tts_model, &key);
-    const char *p = m ? m->provider : "openai";
-    const char *name = strcmp(p, "mistral") == 0 ? "Mistral" : strcmp(p, "deepgram") == 0 ? "Deepgram" :
-                       strcmp(p, "openrouter") == 0 ? "OpenRouter" : strcmp(p, "groq") == 0 ? "Groq" :
-                       strcmp(p, "elevenlabs") == 0 ? "ElevenLabs" : "OpenAI";
     char *text = NULL;
-    asprintf(&text, app_lang_get()->speech_refused, name);
+    asprintf(&text, app_lang_get()->speech_refused, assistant_speech_company(m ? m->provider : "openai"));
     return text;
 }
 
@@ -1147,10 +1130,7 @@ void app_main()
     voice_cmd_init();
     weather_places_load();
     char *system_prompt = build_system_prompt();
-    llm_init(sys_param->chat_model, sys_param->claude_key, sys_param->key, sys_param->url,
-             sys_param->gemini_key, sys_param->openrouter_key, sys_param->xai_key,
-             sys_param->mistral_key, sys_param->perplexity_key,
-             system_prompt ? system_prompt : app_lang_get()->system_prompt);
+    llm_init(sys_param->chat_model, sys_param->url, system_prompt ? system_prompt : app_lang_get()->system_prompt);
     free(system_prompt);
     llm_set_location(sys_param->country, sys_param->city);
     // Transcription and speech: the models of CONFIG.INI (Stt_model, Tts_model), by their provider

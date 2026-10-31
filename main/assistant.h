@@ -41,6 +41,9 @@ const char *assistant_speech_key(const char *provider);
 /** The name of that key in CONFIG.INI ("ChatGPT_key", "Mistral_key", "Deepgram_key") */
 const char *assistant_speech_key_name(const char *provider);
 
+/** Its company, as said ("OpenAI", "Mistral AI", "ElevenLabs") */
+const char *assistant_speech_company(const char *provider);
+
 /** The transcription / speech service of a provider */
 struct stt_backend;
 struct tts_backend;

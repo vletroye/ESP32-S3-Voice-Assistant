@@ -372,7 +372,6 @@ end:
 }
 
 const llm_backend_t llm_backend_perplexity = {
-    .key_name = "Perplexity_key",
     .init = perplexity_init,
     .set_instructions = perplexity_set_instructions,
     .reset = perplexity_reset,

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: CC0-1.0
  *
  * A chat provider's client (ai_provider_<name>.c) for llm.c: what llm.c asks of every provider, one table per
- * provider (llm_backend_claude, llm_backend_openai...), in the order of llm_provider_t.
+ * provider (llm_backend_claude, llm_backend_openai...), in the table of the providers (ai_providers.c).
  */
 
 #pragma once
@@ -18,7 +18,6 @@ extern "C" {
 #endif
 
 typedef struct llm_backend {
-    const char *key_name;       /* "Claude_key": named in the log when it is missing */
     void *state;                /* given back to each function (the clients sharing a code: their own state) */
     /* Configured for a model (the strings are copied); effort: of AGENTS.INI, NULL or "-" for none */
     esp_err_t (*init)(void *state, const char *api_key, const char *model, const char *instructions,

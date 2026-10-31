@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-/** The client for llm.c (key: OpenAI_key of CONFIG.INI) */
+/** The client for llm.c (key: ChatGPT_key of CONFIG.INI) */
 extern const llm_backend_t llm_backend_openai;
 
 /** OpenAI base URL ("https://api.openai.com/v1/", OpenAI_url of CONFIG.INI), copied: set before its init */

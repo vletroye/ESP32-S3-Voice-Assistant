@@ -25,6 +25,7 @@
 #include "app_ui_ctrl.h"
 #include "driver/usb_serial_jtag.h"
 #include "model_test.h"
+#include "ai_providers.h"
 #include "file_country.h"
 #include "radio.h"
 #include "radio_browser.h"
@@ -423,28 +424,14 @@ static voice_cmd_t choose_language(const char *norm, bool numbered, char **reply
 /* "un" / "une" mean 1 only when said alone: elsewhere they are articles ("je veux un modèle rapide") */
 static PHRASE_LIST(s_one_alone);
 
-/* Providers as they may be said (normalized), by llm_provider_t; spoken as their company name */
-static const struct {
-    const char *name;
-    const char *heard[7];
-} s_providers[LLM_PROVIDER_COUNT] = {
-    [LLM_PROVIDER_CLAUDE] = { "Anthropic", { "anthropic", "anthropique", "anthropik", "claude", "clode", NULL } },
-    [LLM_PROVIDER_OPENAI] = { "OpenAI", { "openai", "open ai", "open a i", "openaï", "gpt", "chatgpt", "chat gpt" } },
-    [LLM_PROVIDER_GEMINI] = { "Google", { "google", "gougle", "gemini", "gémini", "jemini", NULL } },
-    [LLM_PROVIDER_OPENROUTER] = { "OpenRouter", { "openrouter", "open router", "open routeur", "openrouteur",
-                                                  "open rooter", NULL } },
-    [LLM_PROVIDER_XAI] = { "xAI", { "xai", "x ai", "ix ai", "grok", "grock", "groc", "groque" } },
-    [LLM_PROVIDER_MISTRAL] = { "Mistral AI", { "mistral", "mistrale", "mistral ai", NULL } },
-    [LLM_PROVIDER_PERPLEXITY] = { "Perplexity", { "perplexity", "perplexité", "perplexiti", "perplexite", "sonar",
-                                                  "sonare", NULL } },
-};
-
 /* Provider named in the text, LLM_PROVIDER_COUNT if none */
 static llm_provider_t find_provider(const char *norm)
 {
+    // As the transcription may write them (ai_providers.c)
     for (int p = 0; p < LLM_PROVIDER_COUNT; p++) {
-        for (size_t i = 0; i < 7 && s_providers[p].heard[i]; i++) {
-            if (has_word(norm, s_providers[p].heard[i])) {
+        const char *const *heard = ai_provider_of_llm((llm_provider_t)p)->heard;
+        for (size_t i = 0; i < AI_PROVIDER_HEARD_MAX && heard[i]; i++) {
+            if (has_word(norm, heard[i])) {
                 return (llm_provider_t)p;
             }
         }
@@ -603,7 +590,7 @@ static char *model_list(llm_provider_t provider)
                  strcmp(llm_models[i].id, current) == 0 ? lang->model_current : "");
         number++;
     }
-    snprintf(out, CMD_REPLY_SIZE, lang->model_ask_intro, s_providers[provider].name, list);
+    snprintf(out, CMD_REPLY_SIZE, lang->model_ask_intro, ai_provider_of_llm(provider)->company, list);
     free(list);
     return out;
 }
@@ -655,7 +642,8 @@ static char *models_by_provider(void)
         size_t n = strlen(out);
         snprintf(out + n, size - n, "%s", n ? " " : "");
         n = strlen(out);
-        snprintf(out + n, size - n, first ? lang->models_first : lang->models_next, s_providers[p].name, names);
+        snprintf(out + n, size - n, first ? lang->models_first : lang->models_next,
+                 ai_provider_of_llm((llm_provider_t)p)->company, names);
         first = false;
     }
     names[0] = '\0';
@@ -734,7 +722,7 @@ static char *provider_list(const char *format)
     for (size_t i = 0; i < count; i++) {
         size_t n = strlen(list);
         snprintf(list + n, sizeof(list) - n, "%s%u, %s.", i ? " " : "", (unsigned)(i + 1),
-                 s_providers[offered[i]].name);
+                 ai_provider_of_llm(offered[i])->company);
     }
     char *text = NULL;
     asprintf(&text, format, list);
@@ -1024,15 +1012,9 @@ static voice_cmd_t choose_speech(llm_speech_kind_t kind, const char *norm, char 
         return VOICE_CMD_ANSWERED;
     }
     if (!assistant_speech_key(m->provider)[0]) {
-        // "Il manque la clé Deepgram : ajoutez Deepgram_key...": the provider named as its key, without "_key"
-        const char *key_name = assistant_speech_key_name(m->provider);
-        char provider[24];
-        strlcpy(provider, key_name, sizeof(provider));
-        char *suffix = strstr(provider, "_key");
-        if (suffix) {
-            *suffix = '\0';
-        }
-        asprintf(&text, lang->speech_no_key, provider, key_name);
+        // "Il manque la clé Deepgram : ajoutez Deepgram_key..."
+        asprintf(&text, lang->speech_no_key, assistant_speech_company(m->provider),
+                 assistant_speech_key_name(m->provider));
         *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
@@ -1457,7 +1439,7 @@ static voice_cmd_t test_models(char **reply, model_test_scope_t scope, llm_provi
         asprintf(&text, lang->test_current_start, speech_spoken(LLM_SPEECH_STT, param->stt_model),
                  speech_spoken(LLM_SPEECH_TTS, param->tts_model), chat);
     } else if (scope == MODEL_TEST_PROVIDER) {
-        asprintf(&text, lang->test_provider_start, s_providers[provider].name, model_count(provider));
+        asprintf(&text, lang->test_provider_start, ai_provider_of_llm(provider)->company, model_count(provider));
     } else if (scope == MODEL_TEST_TTS) {
         asprintf(&text, lang->test_tts_start, (int)llm_speech_count(LLM_SPEECH_TTS));
     } else if (scope == MODEL_TEST_STT) {

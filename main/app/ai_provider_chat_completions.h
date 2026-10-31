@@ -62,9 +62,9 @@ void cc_set_history(void *client, cJSON *messages);
 void cc_prewarm(void *client);
 llm_error_t cc_stream(void *client, const char *text, llm_text_cb_t on_text, void *ctx, char **full_text);
 
-/* The table of a Chat Completions provider: CC_BACKEND("XAI_key", s_client) */
-#define CC_BACKEND(key, client) {                                                                       \
-        .key_name = (key), .state = &(client), .init = cc_init, .set_instructions = cc_set_instructions, \
+/* The table of a Chat Completions provider: CC_BACKEND(s_client) */
+#define CC_BACKEND(client) {                                                                            \
+        .state = &(client), .init = cc_init, .set_instructions = cc_set_instructions,                    \
         .reset = cc_reset, .history = cc_history, .set_history = cc_set_history, .prewarm = cc_prewarm,  \
         .stream = cc_stream,                                                                             \
     }

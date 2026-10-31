@@ -303,7 +303,6 @@ end:
 }
 
 const llm_backend_t llm_backend_openai = {
-    .key_name = "OpenAI_key",
     .init = openai_init,
     .set_instructions = openai_set_instructions,
     .reset = openai_reset,

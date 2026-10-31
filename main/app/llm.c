@@ -23,6 +23,7 @@
 #include "ai_provider_xai.h"
 #include "ai_provider_mistral.h"
 #include "ai_provider_perplexity.h"
+#include "ai_providers.h"
 #include "tools.h"
 
 static const char *TAG = "llm";
@@ -73,19 +74,6 @@ static struct {
 static int s_call_count = 0;
 static char *s_free_excluded[FREE_EXCLUDED_MAX];
 static int s_free_excluded_count = 0;
-
-static const struct {
-    const char *section;
-    llm_provider_t provider;
-} s_sections[] = {
-    { "anthropic", LLM_PROVIDER_CLAUDE },
-    { "openai", LLM_PROVIDER_OPENAI },
-    { "google", LLM_PROVIDER_GEMINI },
-    { "openrouter", LLM_PROVIDER_OPENROUTER },
-    { "xai", LLM_PROVIDER_XAI },
-    { "mistral", LLM_PROVIDER_MISTRAL },
-    { "perplexity", LLM_PROVIDER_PERPLEXITY },
-};
 
 /* Without the blanks around it (in place) */
 static char *trim(char *s)
@@ -183,9 +171,11 @@ static section_t section_of(char *name, int *provider)
 {
     *provider = -1;
     name = trim(name);
-    for (size_t i = 0; i < sizeof(s_sections) / sizeof(s_sections[0]); i++) {
-        if (strcasecmp(name, s_sections[i].section) == 0) {
-            *provider = s_sections[i].provider;
+    // The section of a chat provider: its id ("anthropic")
+    for (size_t i = 0; i < ai_provider_count(); i++) {
+        const ai_provider_t *p = ai_provider_at(i);
+        if (p->llm < LLM_PROVIDER_COUNT && strcasecmp(name, p->id) == 0) {
+            *provider = p->llm;
             return SECTION_MODELS;
         }
     }
@@ -974,18 +964,7 @@ static const llm_model_t *model_of(const char *id)
 #define LLM_HISTORY_TMP_FILE    "/spiffs/history.tmp"
 
 static llm_provider_t s_provider = LLM_PROVIDER_CLAUDE;
-/* The client of each provider (ai_provider_<name>.c) */
-static const llm_backend_t *const s_backends[LLM_PROVIDER_COUNT] = {
-    [LLM_PROVIDER_CLAUDE] = &llm_backend_claude,
-    [LLM_PROVIDER_OPENAI] = &llm_backend_openai,
-    [LLM_PROVIDER_GEMINI] = &llm_backend_gemini,
-    [LLM_PROVIDER_OPENROUTER] = &llm_backend_openrouter,
-    [LLM_PROVIDER_XAI] = &llm_backend_xai,
-    [LLM_PROVIDER_MISTRAL] = &llm_backend_mistral,
-    [LLM_PROVIDER_PERPLEXITY] = &llm_backend_perplexity,
-};
-/* Keys and instructions of llm_init(): the model test configures other models with them */
-static char *s_keys[LLM_PROVIDER_COUNT];
+/* Instructions of llm_init(): the model test configures other models with them (and the keys of the settings) */
 static char *s_system = NULL;
 static bool s_ready = false;
 static char s_model[64];
@@ -1024,9 +1003,8 @@ llm_provider_t llm_provider_of(const char *model)
 
 const char *llm_provider_name(llm_provider_t provider)
 {
-    return provider == LLM_PROVIDER_OPENAI ? "GPT" : provider == LLM_PROVIDER_GEMINI ? "Gemini" :
-           provider == LLM_PROVIDER_OPENROUTER ? "OpenRouter" : provider == LLM_PROVIDER_XAI ? "Grok" :
-           provider == LLM_PROVIDER_MISTRAL ? "Mistral" : provider == LLM_PROVIDER_PERPLEXITY ? "Perplexity" : "Claude";
+    const ai_provider_t *p = ai_provider_of_llm(provider);
+    return p ? p->family : "?";
 }
 
 /* Effort of a listed model; "low" for a model only known from CONFIG.INI (accepted by every recent model) */
@@ -1045,7 +1023,7 @@ static const char *effort_of(const char *model)
 
 static const llm_backend_t *backend(void)
 {
-    return s_backends[s_provider];
+    return ai_provider_of_llm(s_provider)->chat;
 }
 
 static const cJSON *history_get(void)
@@ -1137,9 +1115,9 @@ static void keep(char **dst, const char *src)
 static esp_err_t client_init(const char *model, bool tools)
 {
     const llm_backend_t *b = backend();
-    const char *key = s_keys[s_provider];
-    if (!key || key[0] == '\0') {
-        ESP_LOGW(TAG, "No %s configured for %s", b->key_name, model);
+    const char *key = ai_provider_key(ai_provider_of_llm(s_provider));
+    if (key[0] == '\0') {
+        ESP_LOGW(TAG, "No %s configured for %s", ai_provider_of_llm(s_provider)->key_name, model);
         return ESP_ERR_INVALID_ARG;
     }
     if (s_provider == LLM_PROVIDER_CLAUDE) {
@@ -1151,25 +1129,11 @@ static esp_err_t client_init(const char *model, bool tools)
     return b->init(b->state, key, model, s_system, effort_of(model));
 }
 
-esp_err_t llm_init(const char *model, const char *claude_key, const char *openai_key, const char *openai_base_url,
-                   const char *gemini_key, const char *openrouter_key, const char *xai_key,
-                   const char *mistral_key, const char *perplexity_key, const char *system_prompt)
+esp_err_t llm_init(const char *model, const char *openai_base_url, const char *system_prompt)
 {
     // Called again when the model is changed at run time: wait for an answer being generated
     if (s_lock) {
         xSemaphoreTake(s_lock, portMAX_DELAY);
-    }
-    const char *keys[LLM_PROVIDER_COUNT] = {
-        [LLM_PROVIDER_CLAUDE] = claude_key,
-        [LLM_PROVIDER_OPENAI] = openai_key,
-        [LLM_PROVIDER_GEMINI] = gemini_key,
-        [LLM_PROVIDER_OPENROUTER] = openrouter_key,
-        [LLM_PROVIDER_XAI] = xai_key,
-        [LLM_PROVIDER_MISTRAL] = mistral_key,
-        [LLM_PROVIDER_PERPLEXITY] = perplexity_key,
-    };
-    for (int p = 0; p < LLM_PROVIDER_COUNT; p++) {
-        keep(&s_keys[p], keys[p]);
     }
     openai_chat_set_base_url(openai_base_url);
     keep(&s_system, system_prompt);

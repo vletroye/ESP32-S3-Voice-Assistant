@@ -315,7 +315,6 @@ end:
 }
 
 const llm_backend_t llm_backend_gemini = {
-    .key_name = "Gemini_key",
     .init = gemini_init,
     .set_instructions = gemini_set_instructions,
     .reset = gemini_reset,

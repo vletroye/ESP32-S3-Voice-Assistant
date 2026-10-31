@@ -31,6 +31,7 @@ extern const stt_backend_t stt_backend_openai;
 extern const stt_backend_t stt_backend_mistral;
 extern const stt_backend_t stt_backend_deepgram;
 extern const stt_backend_t stt_backend_groq;
+extern const stt_backend_t stt_backend_elevenlabs;
 
 /**
  * @brief Set the transcription service and its parameters (the strings are copied). Called again to change the

@@ -223,7 +223,7 @@ static void handle_message(const char *text)
         ESP_LOGW(TAG, "Unparsable message: %.100s", text);
         return;
     }
-    const cJSON *type = cJSON_GetObjectItem(json, "type");
+    const cJSON *type = cJSON_GetObjectItem(json, s_backend && s_backend->type_key ? s_backend->type_key : "type");
     const char *t = cJSON_IsString(type) ? type->valuestring : "";
     if (strcmp(t, "session.created") == 0 || strcmp(t, "session.updated") == 0) {
         ESP_LOGI(TAG, "%s", t);
@@ -342,6 +342,15 @@ static bool send_simple(esp_websocket_client_handle_t client, const char *type)
     return send_json(client, text, len);
 }
 
+/* The message ending the audio of the turn: the service's own, else {"type": commit_type} */
+static bool send_commit(esp_websocket_client_handle_t client)
+{
+    if (s_backend->commit_json) {
+        return send_json(client, s_backend->commit_json, strlen(s_backend->commit_json));
+    }
+    return send_simple(client, s_backend->commit_type);
+}
+
 static bool send_audio(esp_websocket_client_handle_t client, const int16_t *samples, size_t count)
 {
     // 24 kHz for OpenAI, the 16 kHz of the AFE as is for Mistral and Deepgram
@@ -356,12 +365,16 @@ static bool send_audio(esp_websocket_client_handle_t client, const int16_t *samp
         int len = (int)(n_out * sizeof(int16_t));
         return esp_websocket_client_send_bin(client, (const char *)pcm, len, pdMS_TO_TICKS(5000)) == len;
     }
-    char prefix[64];
-    size_t prefix_len = snprintf(prefix, sizeof(prefix), "{\"type\":\"%s\",\"audio\":\"", s_backend->append_type);
-    static const char suffix[] = "\"}";
+    // {"type": "<append type>", "audio": "<base64>"<extra fields>}, with the field names of the service
+    char prefix[64], suffix[96];
+    size_t prefix_len = snprintf(prefix, sizeof(prefix), "{\"%s\":\"%s\",\"%s\":\"",
+                                 s_backend->type_key ? s_backend->type_key : "type", s_backend->append_type,
+                                 s_backend->audio_key ? s_backend->audio_key : "audio");
+    snprintf(suffix, sizeof(suffix), "\"%s}", s_backend->append_extra ? s_backend->append_extra : "");
+    size_t suffix_len = strlen(suffix);
     size_t b64_len = 0;
     mbedtls_base64_encode(NULL, 0, &b64_len, (const unsigned char *)pcm, n_out * sizeof(int16_t));
-    size_t total = prefix_len + b64_len + sizeof(suffix);
+    size_t total = prefix_len + b64_len + suffix_len + 1;
     if (total > s_message_cap) {
         char *p = heap_caps_realloc(s_message, total, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!p) {
@@ -374,8 +387,8 @@ static bool send_audio(esp_websocket_client_handle_t client, const int16_t *samp
     size_t written = 0;
     mbedtls_base64_encode((unsigned char *)s_message + prefix_len, b64_len, &written, (const unsigned char *)pcm,
                           n_out * sizeof(int16_t));
-    memcpy(s_message + prefix_len + written, suffix, sizeof(suffix));
-    return send_json(client, s_message, prefix_len + written + sizeof(suffix) - 1);
+    memcpy(s_message + prefix_len + written, suffix, suffix_len + 1);
+    return send_json(client, s_message, prefix_len + written + suffix_len);
 }
 
 static void drain_audio(void)
@@ -618,7 +631,7 @@ static void stt_task(void *arg)
             xEventGroupClearBits(s_events, EV_COMMIT);
             s_commit_us = esp_timer_get_time();
             s_awaiting = true;
-            if (!send_simple(client, s_backend->commit_type)) {
+            if (!send_commit(client)) {
                 fail_turn("commit not sent");
                 continue;
             }
@@ -652,7 +665,12 @@ void stt_stream_configure(const stt_backend_t *backend, const char *api_key, con
                           const char *language)
 {
     char *header = NULL;
-    asprintf(&header, "Authorization: %s %s\r\n", backend->auth_scheme ? backend->auth_scheme : "Bearer", api_key);
+    if (backend->auth_header) {
+        asprintf(&header, "%s: %s\r\n", backend->auth_header, api_key);     // "xi-api-key: <key>" (ElevenLabs)
+    } else {
+        asprintf(&header, "Authorization: %s %s\r\n", backend->auth_scheme ? backend->auth_scheme : "Bearer",
+                 api_key);
+    }
     // Taken by the stt task at its next loop (which makes the URI): the old header stays valid until it has
     // reconnected
     char *old_header = s_auth_header;
@@ -763,6 +781,11 @@ char *stt_stream_test(const int16_t *audio, size_t samples, int *ms)
 bool stt_stream_no_credit(void)
 {
     return s_no_credit;
+}
+
+bool stt_backend_awaiting(void)
+{
+    return s_awaiting;
 }
 
 bool stt_stream_has_text(void)

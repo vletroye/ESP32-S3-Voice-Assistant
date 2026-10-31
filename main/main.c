@@ -725,7 +725,8 @@ const struct stt_backend *assistant_stt_backend(const char *provider)
 {
     return strcmp(provider, "mistral") == 0 ? &stt_backend_mistral :
            strcmp(provider, "deepgram") == 0 ? &stt_backend_deepgram :
-           strcmp(provider, "groq") == 0 ? &stt_backend_groq : &stt_backend_openai;
+           strcmp(provider, "groq") == 0 ? &stt_backend_groq :
+           strcmp(provider, "elevenlabs") == 0 ? &stt_backend_elevenlabs : &stt_backend_openai;
 }
 
 const struct tts_backend *assistant_tts_backend(const char *provider)

@@ -20,6 +20,7 @@ extern "C" {
 struct stt_backend {
     const char *name;           /* "openai", "mistral", "deepgram" (logs) */
     const char *auth_scheme;    /* of the Authorization header: "Bearer" when NULL, "Token" (Deepgram) */
+    const char *auth_header;    /* a header carrying the key alone instead ("xi-api-key", ElevenLabs), else NULL */
     int rate;                   /* sample rate of the audio sent: 24000 (resampled from 16 kHz) or 16000 */
     /* "wss://..." for this model and language (allocated), made at each connection */
     char *(*uri)(const char *model, const char *language);
@@ -27,6 +28,10 @@ struct stt_backend {
     char *(*session_update)(const char *model, const char *language);
     /* message carrying base64 audio: {"type": append_type, "audio": "..."}; NULL: the audio in binary frames */
     const char *append_type;
+    const char *type_key;       /* name of the "type" field, sent and received ("message_type"), NULL: "type" */
+    const char *audio_key;      /* name of the "audio" field ("audio_base_64"), NULL: "audio" */
+    const char *append_extra;   /* fields after the audio (",\"commit\":false"), NULL for none */
+    const char *commit_json;    /* the whole message ending the audio, instead of {"type": commit_type} */
     const char *clear_type;     /* message dropping the audio of an abandoned turn, NULL for none */
     const char *commit_type;    /* message ending the audio of the turn */
     /*
@@ -56,6 +61,9 @@ void stt_backend_delta(const char *text);
  * @param seconds    Duration of the audio billed, < 0 for the duration of the audio sent
  */
 void stt_backend_final(const char *text, int in_tokens, int out_tokens, double seconds);
+
+/** The end of the turn has been sent: the transcript received now is the final one */
+bool stt_backend_awaiting(void);
 
 /** The turn failed (code and message as the server gave them, for the log and the lack of credit) */
 void stt_backend_failed(const char *code, const char *message);

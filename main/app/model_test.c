@@ -270,7 +270,7 @@ static void speech_line(char *screen, size_t size, const char *name, const char 
 
 /*
  * The result of a speech model, said at once and waited for: "Résultat de la synthèse Voxtral : 0,7 seconde."
- * (the next speech test would cut it). A synthesis is said with its own voice, still set up after its test.
+ * (the next speech test would cut it), with the speech and voice of the settings.
  */
 static void say_speech_result(int index)
 {
@@ -371,7 +371,9 @@ static void test_speech(char *screen, size_t screen_size)
         speech_line(screen, screen_size, name, ok ? result : lang->test_unavailable_short);
         assistant_show(screen);
         if (!s_cancel) {
-            say_speech_result(s_speech_result_count - 1);   // with the voice just tested
+            // With the speech and voice of the settings (the test left its own)
+            assistant_set_tts(NULL);
+            say_speech_result(s_speech_result_count - 1);
         }
     }
     if (s_scope == MODEL_TEST_STT && !s_cancel) {

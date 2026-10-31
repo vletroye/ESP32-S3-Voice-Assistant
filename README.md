@@ -966,8 +966,8 @@ conversation nor tools** but with the same instructions. The model chosen and it
   the microphone: a realtime model transcribes as the audio comes), and the time from the end of the audio to the
   transcript is measured, with the % of the words of the sentence found. A model without its key is "non
   disponible". Each result is said right after its test ("Résultat de la synthèse Voxtral : 0,7 seconde." / "Result of the
-  synthesis Voxtral: 0.7 seconds.", a
-  synthesis with its own voice), before the next one. The speech settings in use are restored after; the results
+  synthesis Voxtral: 0.7 seconds.", said with the speech and voice of the settings), before the next one. The
+  speech settings in use are restored after; the results
   are in a second table of `SPEED.TXT`.
 - Each test costs one short answer of each paid model, and a sentence of each speech model.
 - **Fewer models**: "**teste les modèles en cours**" ("test the current models") tests only the transcription, the

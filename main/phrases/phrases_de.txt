@@ -98,6 +98,21 @@ welches lied ist das
 teste (die|deine) (aktuellen|jetzigen|benutzten) modelle
 teste (das|dein) (aktuelle|jetzige) modell
 
+[s_test_tts]
+# Testet nur die Sprachausgabe-Modelle ([tts] von AGENTS.INI)
+teste [alle ][(die|deine) ](tts|sprachausgabe|synthese) modelle
+teste [alle ][(die|deine) ]modelle (der|für) (tts|sprachausgabe|synthese)
+
+[s_test_stt]
+# Testet nur die Transkriptionsmodelle ([stt] von AGENTS.INI)
+teste [alle ][(die|deine) ](stt modelle|transkriptionsmodelle|spracherkennung)
+teste [alle ][(die|deine) ]modelle (der|für) (stt|transkription|spracherkennung)
+
+[s_test_llm]
+# Testet nur die Sprachmodelle (die von "wechsle das Modell")
+teste [alle ][(die|deine) ](llm modelle|sprachmodelle|chat modelle|llms)
+teste [alle ][(die|deine) ]modelle (der|für) (llm|chat)
+
 [s_test_provider]
 # Testet die Modelle eines Anbieters: sein Name kann folgen ("teste die Modelle von Google"), sonst wird er gefragt
 teste (die|deine|alle) modelle (von|des|vom)

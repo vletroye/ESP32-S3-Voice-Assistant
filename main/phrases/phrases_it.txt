@@ -84,6 +84,21 @@ come si chiama (questa canzone|questo brano|questo pezzo)
 # Prova solo la trascrizione, la sintesi e il modello in uso (prima di s_test_models)
 (prova|testa) (i|il|i tuoi|il tuo) modell(i|o) (attuale|attuali|in uso|correnti|corrente)
 
+[s_test_tts]
+# Prova solo i modelli di sintesi vocale ([tts] di AGENTS.INI)
+(prova|testa) [tutti ](i|i tuoi) modelli [(di|del|della) ](tts|sintesi[ vocale]|voce)
+(prova|testa) [tutti ](i|i tuoi) tts
+
+[s_test_stt]
+# Prova solo i modelli di trascrizione ([stt] di AGENTS.INI)
+(prova|testa) [tutti ](i|i tuoi) modelli [(di|del|della) ](stt|trascrizione|riconoscimento vocale)
+(prova|testa) [tutti ](i|i tuoi) stt
+
+[s_test_llm]
+# Prova solo i modelli linguistici (quelli di « cambia modello »)
+(prova|testa) [tutti ](i|i tuoi) modelli [(di|del) ](llm|linguaggio|linguistici|chat)
+(prova|testa) [tutti ](i|i tuoi) llm
+
 [s_test_provider]
 # Prova i modelli di un fornitore: il suo nome può seguire (« prova i modelli di Google »), altrimenti viene chiesto
 (prova|testa) (i|i tuoi|tutti i) modelli (di|del|dell)

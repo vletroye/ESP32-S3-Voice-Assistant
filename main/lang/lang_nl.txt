@@ -95,6 +95,11 @@ test_provider_ask = Van welke aanbieder moet ik de modellen testen:: %s
 # %s: the provider, %d: number of its models
 test_provider_start = Ik test de modellen van %s, %d in totaal.
 
+# "teste les modèles de TTS / STT / LLM": %d number of speech / transcription / chat models
+test_tts_start = Ik test de %d spraakmodellen, één voor één.
+test_stt_start = Ik test de %d transcriptiemodellen, één voor één.
+test_llm_start = Ik test de %d taalmodellen, één voor één.
+
 # on screen, after the model's name
 test_unavailable_short = niet beschikbaar
 

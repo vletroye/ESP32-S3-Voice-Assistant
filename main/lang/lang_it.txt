@@ -94,6 +94,11 @@ test_provider_ask = Di quale fornitore devo provare i modelli:: %s
 # %s: the provider, %d: number of its models
 test_provider_start = Provo i modelli di %s, %d in tutto.
 
+# "teste les modèles de TTS / STT / LLM": %d number of speech / transcription / chat models
+test_tts_start = Provo i %d modelli di sintesi vocale, uno alla volta.
+test_stt_start = Provo i %d modelli di trascrizione, uno alla volta.
+test_llm_start = Provo i %d modelli linguistici, uno alla volta.
+
 # on screen, after the model's name
 test_unavailable_short = non disponibile
 

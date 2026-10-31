@@ -61,6 +61,9 @@ typedef struct {
     const char *test_current_start; /* "teste les modèles en cours": %s transcription, %s speech, %s chat model */
     const char *test_provider_ask;  /* "teste les modèles d'un fournisseur": %s the numbered providers */
     const char *test_provider_start; /* %d: number of models, %s: the provider */
+    const char *test_tts_start;     /* "teste les modèles de TTS", %d: number of speech models */
+    const char *test_stt_start;     /* "teste les modèles de STT", %d: number of transcription models */
+    const char *test_llm_start;     /* "teste les modèles de LLM", %d: number of chat models */
     const char *test_running;
     const char *test_unavailable_short; /* on screen, after the model's name */
     const char *test_result;        /* %s spoken name, %s time ("1,2 secondes") */

@@ -86,6 +86,21 @@ waar luisteren we naar
 test (de|je|het) (huidige|actieve) model[len]
 test (de|je|het) model[len] in gebruik
 
+[s_test_tts]
+# Test alleen de spraakmodellen ([tts] van AGENTS.INI)
+test [alle ][(de|je) ](tts modellen|spraakmodellen|spraaksynthese)
+test [alle ][(de|je) ]modellen (van|voor) (tts|spraak|spraaksynthese)
+
+[s_test_stt]
+# Test alleen de transcriptiemodellen ([stt] van AGENTS.INI)
+test [alle ][(de|je) ](stt modellen|transcriptiemodellen|spraakherkenning)
+test [alle ][(de|je) ]modellen (van|voor) (stt|transcriptie|spraakherkenning)
+
+[s_test_llm]
+# Test alleen de taalmodellen (die van "wissel van model")
+test [alle ][(de|je) ](llm modellen|taalmodellen|chatmodellen|llms)
+test [alle ][(de|je) ]modellen (van|voor) (llm|chat)
+
 [s_test_provider]
 # Test de modellen van een aanbieder: de naam kan volgen ("test de modellen van Google"), anders wordt hij gevraagd
 test (de|je|alle) modellen (van|bij)

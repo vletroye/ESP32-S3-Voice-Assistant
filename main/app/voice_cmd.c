@@ -54,6 +54,10 @@ static PHRASE_LIST(s_test_models);
 /* "Teste les modèles en cours", "teste les modèles de Google" (before s_test_models: "teste les modèles ...") */
 static PHRASE_LIST(s_test_current);
 static PHRASE_LIST(s_test_provider);
+/* "Teste les modèles de TTS / STT / LLM" (before s_test_provider: "teste les modèles de ...") */
+static PHRASE_LIST(s_test_tts);
+static PHRASE_LIST(s_test_stt);
+static PHRASE_LIST(s_test_llm);
 /* Radio: a station ("joue la radio X"), a genre or a country ("joue du jazz"), and while one plays or is suspended:
  * next, previous, stop, resume, what is playing */
 static PHRASE_LIST(s_radio_station);
@@ -1212,7 +1216,8 @@ bool voice_cmd_ends_with_goodbye(const char *sentence)
 void voice_cmd_init(void)
 {
     phrase_list_t *lists[] = {
-        &s_goodbyes, &s_list_models, &s_test_models, &s_test_current, &s_test_provider, &s_fastest_models, &s_radio_station, &s_radio_music,
+        &s_goodbyes, &s_list_models, &s_test_models, &s_test_current, &s_test_provider, &s_test_tts, &s_test_stt,
+        &s_test_llm, &s_fastest_models, &s_radio_station, &s_radio_music,
         &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
         &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut, &s_change_stt, &s_change_tts,
         &s_new_conversation, &s_edit_config, &s_restart, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
@@ -1450,6 +1455,12 @@ static voice_cmd_t test_models(char **reply, model_test_scope_t scope, llm_provi
                  speech_spoken(LLM_SPEECH_TTS, param->tts_model), chat);
     } else if (scope == MODEL_TEST_PROVIDER) {
         asprintf(&text, lang->test_provider_start, s_providers[provider].name, model_count(provider));
+    } else if (scope == MODEL_TEST_TTS) {
+        asprintf(&text, lang->test_tts_start, (int)llm_speech_count(LLM_SPEECH_TTS));
+    } else if (scope == MODEL_TEST_STT) {
+        asprintf(&text, lang->test_stt_start, (int)llm_speech_count(LLM_SPEECH_STT));
+    } else if (scope == MODEL_TEST_LLM) {
+        asprintf(&text, lang->test_llm_start, (int)llm_model_count);
     } else {
         asprintf(&text, lang->test_start, (int)llm_model_count);
     }
@@ -1597,6 +1608,15 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     }
     if (starts_with(norm, phrases_of(&s_test_current), NULL)) {
         return test_models(reply, MODEL_TEST_CURRENT, LLM_PROVIDER_COUNT);
+    }
+    if (starts_with(norm, phrases_of(&s_test_tts), NULL)) {
+        return test_models(reply, MODEL_TEST_TTS, LLM_PROVIDER_COUNT);
+    }
+    if (starts_with(norm, phrases_of(&s_test_stt), NULL)) {
+        return test_models(reply, MODEL_TEST_STT, LLM_PROVIDER_COUNT);
+    }
+    if (starts_with(norm, phrases_of(&s_test_llm), NULL)) {
+        return test_models(reply, MODEL_TEST_LLM, LLM_PROVIDER_COUNT);
     }
     if (starts_with(norm, phrases_of(&s_test_provider), &len)) {
         // "Teste les modèles de Google": tested at once; else the providers are shown and one is asked

@@ -86,6 +86,24 @@ test[e][r] (les|tes|mes|des|de|du|le|ton) mod(è|e)le[s] en cours
 test[e][r] (les|tes|mes|des|de|du|le|ton) mod(è|e)le[s] (actuel[s]|courant[s]|utilisé[s])
 [(lance|fais|fait) ](le|un) test (des|de|du) mod(è|e)le[s] (en cours|actuel[s])
 
+[s_test_tts]
+# Teste seulement les modèles de synthèse vocale ([tts] d'AGENTS.INI)
+test[e][r] [tous ](les|des|mes|tes) mod(è|e)les [de ](tts|t t s|[la ]synthèse[ vocale]|voix)
+test[e][r] (le|de|du) mod(è|e)le [de ](tts|t t s|[la ]synthèse[ vocale]|voix)
+test[e][r] [tous ](les|tes|mes) (tts|t t s|voix)
+
+[s_test_stt]
+# Teste seulement les modèles de transcription ([stt] d'AGENTS.INI)
+test[e][r] [tous ](les|des|mes|tes) mod(è|e)les [de ](stt|s t t|[la ]transcription|reconnaissance vocale)
+test[e][r] (le|de|du) mod(è|e)le [de ](stt|s t t|[la ]transcription|reconnaissance vocale)
+test[e][r] [tous ](les|tes|mes) (stt|s t t|transcriptions)
+
+[s_test_llm]
+# Teste seulement les modèles de langage (ceux de « change de modèle »)
+test[e][r] [tous ](les|des|mes|tes) mod(è|e)les [de ](llm|l l m|langage|chat)
+test[e][r] (le|de|du) mod(è|e)le [de ](llm|l l m|langage|chat)
+test[e][r] [tous ](les|tes|mes) (llm|l l m)
+
 [s_test_provider]
 # Teste les modèles d'un fournisseur : son nom peut suivre (« teste les modèles de Google »), sinon il est demandé
 test[e][r] (les|tes|des|mes|de|du) mod(è|e)le[s] (d un|du|de|d|chez)

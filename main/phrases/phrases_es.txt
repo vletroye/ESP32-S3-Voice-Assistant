@@ -89,6 +89,21 @@ que (esta sonando|suena|estamos escuchando)
 prueba (los|tus|el|tu) modelo[s] (actual|actuales|en uso)
 (testea|testear) (los|tus) modelos (actuales|en uso)
 
+[s_test_tts]
+# Prueba solo los modelos de síntesis de voz ([tts] de AGENTS.INI)
+prueba [todos ](los|tus) modelos (de|del) (tts|síntesis[ de voz]|voz)
+prueba [todos ](los|tus) (tts|modelos tts)
+
+[s_test_stt]
+# Prueba solo los modelos de transcripción ([stt] de AGENTS.INI)
+prueba [todos ](los|tus) modelos (de|del) (stt|transcripción|reconocimiento de voz)
+prueba [todos ](los|tus) (stt|modelos stt)
+
+[s_test_llm]
+# Prueba solo los modelos de lenguaje (los de « cambia de modelo »)
+prueba [todos ](los|tus) modelos (de|del) (llm|lenguaje|chat)
+prueba [todos ](los|tus) (llm|modelos llm)
+
 [s_test_provider]
 # Prueba los modelos de un proveedor: su nombre puede seguir (« prueba los modelos de Google »), si no se pregunta
 prueba (los|tus|todos los) modelos (de|del)

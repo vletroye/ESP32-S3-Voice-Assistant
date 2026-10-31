@@ -73,16 +73,18 @@ void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider)
 /* A chat model is part of the running test */
 static bool chat_tested(const llm_model_t *m)
 {
-    return s_scope == MODEL_TEST_ALL ||
+    return s_scope == MODEL_TEST_ALL || s_scope == MODEL_TEST_LLM ||
            (s_scope == MODEL_TEST_CURRENT && strcmp(m->id, settings_get_parameter()->chat_model) == 0) ||
            (s_scope == MODEL_TEST_PROVIDER && llm_provider_of(m->id) == s_provider);
 }
 
-/* A speech model is part of the running test (none for a provider's test) */
+/* A speech model is part of the running test (none for a provider's test nor the chat models') */
 static bool speech_tested(llm_speech_kind_t kind, const llm_speech_model_t *m)
 {
     const sys_param_t *param = settings_get_parameter();
     return s_scope == MODEL_TEST_ALL ||
+           (s_scope == MODEL_TEST_TTS && kind == LLM_SPEECH_TTS) ||
+           (s_scope == MODEL_TEST_STT && kind == LLM_SPEECH_STT) ||
            (s_scope == MODEL_TEST_CURRENT &&
             strcmp(m->id, kind == LLM_SPEECH_STT ? param->stt_model : param->tts_model) == 0);
 }
@@ -288,10 +290,45 @@ static void say_speech_result(int index)
     assistant_announce_end();
 }
 
-static void test_speech(char *screen, size_t screen_size)
+/* speech_test_phrase said by a speech model into memory (not played); false without its key or audio */
+static bool synthesize(const llm_speech_model_t *m, int16_t **audio, size_t *samples, int *first_ms, int *total_ms)
 {
     const app_lang_t *lang = app_lang_get();
     const sys_param_t *param = settings_get_parameter();
+    const char *key = speech_key(m);
+    const llm_voice_t *v = llm_voice_for(llm_speech_voice_owner(m), lang->code, param->voice);
+    return key && tts_stream_test(assistant_tts_backend(m->provider), param->url, key, m->id, v ? v->id : NULL,
+                                  lang->speech_test_phrase, audio, samples, first_ms, total_ms);
+}
+
+/*
+ * The transcription models alone: the audio is that of the speech model in use, else of the first one that gives
+ * some (not a result of the test)
+ */
+static int16_t *audio_for_stt(size_t *samples)
+{
+    const llm_speech_model_t *current = llm_speech_find(LLM_SPEECH_TTS, settings_get_parameter()->tts_model);
+    int16_t *audio = NULL;
+    int first_ms, total_ms;
+    if (current && synthesize(current, &audio, samples, &first_ms, &total_ms)) {
+        return audio;
+    }
+    free(audio);
+    for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_TTS) && !s_cancel; i++) {
+        const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_TTS, i);
+        audio = NULL;
+        if (m != current && synthesize(m, &audio, samples, &first_ms, &total_ms)) {
+            return audio;
+        }
+        free(audio);
+    }
+    ESP_LOGW(TAG, "No speech model gave the audio to transcribe");
+    return NULL;
+}
+
+static void test_speech(char *screen, size_t screen_size)
+{
+    const app_lang_t *lang = app_lang_get();
     int16_t *audio = NULL;
     size_t samples = 0;
     char name[32], result[32];
@@ -315,12 +352,9 @@ static void test_speech(char *screen, size_t screen_size)
         strlcpy(r->name, name, sizeof(r->name));
         strlcpy(r->model, m->id, sizeof(r->model));
         const char *key = speech_key(m);
-        const llm_voice_t *v = llm_voice_for(llm_speech_voice_owner(m), lang->code, param->voice);
         int16_t *got = NULL;
         size_t got_samples = 0;
-        bool ok = key && tts_stream_test(assistant_tts_backend(m->provider), param->url, key, m->id,
-                                         v ? v->id : NULL, lang->speech_test_phrase,
-                                         &got, &got_samples, &r->first_ms, &r->total_ms);
+        bool ok = synthesize(m, &got, &got_samples, &r->first_ms, &r->total_ms);
         strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : "unavailable: no audio", sizeof(r->status));
         ESP_LOGI(TAG, "TTS %s: %s, first audio %d ms, total %d ms, %u samples", m->id, r->status, r->first_ms,
                  r->total_ms, (unsigned)got_samples);
@@ -339,6 +373,9 @@ static void test_speech(char *screen, size_t screen_size)
         if (!s_cancel) {
             say_speech_result(s_speech_result_count - 1);   // with the voice just tested
         }
+    }
+    if (s_scope == MODEL_TEST_STT && !s_cancel) {
+        audio = audio_for_stt(&samples);
     }
     // The speech of the settings again
     assistant_set_tts(NULL);
@@ -664,8 +701,12 @@ static void test_run(void)
             strlcat(screen, "\n", screen_size);
         }
     }
-    ESP_LOGI(TAG, "Testing %s models (%u offered)", s_scope == MODEL_TEST_ALL ? "all" :
-             s_scope == MODEL_TEST_CURRENT ? "the current" : llm_provider_name(s_provider), (unsigned)count);
+    static const char *const scopes[] = {
+        [MODEL_TEST_ALL] = "all", [MODEL_TEST_CURRENT] = "the current", [MODEL_TEST_PROVIDER] = "a provider's",
+        [MODEL_TEST_TTS] = "the speech", [MODEL_TEST_STT] = "the transcription", [MODEL_TEST_LLM] = "the chat",
+    };
+    ESP_LOGI(TAG, "Testing %s models (%u chat models offered)%s%s", scopes[s_scope], (unsigned)count,
+             s_scope == MODEL_TEST_PROVIDER ? ": " : "", s_scope == MODEL_TEST_PROVIDER ? llm_provider_name(s_provider) : "");
     assistant_announce_begin();
 
     int number = 0;

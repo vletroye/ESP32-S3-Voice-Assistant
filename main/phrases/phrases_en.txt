@@ -84,6 +84,24 @@ test (the|your|my) (current|active) model[s]
 test (the|your|my) model[s] (in use|currently in use)
 (run|do|start) (the|a) test of (the|your) (current|active) model[s]
 
+[s_test_tts]
+# Tests only the speech models ([tts] of AGENTS.INI)
+test [all ][(the|your) ](tts|speech|voice) model[s]
+test [all ][(the|your) ]model[s] (of|for) (tts|speech)
+test [all ][(the|your) ](tts|voices)
+
+[s_test_stt]
+# Tests only the transcription models ([stt] of AGENTS.INI)
+test [all ][(the|your) ](stt|transcription|speech recognition) model[s]
+test [all ][(the|your) ]model[s] (of|for) (stt|transcription)
+test [all ][(the|your) ]stt
+
+[s_test_llm]
+# Tests only the chat models (those of "change the model")
+test [all ][(the|your) ](llm|chat|language) model[s]
+test [all ][(the|your) ]model[s] (of|for) (llm|chat)
+test [all ][(the|your) ]llm[s]
+
 [s_test_provider]
 # Tests the models of a provider: its name may follow ("test the models of Google"), else it is asked
 test (the|your|all) model[s] (of|from|by)

@@ -23,6 +23,9 @@ typedef enum {
     MODEL_TEST_ALL,         /* "teste les modèles": the speech models, then every model offered */
     MODEL_TEST_CURRENT,     /* "teste les modèles en cours": the transcription, speech and chat models in use */
     MODEL_TEST_PROVIDER,    /* "teste les modèles d'Anthropic": the chat models of a provider */
+    MODEL_TEST_TTS,         /* "teste les modèles de TTS": the speech models */
+    MODEL_TEST_STT,         /* "teste les modèles de STT": the transcription models (given the audio of a speech one) */
+    MODEL_TEST_LLM,         /* "teste les modèles de LLM": the chat models */
 } model_test_scope_t;
 
 /** The models of the next test (provider: for MODEL_TEST_PROVIDER), kept until it is started */

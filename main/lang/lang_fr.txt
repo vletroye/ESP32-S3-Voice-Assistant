@@ -272,6 +272,9 @@ costs_cost = Coût
 # "cache l'heure"
 clock_hidden = D'accord, je n'affiche plus l'heure.
 
+# "quelle est ta version": %s the firmware version ("1.4.2")
+version_reply = Mon firmware est en version %s.
+
 # "nouvelle discussion": the conversation is cleared
 new_conversation = D'accord, je t'écoute.
 

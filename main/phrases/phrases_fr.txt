@@ -180,6 +180,13 @@ je veux (éditer|editer|modifier) (la|le|les fichier[s] de) config[uration]
 (fais|lance) un redémarrage
 redémarrage
 
+[s_version]
+# La version du firmware installé (version.txt du projet)
+quelle (est|et) (ta|la|ton) version[ du firmware]
+(quelle|c est quoi ta) version (es tu|du firmware|as tu|utilises tu)
+(dis|donne) moi (ta|la) version[ du firmware]
+version du firmware
+
 [s_clock_on]
 # Dite seule : l'heure et la date s'affichent sur l'écran de veille (Show_clock de CONFIG.INI)
 (affiche|montre|remets|active) l (heure|horloge)

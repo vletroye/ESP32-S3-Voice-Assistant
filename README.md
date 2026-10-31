@@ -53,12 +53,13 @@ been largely rewritten.
   - [4.2 Hardware and software](#42-hardware-and-software)
   - [4.3 Repository layout](#43-repository-layout)
   - [4.4 Build and flash](#44-build-and-flash)
-  - [4.5 Making a release](#45-making-a-release)
-  - [4.6 At build time: `sdkconfig.defaults` / `idf.py menuconfig`](#46-at-build-time-sdkconfigdefaults--idfpy-menuconfig)
-  - [4.7 System sounds](#47-system-sounds)
-  - [4.8 Logs and diagnostics](#48-logs-and-diagnostics)
-  - [4.9 Features in detail](#49-features-in-detail)
-  - [4.10 Design notes](#410-design-notes)
+  - [4.5 Firmware version](#45-firmware-version)
+  - [4.6 Making a release](#46-making-a-release)
+  - [4.7 At build time: `sdkconfig.defaults` / `idf.py menuconfig`](#47-at-build-time-sdkconfigdefaults--idfpy-menuconfig)
+  - [4.8 System sounds](#48-system-sounds)
+  - [4.9 Logs and diagnostics](#49-logs-and-diagnostics)
+  - [4.10 Features in detail](#410-features-in-detail)
+  - [4.11 Design notes](#411-design-notes)
 - [5. Roadmap](#5-roadmap)
 - [6. Credits and licenses](#6-credits-and-licenses)
 
@@ -232,7 +233,7 @@ settings of the [Quick start](#1-quick-start).
   the fastest; "teste les modèles en cours" / "test the current models" tests only those in use, "teste les modèles
   de Google" / "test the models of Google" those of a provider.
 
-Every feature in detail: [Features in detail](#49-features-in-detail).
+Every feature in detail: [Features in detail](#410-features-in-detail).
 
 ### 2.2 Everyday use
 
@@ -424,6 +425,7 @@ de 1 à 3, ou le nom du modèle." / "I did not understand. Say a number from 1 t
 | French | English | Effect |
 | --- | --- | --- |
 | ouvre les paramètres · montre les paramètres · affiche les paramètres · ouvre les réglages · montre les réglages · affiche les réglages · va dans les paramètres · va dans les réglages | open the settings · show the settings · open settings · show settings · display the settings · go to the settings | The Settings screen is shown at once, without a spoken reply (no follow-up listening) |
+| quelle est ta version (du firmware) · quelle version es-tu · dis-moi ta version · version du firmware | what is your (firmware) version · what version are you · tell me your version · firmware version | The version of the installed firmware is said ("Mon firmware est en version 1.1.0." / "My firmware is version 1.1.0."; section `[s_version]`, see [Firmware version](#45-firmware-version)) |
 | affiche / montre / remets / active l'heure · l'horloge · la date et l'heure (alone) | show / display the time · the clock · turn on the clock | The time and date are shown on the sleep screen again ("D'accord, j'affiche l'heure." / "All right, I show the time."); saved as `Show_clock = on` |
 | cache / masque / enlève / retire / désactive / éteins l'heure · l'horloge · la date et l'heure · n'affiche plus l'heure (alone) | hide the time · the clock · turn off the clock · don't show the time | The time and date are no longer shown on the sleep screen (volume and Wi-Fi stay); saved as `Show_clock = off` |
 | redémarre · redémarre-toi · relance · relance-toi · fais un redémarrage · lance un redémarrage · redémarrage (alone, or with "s'il te plaît") | restart · restart yourself · reboot · reboot yourself (alone, or with "please") | "D'accord, je redémarre." / "All right, I restart.", then the conversation, the volume and the town cache are saved, the speaker is switched off and the device restarts (section `[s_restart]`) |
@@ -1368,7 +1370,7 @@ Turning off a **power plug** is confirmed first ("Tu veux vraiment éteindre la 
 want to switch off the fridge plug?"), so that an
 appliance is not switched off by mistake: `Confirm_off` lists the device classes to confirm (`socket` by default,
 `off` for none). Only 16 tools of the app are offered, none that deletes, installs or reconfigures anything. How it
-works: see the Homey items of the [Design notes](#410-design-notes).
+works: see the Homey items of the [Design notes](#411-design-notes).
 
 ## 4. Design and architecture
 
@@ -1448,6 +1450,7 @@ Two firmwares live side by side in flash:
 | `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `MEMORY.TXT` and the files kept on SPIFFS (`AGENTS.INI`, `LANG_FR.TXT`, `VOICE_FR.TXT`, `PERSO_FR.TXT`, `COUNTRY.TXT`…) (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `MEMORY.TXT` and the files of SPIFFS, files that can grow when edited, a root directory of 8 sectors (up to 64 files of SPIFFS instead of 15 files in all), and a bound-checked `CONFIG.INI`; the `INFO_UF2.TXT`, `INDEX.HTM` and `CURRENT.UF2` files of TinyUF2 are not shown, no firmware being flashed through the drive) |
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
 | `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep); the conversation (`history.json`) is saved there at run time |
+| `version.txt`, `tools/bump_version.py` | — | Firmware version and the script raising it (see [Firmware version](#45-firmware-version)) |
 
 Main modules of the assistant (`main/app/`): the clients of the providers are named `ai_provider_<provider>`, the
 modules that manage a file of the configuration drive `file_<name>`.
@@ -1529,7 +1532,22 @@ idf.py -p COMx flash monitor
   versions are pinned in `dependencies.lock`.
 - After changing a `Kconfig` file, run `idf.py reconfigure`.
 
-### 4.5 Making a release
+### 4.5 Firmware version
+
+The version is in **`version.txt`** at the root of the project, `M.m.b`: ESP-IDF builds it into the firmware
+(`esp_app_get_description()->version`, also printed at start-up as "App version"), and "quelle est ta version ?"
+/ "what is your version?" makes the assistant say it. It is raised once per change, before its build and commit:
+
+```bash
+python tools/bump_version.py fix       # b: a fix                                1.1.0 -> 1.1.1
+python tools/bump_version.py feature   # m: a new feature made without a branch  1.1.1 -> 1.2.0
+python tools/bump_version.py major     # M: a big change that needed a branch    1.2.0 -> 2.0.0
+```
+
+The next build takes the new version (`version.txt` is watched by the build). It is not raised by every build
+on its own: the same change is often built several times, and only its author knows which kind it is.
+
+### 4.6 Making a release
 
 The files of the [Releases](https://github.com/vletroye/ESP32-S3-Voice-Assistant/releases) page are made from a
 full build (configuration mode first, then the assistant, as above), in the `build` folder of the assistant:
@@ -1548,7 +1566,7 @@ configuration mode, sounds (`storage`) and ESP-SR models. The full image is abou
 parts are filled with `0xFF`, so the NVS (Wi-Fi, keys, settings) is erased, as a first install should be. Say in
 the release notes when the sounds (`spiffs/`) or the wake word models changed: the update files do not carry them.
 
-### 4.6 At build time: `sdkconfig.defaults` / `idf.py menuconfig`
+### 4.7 At build time: `sdkconfig.defaults` / `idf.py menuconfig`
 
 "Example Configuration" menu of the assistant (`main/Kconfig.projbuild`). These are the **only** default values:
 the configuration mode (`factory_nvs/`) writes the same ones to a new `CONFIG.INI`, its `CMakeLists.txt` reading
@@ -1583,14 +1601,14 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to change a value, use
 `idf.py menuconfig` (or delete `sdkconfig` before rebuilding).
 
-### 4.7 System sounds
+### 4.8 System sounds
 
 The sounds in `spiffs/` must be **16-bit PCM WAV at 16 kHz** (mono or stereo): the I2S bus is shared with
 the microphones and stays at 16 kHz, other rates are rejected. The wake beep is loaded into PSRAM at start-up
 and played once an interrupted answer has left the speaker. After changing the sounds, do a full flash
 (`idf.py flash`).
 
-### 4.8 Logs and diagnostics
+### 4.9 Logs and diagnostics
 
 The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
@@ -1612,7 +1630,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - `claude: web search: available` (capability read at the first wake)
 - `[heap] internal free …` every 30 s (internal RAM is the critical resource)
 
-### 4.9 Features in detail
+### 4.10 Features in detail
 
 - Local wake word **"Bonjour ESP"** (or "Hi ESP"), or touch the screen while asleep.
 - **Live transcription** while you speak (streamed to the API, so the question is ready as soon as you stop;
@@ -1711,7 +1729,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   stopped by the wake word and resumed after the answer, with fades and the same loudness on every station
   (see [Radio](#26-radio)).
 
-### 4.10 Design notes
+### 4.11 Design notes
 
 - **Presence radar**: the AT581X of the BOX-3-SENSOR dock is on the dock's own I2C bus (GPIO 40/41, the port the
   board does not use) and signals a presence on GPIO 21. `app_presence.c` probes it at start-up (nothing happens

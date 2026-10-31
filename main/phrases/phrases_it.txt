@@ -180,6 +180,12 @@ voglio (modificare|cambiare|aprire) (la|il|i file di) config[urazione]
 (fai|lancia) un riavvio
 riavvio
 
+[s_version]
+# La versione del firmware installato (version.txt del progetto)
+(qual è|quale è|qual e) (la tua|la) versione[ del firmware]
+(dimmi|dammi) (la tua|la) versione[ del firmware]
+versione del firmware
+
 [s_clock_on]
 # Detta da sola: l'ora e la data appaiono sullo schermo di standby (Show_clock di CONFIG.INI)
 (mostra|visualizza|rimetti|attiva) (l ora|l orologio)

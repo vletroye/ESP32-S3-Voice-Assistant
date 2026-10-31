@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
+#include "esp_app_desc.h"
 #include "file_lang.h"
 #include "file_memory.h"
 #include "llm.h"
@@ -84,6 +85,8 @@ static PHRASE_LIST(s_new_conversation);
 /* Configuration files (normalized: "éditer" and "editer", "la config" and "le config" as often transcribed) */
 static PHRASE_LIST(s_edit_config);
 static PHRASE_LIST(s_restart);
+/* "Quelle est ta version ?": the version of the firmware (version.txt, built in) */
+static PHRASE_LIST(s_version);
 static PHRASE_LIST(s_clock_on);
 static PHRASE_LIST(s_clock_off);
 static PHRASE_LIST(s_open_settings);
@@ -1220,7 +1223,7 @@ void voice_cmd_init(void)
         &s_test_llm, &s_fastest_models, &s_radio_station, &s_radio_music,
         &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
         &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut, &s_change_stt, &s_change_tts,
-        &s_new_conversation, &s_edit_config, &s_restart, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
+        &s_new_conversation, &s_edit_config, &s_restart, &s_version, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
@@ -1670,6 +1673,12 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         s_asked = ASKED_VOICE;
         s_asked_us = esp_timer_get_time();
         *reply = voice_list();
+        return VOICE_CMD_ANSWERED;
+    }
+    if (starts_with(norm, phrases_of(&s_version), NULL)) {
+        char *text = NULL;
+        asprintf(&text, app_lang_get()->version_reply, esp_app_get_description()->version);
+        *reply = text ? text : reply_dup("");
         return VOICE_CMD_ANSWERED;
     }
     // "Affiche l'heure" / "cache l'heure", alone (or with "s'il te plaît"): the clock of the sleep screen

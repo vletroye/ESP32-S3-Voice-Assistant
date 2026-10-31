@@ -138,6 +138,7 @@ typedef struct {
     const char *costs_total;
     const char *costs_cost;         /* row of the amounts (the tokens In / Out below) */        /* its last column */
     const char *clock_hidden;       /* "cache l'heure" */
+    const char *version_reply;      /* "quelle est ta version", %s: the firmware version ("1.4.2") */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
     const char *speech_test_phrase; /* model test: spoken by each speech model, then transcribed */

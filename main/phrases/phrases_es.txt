@@ -186,6 +186,12 @@ quiero (editar|modificar|cambiar|abrir) (la|el|los archivos de) (config|configur
 reinicio
 reiniciar
 
+[s_version]
+# La versión del firmware instalado (version.txt del proyecto)
+(cuál|cual|qué|que) es (tu|la) versión[ del firmware]
+(dime|dame) (tu|la) versión[ del firmware]
+versión del firmware
+
 [s_clock_on]
 # Dicha sola: la hora y la fecha se muestran en la pantalla de reposo (Show_clock de CONFIG.INI)
 (muestra|enseña|ensena|pon|activa) (la hora|el reloj)

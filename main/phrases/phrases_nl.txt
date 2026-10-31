@@ -180,6 +180,12 @@ start opnieuw[ op]
 (doe|voer) een herstart[ uit]
 herstarten
 
+[s_version]
+# De versie van de geïnstalleerde firmware (version.txt van het project)
+(wat|welke) is (je|jouw|de) [firmware ]versie
+(zeg|geef) me (je|jouw|de) [firmware ]versie
+firmware versie
+
 [s_clock_on]
 # Alleen gezegd: de tijd en de datum worden getoond op het slaapscherm (Show_clock van CONFIG.INI)
 toon de (tijd|klok)

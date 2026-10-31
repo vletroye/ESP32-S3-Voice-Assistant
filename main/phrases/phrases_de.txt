@@ -194,6 +194,13 @@ neustart
 (mach|mache|führe) einen neustart[ durch]
 neu starten
 
+[s_version]
+# Die Version der installierten Firmware (version.txt des Projekts)
+(welche|was ist) (deine|die) [firmware ]version
+welche version (hast du|bist du|der firmware)
+(sag|nenn) mir (deine|die) [firmware ]version
+firmware version
+
 [s_clock_on]
 # Allein gesagt: Uhrzeit und Datum werden auf dem Ruhebildschirm angezeigt (Show_clock von CONFIG.INI)
 (zeige|zeig) die (uhrzeit|uhr)[ an]

@@ -100,6 +100,9 @@ test_tts_start = Ik test de %d spraakmodellen, één voor één.
 test_stt_start = Ik test de %d transcriptiemodellen, één voor één.
 test_llm_start = Ik test de %d taalmodellen, één voor één.
 
+# "teste le modèle Argon": %s its spoken name
+test_one_start = Ik test het model %s.
+
 # on screen, after the model's name
 test_unavailable_short = niet beschikbaar
 

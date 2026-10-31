@@ -1474,6 +1474,32 @@ static voice_cmd_t test_models(char **reply, model_test_scope_t scope, llm_provi
     return VOICE_CMD_TEST_MODELS;
 }
 
+/* "Teste le modèle Argon": that chat model only (number: 1-based, in llm_models) */
+static voice_cmd_t test_one_model(char **reply, int number)
+{
+    if (model_test_running()) {
+        *reply = reply_dup(app_lang_get()->test_running);
+        return VOICE_CMD_ANSWERED;
+    }
+    char *text = NULL;
+    asprintf(&text, app_lang_get()->test_one_start, llm_models[number - 1].spoken);
+    *reply = text ? text : reply_dup("");
+    model_test_set_model(llm_models[number - 1].id);
+    return VOICE_CMD_TEST_MODELS;
+}
+
+/* "le modèle" said in the singular, in the languages offered ("teste le modèle Mistral Large" is one model) */
+static bool says_one_model(const char *norm)
+{
+    static const char *const singular[] = { "modèle", "modele", "model", "modell", "modelo", "modello", NULL };
+    for (const char *const *word = singular; *word; word++) {
+        if (has_word(norm, *word)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* "Teste les modèles d'un fournisseur": the providers offered shown (not read, Read_lists), the one said tested */
 static voice_cmd_t ask_test_provider(const char *format, char **reply)
 {
@@ -1636,8 +1662,14 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         return ask_test_provider(app_lang_get()->test_provider_ask, reply);
     }
     if (starts_with(norm, phrases_of(&s_test_models), &len)) {
-        // A provider named after it, however it was transcribed ("teste les modèles Google"): its models only
+        // A model named after it ("teste le modèle Argon"): that one only; a provider ("teste les modèles
+        // Google", however it was transcribed): its models only. "Le modèle Mistral Large" is one model,
+        // "les modèles de Mistral" those of the provider.
         llm_provider_t provider = find_provider(norm + len);
+        int named = norm[len] ? find_model_name(norm + len) : 0;
+        if (named && (provider == LLM_PROVIDER_COUNT || says_one_model(norm))) {
+            return test_one_model(reply, named);
+        }
         if (provider != LLM_PROVIDER_COUNT) {
             // Without models in AGENTS.INI: the providers offered are shown
             return model_count(provider) > 0 ? test_models(reply, MODEL_TEST_PROVIDER, provider) :

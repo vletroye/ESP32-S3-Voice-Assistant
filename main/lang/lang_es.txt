@@ -99,6 +99,9 @@ test_tts_start = Pruebo los %d modelos de síntesis de voz, uno por uno.
 test_stt_start = Pruebo los %d modelos de transcripción, uno por uno.
 test_llm_start = Pruebo los %d modelos de lenguaje, uno por uno.
 
+# "teste le modèle Argon": %s its spoken name
+test_one_start = Pruebo el modelo %s.
+
 # on screen, after the model's name
 test_unavailable_short = no disponible
 

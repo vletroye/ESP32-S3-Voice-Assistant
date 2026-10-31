@@ -99,6 +99,9 @@ test_tts_start = I am testing the %d speech models, one by one.
 test_stt_start = I am testing the %d transcription models, one by one.
 test_llm_start = I am testing the %d language models, one by one.
 
+# "teste le modèle Argon": %s its spoken name
+test_one_start = I am testing the model %s.
+
 # on screen, after the model's name
 test_unavailable_short = not available
 

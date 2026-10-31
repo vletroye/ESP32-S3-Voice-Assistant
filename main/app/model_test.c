@@ -64,10 +64,20 @@ static llm_provider_t s_next_provider = LLM_PROVIDER_COUNT;
 static model_test_scope_t s_scope = MODEL_TEST_ALL;
 static llm_provider_t s_provider = LLM_PROVIDER_COUNT;
 
+/* MODEL_TEST_MODEL: the id of the model, of the test asked and of the one running */
+static char s_next_model[80];
+static char s_model[80];
+
 void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider)
 {
     s_next_scope = scope;
     s_next_provider = provider;
+}
+
+void model_test_set_model(const char *id)
+{
+    s_next_scope = MODEL_TEST_MODEL;
+    strlcpy(s_next_model, id, sizeof(s_next_model));
 }
 
 /* A chat model is part of the running test */
@@ -75,7 +85,8 @@ static bool chat_tested(const llm_model_t *m)
 {
     return s_scope == MODEL_TEST_ALL || s_scope == MODEL_TEST_LLM ||
            (s_scope == MODEL_TEST_CURRENT && strcmp(m->id, settings_get_parameter()->chat_model) == 0) ||
-           (s_scope == MODEL_TEST_PROVIDER && llm_provider_of(m->id) == s_provider);
+           (s_scope == MODEL_TEST_PROVIDER && llm_provider_of(m->id) == s_provider) ||
+           (s_scope == MODEL_TEST_MODEL && strcmp(m->id, s_model) == 0);
 }
 
 /* A speech model is part of the running test (none for a provider's test nor the chat models') */
@@ -706,6 +717,7 @@ static void test_run(void)
     static const char *const scopes[] = {
         [MODEL_TEST_ALL] = "all", [MODEL_TEST_CURRENT] = "the current", [MODEL_TEST_PROVIDER] = "a provider's",
         [MODEL_TEST_TTS] = "the speech", [MODEL_TEST_STT] = "the transcription", [MODEL_TEST_LLM] = "the chat",
+        [MODEL_TEST_MODEL] = "one of the",
     };
     ESP_LOGI(TAG, "Testing %s models (%u chat models offered)%s%s", scopes[s_scope], (unsigned)count,
              s_scope == MODEL_TEST_PROVIDER ? ": " : "", s_scope == MODEL_TEST_PROVIDER ? llm_provider_name(s_provider) : "");
@@ -796,6 +808,7 @@ void model_test_start(void)
     s_cancel = false;
     s_scope = s_next_scope;
     s_provider = s_next_provider;
+    strlcpy(s_model, s_next_model, sizeof(s_model));
     s_next_scope = MODEL_TEST_ALL;      // the next test, unless asked otherwise
     s_running = true;
     s_pending = true;

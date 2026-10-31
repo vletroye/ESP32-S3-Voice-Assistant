@@ -99,6 +99,9 @@ test_tts_start = Provo i %d modelli di sintesi vocale, uno alla volta.
 test_stt_start = Provo i %d modelli di trascrizione, uno alla volta.
 test_llm_start = Provo i %d modelli linguistici, uno alla volta.
 
+# "teste le modèle Argon": %s its spoken name
+test_one_start = Provo il modello %s.
+
 # on screen, after the model's name
 test_unavailable_short = non disponibile
 

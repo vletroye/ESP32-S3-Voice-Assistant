@@ -26,10 +26,14 @@ typedef enum {
     MODEL_TEST_TTS,         /* "teste les modèles de TTS": the speech models */
     MODEL_TEST_STT,         /* "teste les modèles de STT": the transcription models (given the audio of a speech one) */
     MODEL_TEST_LLM,         /* "teste les modèles de LLM": the chat models */
+    MODEL_TEST_MODEL,       /* "teste le modèle Argon": one chat model (model_test_set_model) */
 } model_test_scope_t;
 
 /** The models of the next test (provider: for MODEL_TEST_PROVIDER), kept until it is started */
 void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider);
+
+/** The next test: this chat model only (its id, copied) */
+void model_test_set_model(const char *id);
 
 /** Ask for the test (nothing if one is running); it is run by model_test_poll() */
 void model_test_start(void);

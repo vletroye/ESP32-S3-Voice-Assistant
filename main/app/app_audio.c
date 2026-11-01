@@ -365,7 +365,7 @@ void sr_handler_task(void *pvParam)
             assistant_listen_start();
 
             // UI show listen, or the reply kept shown (a list to read, a question asked: the user answers it) with
-            // the small listening head
+            // the moving bars beside the robot head
             if (result.keep_reply) {
                 ui_ctrl_reply_listening(true);
             } else {

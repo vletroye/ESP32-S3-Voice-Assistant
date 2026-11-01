@@ -1098,11 +1098,10 @@ static void model_row_show(bool shown)
 }
 
 /*
- * Listening while the reply stays shown (it asks something): a small robot head at its top right, with bars rising
- * and falling beside it
+ * Listening while the reply stays shown (it asks something): bars rising and falling beside the robot head at its
+ * top right
  */
-#define LISTEN_HEAD_COLOR       0x1F2A44
-#define LISTEN_EYES_COLOR       0x4FC3F7
+#define LISTEN_BARS_COLOR       0x4FC3F7
 #define LISTEN_BARS             3
 static lv_obj_t *s_listen_head = NULL;
 static lv_obj_t *s_listen_bars[LISTEN_BARS];
@@ -1124,20 +1123,9 @@ static void listen_head_create(void)
     s_listen_head = listen_head_part(ui_PanelReply, 50, 32, 0, 0);
     lv_obj_set_style_bg_opa(s_listen_head, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_align(s_listen_head, LV_ALIGN_TOP_RIGHT, -8, 6);
-    // The antenna, the head and its eyes
-    lv_obj_t *ball = listen_head_part(s_listen_head, 6, 6, LV_RADIUS_CIRCLE, LISTEN_EYES_COLOR);
-    lv_obj_align(ball, LV_ALIGN_TOP_LEFT, 11, 0);
-    lv_obj_t *stick = listen_head_part(s_listen_head, 2, 5, 0, LISTEN_HEAD_COLOR);
-    lv_obj_align(stick, LV_ALIGN_TOP_LEFT, 13, 5);
-    lv_obj_t *head = listen_head_part(s_listen_head, 28, 22, 6, LISTEN_HEAD_COLOR);
-    lv_obj_align(head, LV_ALIGN_TOP_LEFT, 0, 10);
-    for (int i = 0; i < 2; i++) {
-        lv_obj_t *eye = listen_head_part(head, 6, 8, 2, LISTEN_EYES_COLOR);
-        lv_obj_align(eye, LV_ALIGN_LEFT_MID, 6 + i * 10, 0);
-    }
-    // The bars: animated while shown
+    // The bars beside the robot head of the reply's picture: animated while shown
     for (int i = 0; i < LISTEN_BARS; i++) {
-        s_listen_bars[i] = listen_head_part(s_listen_head, 3, 4, 1, LISTEN_EYES_COLOR);
+        s_listen_bars[i] = listen_head_part(s_listen_head, 3, 4, 1, LISTEN_BARS_COLOR);
         lv_obj_align(s_listen_bars[i], LV_ALIGN_LEFT_MID, 34 + i * 6, 5);
     }
     lv_obj_add_flag(s_listen_head, LV_OBJ_FLAG_HIDDEN);

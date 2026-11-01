@@ -41,7 +41,7 @@ typedef struct {
     bool followup;   /* WAKENET_DETECTED: session continues the conversation (no wake word) */
     bool no_speech;  /* ESP_MN_STATE_TIMEOUT: nobody spoke, nothing to send */
     bool keep_reply;            /* WAKENET_DETECTED: the reply stays shown while listening (text to read, a question
-                                   asked), with the small listening head instead of the listen panel */
+                                   asked), with moving bars instead of the listen panel */
 } sr_result_t;
 
 typedef enum {
@@ -81,8 +81,8 @@ esp_err_t app_sr_start_once(void);
  * @brief Listen again without wake word to continue the conversation.
  *
  * The session is dropped (no request sent) if no speech is heard within window_ms. With keep_reply, the reply stays
- * shown while listening (a list shown, not read, a question asked: the user reads it and answers), a small
- * listening head at its top right instead of the listen panel.
+ * shown while listening (a list shown, not read, a question asked: the user reads it and answers), moving
+ * bars at its top right instead of the listen panel.
  */
 esp_err_t app_sr_start_followup(uint32_t window_ms, bool keep_reply);
 

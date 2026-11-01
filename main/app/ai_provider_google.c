@@ -164,6 +164,11 @@ static char *build_request(void)
         }
         cJSON_AddItemToArray(tools, functions);
     }
+    if (cJSON_GetArraySize(tools) > 1) {
+        // Google Search (run by Google) and the functions (run here) together: Google asks for this setting; the
+        // parts of its searches come in the answer, given back with the rest
+        cJSON_AddBoolToObject(cJSON_AddObjectToObject(req, "toolConfig"), "includeServerSideToolInvocations", true);
+    }
     if (cJSON_GetArraySize(tools) > 0) {
         cJSON_AddItemToObject(req, "tools", tools);
     } else {

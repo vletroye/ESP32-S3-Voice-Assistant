@@ -163,6 +163,16 @@ cambia[r] (de|la|tu) sintesis de voz
 cambia[r] (de|el) (tts|t t s|dts|d t s)
 cambia[r] (de|el|tu) motor de voz
 
+[s_reasoning_on]
+# Modo razonamiento: el modelo piensa más hasta el final de la conversación (« adiós »)
+tengo una pregunta (difícil|complicada|compleja)
+(activa|enciende) el razonamiento
+piensa (bien|a fondo)
+modo razonamiento
+
+[s_reasoning_off]
+(desactiva|apaga|para) el razonamiento
+
 [s_new_conversation]
 (empecemos|empieza|comencemos|empezamos) una nueva (conversación|conversacion|charla)
 (empecemos|empezamos|volvamos a empezar) de cero

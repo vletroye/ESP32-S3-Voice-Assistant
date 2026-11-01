@@ -37,6 +37,7 @@ typedef enum {
     VOICE_CMD_RESTART,      /* "redémarre": speak the reply, then restart */
     VOICE_CMD_TEST_MODELS,  /* "teste les modèles": speak the reply, then test the models (model_test.c) */
     VOICE_CMD_RADIO,        /* a radio command: speak the reply, then back to sleep (the radio plays then) */
+    VOICE_CMD_LISTEN,       /* speak the reply, then listen again ("Je t'écoute."), whatever Sleep_after_cmd */
 } voice_cmd_t;
 
 /**
@@ -59,6 +60,9 @@ bool voice_cmd_waiting_answer(void);
 
 /** That question is dropped (double tap): its answer is no longer listened for */
 void voice_cmd_cancel_question(void);
+
+/** The next answer is about going on with the conversation of the reasoning mode after a pause: yes / no */
+void voice_cmd_expect_resume(void);
 
 /** The next answer is about excluding a slow free model (model test): yes / no */
 void voice_cmd_expect_exclusion(void);

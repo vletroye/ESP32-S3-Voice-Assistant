@@ -290,6 +290,22 @@ version_reply = Mijn firmware is versie %s.
 # "nouvelle discussion": the conversation is cleared
 new_conversation = Goed, ik luister.
 
+# "j'ai une question difficile" alone: the reasoning mode on (the answer is listened to)
+reasoning_on = Goed, ik neem de tijd om goed na te denken. Wat is je vraag?
+reasoning_already = Ik denk al grondig na. Wat is je vraag?
+
+# "désactive le raisonnement"
+reasoning_off = Goed, ik antwoord weer snel.
+reasoning_not_on = Het redeneren stond niet aan.
+
+# %s: the label of the model in use
+reasoning_unsupported = Het model %s kan niet redeneren. Kies een ander model om het redeneren aan te zetten.
+
+# reasoning mode, woken up after Resume_ask_min of pause: go on? ("oui" / "non": a new conversation)
+resume_ask = Hallo! Wil je het vorige gesprek voortzetten?
+resume_yes = Goed, ik luister.
+resume_no = Goed, we beginnen opnieuw. Ik luister.
+
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Verbinding te traag: de stem kon niet vloeiend worden voorgelezen.)
 

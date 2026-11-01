@@ -22,8 +22,6 @@
 #define PERPLEXITY_URL                  "https://api.perplexity.ai/v1/agent"
 /* A tiny free answer (the list of models): opens the TLS connection in advance */
 #define PERPLEXITY_PREWARM_URL          "https://api.perplexity.ai/v1/models"
-/* Counts the reasoning tokens too: room for a short spoken answer after a little reasoning */
-#define PERPLEXITY_MAX_OUTPUT_TOKENS    2048
 /* Web pages read for an answer: enough for a short spoken one (each one costs input tokens) */
 #define PERPLEXITY_SEARCH_RESULTS       5
 /* Longest source mark taken out of the text: "[12, 13]" */
@@ -135,7 +133,7 @@ static char *build_request(void)
     cJSON_AddStringToObject(req, "model", s_model);
     cJSON_AddBoolToObject(req, "stream", true);
     cJSON_AddBoolToObject(req, "store", false);
-    cJSON_AddNumberToObject(req, "max_output_tokens", PERPLEXITY_MAX_OUTPUT_TOKENS);
+    cJSON_AddNumberToObject(req, "max_output_tokens", llm_max_output_tokens());
     // Its web search: what Perplexity is for (the model decides whether a question needs it)
     cJSON *search = cJSON_CreateObject();
     cJSON_AddStringToObject(search, "type", "web_search");

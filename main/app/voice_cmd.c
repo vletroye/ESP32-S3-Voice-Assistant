@@ -83,6 +83,9 @@ static PHRASE_LIST(s_change_stt);
 static PHRASE_LIST(s_change_tts);
 /* A new conversation, as after "au revoir" (normalized: lowercase, apostrophes as spaces) */
 static PHRASE_LIST(s_new_conversation);
+/* The reasoning mode: "j'ai une question difficile" (a question may follow), "désactive le raisonnement" */
+static PHRASE_LIST(s_reasoning_on);
+static PHRASE_LIST(s_reasoning_off);
 /* Configuration files (normalized: "éditer" and "editer", "la config" and "le config" as often transcribed) */
 static PHRASE_LIST(s_edit_config);
 static PHRASE_LIST(s_restart);
@@ -119,6 +122,7 @@ typedef enum {
     CONFIRM_CITY,           /* s_pending holds the town */
     CONFIRM_EXCLUDE,        /* model test: exclude the slow free model asked about? */
     CONFIRM_TEST,           /* no test yet for "les modèles les plus rapides": run one? */
+    CONFIRM_RESUME,         /* reasoning mode after a pause: go on with the conversation? */
 } asked_t;
 
 static asked_t s_asked = ASKED_NOTHING;
@@ -1126,6 +1130,12 @@ void voice_cmd_cancel_question(void)
     s_asked_us = 0;
 }
 
+void voice_cmd_expect_resume(void)
+{
+    s_asked = CONFIRM_RESUME;
+    s_asked_us = esp_timer_get_time();
+}
+
 void voice_cmd_expect_exclusion(void)
 {
     s_asked = CONFIRM_EXCLUDE;
@@ -1205,7 +1215,7 @@ void voice_cmd_init(void)
         &s_test_llm, &s_fastest_models, &s_radio_station, &s_radio_music,
         &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
         &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut, &s_change_stt, &s_change_tts,
-        &s_new_conversation, &s_edit_config, &s_restart, &s_version, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
+        &s_new_conversation, &s_reasoning_on, &s_reasoning_off, &s_edit_config, &s_restart, &s_version, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
@@ -1418,6 +1428,56 @@ static const char *speech_spoken(llm_speech_kind_t kind, const char *id)
     return m ? m->spoken : id;
 }
 
+/* The label of the model in use ("Grok 4.20 rapide"), its id if it is not in AGENTS.INI */
+static const char *model_label(void)
+{
+    const char *id = settings_get_parameter()->chat_model;
+    for (size_t i = 0; i < llm_model_count; i++) {
+        if (strcmp(llm_models[i].id, id) == 0) {
+            return llm_models[i].label;
+        }
+    }
+    return id;
+}
+
+/*
+ * "J'ai une question difficile", "active le raisonnement": the reasoning mode on until the end of the conversation;
+ * alone, answered and listened to again; followed by a question (NONE), the model answers it, reasoning.
+ * "Désactive le raisonnement": off. False when it is not one of them.
+ */
+static bool reasoning_command(const char *norm, char **reply, voice_cmd_t *cmd)
+{
+    const app_lang_t *lang = app_lang_get();
+    size_t len = 0;
+    if (starts_with(norm, phrases_of(&s_reasoning_on), &len)) {
+        const char *rest = norm + len + (norm[len] == ' ');
+        bool alone = !*rest || starts_with(rest, phrases_of(&s_courtesy), NULL);
+        bool was_on = llm_reasoning();
+        if (!llm_set_reasoning(true)) {
+            char *text = NULL;
+            asprintf(&text, lang->reasoning_unsupported, model_label());
+            *reply = text ? text : reply_dup("");
+            *cmd = VOICE_CMD_ANSWERED;
+            return true;
+        }
+        if (!alone) {
+            *cmd = VOICE_CMD_NONE;      // the question that follows: asked to the model, which reasons now
+            return true;
+        }
+        *reply = reply_dup(was_on ? lang->reasoning_already : lang->reasoning_on);
+        *cmd = VOICE_CMD_LISTEN;
+        return true;
+    }
+    if (starts_with(norm, phrases_of(&s_reasoning_off), NULL)) {
+        bool was_on = llm_reasoning();
+        llm_set_reasoning(false);
+        *reply = reply_dup(was_on ? lang->reasoning_off : lang->reasoning_not_on);
+        *cmd = VOICE_CMD_ANSWERED;
+        return true;
+    }
+    return false;
+}
+
 /*
  * "Teste les modèles" (all), "teste les modèles en cours" (those in use), "teste les modèles de Google" (the chat
  * models of a provider): announced, then run once the reply is spoken
@@ -1575,6 +1635,23 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
             return answered;
         }
     }
+    if (recent && asked == CONFIRM_RESUME) {
+        // "Oui": listened to at once; "non": a new conversation (the reasoning mode off), then listened to. A
+        // longer sentence is a question of the conversation, answered as usual
+        int words = 1;
+        for (const char *c = norm; *c; c++) {
+            words += (*c == ' ');
+        }
+        bool no = words <= 4 && has_any(norm, &s_no);
+        bool yes = !no && words <= 4 && has_any(norm, &s_yes);
+        if (yes || no) {
+            if (no) {
+                llm_reset();
+            }
+            *reply = reply_dup(yes ? app_lang_get()->resume_yes : app_lang_get()->resume_no);
+            return VOICE_CMD_LISTEN;
+        }
+    }
 
     voice_cmd_t radio = radio_command(norm, reply);
     if (radio != VOICE_CMD_NONE) {
@@ -1590,6 +1667,10 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
             return VOICE_CMD_NEW_CONVERSATION;
         }
         return VOICE_CMD_NEW_CONVERSATION_ASK;
+    }
+    voice_cmd_t reasoning;
+    if (reasoning_command(norm, reply, &reasoning)) {
+        return reasoning;
     }
     if (starts_with(norm, phrases_of(&s_change_lang), NULL)) {
         // "Change la langue en anglais": the language may already be given

@@ -374,6 +374,27 @@ question.
 | j'ai une autre question · une autre question · autre question | I have another question · another question |
 | passons à autre chose · on passe à autre chose · parlons d'autre chose · changeons de sujet · on change de sujet · changement de sujet | let's move on · let's talk about something else · let's change the subject · change of subject |
 
+**Reasoning mode.** "**J'ai une question difficile**" ("I have a difficult question") makes the model in use think
+more, until the end of the conversation: its effort becomes `high` (Claude's `output_config.effort` with its thinking
+left to the model, even Haiku's; OpenAI's `reasoning.effort`, Gemini's `thinkingLevel`, the `reasoning_effort` of the
+others; `ai_providers.c`), with room for a longer answer (8192 tokens instead of 2048) and a longer wait (120 s).
+Alone, it is answered ("D'accord, je prends le temps de bien réfléchir. Quelle est ta question ?" / "All right, I will
+take the time to think it through. What is your question?") and the question is listened to; followed by a question
+("J'ai une question difficile : pourquoi le ciel est-il bleu ?"), the model answers it at once, reasoning. A gear
+next to the provider's icon on the robot's head shows the mode. A model that does not reason (`-` in `AGENTS.INI`)
+says so. The mode ends with the conversation ("au revoir", "nouvelle discussion"), another model, a restart, or
+"désactive le raisonnement" ("turn off reasoning"), which keeps the conversation.
+
+Woken up in this mode after `Resume_ask_min` minutes of pause (5 by default, `CONFIG.INI`), the assistant asks
+"Bonjour ! Veux-tu continuer la conversation précédente ?" ("Hello! Do you want to go on with the previous
+conversation?"): "oui" / "yes" listens at once, the conversation and the mode kept; "non" / "no" starts a new
+conversation (the mode off), then listens; a longer sentence is taken as a question of the conversation.
+
+| French | English |
+| --- | --- |
+| j'ai une question difficile / compliquée / complexe · active / lance le raisonnement · active le mode réflexion · réfléchis bien / en profondeur · prends le temps de bien réfléchir · mode raisonnement | I have a difficult / hard / tricky question · turn on / enable the reasoning · think hard / carefully · reasoning mode |
+| désactive / arrête / coupe le raisonnement · désactive le mode réflexion | turn off / disable / stop the reasoning |
+
 #### 2.5.4 Language, model and voice
 
 Recognised in the language in use, except "change la langue" / "change the language" and the direct language phrases, recognised in
@@ -681,6 +702,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
+| `Resume_ask_min` | Reasoning mode ("j'ai une question difficile"): woken up after this many minutes of pause, the assistant asks whether to go on with the conversation (`0` to `120`; `0`: never asked) | `5` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
 | `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
 | `Radio_treble` | Treble of the radio (above about 3 kHz), in dB, from `-12` to `6`: negative softens them on the small speaker, `0` leaves the sound as it is (also changed from the radio screen) | `-6` |

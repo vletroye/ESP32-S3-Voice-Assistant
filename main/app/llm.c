@@ -14,6 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "cJSON.h"
 #include "llm.h"
 #include "ai_provider_anthropic.h"
@@ -1111,9 +1112,18 @@ static void keep(char **dst, const char *src)
     *dst = strdup(src ? src : "");
 }
 
-/* The client of the model's provider (s_provider) configured for it, with the keys and instructions kept */
-static esp_err_t client_init(const char *model, bool tools)
+/* The reasoning mode ("j'ai une question difficile"): until a new conversation; the time of the last exchange */
+static bool s_reasoning = false;
+static int64_t s_last_exchange_us = 0;
+
+/*
+ * The client of the model's provider (s_provider) configured for it, with the keys and instructions kept; for the
+ * conversation (not the model test): with the tools, and the effort of the reasoning mode when it is on
+ */
+static esp_err_t client_init(const char *model, bool conversation)
 {
+    bool tools = conversation;
+    bool reasoning = conversation && s_reasoning;
     const llm_backend_t *b = backend();
     const char *key = ai_provider_key(ai_provider_of_llm(s_provider));
     if (key[0] == '\0') {
@@ -1122,11 +1132,60 @@ static esp_err_t client_init(const char *model, bool tools)
     }
     if (s_provider == LLM_PROVIDER_CLAUDE) {
         const llm_model_t *listed = model_of(model);
-        claude_client_set_thinking(listed ? listed->thinking : NULL);
+        // Reasoning: its thinking left to the model ("default"), even Haiku's (else disabled)
+        claude_client_set_thinking(reasoning ? "default" : listed ? listed->thinking : NULL);
         // Tools (weather, volume...): offered to Claude only for now; none for the model test
         claude_client_set_tools(tools ? tools_definitions() : NULL, tools ? tools_run : NULL);
     }
-    return b->init(b->state, key, model, s_system, effort_of(model));
+    const char *effort = reasoning ? ai_provider_of_llm(s_provider)->reasoning_effort : effort_of(model);
+    return b->init(b->state, key, model, s_system, effort);
+}
+
+bool llm_reasoning(void)
+{
+    return s_reasoning;
+}
+
+bool llm_reasoning_possible(void)
+{
+    // "-" in AGENTS.INI: a model that does not reason (no effort sent)
+    return s_ready && strcmp(effort_of(s_model), "-") != 0 && ai_provider_of_llm(s_provider)->reasoning_effort;
+}
+
+bool llm_set_reasoning(bool on)
+{
+    if (on && !llm_reasoning_possible()) {
+        return false;
+    }
+    if (!s_ready || s_reasoning == on) {
+        return true;
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    // The client configured again with the other effort: its conversation given back
+    cJSON *saved = cJSON_Duplicate(history_get(), true);
+    s_reasoning = on;
+    client_init(s_model, true);
+    history_set(saved);
+    xSemaphoreGive(s_lock);
+    ESP_LOGI(TAG, "Reasoning mode %s", on ? "on" : "off");
+    return true;
+}
+
+int64_t llm_last_exchange_us(void)
+{
+    return s_last_exchange_us;
+}
+
+int llm_max_output_tokens(void)
+{
+    // Counts the reasoning tokens too: room for a short spoken answer after a little reasoning, or a long one
+    return s_reasoning ? LLM_MAX_OUTPUT_TOKENS_REASONING : LLM_MAX_OUTPUT_TOKENS;
+}
+
+int llm_answer_timeout_ms(void)
+{
+    // A model thinking for long may send nothing meanwhile
+    return s_reasoning ? 120000 : 30000;
 }
 
 esp_err_t llm_init(const char *model, const char *openai_base_url, const char *system_prompt)
@@ -1138,6 +1197,7 @@ esp_err_t llm_init(const char *model, const char *openai_base_url, const char *s
     openai_chat_set_base_url(openai_base_url);
     keep(&s_system, system_prompt);
     s_provider = llm_provider_of(model);
+    s_reasoning = false;    // another model: the reasoning mode ends
     esp_err_t ret = client_init(model, true);
     s_ready = (ret == ESP_OK);
     strlcpy(s_model, model, sizeof(s_model));
@@ -1256,6 +1316,7 @@ llm_error_t llm_stream(const char *text, llm_text_cb_t on_text, void *ctx, char 
     llm_error_t err = client_stream(text, on_text, ctx, full_text);
     if (err == LLM_OK) {
         s_dirty = true;
+        s_last_exchange_us = esp_timer_get_time();
     }
     xSemaphoreGive(s_lock);
     return err;
@@ -1275,7 +1336,15 @@ void llm_reset(void)
         return;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    backend()->reset(backend()->state);
+    if (s_reasoning) {
+        // A new conversation ends the reasoning mode: the client configured again (its conversation empty)
+        s_reasoning = false;
+        client_init(s_model, true);
+        ESP_LOGI(TAG, "Reasoning mode off");
+    } else {
+        backend()->reset(backend()->state);
+    }
+    s_last_exchange_us = 0;
     s_dirty = false;
     xSemaphoreGive(s_lock);
     remove(LLM_HISTORY_FILE);

@@ -19,8 +19,6 @@
 #include "llm_common.h"
 
 #define GEMINI_BASE_URL             "https://generativelanguage.googleapis.com/v1beta/models/"
-/* Counts the thinking tokens too: room for a short spoken answer after a little thinking */
-#define GEMINI_MAX_OUTPUT_TOKENS    2048
 #define GEMINI_URL_SIZE             192
 
 static const char *TAG = "gemini_chat";
@@ -128,7 +126,7 @@ static char *build_request(void)
     /* Referenced, not copied: the history stays owned by s_messages */
     cJSON_AddItemReferenceToObject(req, "contents", s_messages);
     cJSON *config = cJSON_AddObjectToObject(req, "generationConfig");
-    cJSON_AddNumberToObject(config, "maxOutputTokens", GEMINI_MAX_OUTPUT_TOKENS);
+    cJSON_AddNumberToObject(config, "maxOutputTokens", llm_max_output_tokens());
     if (s_thinking_level) {
         cJSON *thinking = cJSON_AddObjectToObject(config, "thinkingConfig");
         cJSON_AddStringToObject(thinking, "thinkingLevel", s_thinking_level);

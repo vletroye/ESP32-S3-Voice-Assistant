@@ -16,8 +16,6 @@
 #include "ai_provider_chat_completions.h"
 #include "file_costs.h"
 
-/* Counts the reasoning tokens too: room for a short spoken answer after a little reasoning */
-#define CC_MAX_TOKENS       2048
 
 typedef struct {
     const cc_config_t *config;
@@ -167,7 +165,7 @@ static char *build_request(const cc_client_t *c)
     cJSON *req = cJSON_CreateObject();
     cJSON_AddStringToObject(req, "model", c->model);
     cJSON_AddBoolToObject(req, "stream", true);
-    cJSON_AddNumberToObject(req, "max_tokens", CC_MAX_TOKENS);
+    cJSON_AddNumberToObject(req, "max_tokens", llm_max_output_tokens());
     if (c->effort) {
         // Reasoning kept short or left out ("none"), its text not returned: the answer is spoken
         if (c->config->reasoning == CC_REASONING_OBJECT) {

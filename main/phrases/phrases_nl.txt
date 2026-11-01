@@ -156,6 +156,16 @@ model[ nummer]
 (verander|wijzig|wissel)[ (van|de)] (tts|t t s|dts|d t s)
 (verander|wijzig|wissel)[ (van|de|je)] (stemmotor|spraakmotor)
 
+[s_reasoning_on]
+# Redeneermodus: het model denkt meer na tot het einde van het gesprek ("tot ziens")
+ik heb een (moeilijke|lastige|ingewikkelde) vraag
+(zet|schakel) het redeneren aan
+denk (goed|grondig) na
+
+[s_reasoning_off]
+(zet|schakel) het redeneren uit
+stop met redeneren
+
 [s_new_conversation]
 (laten we|we) een nieuw gesprek beginnen
 (begin|start) een nieuw gesprek

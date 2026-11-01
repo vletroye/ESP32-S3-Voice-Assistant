@@ -30,8 +30,6 @@
                                 "user's language, such as \"Je regarde.\". Never read out web addresses, " \
                                 "citations or source names unless asked."
 #define CLAUDE_API_VERSION      "2023-06-01"
-/* Spoken answers are short; the ceiling leaves room for Opus' thinking, which cannot be disabled */
-#define CLAUDE_MAX_TOKENS       2048
 /* Tool calls answered per question, before giving up */
 #define CLAUDE_MAX_TOOL_ROUNDS  3
 
@@ -192,7 +190,7 @@ static char *build_request(void)
 {
     cJSON *req = cJSON_CreateObject();
     cJSON_AddStringToObject(req, "model", s_model);
-    cJSON_AddNumberToObject(req, "max_tokens", CLAUDE_MAX_TOKENS);
+    cJSON_AddNumberToObject(req, "max_tokens", llm_max_output_tokens());
     cJSON_AddBoolToObject(req, "stream", true);
     /* Thinking off when the model allows it: lowest latency to the first spoken word */
     if (s_thinking) {

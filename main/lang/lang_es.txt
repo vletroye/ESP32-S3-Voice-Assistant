@@ -289,6 +289,22 @@ version_reply = Mi firmware está en la versión %s.
 # "nouvelle discussion": the conversation is cleared
 new_conversation = De acuerdo, te escucho.
 
+# "j'ai une question difficile" alone: the reasoning mode on (the answer is listened to)
+reasoning_on = De acuerdo, me tomo el tiempo de pensarlo bien. ¿Cuál es tu pregunta?
+reasoning_already = Ya estoy pensando a fondo. ¿Cuál es tu pregunta?
+
+# "désactive le raisonnement"
+reasoning_off = De acuerdo, vuelvo a responder rápido.
+reasoning_not_on = El razonamiento no estaba activado.
+
+# %s: the label of the model in use
+reasoning_unsupported = El modelo %s no sabe razonar. Cambia de modelo para activar el razonamiento.
+
+# reasoning mode, woken up after Resume_ask_min of pause: go on? ("oui" / "non": a new conversation)
+resume_ask = ¡Hola! ¿Quieres seguir con la conversación anterior?
+resume_yes = De acuerdo, te escucho.
+resume_no = De acuerdo, empezamos de nuevo. Te escucho.
+
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Conexión demasiado lenta: la voz no se ha podido leer de forma fluida.)
 

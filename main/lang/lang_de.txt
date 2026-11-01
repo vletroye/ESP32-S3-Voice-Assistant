@@ -290,6 +290,22 @@ version_reply = Meine Firmware hat die Version %s.
 # "nouvelle discussion": the conversation is cleared
 new_conversation = In Ordnung, ich höre zu.
 
+# "j'ai une question difficile" alone: the reasoning mode on (the answer is listened to)
+reasoning_on = In Ordnung, ich nehme mir Zeit zum Nachdenken. Was ist deine Frage?
+reasoning_already = Ich denke schon gründlich nach. Was ist deine Frage?
+
+# "désactive le raisonnement"
+reasoning_off = In Ordnung, ich antworte wieder schnell.
+reasoning_not_on = Das Nachdenken war nicht aktiviert.
+
+# %s: the label of the model in use
+reasoning_unsupported = Das Modell %s kann nicht nachdenken. Wechsle das Modell, um das Nachdenken zu aktivieren.
+
+# reasoning mode, woken up after Resume_ask_min of pause: go on? ("oui" / "non": a new conversation)
+resume_ask = Hallo! Möchtest du das vorherige Gespräch fortsetzen?
+resume_yes = In Ordnung, ich höre zu.
+resume_no = In Ordnung, wir fangen neu an. Ich höre zu.
+
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Verbindung zu langsam: die Stimme konnte nicht flüssig vorgelesen werden.)
 

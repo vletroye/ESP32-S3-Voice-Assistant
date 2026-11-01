@@ -169,6 +169,8 @@ esp_err_t llm_http_send(llm_http_t *h, const char *body, int *status)
             ESP_LOGE(h->tag, "Failed to init http client");
             return ESP_ERR_NO_MEM;
         }
+        // A reasoning model may stay silent for long before its answer
+        esp_http_client_set_timeout_ms(client, llm_answer_timeout_ms());
         if (esp_http_client_open(client, len) == ESP_OK &&
                 esp_http_client_write(client, body, len) == (int)len &&
                 esp_http_client_fetch_headers(client) >= 0) {

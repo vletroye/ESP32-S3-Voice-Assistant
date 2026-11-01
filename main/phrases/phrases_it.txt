@@ -155,6 +155,16 @@ cambia[re] (la|di|tua) sintesi vocale
 cambia[re] (il|di) (tts|t t s|dts|d t s)
 cambia[re] (il|di|tuo) motore vocale
 
+[s_reasoning_on]
+# Modalità ragionamento: il modello riflette di più fino alla fine della conversazione (« arrivederci »)
+ho una domanda (difficile|complicata|complessa)
+(attiva|accendi) il ragionamento
+pensa (bene|a fondo)
+modalità ragionamento
+
+[s_reasoning_off]
+(disattiva|spegni|ferma) il ragionamento
+
 [s_new_conversation]
 (iniziamo|cominciamo|inizia|comincia) una nuova (conversazione|discussione|chiacchierata)
 (ricominciamo|ripartiamo) da (zero|capo)

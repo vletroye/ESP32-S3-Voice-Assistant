@@ -240,8 +240,33 @@ bool llm_cancelled(void);
 /** Open the HTTPS connection in advance (blocking, ~1 s when not already open) */
 void llm_prewarm(void);
 
-/** Forget the conversation history, also the saved one */
+/** Forget the conversation history, also the saved one; the reasoning mode ends */
 void llm_reset(void);
+
+/*
+ * The reasoning mode ("j'ai une question difficile"): the model of the conversation reasons more (the effort of its
+ * provider in ai_providers.c), until a new conversation ("au revoir"), another model or a restart
+ */
+bool llm_reasoning(void);
+
+/** The model in use can reason (its effort in AGENTS.INI is not "-") */
+bool llm_reasoning_possible(void);
+
+/** Turned on or off, the conversation kept; false if the model cannot reason */
+bool llm_set_reasoning(bool on);
+
+/** esp_timer time of the last question answered (0 after a new conversation) */
+int64_t llm_last_exchange_us(void);
+
+/* Tokens an answer may take, its reasoning included: a short spoken answer, or a long reasoning */
+#define LLM_MAX_OUTPUT_TOKENS           2048
+#define LLM_MAX_OUTPUT_TOKENS_REASONING 8192
+
+/** The tokens the clients ask for: LLM_MAX_OUTPUT_TOKENS, or ..._REASONING in the reasoning mode */
+int llm_max_output_tokens(void);
+
+/** The time the clients wait for the answer to go on: longer in the reasoning mode (ms) */
+int llm_answer_timeout_ms(void);
 
 /**
  * @brief Save the conversation history to flash if it changed since the last save.

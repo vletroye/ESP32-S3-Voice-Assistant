@@ -158,6 +158,17 @@ change[r] (de|la|ta) synthèse vocale
 change[r] (de|le) (tts|t t s|dts|d t s)
 change[r] (de|le|ton) moteur de voix
 
+[s_reasoning_on]
+# Mode raisonnement : le modèle réfléchit davantage jusqu'à la fin de la conversation (« au revoir »)
+j ai une question (difficile|compliquée|complexe)
+(active|lance|mets|allume) [le ](raisonnement|mode raisonnement|mode réflexion)
+réfléchis (bien|profondément|en profondeur)
+prends le temps de [bien ]réfléchir
+mode (raisonnement|réflexion)
+
+[s_reasoning_off]
+(désactive|arrête|coupe|éteins|enlève) [le ](raisonnement|mode raisonnement|mode réflexion)
+
 [s_new_conversation]
 (démarrons|commençons|[on ](démarre|commence)) une nouvelle (discussion|conversation)
 (on recommence|recommençons) à zéro

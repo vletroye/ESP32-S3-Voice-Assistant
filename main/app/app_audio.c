@@ -49,6 +49,7 @@ extern void assistant_listen_start(void);
 extern void assistant_listen_end(void);
 extern void assistant_listen_abort(void);
 extern void assistant_prewarm(void);
+extern bool assistant_resume_ask(void);
 extern void assistant_reply_stop(void);
 extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
 
@@ -362,6 +363,10 @@ void sr_handler_task(void *pvParam)
             app_presence_activity();
             // A new question interrupts the reply being spoken
             assistant_reply_stop();
+            // The reasoning mode after a pause: asked first whether to go on with the conversation
+            if (assistant_resume_ask()) {
+                continue;
+            }
             audio_record_start();
             // Connect to the transcription service while the user speaks (the audio is buffered meanwhile)
             assistant_listen_start();

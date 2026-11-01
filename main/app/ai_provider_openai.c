@@ -16,8 +16,6 @@
 #include "file_costs.h"
 #include "llm_common.h"
 
-/* Counts the reasoning tokens too: room for a short spoken answer after a little reasoning */
-#define OPENAI_MAX_OUTPUT_TOKENS    2048
 #define OPENAI_URL_SIZE             160
 
 static const char *TAG = "openai_chat";
@@ -128,7 +126,7 @@ static char *build_request(void)
     cJSON_AddStringToObject(req, "model", s_model);
     cJSON_AddBoolToObject(req, "stream", true);
     cJSON_AddBoolToObject(req, "store", false);
-    cJSON_AddNumberToObject(req, "max_output_tokens", OPENAI_MAX_OUTPUT_TOKENS);
+    cJSON_AddNumberToObject(req, "max_output_tokens", llm_max_output_tokens());
     if (s_effort) {
         cJSON *reasoning = cJSON_AddObjectToObject(req, "reasoning");
         cJSON_AddStringToObject(reasoning, "effort", s_effort);

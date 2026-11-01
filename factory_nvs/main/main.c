@@ -201,6 +201,8 @@ void app_main(void)
         nvs_init_int_if_missing("Scroll_speed", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
         // Screen off after this many seconds without presence (radar of the BOX-3-SENSOR dock), 0: never
         nvs_init_int_if_missing("Screen_off_s", CONFIG_ASSISTANT_SCREEN_OFF_S);
+        // Reasoning mode: asked whether to go on with the conversation after this pause (minutes), 0: never
+        nvs_init_int_if_missing("Resume_ask_min", CONFIG_ASSISTANT_RESUME_ASK_MIN);
         // Treble of the radio, in dB (negative: softer)
         nvs_init_int_if_missing("Radio_treble", CONFIG_ASSISTANT_RADIO_TREBLE);
         // Radio resumed after a conversation (on / off), and the level its stations are brought to (dBFS)

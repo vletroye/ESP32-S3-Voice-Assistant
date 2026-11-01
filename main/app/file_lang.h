@@ -151,6 +151,15 @@ typedef struct {
     const char *clock_hidden;       /* "cache l'heure" */
     const char *version_reply;      /* "quelle est ta version", %s: the firmware version ("1.4.2") */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
+    /* The reasoning mode ("j'ai une question difficile"), and going on with its conversation after a pause */
+    const char *reasoning_on;
+    const char *reasoning_already;
+    const char *reasoning_off;
+    const char *reasoning_not_on;
+    const char *reasoning_unsupported;  /* %s: the label of the model */
+    const char *resume_ask;
+    const char *resume_yes;
+    const char *resume_no;
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
     const char *speech_test_phrase; /* model test: spoken by each speech model, then transcribed */
     const char *test_tts_name;      /* %s: spoken name of a speech model ("la synthèse %s") */

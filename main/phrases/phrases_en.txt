@@ -158,6 +158,16 @@ change[ (the|your)] speech synthesis
 change[ the] (tts|t t s|dts|d t s)
 change[ (the|your)] voice engine
 
+[s_reasoning_on]
+# Reasoning mode: the model thinks more until the end of the conversation ("goodbye")
+i have a (difficult|hard|tricky|complex) question
+(turn on|enable|activate|start) [the ]reasoning[ mode]
+think (hard|carefully|deeply)
+reasoning mode
+
+[s_reasoning_off]
+(turn off|disable|stop|deactivate) [the ]reasoning[ mode]
+
 [s_new_conversation]
 [let s ](start|begin) a new (discussion|conversation|chat)
 (let s start|start) (again|over) from scratch

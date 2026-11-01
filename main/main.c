@@ -322,6 +322,27 @@ static void on_reply_audio(tts_event_t event)
     ui_ctrl_reply_set_audio_end_flag(true);
 }
 
+/*
+ * Woken up in the reasoning mode after a pause of Resume_ask_min or more: "Veux-tu continuer la conversation
+ * précédente ?" is asked instead of listening at once (its answer is listened to after it, voice_cmd.c). Called
+ * from app_audio.c (SR handler task); false: listen as usual.
+ */
+bool assistant_resume_ask(void)
+{
+    int64_t last_us = llm_last_exchange_us();
+    int64_t pause_us = esp_timer_get_time() - last_us;
+    if (!llm_reasoning() || sys_param->resume_ask_min <= 0 || !last_us ||
+            pause_us < sys_param->resume_ask_min * 60 * 1000000LL) {
+        return false;
+    }
+    ESP_LOGI(TAG, "Reasoning mode, %lld min since the last answer: going on?", pause_us / 60000000LL);
+    s_cancelled = false;
+    llm_cancel_clear();
+    voice_cmd_expect_resume();
+    speak_message(app_lang_get()->resume_ask);
+    return true;
+}
+
 /* Stop the reply being spoken. Called from app_audio.c when a new listening session starts. */
 void assistant_reply_stop(void)
 {
@@ -913,7 +934,8 @@ void assistant_listen_end(void)
         s_test_after_reply = (voice_cmd == VOICE_CMD_TEST_MODELS);
         s_sleep_after_local = (voice_cmd == VOICE_CMD_RADIO);
         speak_message(cmd_reply ? cmd_reply : "");
-        s_reply_local_cmd = true;
+        // A reply asking to go on ("Je t'écoute."): listened to again, whatever Sleep_after_cmd
+        s_reply_local_cmd = (voice_cmd != VOICE_CMD_LISTEN);
         free(cmd_reply);
         goto err;
     }

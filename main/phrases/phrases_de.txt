@@ -168,6 +168,17 @@ modell[ nummer]
 (ändere|wechsle|wechsel)[ (die|das)] (tts|t t s|dts|d t s)
 (ändere|wechsle|wechsel)[ (die|deine)] (sprachausgabe|stimmengine|stimm engine)
 
+[s_reasoning_on]
+# Nachdenkmodus: das Modell denkt bis zum Ende des Gesprächs mehr nach ("tschüss")
+ich habe eine (schwierige|knifflige|komplizierte) frage
+(aktiviere|starte) [das ](nachdenken|denken)
+schalte [das ](nachdenken|denken) ein
+denk (gut|gründlich) nach
+
+[s_reasoning_off]
+(deaktiviere|beende|stoppe) [das ](nachdenken|denken)
+schalte [das ](nachdenken|denken) aus
+
 [s_new_conversation]
 (lass uns|wir) ein neues gespräch (beginnen|anfangen|starten)
 (beginne|starte|fang) ein neues gespräch[ an]

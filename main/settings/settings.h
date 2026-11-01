@@ -48,6 +48,7 @@ typedef struct {
     char elevenlabs_key[ELEVENLABS_KEY_SIZE];       /* ElevenLabs key (speech), empty if not configured. */
     char chat_model[MODEL_SIZE];      /* Model answering the questions (Claude, GPT, Gemini, Grok or OpenRouter). */
     int scroll_cps;                   /* Reading speed of the answer on screen (characters per second). */
+    int resume_ask_min;               /* Reasoning mode: asked whether to go on after this pause (min), 0: never. */
     int screen_off_s;                 /* Screen off after this long without presence (radar dock), 0: never. */
     int radio_treble;                 /* Treble of the radio, in dB (-12..6; negative: softer, 0: unchanged). */
     bool radio_resume;                /* A radio interrupted by a conversation plays again afterwards. */

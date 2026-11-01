@@ -996,6 +996,9 @@ static lv_obj_t *s_model_name = NULL;
 /* The same icon on the forehead of the robot asleep, listening and thinking: children of the screens of the eyes,
  * drawn above them (outside their area), so that they follow their moves with the head */
 static lv_obj_t *s_head_icons[3] = { NULL };
+/* Next to them, a gear while the reasoning mode is on ("j'ai une question difficile") */
+static lv_obj_t *s_head_badges[3] = { NULL };
+#define HEAD_BADGE_COLOR    0xFFB300
 
 /*
  * The area redrawn when a screen of the eyes moves: its own, plus this margin, which must reach the top of the icon
@@ -1021,6 +1024,13 @@ static void head_icons_create(void)
         lv_img_set_src(s_head_icons[i], logo_image(provider_logo(llm_provider())));
         lv_obj_align(s_head_icons[i], LV_ALIGN_OUT_TOP_MID, HEAD_LOGO_X, -HEAD_LOGO_GAP_Y);
         lv_obj_clear_flag(s_head_icons[i], LV_OBJ_FLAG_CLICKABLE);
+        s_head_badges[i] = lv_label_create(eye_screens[i]);
+        lv_label_set_text(s_head_badges[i], LV_SYMBOL_SETTINGS);
+        lv_obj_set_style_text_font(s_head_badges[i], &lv_font_montserrat_14, LV_PART_MAIN);
+        lv_obj_set_style_text_color(s_head_badges[i], lv_color_hex(HEAD_BADGE_COLOR), LV_PART_MAIN);
+        lv_obj_align_to(s_head_badges[i], s_head_icons[i], LV_ALIGN_OUT_RIGHT_MID, 3, 0);
+        lv_obj_clear_flag(s_head_badges[i], LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(s_head_badges[i], LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -1031,6 +1041,13 @@ static void head_icons_refresh(void)
     for (size_t i = 0; i < 3; i++) {
         if (s_head_icons[i] && lv_img_get_src(s_head_icons[i]) != src) {
             lv_img_set_src(s_head_icons[i], src);
+        }
+        if (s_head_badges[i] && lv_obj_has_flag(s_head_badges[i], LV_OBJ_FLAG_HIDDEN) == llm_reasoning()) {
+            if (llm_reasoning()) {
+                lv_obj_clear_flag(s_head_badges[i], LV_OBJ_FLAG_HIDDEN);
+            } else {
+                lv_obj_add_flag(s_head_badges[i], LV_OBJ_FLAG_HIDDEN);
+            }
         }
     }
 }
@@ -1410,6 +1427,7 @@ bool ui_ctrl_screen_can_sleep(void)
 void ui_ctrl_show_panel(ui_ctrl_panel_t panel, uint16_t timeout)
 {
     bsp_display_lock(0);
+    head_icons_refresh();       // the reasoning mode may have changed
 
     if (timeout) {
         lv_timer_t *timer = lv_timer_create(show_panel_timer_handler, timeout, NULL);

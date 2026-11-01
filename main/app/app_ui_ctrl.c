@@ -1196,6 +1196,36 @@ static void reply_scrolled_cb(lv_event_t *e)
     scroll_arrow_update();
 }
 
+/*
+ * A finger on the reply (pressed, or the text scrolling under it): the delays before sleep are paused (the listening
+ * without speech, and the list's idle time)
+ */
+static bool s_reply_pressed = false;
+static bool s_reply_scrolling = false;
+
+static void reply_touch_cb(lv_event_t *e)
+{
+    switch (lv_event_get_code(e)) {
+    case LV_EVENT_PRESSED:
+        s_reply_pressed = true;
+        break;
+    case LV_EVENT_RELEASED:
+    case LV_EVENT_PRESS_LOST:
+        s_reply_pressed = false;
+        break;
+    case LV_EVENT_SCROLL_BEGIN:
+        s_reply_scrolling = true;
+        break;
+    case LV_EVENT_SCROLL_END:
+        s_reply_scrolling = false;
+        break;
+    default:
+        return;
+    }
+    s_manual_idle_us = esp_timer_get_time();
+    app_sr_touch_hold(s_reply_pressed || s_reply_scrolling);
+}
+
 static void scroll_arrow_create(void)
 {
     s_scroll_arrow = lv_obj_create(ui_PanelReply);
@@ -1213,6 +1243,8 @@ static void scroll_arrow_create(void)
     lv_obj_center(symbol);
     lv_obj_add_flag(s_scroll_arrow, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_scrolled_cb, LV_EVENT_SCROLL, NULL);
+    lv_obj_add_event_cb(ui_ContainerReplyContent, reply_touch_cb, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(ui_PanelReply, reply_touch_cb, LV_EVENT_ALL, NULL);
 }
 
 /* Shown, blinking, while a list not read goes on below the screen (display locked) */
@@ -1563,6 +1595,10 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
     // A list scrolled with the finger: until the next reply
     if (panel != UI_CTRL_PANEL_REPLY) {
         s_manual_scroll = false;
+        // The reply hidden under the finger: no release may come
+        s_reply_pressed = false;
+        s_reply_scrolling = false;
+        app_sr_touch_hold(false);
     }
     scroll_arrow_update();
     // The model in use: shown while listening, "Entendu", "Je réfléchis"
@@ -1878,8 +1914,11 @@ static void reply_content_scroll_timer_handler()
         lv_coord_t max_offset = content_height > visible ? content_height - visible : 0;
         bool done;
         if (s_manual_scroll) {
-            // A list not read: left where the finger puts it; ends a while after the last move
+            // A list not read: left where the finger puts it; ends a while after the last move (not while touched)
             scroll_arrow_update();
+            if (s_reply_pressed || s_reply_scrolling) {
+                s_manual_idle_us = esp_timer_get_time();
+            }
             done = reply_audio_end && esp_timer_get_time() - s_manual_idle_us > REPLY_MANUAL_IDLE_MS * 1000LL;
         } else {
             if (settings_get_parameter()->scroll_smooth) {

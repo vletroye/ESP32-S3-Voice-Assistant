@@ -75,6 +75,9 @@ esp_err_t app_sr_get_result(sr_result_t *result, TickType_t xTicksToWait);
 /** The listening session ends as if nobody had spoken (double tap while "J'écoute") */
 void app_sr_cancel(void);
 
+/** A finger is on the screen (true) or lifted: while it is, the delay without speech is paused (a list scrolled) */
+void app_sr_touch_hold(bool held);
+
 esp_err_t app_sr_start_once(void);
 
 /**

@@ -68,6 +68,8 @@ static srmodel_list_t *models = NULL;
 static volatile bool manul_detect_flag = false;
 /* Double tap while listening: the session ends as if nobody had spoken */
 static volatile bool s_cancel_listen = false;
+/* A finger on the screen (a list scrolled): the delay without speech is paused */
+static volatile bool s_touch_hold = false;
 /* Non-zero: the pending manual session is a follow-up that must hear speech within this delay */
 static volatile uint32_t s_followup_window_ms = 0;
 /* The pending follow-up listens while the reply stays shown (it asks something, its text is being read) */
@@ -132,6 +134,7 @@ static void audio_detect_task(void *arg)
     bool detect_flag = false;
     bool speech_seen = false;
     uint32_t speech_ms = 0;
+    uint32_t paused_ms = 0;         // time with a finger on the screen, not counted in the delay without speech
     float max_volume = -100.0f;
     TickType_t listen_start = 0;
     uint32_t no_speech_timeout_ms = SR_NO_SPEECH_TIMEOUT_MS;
@@ -164,6 +167,7 @@ static void audio_detect_task(void *arg)
             speech_ms = 0;
             max_volume = -100.0f;
             listen_start = xTaskGetTickCount();
+            paused_ms = 0;
             no_speech_timeout_ms = SR_NO_SPEECH_TIMEOUT_MS;
             vad_ignore_ms = SR_VAD_IGNORE_WAKE_MS;
             if (manul_detect_flag) {
@@ -217,7 +221,10 @@ static void audio_detect_task(void *arg)
                 }
             }
 
-            bool no_speech = (!speech_seen && elapsed_ms >= no_speech_timeout_ms) || s_cancel_listen;
+            if (s_touch_hold) {
+                paused_ms += frame_ms;
+            }
+            bool no_speech = (!speech_seen && elapsed_ms >= no_speech_timeout_ms + paused_ms) || s_cancel_listen;
             if (s_cancel_listen) {
                 s_cancel_listen = false;
                 speech_seen = false;
@@ -385,6 +392,11 @@ esp_err_t app_sr_get_result(sr_result_t *result, TickType_t xTicksToWait)
 void app_sr_cancel(void)
 {
     s_cancel_listen = true;
+}
+
+void app_sr_touch_hold(bool held)
+{
+    s_touch_hold = held;
 }
 
 esp_err_t app_sr_start_once(void)

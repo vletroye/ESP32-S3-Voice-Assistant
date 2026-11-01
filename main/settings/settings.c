@@ -5,6 +5,8 @@
  */
 
 #include <ctype.h>
+#include <limits.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -135,6 +137,99 @@ static char *read_text(nvs_handle_t handle, const char *key)
     return p;
 }
 
+/* A string setting into buf (an ASCII value trimmed, see str_trim), "" when absent: false if absent or empty */
+static bool read_str(const char *key, char *buf, size_t size, bool trim)
+{
+    size_t len = size;
+    esp_err_t ret = nvs_get_str(my_handle, key, buf, &len);
+    if (ret == ESP_ERR_NVS_INVALID_LENGTH) {
+        ESP_LOGE(TAG, "%s longer than %u characters", key, (unsigned)size - 1);
+    }
+    if (ret != ESP_OK) {
+        buf[0] = '\0';
+        return false;
+    }
+    if (trim) {
+        str_trim(buf);
+    }
+    return buf[0] != '\0';
+}
+
+/* The same, def (of Kconfig) when absent or empty */
+static void read_str_or(const char *key, char *buf, size_t size, const char *def, bool trim)
+{
+    if (!read_str(key, buf, size, trim)) {
+        strlcpy(buf, def, size);
+    }
+}
+
+/* What is done with a number out of its range */
+typedef enum {
+    OUT_OF_RANGE_DEFAULT,       /* the default used, with a warning */
+    OUT_OF_RANGE_CLAMP,         /* brought to the nearest bound */
+} out_of_range_t;
+
+/* A whole number in min..max, def when absent or not a number */
+static int read_int(const char *key, int def, int min, int max, out_of_range_t out)
+{
+    char value[12];
+    if (!read_str(key, value, sizeof(value), true) || !(isdigit((unsigned char)value[0]) ||
+            (value[0] == '-' && isdigit((unsigned char)value[1])))) {
+        return def;
+    }
+    int n = atoi(value);
+    if (n >= min && n <= max) {
+        return n;
+    }
+    if (out == OUT_OF_RANGE_CLAMP) {
+        return n < min ? min : max;
+    }
+    ESP_LOGW(TAG, "%s %d out of range (%d..%d), using %d", key, n, min, max, def);
+    return def;
+}
+
+/* "on" / "off" (also yes / no, true / false, 1 / 0), def (of Kconfig) when absent or neither */
+static bool is_on(const char *value, bool *on)
+{
+    static const char *const yes[] = { "on", "yes", "true", "1" };
+    static const char *const no[] = { "off", "no", "false", "0" };
+    for (size_t i = 0; i < sizeof(yes) / sizeof(yes[0]); i++) {
+        if (strcasecmp(value, yes[i]) == 0 || strcasecmp(value, no[i]) == 0) {
+            *on = strcasecmp(value, yes[i]) == 0;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool read_bool(const char *key, const char *def)
+{
+    char value[8];
+    bool on = false;
+    if (read_str(key, value, sizeof(value), true) && is_on(value, &on)) {
+        return on;
+    }
+    return is_on(def, &on) && on;
+}
+
+/* The keys of the providers, all optional but ChatGPT_key (read first): trimmed (a pasted key may carry spaces) */
+#define FIELD(f)    offsetof(sys_param_t, f), sizeof(((sys_param_t *)0)->f)
+static const struct {
+    const char *key;
+    size_t offset;
+    size_t size;
+} s_api_keys[] = {
+    { "Claude_key", FIELD(claude_key) },
+    { "Gemini_key", FIELD(gemini_key) },
+    { "OpenRouter_key", FIELD(openrouter_key) },
+    { "XAI_key", FIELD(xai_key) },
+    { "Mistral_key", FIELD(mistral_key) },
+    { "Perplexity_key", FIELD(perplexity_key) },
+    { "Deepgram_key", FIELD(deepgram_key) },
+    { "Groq_key", FIELD(groq_key) },
+    { "ElevenLabs_key", FIELD(elevenlabs_key) },
+};
+
 esp_err_t settings_read_parameter_from_nvs(void)
 {
     esp_err_t ret = nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READONLY, &my_handle);
@@ -142,254 +237,91 @@ esp_err_t settings_read_parameter_from_nvs(void)
         ESP_LOGI(TAG, "Credentials not found");
         goto err;
     }
-
     ESP_GOTO_ON_FALSE(ESP_OK == ret, ret, err, TAG, "nvs open failed (0x%x)", ret);
-    size_t len = 0;
 
-    // Read SSID
-    len = sizeof(g_sys_param.ssid);
-    ret = nvs_get_str(my_handle, "ssid", g_sys_param.ssid, &len);
-    if (ret != ESP_OK || len <= 1) {
+    // Wi-Fi (the SSID and the password may legitimately contain spaces: not trimmed) and the OpenAI key: required
+    if (!read_str("ssid", g_sys_param.ssid, sizeof(g_sys_param.ssid), false)) {
         ESP_LOGI(TAG, "No SSID found");
+        ret = ESP_ERR_NOT_FOUND;
         goto err;
     }
-
-    // Read password
-    len = sizeof(g_sys_param.password);
-    ret = nvs_get_str(my_handle, "password", g_sys_param.password, &len);
-    if (ret != ESP_OK || len == 0) {
+    size_t len = sizeof(g_sys_param.password);
+    if (nvs_get_str(my_handle, "password", g_sys_param.password, &len) != ESP_OK) {
         ESP_LOGI(TAG, "No Password found");
+        ret = ESP_ERR_NOT_FOUND;
         goto err;
     }
-
-    // Read key
-    len = sizeof(g_sys_param.key);
-    ret = nvs_get_str(my_handle, "ChatGPT_key", g_sys_param.key, &len);
-    if (ret == ESP_ERR_NVS_INVALID_LENGTH) {
-        ESP_LOGE(TAG, "OpenAI key longer than %u characters", (unsigned)sizeof(g_sys_param.key) - 1);
-    }
-    if (ret != ESP_OK || len <= 1) {
+    if (!read_str("ChatGPT_key", g_sys_param.key, sizeof(g_sys_param.key), true)) {
         ESP_LOGI(TAG, "No OpenAI key found");
+        ret = ESP_ERR_NOT_FOUND;
         goto err;
+    }
+    for (size_t i = 0; i < sizeof(s_api_keys) / sizeof(s_api_keys[0]); i++) {
+        read_str(s_api_keys[i].key, (char *)&g_sys_param + s_api_keys[i].offset, s_api_keys[i].size, true);
     }
 
     // OpenAI's API: fixed (no longer in CONFIG.INI; a Base_url key of an older version is erased by the
     // configuration mode)
     strlcpy(g_sys_param.url, CONFIG_ASSISTANT_OPENAI_URL, sizeof(g_sys_param.url));
 
-    // Read language (optional, written by factory_nvs since the language support was added)
-    len = sizeof(g_sys_param.lang);
-    ret = nvs_get_str(my_handle, "Language", g_sys_param.lang, &len);
-    if (ret != ESP_OK || len <= 1) {
-        strlcpy(g_sys_param.lang, CONFIG_ASSISTANT_LANGUAGE, sizeof(g_sys_param.lang));
+    read_str_or("Language", g_sys_param.lang, sizeof(g_sys_param.lang), CONFIG_ASSISTANT_LANGUAGE, true);
+    // The chat model ("Claude_model" before the GPT models were added)
+    if (!read_str("Chat_model", g_sys_param.chat_model, sizeof(g_sys_param.chat_model), true)) {
+        read_str_or("Claude_model", g_sys_param.chat_model, sizeof(g_sys_param.chat_model),
+                    CONFIG_ASSISTANT_CHAT_MODEL, true);
     }
-
-
-    // Read the chat model (optional; "Claude_model" before the GPT models were added)
-    len = sizeof(g_sys_param.chat_model);
-    ret = nvs_get_str(my_handle, "Chat_model", g_sys_param.chat_model, &len);
-    if (ret != ESP_OK || len <= 1) {
-        len = sizeof(g_sys_param.chat_model);
-        ret = nvs_get_str(my_handle, "Claude_model", g_sys_param.chat_model, &len);
-    }
-    if (ret != ESP_OK || len <= 1) {
-        strlcpy(g_sys_param.chat_model, CONFIG_ASSISTANT_CHAT_MODEL, sizeof(g_sys_param.chat_model));
-    }
-
-    // Read the Claude key (optional)
-    len = sizeof(g_sys_param.claude_key);
-    ret = nvs_get_str(my_handle, "Claude_key", g_sys_param.claude_key, &len);
-    if (ret == ESP_ERR_NVS_INVALID_LENGTH) {
-        ESP_LOGE(TAG, "Claude key longer than %u characters", (unsigned)sizeof(g_sys_param.claude_key) - 1);
-    }
-    if (ret != ESP_OK) {
-        g_sys_param.claude_key[0] = '\0';
-    }
-
-    // Read the Gemini key (optional)
-    len = sizeof(g_sys_param.gemini_key);
-    if (nvs_get_str(my_handle, "Gemini_key", g_sys_param.gemini_key, &len) != ESP_OK) {
-        g_sys_param.gemini_key[0] = '\0';
-    }
-
-    // OpenRouter (optional): its key (the models offered are in AGENTS.INI)
-    len = sizeof(g_sys_param.openrouter_key);
-    if (nvs_get_str(my_handle, "OpenRouter_key", g_sys_param.openrouter_key, &len) != ESP_OK) {
-        g_sys_param.openrouter_key[0] = '\0';
-    }
-
-    // xAI (optional): its key, for the Grok models of AGENTS.INI
-    len = sizeof(g_sys_param.xai_key);
-    if (nvs_get_str(my_handle, "XAI_key", g_sys_param.xai_key, &len) != ESP_OK) {
-        g_sys_param.xai_key[0] = '\0';
-    }
-
-    // Mistral AI and Perplexity (optional): their keys, for the models of their sections of AGENTS.INI
-    len = sizeof(g_sys_param.mistral_key);
-    if (nvs_get_str(my_handle, "Mistral_key", g_sys_param.mistral_key, &len) != ESP_OK) {
-        g_sys_param.mistral_key[0] = '\0';
-    }
-    len = sizeof(g_sys_param.perplexity_key);
-    if (nvs_get_str(my_handle, "Perplexity_key", g_sys_param.perplexity_key, &len) != ESP_OK) {
-        g_sys_param.perplexity_key[0] = '\0';
-    }
-    // Deepgram (optional): its key, for its transcription and speech models ([stt], [tts] of AGENTS.INI)
-    len = sizeof(g_sys_param.deepgram_key);
-    if (nvs_get_str(my_handle, "Deepgram_key", g_sys_param.deepgram_key, &len) != ESP_OK) {
-        g_sys_param.deepgram_key[0] = '\0';
-    }
-    // Groq (Whisper transcription) and ElevenLabs (speech), optional: their keys
-    len = sizeof(g_sys_param.groq_key);
-    if (nvs_get_str(my_handle, "Groq_key", g_sys_param.groq_key, &len) != ESP_OK) {
-        g_sys_param.groq_key[0] = '\0';
-    }
-    len = sizeof(g_sys_param.elevenlabs_key);
-    if (nvs_get_str(my_handle, "ElevenLabs_key", g_sys_param.elevenlabs_key, &len) != ESP_OK) {
-        g_sys_param.elevenlabs_key[0] = '\0';
-    }
-
-    // Read the scrolling speed of the answer (optional)
-    char speed[8] = {0};
-    len = sizeof(speed);
-    g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
-    if (nvs_get_str(my_handle, "Scroll_speed", speed, &len) == ESP_OK && atoi(speed) > 0) {
-        g_sys_param.scroll_cps = atoi(speed);
-    }
-    if (g_sys_param.scroll_cps < 5 || g_sys_param.scroll_cps > 60) {
-        ESP_LOGW(TAG, "Scroll_speed %d out of range (5..60), using %d", g_sys_param.scroll_cps,
-                 CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
-        g_sys_param.scroll_cps = CONFIG_ASSISTANT_REPLY_SCROLL_CPS;
-    }
-
-    // Silence after which the question is considered finished (End_speech_ms, 300 to 3000 ms)
-    char end_speech[8] = {0};
-    len = sizeof(end_speech);
-    g_sys_param.end_speech_ms = CONFIG_ASSISTANT_END_OF_SPEECH_MS;
-    if (nvs_get_str(my_handle, "End_speech_ms", end_speech, &len) == ESP_OK && atoi(end_speech) > 0) {
-        g_sys_param.end_speech_ms = atoi(end_speech);
-    }
-    if (g_sys_param.end_speech_ms < 300 || g_sys_param.end_speech_ms > 3000) {
-        ESP_LOGW(TAG, "End_speech_ms %d out of range (300..3000), using %d", g_sys_param.end_speech_ms,
-                 CONFIG_ASSISTANT_END_OF_SPEECH_MS);
-        g_sys_param.end_speech_ms = CONFIG_ASSISTANT_END_OF_SPEECH_MS;
-    }
-
-    // Time and date on the sleep screen (Show_clock = on / off, also changed by voice)
-    char clock[8] = {0};
-    len = sizeof(clock);
-    if (nvs_get_str(my_handle, "Show_clock", clock, &len) != ESP_OK) {
-        strlcpy(clock, CONFIG_ASSISTANT_SHOW_CLOCK, sizeof(clock));
-    }
-    str_trim(clock);
-    g_sys_param.show_clock = strcasecmp(clock, "off") != 0 && strcasecmp(clock, "no") != 0 && strcmp(clock, "0") != 0;
-
-    // After a voice command handled locally: back to sleep (on) or listening again (off)
-    char after_cmd[8] = {0};
-    len = sizeof(after_cmd);
-    if (nvs_get_str(my_handle, "Sleep_after_cmd", after_cmd, &len) != ESP_OK) {
-        strlcpy(after_cmd, CONFIG_ASSISTANT_SLEEP_AFTER_CMD, sizeof(after_cmd));
-    }
-    str_trim(after_cmd);
-    g_sys_param.sleep_after_cmd = strcasecmp(after_cmd, "on") == 0 || strcasecmp(after_cmd, "true") == 0 ||
-                                  strcasecmp(after_cmd, "yes") == 0 || strcmp(after_cmd, "1") == 0;
-
-    // Languages offered (Settings screen, "change la langue"): "FR:Français, EN:English"
-    len = sizeof(g_sys_param.languages);
-    if (nvs_get_str(my_handle, "Languages", g_sys_param.languages, &len) != ESP_OK || len <= 1) {
-        strlcpy(g_sys_param.languages, CONFIG_ASSISTANT_LANGUAGES, sizeof(g_sys_param.languages));
-    }
-
+    // Languages offered (Settings screen, "change la langue"): "FR:Français, EN:English" (accents: not trimmed)
+    read_str_or("Languages", g_sys_param.languages, sizeof(g_sys_param.languages), CONFIG_ASSISTANT_LANGUAGES, false);
     // Currency of the prices of AGENTS.INI and of the costs (no conversion)
-    len = sizeof(g_sys_param.currency);
-    if (nvs_get_str(my_handle, "Currency", g_sys_param.currency, &len) != ESP_OK || len <= 1) {
-        strlcpy(g_sys_param.currency, CONFIG_ASSISTANT_CURRENCY, sizeof(g_sys_param.currency));
-    }
-    str_trim(g_sys_param.currency);
+    read_str_or("Currency", g_sys_param.currency, sizeof(g_sys_param.currency), CONFIG_ASSISTANT_CURRENCY, true);
+    // Voice of the answers, transcription and speech models ([stt] and [tts] of AGENTS.INI)
+    read_str_or("Voice", g_sys_param.voice, sizeof(g_sys_param.voice), CONFIG_ASSISTANT_TTS_VOICE, true);
+    read_str_or("Stt_model", g_sys_param.stt_model, sizeof(g_sys_param.stt_model), CONFIG_ASSISTANT_STT_MODEL, true);
+    read_str_or("Tts_model", g_sys_param.tts_model, sizeof(g_sys_param.tts_model), CONFIG_ASSISTANT_TTS_MODEL, true);
 
-    // Free OpenRouter models offered (0 to 5, the most used; 0: none, the list is not read). An older version's
-    // "on" / "off" (until the configuration mode merges it): "off" is 0, "on" its Free_models
-    char value[8] = "";
-    len = sizeof(value);
+    // Reading speed of the answer on screen; silence after which the question is considered finished
+    g_sys_param.scroll_cps = read_int("Scroll_speed", CONFIG_ASSISTANT_REPLY_SCROLL_CPS, 5, 60, OUT_OF_RANGE_DEFAULT);
+    g_sys_param.end_speech_ms = read_int("End_speech_ms", CONFIG_ASSISTANT_END_OF_SPEECH_MS, 300, 3000,
+                                         OUT_OF_RANGE_DEFAULT);
+    // Scrolling mode of the answer: "line" or "smooth"
+    char mode[12];
+    read_str_or("Scroll_mode", mode, sizeof(mode), CONFIG_ASSISTANT_SCROLL_MODE, true);
+    g_sys_param.scroll_smooth = (strcasecmp(mode, "smooth") == 0);
+    // Time and date on the sleep screen (also changed by voice)
+    g_sys_param.show_clock = read_bool("Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK);
+    // After a voice command handled locally: back to sleep (on) or listening again (off)
+    g_sys_param.sleep_after_cmd = read_bool("Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD);
+    // Lists of the voice commands read aloud
+    g_sys_param.read_lists = read_bool("Read_lists", CONFIG_ASSISTANT_READ_LISTS);
+
+    // Free OpenRouter models offered (Free_models of CONFIG.INI, 0 to 5, the most used; 0: none, the list is not
+    // read), kept as OpenRouter_free. An older version's "on" / "off" there (until the configuration mode merges
+    // it): "off" is 0, "on" its Free_models
     g_sys_param.free_models = CONFIG_ASSISTANT_FREE_MODELS;
-    if (nvs_get_str(my_handle, "OpenRouter_free", value, &len) == ESP_OK) {
-        str_trim(value);
-        if (isdigit((unsigned char)value[0])) {
-            g_sys_param.free_models = atoi(value);
-        } else if (!strcasecmp(value, "off") || !strcasecmp(value, "no") || !strcasecmp(value, "false")) {
+    char old_free[8];
+    bool on = true;
+    if (read_str("OpenRouter_free", old_free, sizeof(old_free), true)) {
+        if (isdigit((unsigned char)old_free[0])) {
+            g_sys_param.free_models = read_int("OpenRouter_free", CONFIG_ASSISTANT_FREE_MODELS, 0, 5,
+                                               OUT_OF_RANGE_CLAMP);
+        } else if (is_on(old_free, &on) && !on) {
             g_sys_param.free_models = 0;
         } else {
-            len = sizeof(value);
-            if (nvs_get_str(my_handle, "Free_models", value, &len) == ESP_OK && isdigit((unsigned char)value[0])) {
-                g_sys_param.free_models = atoi(value);
-            }
+            g_sys_param.free_models = read_int("Free_models", CONFIG_ASSISTANT_FREE_MODELS, 0, 5, OUT_OF_RANGE_CLAMP);
         }
-    }
-    if (g_sys_param.free_models > 5) {
-        g_sys_param.free_models = 5;
     }
 
     // Screen off after this many seconds without presence (BOX-3-SENSOR radar), 0: never
-    char screen_off[8] = {0};
-    len = sizeof(screen_off);
-    g_sys_param.screen_off_s = CONFIG_ASSISTANT_SCREEN_OFF_S;
-    if (nvs_get_str(my_handle, "Screen_off_s", screen_off, &len) == ESP_OK && screen_off[0]) {
-        int s = atoi(screen_off);
-        g_sys_param.screen_off_s = s < 0 ? 0 : s;
-    }
+    g_sys_param.screen_off_s = read_int("Screen_off_s", CONFIG_ASSISTANT_SCREEN_OFF_S, 0, INT_MAX, OUT_OF_RANGE_CLAMP);
+    // Radio: treble in dB, level the stations are brought to in dBFS, resumed after a conversation
+    g_sys_param.radio_treble = read_int("Radio_treble", CONFIG_ASSISTANT_RADIO_TREBLE, -12, 6, OUT_OF_RANGE_CLAMP);
+    g_sys_param.radio_level = read_int("Radio_level", CONFIG_ASSISTANT_RADIO_LEVEL, -30, -6, OUT_OF_RANGE_CLAMP);
+    g_sys_param.radio_resume = read_bool("Radio_resume", CONFIG_ASSISTANT_RADIO_RESUME);
+    // Speaker volume (saved when changed by voice)
+    g_sys_param.volume = read_int("Volume", CONFIG_VOLUME_LEVEL, 0, 100, OUT_OF_RANGE_CLAMP);
 
-    // Treble of the radio, in dB (-12..6)
-    char treble[8] = {0};
-    len = sizeof(treble);
-    g_sys_param.radio_treble = CONFIG_ASSISTANT_RADIO_TREBLE;
-    if (nvs_get_str(my_handle, "Radio_treble", treble, &len) == ESP_OK && treble[0]) {
-        int db = atoi(treble);
-        g_sys_param.radio_treble = db < -12 ? -12 : (db > 6 ? 6 : db);
-    }
-
-    // Radio resumed after a conversation (Radio_resume = on / off)
-    char resume[8] = {0};
-    len = sizeof(resume);
-    if (nvs_get_str(my_handle, "Radio_resume", resume, &len) != ESP_OK) {
-        strlcpy(resume, CONFIG_ASSISTANT_RADIO_RESUME, sizeof(resume));
-    }
-    str_trim(resume);
-    g_sys_param.radio_resume = strcasecmp(resume, "off") != 0 && strcasecmp(resume, "no") != 0 &&
-                               strcmp(resume, "0") != 0;
-
-    // Lists of the voice commands read aloud (Read_lists = on / off)
-    char read_lists[8] = {0};
-    len = sizeof(read_lists);
-    if (nvs_get_str(my_handle, "Read_lists", read_lists, &len) != ESP_OK) {
-        strlcpy(read_lists, CONFIG_ASSISTANT_READ_LISTS, sizeof(read_lists));
-    }
-    str_trim(read_lists);
-    g_sys_param.read_lists = strcasecmp(read_lists, "on") == 0 || strcasecmp(read_lists, "yes") == 0 ||
-                             strcmp(read_lists, "1") == 0;
-
-    // Level the radio stations are brought to, in dBFS (-30..-6)
-    char level[8] = {0};
-    len = sizeof(level);
-    g_sys_param.radio_level = CONFIG_ASSISTANT_RADIO_LEVEL;
-    if (nvs_get_str(my_handle, "Radio_level", level, &len) == ESP_OK && level[0]) {
-        int db = atoi(level);
-        g_sys_param.radio_level = db < -30 ? -30 : (db > -6 ? -6 : db);
-    }
-
-    // Speaker volume (optional, saved when changed by voice)
-    char volume[8] = {0};
-    len = sizeof(volume);
-    g_sys_param.volume = CONFIG_VOLUME_LEVEL;
-    if (nvs_get_str(my_handle, "Volume", volume, &len) == ESP_OK && volume[0]) {
-        int level = atoi(volume);
-        g_sys_param.volume = level < 0 ? 0 : (level > 100 ? 100 : level);
-    }
-
-    // Where the user lives (optional): localizes the web search and tells the model
-    len = sizeof(g_sys_param.country);
-    if (nvs_get_str(my_handle, "Country", g_sys_param.country, &len) != ESP_OK) {
-        g_sys_param.country[0] = '\0';
-    }
-    str_trim(g_sys_param.country);
+    // Where the user lives: localizes the web search and tells the model (a town may end with an accent)
+    read_str("Country", g_sys_param.country, sizeof(g_sys_param.country), true);
     for (char *p = g_sys_param.country; *p; p++) {
         *p = toupper((unsigned char)*p);
     }
@@ -400,83 +332,25 @@ esp_err_t settings_read_parameter_from_nvs(void)
         }
         g_sys_param.country[0] = '\0';
     }
-    len = sizeof(g_sys_param.city);
-    if (nvs_get_str(my_handle, "City", g_sys_param.city, &len) != ESP_OK) {
-        g_sys_param.city[0] = '\0';
-    }
+    read_str("City", g_sys_param.city, sizeof(g_sys_param.city), false);
 
-    // Home automation (optional): MCP server of a Homey Pro and its API key
-    len = sizeof(g_sys_param.homey_url);
-    if (nvs_get_str(my_handle, "Homey_url", g_sys_param.homey_url, &len) != ESP_OK) {
-        g_sys_param.homey_url[0] = '\0';
-    }
-    len = sizeof(g_sys_param.homey_key);
-    if (nvs_get_str(my_handle, "Homey_key", g_sys_param.homey_key, &len) != ESP_OK) {
-        g_sys_param.homey_key[0] = '\0';
-    }
-    str_trim(g_sys_param.homey_url);
-    str_trim(g_sys_param.homey_key);
-
-    // Homey device classes to confirm before turning them off ("socket, heater"); "off" for none
-    len = sizeof(g_sys_param.confirm_off);
-    if (nvs_get_str(my_handle, "Confirm_off", g_sys_param.confirm_off, &len) != ESP_OK) {
-        strlcpy(g_sys_param.confirm_off, CONFIG_ASSISTANT_CONFIRM_OFF, sizeof(g_sys_param.confirm_off));
-    }
-    str_trim(g_sys_param.confirm_off);
-    if (strcasecmp(g_sys_param.confirm_off, "off") == 0 || strcasecmp(g_sys_param.confirm_off, "no") == 0) {
+    // Home automation: MCP server of a Homey Pro and its API key; the device classes to confirm before turning
+    // them off ("socket, heater"), "off" for none
+    read_str("Homey_url", g_sys_param.homey_url, sizeof(g_sys_param.homey_url), true);
+    read_str("Homey_key", g_sys_param.homey_key, sizeof(g_sys_param.homey_key), true);
+    read_str_or("Confirm_off", g_sys_param.confirm_off, sizeof(g_sys_param.confirm_off), CONFIG_ASSISTANT_CONFIRM_OFF,
+                true);
+    if (is_on(g_sys_param.confirm_off, &on) && !on) {
         g_sys_param.confirm_off[0] = '\0';
     }
     ESP_LOGI(TAG, "Homey: %s, key: (%d chars)", g_sys_param.homey_url[0] ? g_sys_param.homey_url : "-",
              (int)strlen(g_sys_param.homey_key));
 
-    // Voice of the answers (optional)
-    len = sizeof(g_sys_param.voice);
-    if (nvs_get_str(my_handle, "Voice", g_sys_param.voice, &len) != ESP_OK || len <= 1) {
-        strlcpy(g_sys_param.voice, CONFIG_ASSISTANT_TTS_VOICE, sizeof(g_sys_param.voice));
-    }
-    str_trim(g_sys_param.voice);
-
-    // The transcription and speech models ([stt] and [tts] of AGENTS.INI)
-    len = sizeof(g_sys_param.stt_model);
-    if (nvs_get_str(my_handle, "Stt_model", g_sys_param.stt_model, &len) != ESP_OK || len <= 1) {
-        strlcpy(g_sys_param.stt_model, CONFIG_ASSISTANT_STT_MODEL, sizeof(g_sys_param.stt_model));
-    }
-    str_trim(g_sys_param.stt_model);
-    len = sizeof(g_sys_param.tts_model);
-    if (nvs_get_str(my_handle, "Tts_model", g_sys_param.tts_model, &len) != ESP_OK || len <= 1) {
-        strlcpy(g_sys_param.tts_model, CONFIG_ASSISTANT_TTS_MODEL, sizeof(g_sys_param.tts_model));
-    }
-    str_trim(g_sys_param.tts_model);
-
-    // Memory (optional): free text, edited in MEMORY.TXT
+    // Memory: free text, edited in MEMORY.TXT
     free(g_sys_param.memory);
     g_sys_param.memory = read_text(my_handle, "Memory");
 
-    // Scrolling mode of the answer (optional): "line" or "smooth"
-    char mode[12] = {0};
-    len = sizeof(mode);
-    if (nvs_get_str(my_handle, "Scroll_mode", mode, &len) != ESP_OK) {
-        strlcpy(mode, CONFIG_ASSISTANT_SCROLL_MODE, sizeof(mode));
-    }
-    str_trim(mode);
-    g_sys_param.scroll_smooth = (strcasecmp(mode, "smooth") == 0);
-
     nvs_close(my_handle);
-
-    // SSID and password may legitimately contain spaces: only the other values are trimmed
-    str_trim(g_sys_param.key);
-    str_trim(g_sys_param.url);
-    str_trim(g_sys_param.lang);
-    str_trim(g_sys_param.claude_key);
-    str_trim(g_sys_param.gemini_key);
-    str_trim(g_sys_param.openrouter_key);
-    str_trim(g_sys_param.xai_key);
-    str_trim(g_sys_param.mistral_key);
-    str_trim(g_sys_param.perplexity_key);
-    str_trim(g_sys_param.deepgram_key);
-    str_trim(g_sys_param.groq_key);
-    str_trim(g_sys_param.elevenlabs_key);
-    str_trim(g_sys_param.chat_model);
 
     ESP_LOGI(TAG, "stored ssid:%s", g_sys_param.ssid);
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));

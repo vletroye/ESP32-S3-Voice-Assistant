@@ -78,6 +78,14 @@ static void nvs_init_str_if_missing(const char *key, const char *default_value)
     ESP_LOGI(TAG, "no %s, give a init value to nvs", key);
 }
 
+/* The same for a number (a default of Kconfig) */
+static void nvs_init_int_if_missing(const char *key, int default_value)
+{
+    char value[12];
+    snprintf(value, sizeof(value), "%d", default_value);
+    nvs_init_str_if_missing(key, value);
+}
+
 static void uf2_nvs_modified_cb()
 {
     ESP_LOGI(TAG, "uf2 nvs modified");
@@ -94,9 +102,6 @@ void app_main(void)
     const char *uf2_nvs_partition = "nvs";
     const char *uf2_nvs_namespace = "configuration";
 
-    char ssid[SSID_SIZE] = {0};
-    char password[PASSWORD_SIZE] = {0};
-    char key[KEY_SIZE] = {0};
     char lang[LANG_SIZE] = {0};
 
     s_event_group = xEventGroupCreate();
@@ -113,35 +118,10 @@ void app_main(void)
     if (err != ESP_OK) {
         printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
     } else {
-        buf_len_long = sizeof(ssid);
-        err = nvs_get_str(my_handle, "ssid", ssid, &buf_len_long);
-        if (err != ESP_OK || buf_len_long == 0) {
-            ESP_ERROR_CHECK(nvs_set_str(my_handle, "ssid", ""));
-            ESP_ERROR_CHECK(nvs_commit(my_handle));
-            ESP_LOGI(TAG, "no ssid, give a init value to nvs");
-        } else {
-            ESP_LOGI(TAG, "stored ssid:%s", ssid);
-        }
-
-        buf_len_long = sizeof(password);
-        err = nvs_get_str(my_handle, "password", password, &buf_len_long);
-        if (err != ESP_OK || buf_len_long == 0) {
-            ESP_ERROR_CHECK(nvs_set_str(my_handle, "password", ""));
-            ESP_ERROR_CHECK(nvs_commit(my_handle));
-            ESP_LOGI(TAG, "no password, give a init value to nvs");
-        } else {
-            ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(password));
-        }
-
-        buf_len_long = sizeof(key);
-        err = nvs_get_str(my_handle, "ChatGPT_key", key, &buf_len_long);
-        if (err != ESP_OK || buf_len_long == 0) {
-            ESP_ERROR_CHECK(nvs_set_str(my_handle, "ChatGPT_key", ""));
-            ESP_ERROR_CHECK(nvs_commit(my_handle));
-            ESP_LOGI(TAG, "no ChatGPT key, give a init value to key");
-        } else {
-            ESP_LOGI(TAG, "stored ChatGPT key: (%d chars)", (int)strlen(key));
-        }
+        // Wi-Fi and the OpenAI key: empty until filled in CONFIG.INI
+        nvs_init_str_if_missing("ssid", "");
+        nvs_init_str_if_missing("password", "");
+        nvs_init_str_if_missing("ChatGPT_key", "");
 
         buf_len_long = sizeof(lang);
         err = nvs_get_str(my_handle, "Language", lang, &buf_len_long);
@@ -216,23 +196,16 @@ void app_main(void)
             ESP_ERROR_CHECK(nvs_commit(my_handle));
             ESP_LOGI(TAG, "OpenRouter_free and Free_models merged: OpenRouter_free = %s", free_models);
         }
-        snprintf(free_models, sizeof(free_models), "%d", CONFIG_ASSISTANT_FREE_MODELS);
-        nvs_init_str_if_missing("OpenRouter_free", free_models);
+        nvs_init_int_if_missing("OpenRouter_free", CONFIG_ASSISTANT_FREE_MODELS);
         // Reading speed of the answer on screen, in characters per second
-        char scroll_speed[8];
-        snprintf(scroll_speed, sizeof(scroll_speed), "%d", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
-        nvs_init_str_if_missing("Scroll_speed", scroll_speed);
+        nvs_init_int_if_missing("Scroll_speed", CONFIG_ASSISTANT_REPLY_SCROLL_CPS);
         // Screen off after this many seconds without presence (radar of the BOX-3-SENSOR dock), 0: never
-        char number[8];
-        snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_SCREEN_OFF_S);
-        nvs_init_str_if_missing("Screen_off_s", number);
+        nvs_init_int_if_missing("Screen_off_s", CONFIG_ASSISTANT_SCREEN_OFF_S);
         // Treble of the radio, in dB (negative: softer)
-        snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_RADIO_TREBLE);
-        nvs_init_str_if_missing("Radio_treble", number);
+        nvs_init_int_if_missing("Radio_treble", CONFIG_ASSISTANT_RADIO_TREBLE);
         // Radio resumed after a conversation (on / off), and the level its stations are brought to (dBFS)
         nvs_init_str_if_missing("Radio_resume", CONFIG_ASSISTANT_RADIO_RESUME);
-        snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_RADIO_LEVEL);
-        nvs_init_str_if_missing("Radio_level", number);
+        nvs_init_int_if_missing("Radio_level", CONFIG_ASSISTANT_RADIO_LEVEL);
         // Time and date on the sleep screen (on / off)
         nvs_init_str_if_missing("Show_clock", CONFIG_ASSISTANT_SHOW_CLOCK);
         // After a voice command handled locally: back to sleep (on) or listening again (off)
@@ -244,13 +217,11 @@ void app_main(void)
         // Languages offered: "FR:Français, EN:English" (a language added gets its files at the next start)
         nvs_init_str_if_missing("Languages", CONFIG_ASSISTANT_LANGUAGES);
         // Silence after which the question is considered finished (same default as ASSISTANT_END_OF_SPEECH_MS)
-        snprintf(number, sizeof(number), "%d", CONFIG_ASSISTANT_END_OF_SPEECH_MS);
-        nvs_init_str_if_missing("End_speech_ms", number);
+        nvs_init_int_if_missing("End_speech_ms", CONFIG_ASSISTANT_END_OF_SPEECH_MS);
         // How the answer scrolls: "line" (one line at a time) or "smooth" (continuous)
         nvs_init_str_if_missing("Scroll_mode", CONFIG_ASSISTANT_SCROLL_MODE);
         // Speaker volume (also changed by voice)
-        snprintf(number, sizeof(number), "%d", CONFIG_VOLUME_LEVEL);
-        nvs_init_str_if_missing("Volume", number);
+        nvs_init_int_if_missing("Volume", CONFIG_VOLUME_LEVEL);
         // Voice of the answers (same default as the assistant's ASSISTANT_TTS_VOICE)
         nvs_init_str_if_missing("Voice", CONFIG_ASSISTANT_TTS_VOICE);
         // Transcription and speech models ([stt] and [tts] of AGENTS.INI)
@@ -302,41 +273,7 @@ void app_main(void)
                                                pdTRUE, pdFALSE, portMAX_DELAY);
 
         if (bits & NVS_MODIFIED_BIT) {
-            esp_err_t err = nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READONLY, &my_handle);
-
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to open NVS partition: %s", esp_err_to_name(err));
-                // Handle the error or take appropriate action
-                return;
-            }
-
-            size_t buf_len_long = sizeof(ssid);
-            err = nvs_get_str(my_handle, "ssid", ssid, &buf_len_long);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to read 'ssid' from NVS: %s", esp_err_to_name(err));
-                nvs_close(my_handle);
-                return;
-            }
-            ESP_LOGD(TAG, "SSID: %s", ssid);
-
-            buf_len_long = sizeof(password);
-            err = nvs_get_str(my_handle, "password", password, &buf_len_long);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to read 'password' from NVS: %s", esp_err_to_name(err));
-                nvs_close(my_handle);
-                return;
-            }
-            ESP_LOGD(TAG, "Password updated");
-
-            buf_len_long = sizeof(key);
-            err = nvs_get_str(my_handle, "ChatGPT_key", key, &buf_len_long);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to read 'ChatGPT_key' from NVS: %s", esp_err_to_name(err));
-                nvs_close(my_handle);
-                return;
-            }
-            ESP_LOGD(TAG, "OpenAI Key updated");
-            nvs_close(my_handle);
+            ESP_LOGI(TAG, "CONFIG.INI saved");
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000));

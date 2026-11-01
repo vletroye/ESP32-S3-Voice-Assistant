@@ -35,6 +35,14 @@ static const char *TAG = "mistral";
 #define MISTRAL_PREWARM_URL     "https://api.mistral.ai/v1/models/%s"
 #define MISTRAL_WEB_SEARCH_COST "mistral:web_search"
 
+/*
+ * Instead of LLM_WEB_SEARCH_HINT: asked to say a sentence before searching ("Je regarde."), Mistral's models often
+ * ended their answer with it, without searching
+ */
+#define MISTRAL_WEB_SEARCH_HINT "You can search the web for current information (news, results, schedules, " \
+                                "prices, opening hours...): search at once when needed, without announcing it. " \
+                                "Never read out web addresses, citations or source names unless asked."
+
 /* Function calls of a round, and rounds of calls answered per question before giving up */
 #define MC_TOOL_CALLS_MAX   8
 #define MC_TOOL_ROUNDS_MAX  3
@@ -93,6 +101,7 @@ typedef struct {
     bool retry;                 /* to be sent again (the web search refused) */
     llm_error_t error;
     int input_tokens;
+    int connector_tokens;       /* the search results read by the model: billed as input */
     int output_tokens;
 } stream_t;
 
@@ -104,7 +113,11 @@ static char *build_request(void)
     cJSON_AddStringToObject(req, "model", s_mc.model);
     cJSON_AddBoolToObject(req, "stream", true);
     cJSON_AddBoolToObject(req, "store", false);
-    char *with_hint = s_mc.web_refused ? NULL : llm_with_web_hint(s_mc.instructions);
+    char *with_hint = NULL;
+    if (!s_mc.web_refused) {
+        asprintf(&with_hint, "%s%s%s", s_mc.instructions ? s_mc.instructions : "", s_mc.instructions ? "\n\n" : "",
+                 MISTRAL_WEB_SEARCH_HINT);
+    }
     if (with_hint || s_mc.instructions) {
         cJSON_AddStringToObject(req, "instructions", with_hint ? with_hint : s_mc.instructions);
     }
@@ -189,6 +202,9 @@ static void sse_dispatch(const char *data, void *ctx)
     }
     const cJSON *type = cJSON_GetObjectItem(json, "type");
     const char *t = cJSON_IsString(type) ? type->valuestring : "";
+    if (strcmp(t, "message.output.delta") != 0) {
+        ESP_LOGD(TAG, "event: %.300s", data);
+    }
 
     if (strcmp(t, "message.output.delta") == 0) {
         // Text, or a chunk: {"type": "text", "text"}; the thinking and the sources (tool_reference) left out
@@ -236,6 +252,9 @@ static void sse_dispatch(const char *data, void *ctx)
         }
         if ((v = cJSON_GetObjectItem(usage, "completion_tokens")) && cJSON_IsNumber(v)) {
             st->output_tokens = v->valueint;
+        }
+        if ((v = cJSON_GetObjectItem(usage, "connector_tokens")) && cJSON_IsNumber(v)) {
+            st->connector_tokens = v->valueint;
         }
         st->done = true;
     } else if (strcmp(t, "conversation.response.error") == 0) {
@@ -288,10 +307,10 @@ static void stream_once(stream_t *st)
         st->error = LLM_ERR_NETWORK;
     }
     llm_http_finish(&s_mc.http, st->error == LLM_OK);
-    ESP_LOGI(TAG, "round: %d function call(s), %d web search(es), tokens in %d, out %d", st->call_count,
-             st->web_searches, st->input_tokens, st->output_tokens);
-    // Each round is billed (no cached tokens reported)
-    costs_add_tokens(COST_LLM, s_mc.model, st->input_tokens, 0, 0, st->output_tokens);
+    ESP_LOGI(TAG, "round: %d function call(s), %d web search(es), tokens in %d (search results %d), out %d",
+             st->call_count, st->web_searches, st->input_tokens, st->connector_tokens, st->output_tokens);
+    // Each round is billed (no cached tokens reported), the search results as input
+    costs_add_tokens(COST_LLM, s_mc.model, st->input_tokens + st->connector_tokens, 0, 0, st->output_tokens);
     costs_add_calls(MISTRAL_WEB_SEARCH_COST, st->web_searches);
 }
 

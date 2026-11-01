@@ -565,32 +565,57 @@ static const char *section_line(const char *text, const char *header)
 }
 
 /*
- * A line of the firmware's [per_call] missing in the [per_call] of AGENTS.INI (written by an older firmware):
- * inserted under its header
+ * The lines of the firmware's [per_call] ("xai:web_search = 0.0043") missing in the [per_call] of AGENTS.INI
+ * (written by an older firmware): inserted under its header, in one write
  */
-static bool add_missing_call(const char *text, const char *id)
+static const char *section_end(const char *header);
+
+static void add_missing_calls(const char *text)
 {
     const char *header = section_line(text, "[" PER_CALL_SECTION "]");
     const char *def_header = section_line(s_agents_default_start, "[" PER_CALL_SECTION "]");
-    const char *def_line = def_header ? strstr(def_header, id) : NULL;
-    if (!header || !def_line || strstr(header, id)) {
-        return false;
+    const char *after = header ? strchr(header, '\n') : NULL;
+    if (!after || !def_header || s_agents_cut) {
+        return;
     }
-    const char *def_end = strchr(def_line, '\n');
-    const char *after = strchr(header, '\n');
-    if (!def_end || !after || s_agents_cut) {
-        return false;
+    const char *header_end = section_end(header);
+    char *added = NULL;
+    size_t added_len = 0;
+    FILE *mem = open_memstream(&added, &added_len);
+    if (!mem) {
+        return;
     }
-    FILE *f = fopen(AGENTS_FILE, "w");
-    if (!f) {
-        return false;
+    // Each "id = price" line of the firmware's section whose id is not in the file's section
+    for (const char *line = strchr(def_header, '\n'); line && line[1] && line[1] != '['; line = strchr(line + 1, '\n')) {
+        const char *start = line + 1;
+        const char *end = strchr(start, '\n');
+        const char *eq = strchr(start, '=');
+        if (!end || *start == '#' || !eq || eq > end) {
+            continue;
+        }
+        const char *id_end = eq;
+        while (id_end > start && id_end[-1] == ' ') {
+            id_end--;
+        }
+        char id[48];
+        snprintf(id, sizeof(id), "%.*s", (int)(id_end - start), start);
+        const char *found = strstr(header, id);
+        if (id[0] && (!found || found >= header_end)) {
+            fwrite(start, 1, (size_t)(end + 1 - start), mem);
+            ESP_LOGI(TAG, "%s added to %s", id, AGENTS_FILE);
+        }
     }
-    fwrite(text, 1, (size_t)(after + 1 - text), f);
-    fwrite(def_line, 1, (size_t)(def_end + 1 - def_line), f);
-    fputs(after + 1, f);
-    fclose(f);
-    ESP_LOGI(TAG, "%s added to %s", id, AGENTS_FILE);
-    return true;
+    fclose(mem);
+    if (added_len > 0) {
+        FILE *f = fopen(AGENTS_FILE, "w");
+        if (f) {
+            fwrite(text, 1, (size_t)(after + 1 - text), f);
+            fwrite(added, 1, added_len, f);
+            fputs(after + 1, f);
+            fclose(f);
+        }
+    }
+    free(added);
 }
 
 /* The end of a section starting at header: the next "[...]" line, or the end of the text */
@@ -719,7 +744,7 @@ void llm_load_models(void)
     } else {
         // A file of an older firmware: the sections added since, and the prices of the models it lacks. The
         // [per_call] line first: it rewrites the file from text, which the sections appended would not be in
-        add_missing_call(text, "perplexity:web_search");
+        add_missing_calls(text);
         add_missing_section(text, FREE_EXCLUDE_SECTION);
         add_missing_section(text, STT_SECTION);    // the transcription and speech models to choose from
         add_missing_section(text, TTS_SECTION);

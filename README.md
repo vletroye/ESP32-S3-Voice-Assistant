@@ -528,8 +528,12 @@ community (no key, no account), played through the speaker. Asked by voice, or f
   calls the `play_radio` tool (name, tag, country), and the radio starts after its short answer.
 - A search keeps up to 20 stations the device can play: MP3 or AAC (HE-AAC included) over **http** (no TLS: the
   internal RAM stays free for the conversation), not HLS, at most 192 kbit/s, online at the last check, without
-  duplicates. A station that gives no sound is skipped (the next one plays); a stream that drops is reconnected
-  (3 tries). Each station played is counted by Radio-Browser, as its API asks.
+  duplicates. A station that gives no sound is skipped (the next one plays). A stream that drops while playing
+  (a server silent for 3 s, a CDN switching) is connected again at once, while the buffer (128 KB, ~5 s at
+  192 kbit/s) still plays: the new stream goes on in it, without a gap (3 times in a row; then 3 tries after the
+  buffer has played). The TCP receive window is 17,280 bytes (`CONFIG_LWIP_TCP_WND_DEFAULT`): with 5,760, a far
+  station (192 kbit/s from the US, ~120 ms away) came too slowly and stuttered. Each station played is counted by
+  Radio-Browser, as its API asks.
 
 #### 2.6.2 While it plays
 

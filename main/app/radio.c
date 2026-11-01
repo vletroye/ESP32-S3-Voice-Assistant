@@ -45,7 +45,10 @@
 #define RADIO_FIR_TAPS          31
 #define RADIO_CUTOFF_HZ         7000.0f         /* below the 8 kHz of the 16 kHz output */
 #define RADIO_STATS_US          (60 * 1000000)
-#define RADIO_HTTP_TIMEOUT_MS   5000
+/* A server silent this long: connected again (a few seconds of the buffer still to play meanwhile) */
+#define RADIO_HTTP_TIMEOUT_MS   3000
+/* A stream that dropped while playing: connected again at once, this many times in a row */
+#define RADIO_QUICK_RECONNECTS  3
 #define RADIO_REDIRECTS_MAX     5
 #define RADIO_TREBLE_HZ         3000.0f         /* treble shelf: above this frequency */
 #define RADIO_RETRIES           3               /* reconnections after the stream dropped */
@@ -250,6 +253,7 @@ static bool net_stream(void)
 }
 
 static void play_task(void *arg);
+static size_t ring_filled(void);
 
 static bool wait_speaker_free(int ms)
 {
@@ -304,6 +308,13 @@ static void net_session(void)
         }
         int64_t start = esp_timer_get_time();
         bool received = net_stream();
+        // A stream that was playing dropped (a server pausing, a CDN switching): connected again at once, while
+        // what is buffered still plays; the new stream goes on in the same buffer (the decoder finds its next frame)
+        for (int quick = 1; received && !s_stop && s_pending_index < 0 && quick <= RADIO_QUICK_RECONNECTS; quick++) {
+            ESP_LOGW(TAG, "Stream dropped: connected again at once (%d/%d), %u KB still buffered", quick,
+                     RADIO_QUICK_RECONNECTS, (unsigned)(ring_filled() / 1024));
+            received = net_stream();
+        }
         s_net_ended = true;
         if (s_stop) {
             return;     // stopped on purpose: the caller set the new state

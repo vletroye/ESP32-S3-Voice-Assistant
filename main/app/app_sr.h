@@ -40,6 +40,8 @@ typedef struct {
     int command_id;
     bool followup;   /* WAKENET_DETECTED: session continues the conversation (no wake word) */
     bool no_speech;  /* ESP_MN_STATE_TIMEOUT: nobody spoke, nothing to send */
+    int tapped;                 /* an item of the list shown was tapped: its number, taken as the answer (0: none) */
+    bool was_listening;         /* tapped: a listening session was going on (ended, its transcription to drop) */
     bool keep_reply;            /* WAKENET_DETECTED: the reply stays shown while listening (text to read, a question
                                    asked), with moving bars instead of the listen panel */
 } sr_result_t;
@@ -77,6 +79,9 @@ void app_sr_cancel(void);
 
 /** A finger is on the screen (true) or lifted: while it is, the delay without speech is paused (a list scrolled) */
 void app_sr_touch_hold(bool held);
+
+/** An item of the list shown was tapped: the listening (if any) ends, the number is the answer (SR handler task) */
+void app_sr_answer_tapped(int number);
 
 esp_err_t app_sr_start_once(void);
 

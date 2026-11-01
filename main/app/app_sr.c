@@ -70,6 +70,9 @@ static volatile bool manul_detect_flag = false;
 static volatile bool s_cancel_listen = false;
 /* A finger on the screen (a list scrolled): the delay without speech is paused */
 static volatile bool s_touch_hold = false;
+/* A listening session is going on; an item tapped meanwhile ends it (its number) */
+static volatile bool s_listening = false;
+static volatile int s_tapped = 0;
 /* Non-zero: the pending manual session is a follow-up that must hear speech within this delay */
 static volatile uint32_t s_followup_window_ms = 0;
 /* The pending follow-up listens while the reply stays shown (it asks something, its text is being read) */
@@ -191,6 +194,8 @@ static void audio_detect_task(void *arg)
                 xQueueSend(g_sr_data->result_que, &result, 0);
             }
             frame_keep = 0;
+            s_tapped = 0;
+            s_listening = true;
             g_sr_data->afe_handle->disable_wakenet(afe_data);
             ESP_LOGI(TAG,  "AFE_FETCH_CHANNEL_VERIFIED, channel index: %d\n", res->trigger_channel_id);
         }
@@ -224,6 +229,18 @@ static void audio_detect_task(void *arg)
             if (s_touch_hold) {
                 paused_ms += frame_ms;
             }
+            if (s_tapped) {
+                // An item of the list tapped: the session ends, its number as the answer
+                ESP_LOGI(TAG, "listen end: item %d tapped", s_tapped);
+                sr_result_t result = { .wakenet_mode = WAKENET_NO_DETECT, .state = ESP_MN_STATE_DETECTING,
+                                       .tapped = s_tapped, .was_listening = true };
+                s_tapped = 0;
+                s_listening = false;
+                xQueueSend(g_sr_data->result_que, &result, 0);
+                g_sr_data->afe_handle->enable_wakenet(afe_data);
+                detect_flag = false;
+                continue;
+            }
             bool no_speech = (!speech_seen && elapsed_ms >= no_speech_timeout_ms + paused_ms) || s_cancel_listen;
             if (s_cancel_listen) {
                 s_cancel_listen = false;
@@ -248,6 +265,7 @@ static void audio_detect_task(void *arg)
                 xQueueSend(g_sr_data->result_que, &result, 0);
                 g_sr_data->afe_handle->enable_wakenet(afe_data);
                 detect_flag = false;
+                s_listening = false;
                 continue;
             }
         }
@@ -397,6 +415,20 @@ void app_sr_cancel(void)
 void app_sr_touch_hold(bool held)
 {
     s_touch_hold = held;
+}
+
+void app_sr_answer_tapped(int number)
+{
+    if (!g_sr_data || number <= 0) {
+        return;
+    }
+    if (s_listening) {
+        s_tapped = number;      // the detection task ends the session with it
+        return;
+    }
+    // Not listening yet (the reply still spoken): straight to the SR handler
+    sr_result_t result = { .wakenet_mode = WAKENET_NO_DETECT, .state = ESP_MN_STATE_DETECTING, .tapped = number };
+    xQueueSend(g_sr_data->result_que, &result, 0);
 }
 
 esp_err_t app_sr_start_once(void)

@@ -132,10 +132,50 @@ static void cancel_double_tap_cb(lv_event_t *e)
  * Double tap on the answer: same as the wake word (the reply stops, the assistant listens); on a question of a
  * voice command (language, model...): the command is dropped, back to sleep
  */
+/* The number of the item of a list under the finger (a line "3, Grok (1,2 s)." of the reply), 0 if none */
+static int reply_item_tapped(void)
+{
+    lv_indev_t *indev = lv_indev_get_act();
+    if (!indev) {
+        return 0;
+    }
+    lv_point_t p;
+    lv_indev_get_point(indev, &p);
+    lv_area_t area;
+    lv_obj_get_coords(ui_LabelReplyContent, &area);
+    if (p.y < area.y1 || p.y > area.y2) {
+        return 0;
+    }
+    lv_point_t rel = { .x = p.x > area.x1 ? p.x - area.x1 : 0, .y = p.y - area.y1 };
+    const char *text = lv_label_get_text(ui_LabelReplyContent);
+    uint32_t byte = _lv_txt_encoded_get_byte_id(text, lv_label_get_letter_on(ui_LabelReplyContent, &rel));
+    size_t len = strlen(text);
+    const char *line = text + (byte < len ? byte : len);
+    while (line > text && line[-1] != '\n') {
+        line--;
+    }
+    if (line == text) {
+        return 0;       // the first line: the question, not an item
+    }
+    int number = 0;
+    while (isdigit((unsigned char)*line) && number < 1000) {
+        number = number * 10 + (*line++ - '0');
+    }
+    return *line == ',' ? number : 0;
+}
+
 static void reply_double_tap_cb(lv_event_t *e)
 {
     static int64_t last_tap_us = 0;
     int64_t now = esp_timer_get_time();
+    // A question of a voice command waits for its answer: a tap on an item of its list answers it
+    int item = voice_cmd_waiting_answer() ? reply_item_tapped() : 0;
+    if (item > 0) {
+        last_tap_us = 0;
+        ESP_LOGI(TAG, "tap on item %d of the list", item);
+        app_sr_answer_tapped(item);
+        return;
+    }
     if (now - last_tap_us <= DOUBLE_TAP_MS * 1000LL) {
         last_tap_us = 0;
         if (voice_cmd_waiting_answer()) {

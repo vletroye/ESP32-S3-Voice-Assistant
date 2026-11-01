@@ -909,6 +909,9 @@ void assistant_listen_abort(void)
     stt_stream_abort();
 }
 
+/* The answer given by a tap on an item of a list ("3"), used instead of the transcript */
+static char *s_tapped_text = NULL;
+
 /* End of speech: get the final transcript, then answer. Called from app_audio.c (SR handler task) */
 void assistant_listen_end(void)
 {
@@ -919,7 +922,8 @@ void assistant_listen_end(void)
     ui_ctrl_show_panel(UI_CTRL_PANEL_GET, 0);
 
     t_start = esp_timer_get_time();
-    char *text = stt_stream_finish(STT_FINAL_TIMEOUT_MS);
+    char *text = s_tapped_text ? s_tapped_text : stt_stream_finish(STT_FINAL_TIMEOUT_MS);
+    s_tapped_text = NULL;
     ESP_LOGI(TAG, "[timing] final transcript %lld ms after the end of speech", elapsed_ms(t_start));
     if (s_cancelled) {
         ESP_LOGI(TAG, "Question dropped (cancelled)");
@@ -1087,6 +1091,26 @@ err:
         free(text);
     }
     (void)ret;
+}
+
+/*
+ * An item of the list shown was tapped: its number is the answer, as if said (the listening going on, if any, is
+ * dropped). Called from app_audio.c (SR handler task)
+ */
+void assistant_answer_tapped(int number, bool was_listening)
+{
+    ESP_LOGI(TAG, "Item %d of the list tapped: taken as the answer", number);
+    if (was_listening) {
+        stt_stream_abort();
+    }
+    s_cancelled = false;
+    llm_cancel_clear();
+    voice_cmd_reply_spoken();       // answered now, however long the list was read
+    if (asprintf(&s_tapped_text, "%d", number) < 0) {
+        s_tapped_text = NULL;
+        return;
+    }
+    assistant_listen_end();
 }
 
 

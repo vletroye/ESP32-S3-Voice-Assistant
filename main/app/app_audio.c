@@ -51,6 +51,7 @@ extern void assistant_listen_abort(void);
 extern void assistant_prewarm(void);
 extern bool assistant_resume_ask(void);
 extern bool assistant_question_ask(void);
+extern void assistant_answer_tapped(int number, bool was_listening);
 extern void assistant_reply_stop(void);
 extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
 
@@ -320,6 +321,15 @@ void sr_handler_task(void *pvParam)
             }
         }
 #endif
+        if (result.tapped > 0) {
+            // An item of the list tapped: as if its number had been said
+            app_presence_activity();
+            assistant_reply_stop();
+            audio_record_stop();
+            assistant_answer_tapped(result.tapped, result.was_listening);
+            continue;
+        }
+
         if (ESP_MN_STATE_TIMEOUT == result.state && result.no_speech && stt_stream_has_text() && !llm_cancelled()) {
             // The local VAD missed it (e.g. a very short question), but the transcription heard words
             ESP_LOGI(TAG, "No speech detected locally, but the transcription has text: answering");

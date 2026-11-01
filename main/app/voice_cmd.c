@@ -395,7 +395,7 @@ static char *language_list(const char *format)
         char name[LANG_NAME_SIZE * 2];
         language_spoken_name(i, name, sizeof(name));
         size_t n = strlen(list);
-        snprintf(list + n, sizeof(list) - n, "%s%u, %s.", i ? " " : "", (unsigned)(i + 1), name);
+        snprintf(list + n, sizeof(list) - n, "\n%u, %s.", (unsigned)(i + 1), name);
     }
     char *text = NULL;
     asprintf(&text, format, list);
@@ -875,7 +875,7 @@ static char *voice_list(void)
     strlcpy(out, lang->voice_ask_intro, CMD_REPLY_SIZE);
     for (size_t i = 0; i < s_voice_count; i++) {
         size_t n = strlen(out);
-        snprintf(out + n, CMD_REPLY_SIZE - n, " %u, %s%s.", (unsigned)(i + 1), s_voices[i]->name,
+        snprintf(out + n, CMD_REPLY_SIZE - n, "\n%u, %s%s.", (unsigned)(i + 1), s_voices[i]->name,
                  s_voices[i] == current ? lang->voice_current : "");
     }
     strlcat(out, VOICE_CMD_LIST_END " ", CMD_REPLY_SIZE);

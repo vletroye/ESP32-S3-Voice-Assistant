@@ -6,6 +6,7 @@
 
 #include <ctype.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -181,6 +182,17 @@ static bool is_only(const char *rest, const char *word)
 static char *reply_dup(const char *text)
 {
     return strdup(text ? text : "");
+}
+
+/* A reply made from a format of LANG_<CODE>.TXT and its values (allocated; "" without memory) */
+static char *reply_printf(const char *format, ...)
+{
+    char *text = NULL;
+    va_list args;
+    va_start(args, format);
+    int n = vasprintf(&text, format, args);
+    va_end(args);
+    return n >= 0 && text ? text : reply_dup("");
 }
 
 /* ---------- language ---------- */
@@ -397,9 +409,7 @@ static char *language_list(const char *format)
         size_t n = strlen(list);
         snprintf(list + n, sizeof(list) - n, "\n%u, %s.", (unsigned)(i + 1), name);
     }
-    char *text = NULL;
-    asprintf(&text, format, list);
-    return text ? text : reply_dup("");
+    return reply_printf(format, list);
 }
 
 /*
@@ -683,21 +693,17 @@ static voice_cmd_t use_model(int number, llm_provider_t provider, char **reply)
 {
     const app_lang_t *lang = app_lang_get();
     const llm_model_t *model = &llm_models[number - 1];
-    char *text = NULL;
     if (strcmp(model->id, settings_get_parameter()->chat_model) == 0) {
-        asprintf(&text, lang->model_already, model->label);
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(lang->model_already, model->label);
         return VOICE_CMD_ANSWERED;
     }
     if (settings_save_str("Chat_model", model->id) != ESP_OK) {
-        asprintf(&text, lang->model_unknown, model_count(provider));
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(lang->model_unknown, model_count(provider));
         return VOICE_CMD_ANSWERED;
     }
     ESP_LOGI(TAG, "model %s saved", model->id);
     assistant_set_model(model->id);
-    asprintf(&text, lang->model_switched, model->label);
-    *reply = text ? text : reply_dup("");
+    *reply = reply_printf(lang->model_switched, model->label);
     return VOICE_CMD_ANSWERED;
 }
 
@@ -744,9 +750,7 @@ static char *provider_list(const char *format)
         size_t n = strlen(list);
         snprintf(list + n, sizeof(list) - n, "\n%u, %s.", (unsigned)(i + 1), ai_provider_of_llm(offered[i])->company);
     }
-    char *text = NULL;
-    asprintf(&text, format, list);
-    return text ? text : reply_dup("");
+    return reply_printf(format, list);
 }
 
 /* Provider said in the answer: its name ("Google", "Gemini"), else its number in the list; LLM_PROVIDER_COUNT if none */
@@ -776,9 +780,7 @@ static voice_cmd_t choose_model(const char *norm, llm_provider_t provider, char 
 {
     int number = find_model(norm, provider);
     if (number == 0) {
-        char *text = NULL;
-        asprintf(&text, app_lang_get()->model_unknown, model_count(provider));
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(app_lang_get()->model_unknown, model_count(provider));
         return VOICE_CMD_ANSWERED;
     }
     return use_model(number, provider, reply);
@@ -888,21 +890,17 @@ static voice_cmd_t choose_voice(const char *norm, char **reply)
 {
     const app_lang_t *lang = app_lang_get();
     int number = find_voice(norm);
-    char *text = NULL;
     if (number == 0) {
-        asprintf(&text, lang->voice_unknown, (int)s_voice_count);
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(lang->voice_unknown, (int)s_voice_count);
         return VOICE_CMD_ANSWERED;
     }
     const llm_voice_t *voice = s_voices[number - 1];
     if (voice == assistant_voice()) {
-        asprintf(&text, lang->voice_already, voice->name);
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(lang->voice_already, voice->name);
         return VOICE_CMD_ANSWERED;
     }
     if (settings_save_str("Voice", voice->name) != ESP_OK) {
-        asprintf(&text, lang->voice_unknown, (int)s_voice_count);
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(lang->voice_unknown, (int)s_voice_count);
         return VOICE_CMD_ANSWERED;
     }
     ESP_LOGI(TAG, "voice %s (%s %s) saved", voice->name, voice->provider, voice->id);
@@ -910,8 +908,7 @@ static voice_cmd_t choose_voice(const char *norm, char **reply)
     strlcpy(param->voice, voice->name, sizeof(param->voice));
     assistant_set_tts(NULL);
     ui_ctrl_settings_sync();
-    asprintf(&text, lang->voice_sample, voice->name);
-    *reply = text ? text : reply_dup("");
+    *reply = reply_printf(lang->voice_sample, voice->name);
     return VOICE_CMD_ANSWERED;
 }
 
@@ -940,9 +937,7 @@ static char *speech_list(llm_speech_kind_t kind, const char *format)
                  strcmp(m->id, speech_current(kind)) == 0 ? lang->speech_current : "");
     }
     cJSON_Delete(results);
-    char *text = NULL;
-    asprintf(&text, format, list);
-    return text ? text : reply_dup("");
+    return reply_printf(format, list);
 }
 
 /* Model number (1-based) said: a word of its spoken name or of its shown name ("voxtral", "mistral"), else a
@@ -1031,17 +1026,14 @@ static voice_cmd_t choose_speech(llm_speech_kind_t kind, const char *norm, char 
         return ask_speech(kind, lang->speech_unknown, reply);
     }
     const llm_speech_model_t *m = llm_speech_model(kind, number - 1);
-    char *text = NULL;
     if (strcmp(m->id, speech_current(kind)) == 0) {
-        asprintf(&text, lang->speech_already, m->spoken);
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(lang->speech_already, m->spoken);
         return VOICE_CMD_ANSWERED;
     }
     if (!assistant_speech_key(m->provider)[0]) {
         // "Il manque la clé Deepgram : ajoutez Deepgram_key..."
-        asprintf(&text, lang->speech_no_key, assistant_speech_company(m->provider),
-                 assistant_speech_key_name(m->provider));
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(lang->speech_no_key, assistant_speech_company(m->provider),
+                              assistant_speech_key_name(m->provider));
         return VOICE_CMD_ANSWERED;
     }
     if (settings_save_str(kind == LLM_SPEECH_STT ? "Stt_model" : "Tts_model", m->id) != ESP_OK) {
@@ -1056,8 +1048,7 @@ static voice_cmd_t choose_speech(llm_speech_kind_t kind, const char *norm, char 
         assistant_set_tts(m->id);
         ui_ctrl_settings_sync();    // its voices on the Settings screen
     }
-    asprintf(&text, kind == LLM_SPEECH_STT ? lang->stt_switched : lang->tts_switched, m->spoken);
-    *reply = text ? text : reply_dup("");
+    *reply = reply_printf(kind == LLM_SPEECH_STT ? lang->stt_switched : lang->tts_switched, m->spoken);
     return VOICE_CMD_ANSWERED;
 }
 
@@ -1102,9 +1093,7 @@ static voice_cmd_t ask_confirmation(asked_t confirm, const char *format, const c
 {
     s_asked = confirm;
     s_asked_us = esp_timer_get_time();
-    char *text = NULL;
-    asprintf(&text, format, value);
-    *reply = text ? text : reply_dup("");
+    *reply = reply_printf(format, value);
     return VOICE_CMD_ANSWERED;
 }
 
@@ -1203,9 +1192,8 @@ static voice_cmd_t answer_exclusion(const char *norm, char **reply)
     if (more) {
         voice_cmd_expect_exclusion();
     }
-    char *text = NULL;
-    asprintf(&text, "%s %s", yes ? lang->exclude_yes : lang->exclude_no, more ? question : lang->exclude_finished);
-    *reply = text ? text : reply_dup("");
+    *reply = reply_printf("%s %s", yes ? lang->exclude_yes : lang->exclude_no,
+                          more ? question : lang->exclude_finished);
     return VOICE_CMD_ANSWERED;
 }
 
@@ -1308,9 +1296,7 @@ static bool radio_alone(const char *rest)
 
 static voice_cmd_t radio_reply(char **reply, const char *format, const char *value)
 {
-    char *text = NULL;
-    asprintf(&text, format, value ? value : "");
-    *reply = text ? text : reply_dup("");
+    *reply = reply_printf(format, value ? value : "");
     return VOICE_CMD_RADIO;
 }
 
@@ -1444,13 +1430,8 @@ static voice_cmd_t radio_command(const char *norm, char **reply)
     if (starts_with(norm, phrases_of(&s_radio_what), &len)) {
         char title[128];
         radio_title(title, sizeof(title));
-        char *text = NULL;
-        if (title[0]) {
-            asprintf(&text, lang->radio_what_title, radio_station_name(), title);
-        } else {
-            asprintf(&text, lang->radio_what, radio_station_name());
-        }
-        *reply = text ? text : reply_dup("");
+        *reply = title[0] ? reply_printf(lang->radio_what_title, radio_station_name(), title)
+                          : reply_printf(lang->radio_what, radio_station_name());
         return VOICE_CMD_RADIO;
     }
     return VOICE_CMD_NONE;
@@ -1489,9 +1470,7 @@ static bool reasoning_command(const char *norm, char **reply, voice_cmd_t *cmd)
         bool alone = !*rest || starts_with(rest, phrases_of(&s_courtesy), NULL);
         bool was_on = llm_reasoning();
         if (!llm_set_reasoning(true)) {
-            char *text = NULL;
-            asprintf(&text, lang->reasoning_unsupported, model_label());
-            *reply = text ? text : reply_dup("");
+            *reply = reply_printf(lang->reasoning_unsupported, model_label());
             *cmd = VOICE_CMD_ANSWERED;
             return true;
         }
@@ -1524,29 +1503,27 @@ static voice_cmd_t test_models(char **reply, model_test_scope_t scope, llm_provi
         *reply = reply_dup(lang->test_running);
         return VOICE_CMD_ANSWERED;
     }
-    char *text = NULL;
     if (scope == MODEL_TEST_CURRENT) {
         const sys_param_t *param = settings_get_parameter();
         const char *chat = param->chat_model;
         for (size_t i = 0; i < llm_model_count; i++) {
             chat = strcmp(llm_models[i].id, param->chat_model) == 0 ? llm_models[i].spoken : chat;
         }
-        asprintf(&text, lang->test_current_start, speech_spoken(LLM_SPEECH_STT, param->stt_model),
-                 speech_spoken(LLM_SPEECH_TTS, param->tts_model), chat);
+        *reply = reply_printf(lang->test_current_start, speech_spoken(LLM_SPEECH_STT, param->stt_model),
+                              speech_spoken(LLM_SPEECH_TTS, param->tts_model), chat);
     } else if (scope == MODEL_TEST_PROVIDER) {
-        asprintf(&text, lang->test_provider_start, ai_provider_of_llm(provider)->company, model_count(provider));
+        *reply = reply_printf(lang->test_provider_start, ai_provider_of_llm(provider)->company, model_count(provider));
     } else if (scope == MODEL_TEST_TTS) {
-        asprintf(&text, lang->test_tts_start, (int)llm_speech_count(LLM_SPEECH_TTS));
+        *reply = reply_printf(lang->test_tts_start, (int)llm_speech_count(LLM_SPEECH_TTS));
     } else if (scope == MODEL_TEST_STT) {
-        asprintf(&text, lang->test_stt_start, (int)llm_speech_count(LLM_SPEECH_STT));
+        *reply = reply_printf(lang->test_stt_start, (int)llm_speech_count(LLM_SPEECH_STT));
     } else if (scope == MODEL_TEST_LLM) {
-        asprintf(&text, lang->test_llm_start, (int)llm_model_count);
+        *reply = reply_printf(lang->test_llm_start, (int)llm_model_count);
     } else {
         // The speech and transcription models are tested too
-        asprintf(&text, lang->test_start, (int)(llm_model_count + llm_speech_count(LLM_SPEECH_TTS) +
-                                                llm_speech_count(LLM_SPEECH_STT)));
+        *reply = reply_printf(lang->test_start, (int)(llm_model_count + llm_speech_count(LLM_SPEECH_TTS) +
+                                                      llm_speech_count(LLM_SPEECH_STT)));
     }
-    *reply = text ? text : reply_dup("");
     model_test_set_scope(scope, provider);
     return VOICE_CMD_TEST_MODELS;
 }
@@ -1558,9 +1535,7 @@ static voice_cmd_t test_one_model(char **reply, int number)
         *reply = reply_dup(app_lang_get()->test_running);
         return VOICE_CMD_ANSWERED;
     }
-    char *text = NULL;
-    asprintf(&text, app_lang_get()->test_one_start, llm_models[number - 1].spoken);
-    *reply = text ? text : reply_dup("");
+    *reply = reply_printf(app_lang_get()->test_one_start, llm_models[number - 1].spoken);
     model_test_set_model(llm_models[number - 1].id);
     return VOICE_CMD_TEST_MODELS;
 }
@@ -1725,9 +1700,7 @@ static voice_cmd_t handle(const char *text, char **reply)
         }
         char list[256];
         if (model_test_fastest(list, sizeof(list))) {
-            char *text = NULL;
-            asprintf(&text, app_lang_get()->fastest_models, list);
-            *reply = text ? text : reply_dup("");
+            *reply = reply_printf(app_lang_get()->fastest_models, list);
             return VOICE_CMD_ANSWERED;
         }
         s_asked = CONFIRM_TEST;
@@ -1808,9 +1781,7 @@ static voice_cmd_t handle(const char *text, char **reply)
         return VOICE_CMD_ANSWERED;
     }
     if (starts_with(norm, phrases_of(&s_version), NULL)) {
-        char *text = NULL;
-        asprintf(&text, app_lang_get()->version_reply, esp_app_get_description()->version);
-        *reply = text ? text : reply_dup("");
+        *reply = reply_printf(app_lang_get()->version_reply, esp_app_get_description()->version);
         return VOICE_CMD_ANSWERED;
     }
     // "Affiche l'heure" / "cache l'heure", alone (or with "s'il te plaît"): the clock of the sleep screen

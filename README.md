@@ -770,21 +770,25 @@ How to read this table:
   | <img src="docs/icons/claude.png" width="16" alt=""> Anthropic (Claude) | ✅ | ✅ Anthropic's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/openai.png" width="16" alt=""> OpenAI (GPT) | ✅ | ✅ OpenAI's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/gemini.png" width="16" alt=""> Google (Gemini) | ✅ | ✅ Google Search | ✅ | ✅ | ✅ |
-  | <img src="docs/icons/mistral.png" width="16" alt=""> Mistral AI | ✅ | ❌ | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/mistral.png" width="16" alt=""> Mistral AI | ✅ | ✅ ² Perplexity | ✅ | ✅ | ✅ |
   | <img src="docs/icons/xai.png" width="16" alt=""> xAI (Grok) | ✅ | ✅ xAI's | ✅ | ✅ | ✅ |
-  | <img src="docs/icons/openrouter.png" width="16" alt=""> OpenRouter | ✅ ¹ | ❌ | ✅ ¹ | ✅ ¹ | ✅ ¹ |
+  | <img src="docs/icons/openrouter.png" width="16" alt=""> OpenRouter | ✅ ¹ | ✅ ¹ ² Perplexity | ✅ ¹ | ✅ ¹ | ✅ ¹ |
   | <img src="docs/icons/perplexity.png" width="16" alt=""> Perplexity | ❌ | ✅ built in | ❌ | ❌ | ❌ |
 
   ¹ For the models that take tools: an OpenRouter model refusing them (many free ones) answers without them.
+  ² With a Perplexity key (`Perplexity_key`, paid credit): a `web_search` tool of the device, answered by
+  Perplexity Sonar (the first model of `[perplexity]`) in a few sentences without sources, then told by the model.
 
   - The device's tools (weather, Homey, radio, volume) are declared once in `tools.c` (and Homey's read from its
     MCP server): every provider that takes tools gets them all, a new tool too.
-  - Web search is the provider's own: the model decides when to search. The sources GPT adds to its text
-    (" ([site.com](https://...))") are taken out before the answer is shown and spoken (`llm_answer_add_cited`).
-    A model refusing it (HTTP 400 about it) is asked again without it, until another model is chosen. Not yet for Mistral (none in its Chat Completions
-    API) and OpenRouter (its plugin searches at every question). Each search is
-    billed per call: `openai:web_search`, `gemini:web_search` and `xai:web_search` in `[per_call]` of `AGENTS.INI` (in the
-    firmware's file: add them to yours to count them).
+  - Web search is the provider's own: the model decides when to search. The sources GPT and Grok add to their
+    text (" ([site.com](https://...))") are taken out before the answer is shown and spoken
+    (`llm_answer_add_cited`). A model refusing it (HTTP 400 about it) is asked again without it, until another model
+    is chosen. Each search is billed per call: `openai:web_search`, `gemini:web_search` and `xai:web_search` in
+    `[per_call]` of `AGENTS.INI` (in the firmware's file: add them to yours to count them).
+  - Mistral (no search in its Chat Completions API) and OpenRouter (its plugin searches at every question) get the
+    device's `web_search` tool instead, answered by Perplexity (`perplexity_search()`; its tokens and its search
+    billed as Perplexity's). A provider with its own search does not get it (`own_web_search` in `ai_providers.c`).
   - Commands said to the device itself (`VOICE_FR.TXT`: "mets la radio jazz", "parle plus fort"...) work with every
     model, as the model is not asked.
 - **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three

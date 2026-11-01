@@ -62,9 +62,13 @@ static size_t s_file_count = 0;
 static struct {
     llm_speech_model_t model;
     int kind;               /* llm_speech_kind_t, -1 for a line of [speech] (prices only) */
+    bool disabled;          /* "-" before its id: offered nowhere */
     double price_in;
     double price_out;
 } s_speech[SPEECH_MODELS_MAX];
+/* Chat models disabled by a "-" before their id (PSRAM, LLM_FILE_MODELS_MAX entries) */
+static llm_model_t *s_disabled = NULL;
+static size_t s_disabled_count = 0;
 static int s_speech_count = 0;
 static llm_voice_t *s_voices = NULL;  /* VOICES_MAX entries, PSRAM (internal RAM is scarce) */
 static int s_voice_count = 0;
@@ -281,6 +285,13 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
         }
         s_voice_count = 0;
     }
+    short order = 0;
+    if (lists) {
+        s_disabled_count = 0;
+        if (!s_disabled) {
+            s_disabled = heap_caps_calloc(LLM_FILE_MODELS_MAX, sizeof(llm_model_t), MALLOC_CAP_SPIRAM);
+        }
+    }
     for (char *line = copy ? strtok(copy, "\n") : NULL; line && count < max; line = strtok(NULL, "\n")) {
         line = trim(line);
         if (!line[0] || line[0] == '#' || line[0] == ';') {
@@ -314,6 +325,12 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
         }
         *eq = '\0';
         const char *id = trim(line);
+        // "-id = ...": a model disabled (Settings screen), kept in the file
+        bool disabled = (id[0] == '-' && (section == SECTION_MODELS || section == SECTION_STT ||
+                                          section == SECTION_TTS));
+        if (disabled) {
+            id = trim((char *)id + 1);
+        }
         if (section == SECTION_PER_CALL) {
             // "claude:web_search = 0.0086"
             double price;
@@ -342,6 +359,7 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
                 };
                 s_speech[s_speech_count].kind = section == SECTION_STT ? LLM_SPEECH_STT :
                                                 section == SECTION_TTS ? LLM_SPEECH_TTS : -1;
+                s_speech[s_speech_count].disabled = disabled;
                 s_speech[s_speech_count].price_in = f.price_in;
                 s_speech[s_speech_count++].price_out = f.price_out;
                 if (!f.priced) {
@@ -354,7 +372,17 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
             ESP_LOGW(TAG, "AGENTS.INI: line without a model id or a name, ignored");
             continue;
         }
-        llm_model_t *m = &models[count++];
+        // A disabled model: in its own list (with the lists), else counted as any (the prices of the firmware's file)
+        llm_model_t *m;
+        if (disabled && lists) {
+            if (!s_disabled || s_disabled_count >= LLM_FILE_MODELS_MAX) {
+                continue;
+            }
+            m = &s_disabled[s_disabled_count++];
+        } else {
+            m = &models[count++];
+        }
+        m->order = order++;
         m->id = strdup(id);
         m->label = strdup(f.label);
         m->effort = f.effort[0] ? strdup(f.effort) : "low";
@@ -773,8 +801,9 @@ void llm_load_models(void)
     }
     free(text);
     llm_model_count = s_file_count;
-    ESP_LOGI(TAG, "%u models from AGENTS.INI, %d free OpenRouter model(s) excluded, %d speech model(s), "
-             "%d voice(s), %d per-call price(s)", (unsigned)s_file_count, s_free_excluded_count, s_speech_count,
+    ESP_LOGI(TAG, "%u models from AGENTS.INI (%u disabled), %d free OpenRouter model(s) excluded, %d speech model(s), "
+             "%d voice(s), %d per-call price(s)", (unsigned)s_file_count, (unsigned)s_disabled_count,
+             s_free_excluded_count, s_speech_count,
              s_voice_count, s_call_count);
 }
 
@@ -801,7 +830,7 @@ size_t llm_speech_count(llm_speech_kind_t kind)
 {
     size_t n = 0;
     for (int i = 0; i < s_speech_count; i++) {
-        n += (s_speech[i].kind == (int)kind);
+        n += (s_speech[i].kind == (int)kind && !s_speech[i].disabled);
     }
     return n;
 }
@@ -809,7 +838,29 @@ size_t llm_speech_count(llm_speech_kind_t kind)
 const llm_speech_model_t *llm_speech_model(llm_speech_kind_t kind, size_t index)
 {
     for (int i = 0; i < s_speech_count; i++) {
+        if (s_speech[i].kind == (int)kind && !s_speech[i].disabled && index-- == 0) {
+            return &s_speech[i].model;
+        }
+    }
+    return NULL;
+}
+
+size_t llm_speech_all_count(llm_speech_kind_t kind)
+{
+    size_t n = 0;
+    for (int i = 0; i < s_speech_count; i++) {
+        n += (s_speech[i].kind == (int)kind);
+    }
+    return n;
+}
+
+const llm_speech_model_t *llm_speech_all(llm_speech_kind_t kind, size_t index, bool *enabled)
+{
+    for (int i = 0; i < s_speech_count; i++) {
         if (s_speech[i].kind == (int)kind && index-- == 0) {
+            if (enabled) {
+                *enabled = !s_speech[i].disabled;
+            }
             return &s_speech[i].model;
         }
     }
@@ -827,7 +878,7 @@ const char *llm_speech_voice_owner(const llm_speech_model_t *model)
 const llm_speech_model_t *llm_speech_find(llm_speech_kind_t kind, const char *id)
 {
     for (int i = 0; i < s_speech_count; i++) {
-        if (s_speech[i].kind == (int)kind && strcmp(s_speech[i].model.id, id) == 0) {
+        if (s_speech[i].kind == (int)kind && !s_speech[i].disabled && strcmp(s_speech[i].model.id, id) == 0) {
             return &s_speech[i].model;
         }
     }
@@ -944,6 +995,151 @@ void llm_free_exclude_add(const char *id, const char *comment)
     free(out);
 }
 
+size_t llm_disabled_count(void)
+{
+    return s_disabled_count;
+}
+
+const llm_model_t *llm_disabled_model(size_t index)
+{
+    return index < s_disabled_count ? &s_disabled[index] : NULL;
+}
+
+/*
+ * The line "id = ..." of AGENTS.INI in a section of these kinds, given a "-" before its id or freed of it. The
+ * rest of the file (comments, other lines, line ends) is kept.
+ */
+static bool set_line_disabled(const char *id, bool chat, int speech_section, bool disabled)
+{
+    char *text = read_agents_file();
+    if (!text || s_agents_cut) {
+        free(text);
+        return false;
+    }
+    size_t len = strlen(text);
+    char *out = heap_caps_malloc(len + 4, MALLOC_CAP_SPIRAM);
+    if (!out) {
+        free(text);
+        return false;
+    }
+    size_t n = 0, id_len = strlen(id);
+    section_t section = SECTION_NONE;
+    int provider = -1;
+    bool done = false;
+    for (const char *line = text; *line;) {
+        const char *end = strchr(line, '\n');
+        size_t line_len = end ? (size_t)(end - line + 1) : strlen(line);
+        const char *p = line;
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
+        if (*p == '[') {
+            char name[48] = "";
+            const char *close = memchr(p, ']', line_len - (size_t)(p - line));
+            if (close && (size_t)(close - p - 1) < sizeof(name)) {
+                memcpy(name, p + 1, (size_t)(close - p - 1));
+                name[close - p - 1] = '\0';
+                section = section_of(name, &provider);
+            }
+        } else if (!done && ((chat && section == SECTION_MODELS) || (!chat && (int)section == speech_section))) {
+            const char *q = (*p == '-') ? p + 1 : p;
+            while (*q == ' ' || *q == '\t') {
+                q++;
+            }
+            const char *after = q + id_len;
+            if (strncmp(q, id, id_len) == 0 && (*after == ' ' || *after == '\t' || *after == '=')) {
+                // The id as it is, with or without its "-"
+                memcpy(out + n, line, (size_t)(p - line));
+                n += (size_t)(p - line);
+                if (disabled) {
+                    out[n++] = '-';
+                }
+                size_t rest = line_len - (size_t)(q - line);
+                memcpy(out + n, q, rest);
+                n += rest;
+                done = true;
+                line += line_len;
+                continue;
+            }
+        }
+        memcpy(out + n, line, line_len);
+        n += line_len;
+        line += line_len;
+    }
+    out[n] = '\0';
+    bool ok = done && write_agents_file(out);
+    ESP_LOGI(TAG, "%s %s in %s%s", id, disabled ? "disabled" : "enabled", AGENTS_FILE,
+             ok ? "" : done ? ": could not write" : ": not found");
+    free(out);
+    free(text);
+    return ok;
+}
+
+bool llm_set_model_enabled(const char *id, bool enabled)
+{
+    if (enabled) {
+        // From the disabled ones to the models offered, at its place in the file (the free ones after them)
+        for (size_t i = 0; i < s_disabled_count; i++) {
+            if (strcmp(s_disabled[i].id, id) != 0) {
+                continue;
+            }
+            if (llm_model_count >= LLM_FILE_MODELS_MAX + LLM_OPENROUTER_FREE_MAX ||
+                    !set_line_disabled(id, true, 0, false)) {
+                return false;
+            }
+            llm_model_t m = s_disabled[i];
+            memmove(&s_disabled[i], &s_disabled[i + 1], (s_disabled_count - i - 1) * sizeof(llm_model_t));
+            s_disabled_count--;
+            size_t at = 0;
+            while (at < s_file_count && llm_models[at].order < m.order) {
+                at++;
+            }
+            memmove(&llm_models[at + 1], &llm_models[at], (llm_model_count - at) * sizeof(llm_model_t));
+            llm_models[at] = m;
+            s_file_count++;
+            llm_model_count++;
+            return true;
+        }
+        return false;
+    }
+    // From the models offered to the disabled ones (the strings are kept: a task may still read them)
+    for (size_t i = 0; i < s_file_count; i++) {
+        if (strcmp(llm_models[i].id, id) != 0) {
+            continue;
+        }
+        if (!s_disabled || s_disabled_count >= LLM_FILE_MODELS_MAX || !set_line_disabled(id, true, 0, true)) {
+            return false;
+        }
+        llm_model_t m = llm_models[i];
+        memmove(&llm_models[i], &llm_models[i + 1], (llm_model_count - i - 1) * sizeof(llm_model_t));
+        s_file_count--;
+        llm_model_count--;
+        size_t at = 0;
+        while (at < s_disabled_count && s_disabled[at].order < m.order) {
+            at++;
+        }
+        memmove(&s_disabled[at + 1], &s_disabled[at], (s_disabled_count - at) * sizeof(llm_model_t));
+        s_disabled[at] = m;
+        s_disabled_count++;
+        return true;
+    }
+    return false;
+}
+
+bool llm_set_speech_enabled(llm_speech_kind_t kind, const char *id, bool enabled)
+{
+    for (int i = 0; i < s_speech_count; i++) {
+        if (s_speech[i].kind == (int)kind && strcmp(s_speech[i].model.id, id) == 0) {
+            if (!set_line_disabled(id, false, kind == LLM_SPEECH_STT ? SECTION_STT : SECTION_TTS, !enabled)) {
+                return false;
+            }
+            s_speech[i].disabled = !enabled;
+            return true;
+        }
+    }
+    return false;
+}
+
 size_t llm_agents_count(void)
 {
     return s_file_count;
@@ -971,6 +1167,7 @@ void llm_set_openrouter_free_models(const llm_model_t *models, size_t count)
         m->price_out = 0;
         m->priced = true;
         m->provider = LLM_PROVIDER_OPENROUTER;
+        m->order = -1;
     }
     llm_model_count = s_file_count + n;
 }

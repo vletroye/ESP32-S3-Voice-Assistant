@@ -66,6 +66,7 @@ typedef struct {
     double price_in;        /* per million tokens, in the currency of CONFIG.INI (AGENTS.INI) */
     double price_out;
     bool priced;            /* prices given (otherwise its cost is not counted) */
+    short order;            /* its place among the models of AGENTS.INI (0 first), -1 for a free OpenRouter one */
 } llm_model_t;
 
 /** Measures of the last answer, set by the client of its provider */
@@ -103,7 +104,28 @@ typedef struct {
 /** How many models of this kind */
 size_t llm_speech_count(llm_speech_kind_t kind);
 
-/** The model of this kind at this index (file order), NULL past the end */
+/**
+ * Models disabled in AGENTS.INI by a "-" before their id ("-mistral-large-4 = ..."): offered nowhere (Settings,
+ * voice, model test), only shown unchecked on the lists of the Settings screen
+ */
+size_t llm_disabled_count(void);
+const llm_model_t *llm_disabled_model(size_t index);
+
+/** Every speech model of this kind, enabled or not (file order), NULL past the end; *enabled tells which */
+size_t llm_speech_all_count(llm_speech_kind_t kind);
+const llm_speech_model_t *llm_speech_all(llm_speech_kind_t kind, size_t index, bool *enabled);
+
+/**
+ * @brief Enable or disable a chat model of AGENTS.INI: the "-" of its line added or removed, and the lists in
+ *        memory changed at once (no restart). The model in use is not to be disabled (the caller checks).
+ * @return false if not found, or the file could not be written
+ */
+bool llm_set_model_enabled(const char *id, bool enabled);
+
+/** The same for a transcription or speech model of [stt] / [tts] */
+bool llm_set_speech_enabled(llm_speech_kind_t kind, const char *id, bool enabled);
+
+/** The model of this kind at this index (file order, the enabled ones), NULL past the end */
 const llm_speech_model_t *llm_speech_model(llm_speech_kind_t kind, size_t index);
 
 /**

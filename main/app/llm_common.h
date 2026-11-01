@@ -79,6 +79,10 @@ typedef struct {
     llm_buf_t text;             /* whole answer text */
     int64_t start_us;           /* the request sent */
     int64_t first_text_us;      /* its first words, 0 before */
+    /* llm_answer_add_cited(): the text held back while a source link may be starting, and where it is in it */
+    llm_buf_t held;
+    int link_state;
+    bool link_cited;            /* the link is in parentheses: a citation, dropped with them */
 } llm_answer_t;
 
 /** Start of an answer: its start time set */
@@ -86,6 +90,16 @@ void llm_answer_begin(llm_answer_t *a, llm_text_cb_t on_text, void *ctx);
 
 /** A piece of the answer (len bytes, not necessarily NUL-terminated): kept, timed and given to on_text */
 void llm_answer_add(llm_answer_t *a, const char *text, size_t len);
+
+/**
+ * @brief The same, the sources the model writes in its text taken out (the answer is spoken): a citation
+ *        " ([site.com](https://...))" (several in the same parentheses too) dropped, a link "[text](https://...)"
+ *        kept as its text. Cut anywhere between the pieces; llm_answer_end() gives back what is held at the end.
+ */
+void llm_answer_add_cited(llm_answer_t *a, const char *text, size_t len);
+
+/** The end of the answer: the text held back by llm_answer_add_cited() given (it was not a link) */
+void llm_answer_end(llm_answer_t *a);
 
 /** Until the first words in ms, -1 if none */
 int llm_answer_first_ms(const llm_answer_t *a);

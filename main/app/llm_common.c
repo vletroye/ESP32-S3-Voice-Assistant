@@ -113,6 +113,133 @@ void llm_answer_add(llm_answer_t *a, const char *text, size_t len)
     }
 }
 
+/* Where llm_answer_add_cited() is in a link that may be starting */
+enum {
+    LINK_NONE,
+    LINK_SPACE,         /* " ": the space before a citation goes with it */
+    LINK_PAREN,         /* "(" */
+    LINK_TEXT,          /* "[site.com" */
+    LINK_BRACKET,       /* "[site.com]" */
+    LINK_URL,           /* "[site.com](https://..." */
+    LINK_AFTER,         /* in the parentheses of a citation, after a link: ")" ends it, ", [" goes on */
+};
+#define LINK_TEXT_MAX   200
+#define LINK_URL_MAX    600
+
+/* What was held back is text after all: given, and read again from its normal state */
+static void link_release(llm_answer_t *a, llm_buf_t *out)
+{
+    if (a->held.len) {
+        llm_buf_append(out, a->held.p, a->held.len);
+    }
+    llm_buf_clear(&a->held);
+    a->link_state = LINK_NONE;
+}
+
+void llm_answer_add_cited(llm_answer_t *a, const char *text, size_t len)
+{
+    llm_buf_t out = {0};
+    for (size_t i = 0; i < len; i++) {
+        char c = text[i];
+        switch (a->link_state) {
+        case LINK_NONE:
+            if (c == ' ' || c == '(' || c == '[') {
+                llm_buf_append(&a->held, &c, 1);
+                a->link_cited = (c != '[');
+                a->link_state = c == ' ' ? LINK_SPACE : c == '(' ? LINK_PAREN : LINK_TEXT;
+            } else {
+                llm_buf_append(&out, &c, 1);
+            }
+            continue;
+        case LINK_SPACE:
+            if (c == '(') {
+                llm_buf_append(&a->held, &c, 1);
+                a->link_state = LINK_PAREN;
+                continue;
+            }
+            break;
+        case LINK_PAREN:
+            if (c == '[') {
+                llm_buf_append(&a->held, &c, 1);
+                a->link_state = LINK_TEXT;
+                continue;
+            }
+            break;
+        case LINK_TEXT:
+            if (c != '\n' && a->held.len < LINK_TEXT_MAX) {
+                llm_buf_append(&a->held, &c, 1);
+                a->link_state = c == ']' ? LINK_BRACKET : LINK_TEXT;
+                continue;
+            }
+            break;
+        case LINK_BRACKET:
+            if (c == '(') {
+                llm_buf_append(&a->held, &c, 1);
+                a->link_state = LINK_URL;
+                continue;
+            }
+            break;
+        case LINK_URL:
+            if (c == ')') {
+                if (!a->link_cited) {
+                    // A link in the text: its text kept ("[text](url)" -> "text")
+                    const char *open = memchr(a->held.p, '[', a->held.len);
+                    const char *close = open ? memchr(open, ']', a->held.len - (open - a->held.p)) : NULL;
+                    if (open && close) {
+                        llm_buf_append(&out, a->held.p, open - a->held.p);
+                        llm_buf_append(&out, open + 1, close - open - 1);
+                    }
+                    llm_buf_clear(&a->held);
+                    a->link_state = LINK_NONE;
+                } else {
+                    llm_buf_clear(&a->held);    // a source: dropped, its parentheses and the space before them too
+                    a->link_state = LINK_AFTER;
+                }
+                continue;
+            }
+            if (c != ' ' && c != '\n' && a->held.len < LINK_TEXT_MAX + LINK_URL_MAX) {
+                llm_buf_append(&a->held, &c, 1);
+                continue;
+            }
+            break;
+        case LINK_AFTER:
+            if (c == ')') {
+                a->link_state = LINK_NONE;      // the end of the citation
+            } else if (c == '[') {
+                llm_buf_append(&a->held, &c, 1);
+                a->link_state = LINK_TEXT;      // another source in the same parentheses
+            } else if (c != ',' && c != ';' && c != ' ') {
+                a->link_state = LINK_NONE;      // parentheses never closed: the text goes on
+                i--;
+            }
+            continue;
+        }
+        // Not a link after all: what was held back is text, this character read again
+        link_release(a, &out);
+        i--;
+    }
+    if (out.len) {
+        llm_buf_append(&out, "", 1);
+        llm_answer_add(a, out.p, out.len - 1);
+    }
+    llm_buf_free(&out);
+}
+
+void llm_answer_end(llm_answer_t *a)
+{
+    llm_buf_t out = {0};
+    if (a->link_state != LINK_AFTER) {
+        link_release(a, &out);
+    }
+    if (out.len) {
+        llm_buf_append(&out, "", 1);
+        llm_answer_add(a, out.p, out.len - 1);
+    }
+    llm_buf_free(&out);
+    llm_buf_free(&a->held);
+    a->link_state = LINK_NONE;
+}
+
 int llm_answer_first_ms(const llm_answer_t *a)
 {
     return a->first_text_us ? (int)((a->first_text_us - a->start_us) / 1000) : -1;

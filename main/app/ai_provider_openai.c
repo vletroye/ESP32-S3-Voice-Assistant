@@ -251,7 +251,8 @@ static void sse_dispatch(const char *data, void *ctx)
     if (strcmp(t, "response.output_text.delta") == 0) {
         const cJSON *delta = cJSON_GetObjectItem(json, "delta");
         if (cJSON_IsString(delta)) {
-            llm_answer_add(st->answer, delta->valuestring, strlen(delta->valuestring));
+            // Its web search adds its sources to the text, " ([site.com](https://...))": taken out (spoken)
+            llm_answer_add_cited(st->answer, delta->valuestring, strlen(delta->valuestring));
         }
     } else if (strcmp(t, "response.refusal.delta") == 0) {
         st->refused = true;
@@ -435,6 +436,7 @@ static llm_error_t openai_stream(void *state, const char *text, llm_text_cb_t on
         st->error = LLM_OK;
         st->items = cJSON_CreateArray();
         stream_once(st);
+        llm_answer_end(&answer);    // the text held back while a source link might start
         if (st->retry && round == 0) {
             stream_free(st);
             round = -1;         // the same question, without what the model refused

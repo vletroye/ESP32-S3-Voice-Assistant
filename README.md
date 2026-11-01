@@ -775,8 +775,9 @@ How to read this table:
 
   - The device's tools (weather, Homey, radio, volume) are declared once in `tools.c` (and Homey's read from its
     MCP server): every provider that takes tools gets them all, a new tool too.
-  - Web search is the provider's own: the model decides when to search. A model refusing it (HTTP 400 about it)
-    is asked again without it, until another model is chosen. Not yet for Mistral (none in its Chat Completions
+  - Web search is the provider's own: the model decides when to search. The sources GPT adds to its text
+    (" ([site.com](https://...))") are taken out before the answer is shown and spoken (`llm_answer_add_cited`).
+    A model refusing it (HTTP 400 about it) is asked again without it, until another model is chosen. Not yet for Mistral (none in its Chat Completions
     API), xAI (only in its Responses API) and OpenRouter (its plugin searches at every question). Each search is
     billed per call: `openai:web_search` and `gemini:web_search` in `[per_call]` of `AGENTS.INI` (in the
     firmware's file: add them to yours to count them).

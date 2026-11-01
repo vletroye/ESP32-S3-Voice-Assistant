@@ -50,6 +50,9 @@ LV_FONT_DECLARE(ui_font_Latin20);
 #define REPLY_SCROLL_TIMER_INTERVAL_MS  (100)
 /* Fraction of the visible height kept above the line being read */
 #define REPLY_SCROLL_LEAD_DIV           (3)
+/* A list shown, not read: scrolled with the finger; without follow-up listening, back to sleep after this long
+ * without a move of the text */
+#define REPLY_MANUAL_IDLE_MS            (20000)
 /* Model in use under the robot (listening / thinking): provider icon (20 x 21) and model name, at the bottom left */
 #define MODEL_ROW_LEFT_X                (8)
 #define MODEL_ROW_BOTTOM_Y              (-2)
@@ -78,6 +81,10 @@ static bool reply_content_get = false;
 static uint16_t content_height = 0;
 /* Start of the spoken answer, to follow the reading position */
 static int64_t reply_audio_start_us = 0;
+/* The reply shows a list not read: not scrolled with the speech, but with the finger (arrow while more is below) */
+static bool s_manual_scroll = false;
+static int64_t s_manual_idle_us = 0;
+static void scroll_arrow_update(void);
 /* Text the scrolling animation was computed for (restarted when it grows) */
 static size_t s_scroll_chars = 0;
 static lv_coord_t s_scroll_height = 0;
@@ -1173,6 +1180,82 @@ void ui_ctrl_reply_listening(bool on)
     bsp_display_unlock();
 }
 
+/* Bottom left of the reply: a blinking arrow down while a list shown goes on below the screen */
+#define SCROLL_ARROW_BG_COLOR   0x1F2A44
+#define SCROLL_ARROW_COLOR      0xFFFFFF
+static lv_obj_t *s_scroll_arrow = NULL;
+
+static void scroll_arrow_opa_cb(void *obj, int32_t opa)
+{
+    lv_obj_set_style_opa(obj, opa, LV_PART_MAIN);
+}
+
+static void reply_scrolled_cb(lv_event_t *e)
+{
+    s_manual_idle_us = esp_timer_get_time();
+    scroll_arrow_update();
+}
+
+static void scroll_arrow_create(void)
+{
+    s_scroll_arrow = lv_obj_create(ui_PanelReply);
+    lv_obj_remove_style_all(s_scroll_arrow);
+    lv_obj_set_size(s_scroll_arrow, 26, 26);
+    lv_obj_set_style_radius(s_scroll_arrow, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_scroll_arrow, lv_color_hex(SCROLL_ARROW_BG_COLOR), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(s_scroll_arrow, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_align(s_scroll_arrow, LV_ALIGN_BOTTOM_LEFT, 8, -8);
+    lv_obj_clear_flag(s_scroll_arrow, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *symbol = lv_label_create(s_scroll_arrow);
+    lv_label_set_text(symbol, LV_SYMBOL_DOWN);
+    lv_obj_set_style_text_font(symbol, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(symbol, lv_color_hex(SCROLL_ARROW_COLOR), LV_PART_MAIN);
+    lv_obj_center(symbol);
+    lv_obj_add_flag(s_scroll_arrow, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_event_cb(ui_ContainerReplyContent, reply_scrolled_cb, LV_EVENT_SCROLL, NULL);
+}
+
+/* Shown, blinking, while a list not read goes on below the screen (display locked) */
+static void scroll_arrow_update(void)
+{
+    if (!s_scroll_arrow) {
+        return;
+    }
+    bool on = s_manual_scroll && current_panel == UI_CTRL_PANEL_REPLY &&
+              lv_obj_get_scroll_bottom(ui_ContainerReplyContent) > 0;
+    if (lv_obj_has_flag(s_scroll_arrow, LV_OBJ_FLAG_HIDDEN) == !on) {
+        return;
+    }
+    lv_anim_del(s_scroll_arrow, scroll_arrow_opa_cb);
+    if (on) {
+        lv_anim_t a;
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, s_scroll_arrow);
+        lv_anim_set_exec_cb(&a, scroll_arrow_opa_cb);
+        lv_anim_set_values(&a, LV_OPA_COVER, LV_OPA_20);
+        lv_anim_set_time(&a, 500);
+        lv_anim_set_playback_time(&a, 500);
+        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_start(&a);
+        lv_obj_move_foreground(s_scroll_arrow);
+        lv_obj_clear_flag(s_scroll_arrow, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_scroll_arrow, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+void ui_ctrl_reply_list_shown(void)
+{
+    bsp_display_lock(0);
+    s_manual_scroll = true;
+    s_manual_idle_us = esp_timer_get_time();
+    reply_scroll_stop();
+    lv_obj_update_layout(ui_ContainerReplyContent);
+    lv_obj_scroll_to_y(ui_ContainerReplyContent, 0, LV_ANIM_OFF);
+    scroll_arrow_update();
+    bsp_display_unlock();
+}
+
 static void cost_label_create(void)
 {
     s_cost_label = lv_label_create(ui_ScreenListen);
@@ -1207,6 +1290,7 @@ void ui_ctrl_init(void)
     app_clock_show(settings_get_parameter()->show_clock);
     cost_label_create();
     listen_head_create();
+    scroll_arrow_create();
     model_row_create();
     head_icons_create();
     ui_radio_init();
@@ -1476,6 +1560,11 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
     current_panel = panel;
     // Listening over the reply: until the next panel
     listen_head_show(false);
+    // A list scrolled with the finger: until the next reply
+    if (panel != UI_CTRL_PANEL_REPLY) {
+        s_manual_scroll = false;
+    }
+    scroll_arrow_update();
     // The model in use: shown while listening, "Entendu", "Je réfléchis"
     model_row_show(panel == UI_CTRL_PANEL_LISTEN || panel == UI_CTRL_PANEL_GET);
     head_icons_refresh();
@@ -1693,6 +1782,7 @@ bool ui_ctrl_reply_get_audio_start_flag(void)
 void ui_ctrl_reply_set_audio_end_flag(bool result)
 {
     reply_audio_end = result;
+    s_manual_idle_us = esp_timer_get_time();
 }
 
 static void reply_scroll_anim_cb(void *var, int32_t v)
@@ -1786,13 +1876,21 @@ static void reply_content_scroll_timer_handler()
     if (reply_content_get && reply_audio_start) {
         lv_coord_t visible = lv_obj_get_height(ui_ContainerReplyContent);
         lv_coord_t max_offset = content_height > visible ? content_height - visible : 0;
-        if (settings_get_parameter()->scroll_smooth) {
-            reply_scroll_follow(visible, max_offset);
+        bool done;
+        if (s_manual_scroll) {
+            // A list not read: left where the finger puts it; ends a while after the last move
+            scroll_arrow_update();
+            done = reply_audio_end && esp_timer_get_time() - s_manual_idle_us > REPLY_MANUAL_IDLE_MS * 1000LL;
         } else {
-            reply_scroll_by_line(visible, max_offset);
+            if (settings_get_parameter()->scroll_smooth) {
+                reply_scroll_follow(visible, max_offset);
+            } else {
+                reply_scroll_by_line(visible, max_offset);
+            }
+            done = lv_obj_get_scroll_y(ui_ContainerReplyContent) >= max_offset && reply_audio_end;
         }
 
-        if (lv_obj_get_scroll_y(ui_ContainerReplyContent) >= max_offset && reply_audio_end) {
+        if (done) {
             ESP_LOGI(TAG, "reply scroll timer stop");
             reply_content_get = false;
             reply_audio_start = false;

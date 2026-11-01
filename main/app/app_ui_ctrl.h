@@ -93,6 +93,12 @@ void ui_ctrl_guide_jump(void);
 /** Listening while the reply stays shown: bars moving beside the robot head at its top right (hidden by any panel change) */
 void ui_ctrl_reply_listening(bool on);
 
+/**
+ * The reply shown has a list not read: kept at its top, not scrolled with the speech but with the finger, a blinking
+ * arrow at the bottom left while more is below
+ */
+void ui_ctrl_reply_list_shown(void);
+
 #ifdef __cplusplus
 }
 #endif

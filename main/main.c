@@ -438,11 +438,12 @@ static void reply_begin(void)
  * A "::" or ".." of the LANG texts comes before a list ("Quel fournisseur voulez-vous :: 1, Anthropic. 2, OpenAI."):
  * shown as ":" or ".", and with Read_lists = off the list after it is not read, up to the end of the reply or
  * VOICE_CMD_LIST_END (a question follows); a part between two VOICE_CMD_SHOWN_ONLY is never read. "..." stays an
- * ellipsis. shown and spoken: as long as the message.
+ * ellipsis. shown and spoken: as long as the message. true: a list is not read
  */
-static void list_reply_texts(const char *message, char *shown, char *spoken)
+static bool list_reply_texts(const char *message, char *shown, char *spoken)
 {
     bool silent = false;
+    bool list_unread = false;
     for (const char *p = message; *p; p++) {
         bool colons = (p[0] == ':' && p[1] == ':');
         bool dots = (p[0] == '.' && p[1] == '.' && p[2] != '.' && (p == message || p[-1] != '.'));
@@ -452,6 +453,7 @@ static void list_reply_texts(const char *message, char *shown, char *spoken)
                 *spoken++ = *p;
             }
             silent = !sys_param->read_lists;
+            list_unread |= silent;
             p++;
         } else if (*p == VOICE_CMD_LIST_END[0]) {
             silent = false;
@@ -472,6 +474,7 @@ static void list_reply_texts(const char *message, char *shown, char *spoken)
     }
     *shown = '\0';
     *spoken = '\0';
+    return list_unread;
 }
 
 /* Show and speak a message as the reply (errors, memory commands), sentence by sentence */
@@ -480,12 +483,17 @@ static void speak_message(const char *message)
     size_t size = strlen(message) + 1;
     char *shown = malloc(size);
     char *spoken = malloc(size);
+    bool list_unread = false;
     if (shown && spoken) {
-        list_reply_texts(message, shown, spoken);
+        list_unread = list_reply_texts(message, shown, spoken);
     }
     ui_ctrl_reply_set_logo(UI_CTRL_LOGO_LOCAL);
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_CONTENT, shown && spoken ? shown : message);
     ui_ctrl_show_panel(UI_CTRL_PANEL_REPLY, 0);
+    if (list_unread) {
+        // Scrolled with the finger, from its top
+        ui_ctrl_reply_list_shown();
+    }
     s_reply_t0 = esp_timer_get_time();
     reply_begin();
     if (shown && spoken) {

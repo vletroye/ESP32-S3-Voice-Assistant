@@ -1804,7 +1804,9 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
   A text shown but not read (a list of models, of radios...) stays on screen while the device listens for the
   answer, until it is given or the usual delay ends (its reading time added): bars moving beside the robot head
-  at the top right show that the device listens, instead of the listening robot.
+  at the top right show that the device listens, instead of the listening robot. Such a list is not scrolled with
+  the speech: it stays at its top, to be scrolled with the finger, and a blinking arrow down at the bottom left
+  shows that it goes on below the screen (it disappears at the bottom of the list).
 - **Internet radio** ([Radio-Browser](https://www.radio-browser.info), free): "joue du jazz" / "play some jazz",
   "joue la radio Nostalgie" / "play the radio Nostalgie", "joue de la musique italienne" / "play italian music",
   "suivante" / "next", "stop", favourites (`RADIO.TXT`) and a radio screen;

@@ -27,19 +27,6 @@ extern const llm_backend_t llm_backend_claude;
  */
 void claude_client_set_thinking(const char *thinking);
 
-/**
- * @brief Runs a tool called by Claude.
- *
- * @param name     Tool name
- * @param input    Arguments (JSON object)
- * @param is_error Set to true when the result describes an error
- * @return Result given back to Claude (allocated, freed by the caller), NULL if the tool is unknown
- */
-typedef char *(*claude_tool_runner_t)(const char *name, const cJSON *input, bool *is_error);
-
-/** Offer tools: definitions (JSON array, kept by the caller) and the function running them */
-void claude_client_set_tools(const cJSON *definitions, claude_tool_runner_t runner);
-
 /** Web searches started during the current (or last) answer */
 int claude_client_web_searches(void);
 

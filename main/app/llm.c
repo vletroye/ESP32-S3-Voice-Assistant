@@ -1134,8 +1134,10 @@ static esp_err_t client_init(const char *model, bool conversation)
         const llm_model_t *listed = model_of(model);
         // Reasoning: its thinking left to the model ("default"), even Haiku's (else disabled)
         claude_client_set_thinking(reasoning ? "default" : listed ? listed->thinking : NULL);
-        // Tools (weather, volume...): offered to Claude only for now; none for the model test
-        claude_client_set_tools(tools ? tools_definitions() : NULL, tools ? tools_run : NULL);
+    }
+    // The device's tools (weather, volume, radio, Homey...) to the clients that take them; none for the model test
+    if (b->set_tools) {
+        b->set_tools(b->state, tools ? tools_definitions() : NULL, tools ? tools_run : NULL);
     }
     const char *effort = reasoning ? ai_provider_of_llm(s_provider)->reasoning_effort : effort_of(model);
     return b->init(b->state, key, model, s_system, effort);
@@ -1229,7 +1231,9 @@ void llm_set_tools(const cJSON *definitions)
     if (s_lock) {
         xSemaphoreTake(s_lock, portMAX_DELAY);
     }
-    claude_client_set_tools(definitions, tools_run);
+    if (s_ready && backend()->set_tools) {
+        backend()->set_tools(backend()->state, definitions, tools_run);
+    }
     if (s_lock) {
         xSemaphoreGive(s_lock);
     }

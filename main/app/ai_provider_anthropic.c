@@ -41,7 +41,7 @@ static char *s_system = NULL;
 static char *s_effort = NULL;
 /* Tool definitions (owned by the llm layer) and the function running a tool call */
 static const cJSON *s_tools = NULL;
-static claude_tool_runner_t s_tool_runner = NULL;
+static llm_tool_runner_t s_tool_runner = NULL;
 /* thinking.type sent with each request, NULL to leave the parameter out */
 static const char *s_thinking = NULL;
 /* thinking of AGENTS.INI for the next init ("default": left to the model), "" to choose it from the name */
@@ -486,7 +486,7 @@ static void claude_set_history(void *state, cJSON *messages)
  * Tools: definitions sent with each request and the function running them (set by the llm layer).
  * Claude stops with "tool_use"; the results go back in a user message and the answer goes on.
  */
-void claude_client_set_tools(const cJSON *definitions, claude_tool_runner_t runner)
+static void claude_set_tools(void *state, const cJSON *definitions, llm_tool_runner_t runner)
 {
     s_tools = definitions;
     s_tool_runner = runner;
@@ -784,4 +784,5 @@ const llm_backend_t llm_backend_claude = {
     .set_history = claude_set_history,
     .prewarm = claude_prewarm,
     .stream = claude_stream,
+    .set_tools = claude_set_tools,
 };

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include "esp_err.h"
 #include "cJSON.h"
 #include "llm.h"
@@ -16,6 +17,12 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @brief Runs a tool called by the model (tools.c): its result given back to the model (allocated, freed by the
+ *        caller), NULL if the tool is unknown; is_error set when the result describes an error.
+ */
+typedef char *(*llm_tool_runner_t)(const char *name, const cJSON *input, bool *is_error);
 
 typedef struct llm_backend {
     void *state;                /* given back to each function (the clients sharing a code: their own state) */
@@ -33,6 +40,11 @@ typedef struct llm_backend {
     void (*prewarm)(void *state);
     /* The question answered, streamed to on_text (see llm_stream) */
     llm_error_t (*stream)(void *state, const char *text, llm_text_cb_t on_text, void *ctx, char **full_text);
+    /*
+     * The device's tools offered from now on: definitions [{name, description, input_schema}] (kept by the caller),
+     * and the function running them; NULL for none (model test). NULL for a client without tools.
+     */
+    void (*set_tools)(void *state, const cJSON *definitions, llm_tool_runner_t runner);
 } llm_backend_t;
 
 #ifdef __cplusplus

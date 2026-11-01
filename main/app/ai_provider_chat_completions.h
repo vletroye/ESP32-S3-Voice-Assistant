@@ -39,6 +39,7 @@ typedef struct {
     cc_usage_t usage;
     /* Words of an error message meaning no credit, besides "credit": "billing", "spending limit"... NULL-ended */
     const char *const *credit_words;
+    bool tools;                     /* its models take the device's tools (function calling) */
 } cc_config_t;
 
 /* A provider's state: static, { .config = &its_config }, the rest made by cc_init */
@@ -52,6 +53,9 @@ typedef struct {
     char prewarm_url[160];
     /* Conversation history: [{role: "user" | "assistant", content}] (the instructions are added per request) */
     cJSON *messages;
+    /* The device's tools offered (definitions of tools.c) and the function running them, NULL for none */
+    const cJSON *tools;
+    llm_tool_runner_t runner;
 } cc_client_t;
 
 esp_err_t cc_init(void *client, const char *api_key, const char *model, const char *instructions, const char *effort);
@@ -61,12 +65,13 @@ const cJSON *cc_history(void *client);
 void cc_set_history(void *client, cJSON *messages);
 void cc_prewarm(void *client);
 llm_error_t cc_stream(void *client, const char *text, llm_text_cb_t on_text, void *ctx, char **full_text);
+void cc_set_tools(void *client, const cJSON *definitions, llm_tool_runner_t runner);
 
 /* The table of a Chat Completions provider: CC_BACKEND(s_client) */
 #define CC_BACKEND(client) {                                                                            \
         .state = &(client), .init = cc_init, .set_instructions = cc_set_instructions,                    \
         .reset = cc_reset, .history = cc_history, .set_history = cc_set_history, .prewarm = cc_prewarm,  \
-        .stream = cc_stream,                                                                             \
+        .stream = cc_stream, .set_tools = cc_set_tools,                                                  \
     }
 
 #ifdef __cplusplus

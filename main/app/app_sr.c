@@ -90,8 +90,9 @@ static void audio_feed_task(void *arg)
     /* The channel adjust below and audio_record_save() expect 3 interleaved channels */
     assert(feed_channel == 3);
 
-    /* Allocate audio buffer and check for result */
-    int16_t *audio_buffer = heap_caps_malloc(audio_chunksize * sizeof(int16_t) * feed_channel, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    /* The block read from the microphones (6 KB, filled every 64 ms by a copy from the I2S DMA): PSRAM, internal RAM
+       is scarce */
+    int16_t *audio_buffer = heap_caps_malloc(audio_chunksize * sizeof(int16_t) * feed_channel, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     assert(audio_buffer);
     g_sr_data->afe_in_buffer = audio_buffer;
 
@@ -293,6 +294,8 @@ esp_err_t app_sr_start(bool record_en)
     afe_config_t *afe_config = afe_config_init("MMN", models, AFE_TYPE_SR, AFE_MODE_HIGH_PERF);
     ESP_GOTO_ON_FALSE(NULL != afe_config, ESP_FAIL, err, TAG, "Failed to init afe config");
     afe_config->aec_init = false;
+    /* Its buffers and models in PSRAM as far as it can: internal RAM is kept for the stacks, DMA and TLS */
+    afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
     /* End of speech: silence needed before the VAD reports it (End_speech_ms, ESP-SR default 1000 ms) */
     afe_config->vad_min_noise_ms = settings_get_parameter()->end_speech_ms;
     ESP_LOGI(TAG, "End of speech after %d ms of silence", afe_config->vad_min_noise_ms);

@@ -1773,7 +1773,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   is still spoken (a stuck connection used to drop every following sentence). After a reply cut twice or more,
   or with lost sentences, the screen adds "(Connexion trop lente : la voix n'a pas pu être lue de façon
   fluide.)" under the answer.
-- **Memory**: internal RAM (~40 KB free while running, largest block ~20 KB) is reserved for stacks, DMA and
+- **Memory**: internal RAM (~40 KB free at rest, ~20 KB in a conversation with the radio) is reserved for stacks, DMA and
   the network: TLS needs some of it at each connection (`esp-aes: Failed to allocate memory` when it runs out,
   and the speech connections then fail). Large buffers, JSON trees, TLS buffers (mbedTLS), the network task
   stacks and the LVGL objects live in PSRAM (LVGL's allocator is redirected by `main/lvgl_psram/lv_psram.h` and
@@ -1786,7 +1786,11 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
     **not** used: it also moves the static data of Wi-Fi, LWIP and wpa_supplicant to PSRAM, which made the
     network very slow;
   - task stacks in internal RAM are sized from their measured use with ~1 KB to spare (WebSocket tasks 4.5 KB,
-    wake word detection 3.5 KB, audio feed 3 KB, presence 2 KB); the model test runs on the main task's stack.
+    wake word detection 3.5 KB, audio feed 3 KB, presence 2 KB, radio playback 3.5 KB, LWIP 2.5 KB, main task
+    6.5 KB: the model test runs on it); a task touching the flash (Wi-Fi, NVS, SPIFFS) cannot have its stack in
+    PSRAM;
+  - the block read from the microphones (6 KB) and the buffers of ESP-SR's front end
+    (`AFE_MEMORY_ALLOC_MORE_PSRAM`) are in PSRAM: ~40 KB of internal RAM free at rest, largest block ~21 KB.
 - **No echo cancellation**: speech detection ignores the start of each listening window (beep, end of the
   answer) and filters by volume; empty transcripts and typical Whisper hallucinations on silence are ignored.
 - **Costs**: transcription is billed by the duration of audio sent (only while listening); according to

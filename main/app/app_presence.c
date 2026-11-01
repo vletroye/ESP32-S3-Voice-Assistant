@@ -237,8 +237,8 @@ void app_presence_init(int screen_off_s)
         .pull_down_en = GPIO_PULLDOWN_ENABLE,
     };
     gpio_config(&out);
-    // Small task, internal RAM (I2C, GPIO and the iris object of LVGL)
-    if (xTaskCreatePinnedToCore(presence_task, "presence", 3 * 1024, NULL, 2, &s_task, 1) != pdPASS) {
+    // Small task, internal RAM (I2C, GPIO and the iris object of LVGL): ~0.7 KB of its stack used (measured)
+    if (xTaskCreatePinnedToCore(presence_task, "presence", 2 * 1024, NULL, 2, &s_task, 1) != pdPASS) {
         ESP_LOGE(TAG, "No presence task: the screen stays on");
         return;
     }

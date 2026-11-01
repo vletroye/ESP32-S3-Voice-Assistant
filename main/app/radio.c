@@ -51,7 +51,7 @@
 #define RADIO_RETRIES           3               /* reconnections after the stream dropped */
 #define RADIO_RETRY_DELAY_MS    2000
 #define RADIO_STABLE_US         (30 * 1000000)  /* a stream played this long resets the reconnections */
-#define RADIO_PLAY_STACK        4096
+#define RADIO_PLAY_STACK        3584            /* internal RAM (decoding), ~2.5 KB used (measured) */
 #define RADIO_SPEAKER_WAIT_MS   500             /* the playback task leaves within a decoded frame (~100 ms) */
 #define RADIO_TITLE_SIZE        128
 #define RADIO_META_MAX          255

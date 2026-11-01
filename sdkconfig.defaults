@@ -56,8 +56,12 @@ CONFIG_ASSISTANT_TTS_VOICE="marin"
 CONFIG_ASSISTANT_TIMEZONE="CET-1CEST,M3.5.0,M10.5.0/3"
 CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS=4000
 
-# Main task: app_main reads files and JSON at start-up (3584 by default overflowed)
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+# Main task: app_main reads files and JSON at start-up (3584 by default overflowed); the model test runs on it
+# (TLS handshakes): ~3.6 KB used at most (measured), internal RAM
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=6656
+
+# LWIP's task: ~1.3 KB of its stack used (measured), internal RAM
+CONFIG_LWIP_TCPIP_TASK_STACK_SIZE=2560
 
 # HTTP Upgrade answer of a WebSocket: ElevenLabs (Cloudflare) sends more than 1 KB of headers
 CONFIG_WS_BUFFER_SIZE=4096

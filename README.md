@@ -642,7 +642,11 @@ USB drive named "ESP-BOX" holding these files:
 
 The settings, one `Key = value` per line. On the first start (no Wi-Fi nor key yet), the BOX opens the
 configuration mode by itself. The keys keep the order and the comments of the file as you last saved it; keys it
-does not hold are added in the order of the table below (`s_ini_key_order` in `board_flash.c`):
+does not hold are added in the order of the table below (`s_ini_key_order` in `board_flash.c`). A switch takes
+`on` / `off` (also `yes` / `no`, `true` / `false`, `1` / `0`; anything else: its default); a number out of its
+range is brought to the nearest bound, or its default is used with a warning in the log (`Scroll_speed`,
+`End_speech_ms`); a key longer than the device keeps is reported in the log (`settings.c`: `read_str`,
+`read_int`, `read_bool`):
 
 | Key | Role | Example |
 | --- | --- | --- |

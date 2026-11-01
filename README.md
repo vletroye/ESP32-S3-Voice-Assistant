@@ -1809,7 +1809,8 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   shows that it goes on below the screen (it disappears at the bottom of the list). While a finger is on the
   screen, the delay before going back to sleep is paused.
   A **tap on an item** of a list answering a question (provider, model, voice, language, transcription, speech)
-  chooses it, as if its number had been said, even while the reply is still spoken.
+  chooses it, as if its number had been said, even while the reply is still spoken; the item tapped is
+  highlighted a quarter of a second first.
 - **Internet radio** ([Radio-Browser](https://www.radio-browser.info), free): "joue du jazz" / "play some jazz",
   "joue la radio Nostalgie" / "play the radio Nostalgie", "joue de la musique italienne" / "play italian music",
   "suivante" / "next", "stop", favourites (`RADIO.TXT`) and a radio screen;

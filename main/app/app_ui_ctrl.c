@@ -132,8 +132,59 @@ static void cancel_double_tap_cb(lv_event_t *e)
  * Double tap on the answer: same as the wake word (the reply stops, the assistant listens); on a question of a
  * voice command (language, model...): the command is dropped, back to sleep
  */
-/* The number of the item of a list under the finger (a line "3, Grok (1,2 s)." of the reply), 0 if none */
-static int reply_item_tapped(void)
+/* An item tapped is highlighted this long before it is taken as the answer */
+#define ITEM_TAP_HIGHLIGHT_MS   250
+#define ITEM_TAP_COLOR          0x4FC3F7
+static lv_obj_t *s_item_highlight = NULL;
+static bool s_item_tap_pending = false;
+
+/* Over the lines of the item tapped (text from item to item_end), on the reply panel */
+static void item_highlight_show(const char *text, const char *item, const char *item_end)
+{
+    if (!s_item_highlight) {
+        s_item_highlight = lv_obj_create(ui_PanelReply);
+        lv_obj_remove_style_all(s_item_highlight);
+        lv_obj_set_style_radius(s_item_highlight, 4, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(s_item_highlight, lv_color_hex(ITEM_TAP_COLOR), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(s_item_highlight, LV_OPA_40, LV_PART_MAIN);
+        lv_obj_clear_flag(s_item_highlight, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    }
+    lv_point_t first, last;
+    lv_label_get_letter_pos(ui_LabelReplyContent, _lv_txt_encoded_get_char_id(text, item - text), &first);
+    lv_label_get_letter_pos(ui_LabelReplyContent,
+                            _lv_txt_encoded_get_char_id(text, (item_end > item ? item_end - 1 : item) - text), &last);
+    lv_coord_t line_h = lv_font_get_line_height(lv_obj_get_style_text_font(ui_LabelReplyContent, LV_PART_MAIN));
+    lv_area_t label, box, panel;
+    lv_obj_get_coords(ui_LabelReplyContent, &label);
+    lv_obj_get_coords(ui_ContainerReplyContent, &box);
+    lv_obj_get_coords(ui_PanelReply, &panel);
+    // Within the visible part of the text
+    lv_coord_t y1 = LV_MAX(label.y1 + first.y - 2, box.y1);
+    lv_coord_t y2 = LV_MIN(label.y1 + last.y + line_h + 1, box.y2);
+    if (y2 <= y1) {
+        return;
+    }
+    lv_obj_set_pos(s_item_highlight, box.x1 - panel.x1 - 4, y1 - panel.y1);
+    lv_obj_set_size(s_item_highlight, lv_area_get_width(&box) + 8, y2 - y1);
+    lv_obj_move_foreground(s_item_highlight);
+    lv_obj_clear_flag(s_item_highlight, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* The highlight seen: the item is the answer */
+static void item_tap_timer_cb(lv_timer_t *timer)
+{
+    s_item_tap_pending = false;
+    if (s_item_highlight) {
+        lv_obj_add_flag(s_item_highlight, LV_OBJ_FLAG_HIDDEN);
+    }
+    app_sr_answer_tapped((int)(intptr_t)timer->user_data);
+}
+
+/*
+ * The number of the item of a list under the finger (a line "3, Grok (1,2 s)." of the reply), 0 if none; its text
+ * (up to the next line break) in *item, *item_end
+ */
+static int reply_item_tapped(const char **item, const char **item_end)
 {
     lv_indev_t *indev = lv_indev_get_act();
     if (!indev) {
@@ -157,6 +208,11 @@ static int reply_item_tapped(void)
     if (line == text) {
         return 0;       // the first line: the question, not an item
     }
+    *item = line;
+    *item_end = strchr(line, '\n');
+    if (!*item_end) {
+        *item_end = text + len;
+    }
     int number = 0;
     while (isdigit((unsigned char)*line) && number < 1000) {
         number = number * 10 + (*line++ - '0');
@@ -168,12 +224,20 @@ static void reply_double_tap_cb(lv_event_t *e)
 {
     static int64_t last_tap_us = 0;
     int64_t now = esp_timer_get_time();
-    // A question of a voice command waits for its answer: a tap on an item of its list answers it
-    int item = voice_cmd_waiting_answer() ? reply_item_tapped() : 0;
+    // A question of a voice command waits for its answer: a tap on an item of its list answers it (highlighted
+    // a moment first, to see it was tapped)
+    if (s_item_tap_pending) {
+        return;
+    }
+    const char *item_text = NULL, *item_end = NULL;
+    int item = voice_cmd_waiting_answer() ? reply_item_tapped(&item_text, &item_end) : 0;
     if (item > 0) {
         last_tap_us = 0;
         ESP_LOGI(TAG, "tap on item %d of the list", item);
-        app_sr_answer_tapped(item);
+        item_highlight_show(lv_label_get_text(ui_LabelReplyContent), item_text, item_end);
+        s_item_tap_pending = true;
+        lv_timer_t *timer = lv_timer_create(item_tap_timer_cb, ITEM_TAP_HIGHLIGHT_MS, (void *)(intptr_t)item);
+        lv_timer_set_repeat_count(timer, 1);
         return;
     }
     if (now - last_tap_us <= DOUBLE_TAP_MS * 1000LL) {

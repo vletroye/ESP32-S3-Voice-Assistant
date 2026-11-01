@@ -177,6 +177,7 @@ static const lang_field_t s_fields[] = {
     { "voice_current", offsetof(app_lang_t, voice_current), FIELD_TEXT, 1 },
     { "voice_ask_question", offsetof(app_lang_t, voice_ask_question), FIELD_TEXT, 1 },
     { "voice_already", offsetof(app_lang_t, voice_already), FIELD_TEXT, 1 },
+    { "voice_kept", offsetof(app_lang_t, voice_kept), FIELD_TEXT, 1 },
     { "voice_unknown", offsetof(app_lang_t, voice_unknown), FIELD_TEXT, 1 },
     { "country_ask", offsetof(app_lang_t, country_ask), FIELD_TEXT, 1 },
     { "city_ask", offsetof(app_lang_t, city_ask), FIELD_TEXT, 1 },

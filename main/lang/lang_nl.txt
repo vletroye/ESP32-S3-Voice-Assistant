@@ -220,6 +220,8 @@ voice_ask_question = Welke wil je?
 
 # %s: voice name
 voice_already = Ik heb al de stem %s.
+# "oui" to the sample of the voice just chosen ("Ma voix vous plaît ?"): kept, listened to again
+voice_kept = Prima, ik houd deze stem. Ik luister.
 
 # "change de transcription" / "change de synthèse vocale": %s, the models numbered ("1, OpenAI. 2, Voxtral.")
 stt_ask = Welke transcriptie wil je:: %s

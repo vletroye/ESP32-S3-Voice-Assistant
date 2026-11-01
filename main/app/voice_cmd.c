@@ -128,6 +128,7 @@ typedef enum {
     CONFIRM_EXCLUDE,        /* model test: exclude the slow free model asked about? */
     CONFIRM_TEST,           /* no test yet for "les modèles les plus rapides": run one? */
     CONFIRM_RESUME,         /* reasoning mode after a pause: go on with the conversation? */
+    CONFIRM_VOICE,          /* "Ma voix vous plaît ?": s_pending holds the voice before (given back on "non") */
 } asked_t;
 
 static asked_t s_asked = ASKED_NOTHING;
@@ -885,6 +886,17 @@ static char *voice_list(void)
     return out;
 }
 
+static bool has_any(const char *norm, const phrase_list_t *list);
+
+/* The voice of that name in use (saved already): the speech reconnects with it, the Settings screen follows */
+static void voice_apply(const char *name)
+{
+    sys_param_t *param = settings_get_parameter();
+    strlcpy(param->voice, name, sizeof(param->voice));
+    assistant_set_tts(NULL);
+    ui_ctrl_settings_sync();
+}
+
 /* Saved (Voice: its name) and applied at once: the confirmation is the sample of the new voice, spoken with it */
 static voice_cmd_t choose_voice(const char *norm, char **reply)
 {
@@ -905,10 +917,40 @@ static voice_cmd_t choose_voice(const char *norm, char **reply)
     }
     ESP_LOGI(TAG, "voice %s (%s %s) saved", voice->name, voice->provider, voice->id);
     sys_param_t *param = settings_get_parameter();
-    strlcpy(param->voice, voice->name, sizeof(param->voice));
-    assistant_set_tts(NULL);
-    ui_ctrl_settings_sync();
+    strlcpy(s_pending, param->voice, sizeof(s_pending));
+    voice_apply(voice->name);
+    // "Ma voix vous plaît ?" said with it: "oui" keeps it, "non" gives the one before back and lists them again
+    s_asked = CONFIRM_VOICE;
+    s_asked_us = esp_timer_get_time();
     *reply = reply_printf(lang->voice_sample, voice->name);
+    return VOICE_CMD_ANSWERED;
+}
+
+/* The answer to "Ma voix vous plaît ?" (a short one): yes / no; anything else is answered as usual */
+static voice_cmd_t answer_voice_sample(const char *norm, char **reply)
+{
+    int words = 1;
+    for (const char *c = norm; *c; c++) {
+        words += (*c == ' ');
+    }
+    bool no = words <= 4 && has_any(norm, &s_no);
+    bool yes = !no && words <= 4 && has_any(norm, &s_yes);
+    if (yes) {
+        *reply = reply_dup(app_lang_get()->voice_kept);
+        return VOICE_CMD_LISTEN;
+    }
+    if (!no) {
+        return VOICE_CMD_NONE;
+    }
+    // The voice before back (saved), then the list again, its answer awaited
+    if (s_pending[0]) {
+        ESP_LOGI(TAG, "voice %s given back", s_pending);
+        settings_save_str("Voice", s_pending);
+        voice_apply(s_pending);
+    }
+    s_asked = ASKED_VOICE;
+    s_asked_us = esp_timer_get_time();
+    *reply = voice_list();
     return VOICE_CMD_ANSWERED;
 }
 
@@ -1598,6 +1640,12 @@ static voice_cmd_t handle(const char *text, char **reply)
     }
     if (recent && asked == ASKED_MODEL) {
         return choose_model(norm, s_listed_provider, reply);
+    }
+    if (recent && asked == CONFIRM_VOICE) {
+        voice_cmd_t answered = answer_voice_sample(norm, reply);
+        if (answered != VOICE_CMD_NONE) {
+            return answered;
+        }
     }
     if (recent && asked == ASKED_VOICE) {
         return choose_voice(norm, reply);

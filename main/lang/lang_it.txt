@@ -219,6 +219,8 @@ voice_ask_question = Quale vuoi?
 
 # %s: voice name
 voice_already = Ho già la voce %s.
+# "oui" to the sample of the voice just chosen ("Ma voix vous plaît ?"): kept, listened to again
+voice_kept = Perfetto, tengo questa voce. Ti ascolto.
 
 # "change de transcription" / "change de synthèse vocale": %s, the models numbered ("1, OpenAI. 2, Voxtral.")
 stt_ask = Quale trascrizione vuoi:: %s

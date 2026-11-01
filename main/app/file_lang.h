@@ -128,6 +128,7 @@ typedef struct {
     const char *voice_current;      /* after the current voice in the list */
     const char *voice_ask_question;
     const char *voice_already;      /* %s: voice name */
+    const char *voice_kept;         /* "oui" to the sample of the voice just chosen: kept, listened to again */
     const char *voice_unknown;      /* %d: number of voices */
     /* Country and town changed by voice ("change mon pays", "change ma ville"), confirmed before saving */
     const char *country_ask;

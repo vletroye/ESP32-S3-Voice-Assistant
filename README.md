@@ -757,19 +757,31 @@ How to read this table:
   and GPT-6 Astra (larger models that reason before answering). Measured on the device: Haiku 5.5 0.7 to 1.6 s
   (see the latencies below), GPT-6 Luna 4 to 9 s despite no reasoning (time spent waiting on OpenAI's side);
   the other ratings are expected, not measured.
-- **Tools**: what each provider's models can do besides answering (see [Features in detail](#410-features-in-detail)):
+- **Tools**: what the models of each provider can do besides answering, called by the model when the question
+  needs them. <img src="docs/icons/web.png" width="16" alt="web"> web: the tool reaches a service on the Internet; <img src="docs/icons/local.png" width="16" alt="local"> local: the device does it itself (or a device
+  of the home network).
 
-  | Provider | Weather, volume, radio, Homey (the device's tools) | Web search |
-  | --- | --- | --- |
-  | Claude | yes | yes (Anthropic's) |
-  | Mistral AI, xAI (Grok), OpenRouter | yes (function calling); an OpenRouter model refusing tools (many free ones) answers without them | not yet (xAI's needs its Responses API; OpenRouter's plugin searches at every question; Mistral has none in Chat Completions) |
-  | Perplexity | no | yes (built in) |
-  | GPT (OpenAI) | not yet | yes (OpenAI's `web_search`, located where the user lives) |
-  | Gemini | not yet | yes (Grounding with Google Search) |
+  | Provider | <img src="docs/icons/web.png" width="16" alt="web"> Weather | <img src="docs/icons/web.png" width="16" alt="web"> Web search | <img src="docs/icons/local.png" width="16" alt="local"> Homey (home automation) | <img src="docs/icons/local.png" width="16" alt="local"> Radio | <img src="docs/icons/local.png" width="16" alt="local"> Volume |
+  | --- | :---: | :---: | :---: | :---: | :---: |
+  | <img src="docs/icons/claude.png" width="16" alt=""> Claude (Anthropic) | ✅ | ✅ Anthropic's | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/openai.png" width="16" alt=""> GPT (OpenAI) | ✅ | ✅ OpenAI's | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/gemini.png" width="16" alt=""> Gemini (Google) | ❌ | ✅ Google Search | ❌ | ❌ | ❌ |
+  | <img src="docs/icons/mistral.png" width="16" alt=""> Mistral AI | ✅ | ❌ | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/xai.png" width="16" alt=""> Grok (xAI) | ✅ | ❌ | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/openrouter.png" width="16" alt=""> OpenRouter | ✅ ¹ | ❌ | ✅ ¹ | ✅ ¹ | ✅ ¹ |
+  | <img src="docs/icons/perplexity.png" width="16" alt=""> Perplexity | ❌ | ✅ built in | ❌ | ❌ | ❌ |
 
-  The model decides when to search; a model refusing the search (HTTP 400 about it) is asked again without it,
-  until another model is chosen. Each search is billed per call: `openai:web_search` and `gemini:web_search` in
-  `[per_call]` of `AGENTS.INI` (added to the firmware's file: add them to yours to count them).
+  ¹ For the models that take tools: an OpenRouter model refusing them (many free ones) answers without them.
+
+  - The device's tools (weather, Homey, radio, volume) are declared once in `tools.c` (and Homey's read from its
+    MCP server): every provider that takes tools gets them all, a new tool too.
+  - Web search is the provider's own: the model decides when to search. A model refusing it (HTTP 400 about it)
+    is asked again without it, until another model is chosen. Not yet for Mistral (none in its Chat Completions
+    API), xAI (only in its Responses API) and OpenRouter (its plugin searches at every question). Each search is
+    billed per call: `openai:web_search` and `gemini:web_search` in `[per_call]` of `AGENTS.INI` (in the
+    firmware's file: add them to yours to count them).
+  - Commands said to the device itself (`VOICE_FR.TXT`: "mets la radio jazz", "parle plus fort"...) work with every
+    model, as the model is not asked.
 - **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three
   default models were among the most used on OpenRouter in October 2026 (prices as shown there then); change them
   in the `[openrouter]` section of `AGENTS.INI`.
@@ -1495,6 +1507,7 @@ Two firmwares live side by side in flash:
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
 | `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep); the conversation (`history.json`) is saved there at run time |
 | `version.txt`, `tools/bump_version.py` | — | Firmware version and the script raising it (see [Firmware version](#45-firmware-version)) |
+| `docs/icons/`, `tools/icons_to_png.py` | — | The icons of the screen (providers, web, local) as PNG for this README, made from `main/app/images/` |
 
 Main modules of the assistant (`main/app/`): the clients of the providers are named `ai_provider_<provider>`, the
 modules that manage a file of the configuration drive `file_<name>`.
@@ -1717,7 +1730,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   "New conversation", "J'ai une autre question" / "I have another question" or "Passons à autre chose" / "Let's move
   on" clear it too, without going to sleep. Changing the model starts a new
   one; a full `idf.py flash` erases it (the `storage` partition is rewritten).
-- **Tools** (Claude, Mistral, Grok and OpenRouter models), called by the model when the question needs them:
+- **Tools** (Claude, GPT, Mistral, Grok and OpenRouter models), called by the model when the question needs them:
   - **weather** ("Quel temps fera-t-il demain à Namur ?" / "What will the weather be tomorrow in Namur?"), from Open-Meteo, free and without key;
   - **volume** ("Parle plus fort" / "Speak louder", "Mets le volume à 50" / "Set the volume to 50"), applied at once if nothing is playing (else after
     the answer), kept across restarts; the assistant then goes back to sleep;
@@ -1837,7 +1850,9 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   question and the final answer. A model refusing the tools (HTTP 400 or 404 about tools: "No endpoints found
   that support tool use") is asked again without them, until another model is chosen. Mistral reads the
   instructions and the tools (~4,400 tokens) from its prompt cache. To add a tool, declare it in `tools.c` (JSON
-  definition + a case in `tools_run()`). GPT and Gemini models get no tools yet.
+  definition + a case in `tools_run()`). GPT models get them as functions of the Responses API (their
+  output items, encrypted reasoning included, given back with the results, as `store: false` requires). Gemini
+  models get no tools yet.
 - **Homey**: with `Homey_url` set, the main task opens an MCP session (`initialize`, then
   `notifications/initialized`) once the Wi-Fi is up, reads `tools/list` (~190 tools, ~180 KB, parsed in
   PSRAM) and keeps 16 of them (`s_selected` in `homey_mcp.c`, ~2,900 tokens of definitions instead of ~50,000).

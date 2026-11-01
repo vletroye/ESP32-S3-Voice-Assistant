@@ -69,6 +69,11 @@ static llm_provider_t s_provider = LLM_PROVIDER_COUNT;
 /* MODEL_TEST_MODEL: the id of the model, of the test asked and of the one running */
 static char s_next_model[80];
 static char s_model[80];
+static llm_speech_kind_t s_next_speech_kind = LLM_SPEECH_TTS;
+static llm_speech_kind_t s_speech_kind = LLM_SPEECH_TTS;
+// A test asked by the Settings screen: nothing shown on the reply panel, done() called after
+static void (*s_next_done)(void) = NULL;
+static void (*s_done)(void) = NULL;
 
 void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider)
 {
@@ -99,7 +104,27 @@ static bool speech_tested(llm_speech_kind_t kind, const llm_speech_model_t *m)
            (s_scope == MODEL_TEST_TTS && kind == LLM_SPEECH_TTS) ||
            (s_scope == MODEL_TEST_STT && kind == LLM_SPEECH_STT) ||
            (s_scope == MODEL_TEST_CURRENT &&
-            strcmp(m->id, kind == LLM_SPEECH_STT ? param->stt_model : param->tts_model) == 0);
+            strcmp(m->id, kind == LLM_SPEECH_STT ? param->stt_model : param->tts_model) == 0) ||
+           (s_scope == MODEL_TEST_SPEECH && kind == s_speech_kind && strcmp(m->id, s_model) == 0);
+}
+
+/* The speech models of a test: the disabled ones too when one is asked for by its id */
+static size_t speech_count(llm_speech_kind_t kind)
+{
+    return s_scope == MODEL_TEST_SPEECH ? llm_speech_all_count(kind) : llm_speech_count(kind);
+}
+
+static const llm_speech_model_t *speech_at(llm_speech_kind_t kind, size_t index)
+{
+    return s_scope == MODEL_TEST_SPEECH ? llm_speech_all(kind, index, NULL) : llm_speech_model(kind, index);
+}
+
+/* The results on the reply panel, unless the test was asked by the Settings screen (which stays) */
+static void show(const char *screen)
+{
+    if (!s_done) {
+        show(screen);
+    }
 }
 
 bool model_test_running(void)
@@ -406,15 +431,15 @@ static void test_speech(char *screen, size_t screen_size)
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 
-    for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_TTS) && !s_cancel && s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
-        const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_TTS, i);
+    for (size_t i = 0; i < speech_count(LLM_SPEECH_TTS) && !s_cancel && s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
+        const llm_speech_model_t *m = speech_at(LLM_SPEECH_TTS, i);
         if (!speech_tested(LLM_SPEECH_TTS, m)) {
             continue;
         }
         snprintf(name, sizeof(name), lang->test_tts_name, m->spoken);
         size_t line_start = strlen(screen);
         speech_line(screen, screen_size, name, NULL);
-        assistant_show(screen);
+        show(screen);
         typeof(s_speech_results[0]) *r = &s_speech_results[s_speech_result_count++];
         *r = (typeof(*r)) { .stt = false, .first_ms = -1, .total_ms = -1, .words = -1 };
         strlcpy(r->name, name, sizeof(r->name));
@@ -438,29 +463,30 @@ static void test_speech(char *screen, size_t screen_size)
             spoken_seconds(result, sizeof(result), r->first_ms, true);
         }
         speech_line(screen, screen_size, name, ok ? result : r->reason);
-        assistant_show(screen);
+        show(screen);
         if (!s_cancel) {
             // With the speech and voice of the settings (the test left its own)
             assistant_set_tts(NULL);
             say_speech_result(s_speech_result_count - 1);
         }
     }
-    if (s_scope == MODEL_TEST_STT && !s_cancel) {
+    if ((s_scope == MODEL_TEST_STT || (s_scope == MODEL_TEST_SPEECH && s_speech_kind == LLM_SPEECH_STT)) &&
+            !audio && !s_cancel) {
         audio = audio_for_stt(&samples);
     }
     // The speech of the settings again
     assistant_set_tts(NULL);
 
-    for (size_t i = 0; i < llm_speech_count(LLM_SPEECH_STT) && audio && !s_cancel &&
+    for (size_t i = 0; i < speech_count(LLM_SPEECH_STT) && audio && !s_cancel &&
             s_speech_result_count < SPEECH_RESULTS_MAX; i++) {
-        const llm_speech_model_t *m = llm_speech_model(LLM_SPEECH_STT, i);
+        const llm_speech_model_t *m = speech_at(LLM_SPEECH_STT, i);
         if (!speech_tested(LLM_SPEECH_STT, m)) {
             continue;
         }
         snprintf(name, sizeof(name), lang->test_stt_name, m->spoken);
         size_t line_start = strlen(screen);
         speech_line(screen, screen_size, name, NULL);
-        assistant_show(screen);
+        show(screen);
         typeof(s_speech_results[0]) *r = &s_speech_results[s_speech_result_count++];
         *r = (typeof(*r)) { .stt = true, .first_ms = -1, .total_ms = -1, .words = -1 };
         strlcpy(r->name, name, sizeof(r->name));
@@ -482,7 +508,7 @@ static void test_speech(char *screen, size_t screen_size)
             spoken_seconds(result, sizeof(result), r->first_ms, true);
         }
         speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : (r->reason ? r->reason : lang->test_why_no_text));
-        assistant_show(screen);
+        show(screen);
         if (!s_cancel) {
             say_speech_result(s_speech_result_count - 1);
         }
@@ -805,22 +831,24 @@ static void test_run(void)
     static const char *const scopes[] = {
         [MODEL_TEST_ALL] = "all", [MODEL_TEST_CURRENT] = "the current", [MODEL_TEST_PROVIDER] = "a provider's",
         [MODEL_TEST_TTS] = "the speech", [MODEL_TEST_STT] = "the transcription", [MODEL_TEST_LLM] = "the chat",
-        [MODEL_TEST_MODEL] = "one of the",
+        [MODEL_TEST_MODEL] = "one of the", [MODEL_TEST_SPEECH] = "one of the speech",
     };
     ESP_LOGI(TAG, "Testing %s models (%u chat models offered)%s%s", scopes[s_scope], (unsigned)count,
              s_scope == MODEL_TEST_PROVIDER ? ": " : "", s_scope == MODEL_TEST_PROVIDER ? llm_provider_name(s_provider) : "");
     assistant_announce_begin();
 
     int number = 0;
-    for (size_t i = 0; i < count && !s_cancel && screen; i++) {
-        const llm_model_t *m = &llm_models[i];
+    // One chat model asked for by its id: it may be a disabled one
+    size_t disabled = s_scope == MODEL_TEST_MODEL ? llm_disabled_count() : 0;
+    for (size_t i = 0; i < count + disabled && !s_cancel && screen; i++) {
+        const llm_model_t *m = i < count ? &llm_models[i] : llm_disabled_model(i - count);
         if (!chat_tested(m)) {
             continue;
         }
         size_t line_start = strlen(screen);
         number++;
         screen_line(screen, screen_size, line_start, number, m->spoken, NULL);
-        assistant_show(screen);
+        show(screen);
         llm_stats_t st;
         llm_error_t err = llm_probe(m, lang->test_question, &st);
         ESP_LOGI(TAG, "%s: %s, first %d ms, total %d ms, %d tokens (reasoning %d)", m->id, status_of(err),
@@ -846,7 +874,7 @@ static void test_run(void)
             screen_line(screen, screen_size, line_start, number, m->spoken, reason);
             unavailable_text(text, sizeof(text), m->spoken, reason);
         }
-        assistant_show(screen);
+        show(screen);
         // Queued: spoken while the next model is tested
         assistant_announce(text);
     }
@@ -866,6 +894,13 @@ static void test_run(void)
             assistant_announce(text);
         }
         assistant_announce_end();
+        if (s_done) {
+            // The Settings screen stays: no question, no sleep
+            cJSON_Delete(times);
+            free(screen);
+            ESP_LOGI(TAG, "Test done");
+            return;
+        }
         find_slow_free(times);
         if (!s_cancel && model_test_exclusion_question(text, sizeof(text))) {
             // Asked as an answer: the user's answer is listened to, then voice_cmd.c asks about the next one
@@ -898,6 +933,9 @@ void model_test_start(void)
     s_scope = s_next_scope;
     s_provider = s_next_provider;
     strlcpy(s_model, s_next_model, sizeof(s_model));
+    s_speech_kind = s_next_speech_kind;
+    s_done = s_next_done;
+    s_next_done = NULL;
     s_next_scope = MODEL_TEST_ALL;      // the next test, unless asked otherwise
     s_running = true;
     s_pending = true;
@@ -919,4 +957,20 @@ void model_test_poll(void)
     s_pending = false;
     test_run();
     s_running = false;
+    if (s_done) {
+        s_done();
+    }
+}
+
+bool model_test_one(model_test_kind_t kind, const char *id, void (*done)(void))
+{
+    if (s_running || !id) {
+        return false;
+    }
+    s_next_scope = kind == MODEL_TEST_KIND_LLM ? MODEL_TEST_MODEL : MODEL_TEST_SPEECH;
+    s_next_speech_kind = kind == MODEL_TEST_KIND_STT ? LLM_SPEECH_STT : LLM_SPEECH_TTS;
+    strlcpy(s_next_model, id, sizeof(s_next_model));
+    s_next_done = done;
+    model_test_start();
+    return true;
 }

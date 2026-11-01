@@ -28,7 +28,15 @@ typedef enum {
     MODEL_TEST_STT,         /* "teste les modèles de STT": the transcription models (given the audio of a speech one) */
     MODEL_TEST_LLM,         /* "teste les modèles de LLM": the chat models */
     MODEL_TEST_MODEL,       /* "teste le modèle Argon": one chat model (model_test_set_model) */
+    MODEL_TEST_SPEECH,      /* one transcription or speech model (model_test_one) */
 } model_test_scope_t;
+
+/* The kind of model of model_test_one */
+typedef enum {
+    MODEL_TEST_KIND_LLM,
+    MODEL_TEST_KIND_STT,
+    MODEL_TEST_KIND_TTS,
+} model_test_kind_t;
 
 /** The models of the next test (provider: for MODEL_TEST_PROVIDER), kept until it is started */
 void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider);
@@ -38,6 +46,13 @@ void model_test_set_model(const char *id);
 
 /** Ask for the test (nothing if one is running); it is run by model_test_poll() */
 void model_test_start(void);
+
+/**
+ * @brief The Settings screen: one model tested at once (its id), even a disabled one; its result is spoken, not
+ *        shown on the reply panel (the screen stays), then done() is called from the main task (NULL: none).
+ *        false if a test is running.
+ */
+bool model_test_one(model_test_kind_t kind, const char *id, void (*done)(void));
 
 /**
  * @brief Run the test if asked: from the main task's loop, whose stack (in internal RAM, needed by the TLS

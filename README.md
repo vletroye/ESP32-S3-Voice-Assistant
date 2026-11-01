@@ -769,7 +769,7 @@ How to read this table:
   | --- | :---: | :---: | :---: | :---: | :---: |
   | <img src="docs/icons/claude.png" width="16" alt=""> Anthropic (Claude) | ✅ | ✅ Anthropic's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/openai.png" width="16" alt=""> OpenAI (GPT) | ✅ | ✅ OpenAI's | ✅ | ✅ | ✅ |
-  | <img src="docs/icons/gemini.png" width="16" alt=""> Google (Gemini) | ❌ | ✅ Google Search | ❌ | ❌ | ❌ |
+  | <img src="docs/icons/gemini.png" width="16" alt=""> Google (Gemini) | ✅ | ✅ Google Search | ✅ | ✅ | ✅ |
   | <img src="docs/icons/mistral.png" width="16" alt=""> Mistral AI | ✅ | ❌ | ✅ | ✅ | ✅ |
   | <img src="docs/icons/xai.png" width="16" alt=""> xAI (Grok) | ✅ | ❌ | ✅ | ✅ | ✅ |
   | <img src="docs/icons/openrouter.png" width="16" alt=""> OpenRouter | ✅ ¹ | ❌ | ✅ ¹ | ✅ ¹ | ✅ ¹ |
@@ -1735,7 +1735,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   "New conversation", "J'ai une autre question" / "I have another question" or "Passons à autre chose" / "Let's move
   on" clear it too, without going to sleep. Changing the model starts a new
   one; a full `idf.py flash` erases it (the `storage` partition is rewritten).
-- **Tools** (Claude, GPT, Mistral, Grok and OpenRouter models), called by the model when the question needs them:
+- **Tools** (Claude, GPT, Gemini, Mistral, Grok and OpenRouter models), called by the model when the question needs them:
   - **weather** ("Quel temps fera-t-il demain à Namur ?" / "What will the weather be tomorrow in Namur?"), from Open-Meteo, free and without key;
   - **volume** ("Parle plus fort" / "Speak louder", "Mets le volume à 50" / "Set the volume to 50"), applied at once if nothing is playing (else after
     the answer), kept across restarts; the assistant then goes back to sleep;
@@ -1857,7 +1857,9 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   instructions and the tools (~4,400 tokens) from its prompt cache. To add a tool, declare it in `tools.c` (JSON
   definition + a case in `tools_run()`). GPT models get them as functions of the Responses API (their
   output items, encrypted reasoning included, given back with the results, as `store: false` requires). Gemini
-  models get no tools yet.
+  models get them as `functionDeclarations` (their schemas as `parametersJsonSchema`), next to Google Search: the
+  model's parts are given back as they came (their thought signatures are checked), the results as
+  `functionResponse` parts. A Gemini model refusing Google Search with the functions keeps the functions.
 - **Homey**: with `Homey_url` set, the main task opens an MCP session (`initialize`, then
   `notifications/initialized`) once the Wi-Fi is up, reads `tools/list` (~190 tools, ~180 KB, parsed in
   PSRAM) and keeps 16 of them (`s_selected` in `homey_mcp.c`, ~2,900 tokens of definitions instead of ~50,000).

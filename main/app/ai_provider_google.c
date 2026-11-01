@@ -6,7 +6,8 @@
  * Gemini client: Gemini API generateContent with server-sent events (streamGenerateContent?alt=sse),
  * the conversation kept on the device and sent with each request. The effort of AGENTS.INI is its
  * thinkingConfig.thinkingLevel ("minimal", "low", ...). With Google Search grounding: the model decides when to
- * search (a model refusing it is asked again without, until another model).
+ * search (a model refusing it is asked again without, until another model), and the device's tools as function
+ * declarations (weather, volume, radio, Homey).
  */
 
 #include <stdio.h>
@@ -14,6 +15,7 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_check.h"
+#include "esp_heap_caps.h"
 #include "cJSON.h"
 #include "ai_provider_google.h"
 #include "file_costs.h"
@@ -32,14 +34,23 @@ static char *s_instructions = NULL;
 static char *s_thinking_level = NULL;
 /* The model refused the Google Search tool: its questions asked without, until another model */
 static bool s_search_refused = false;
+/* The device's tools (definitions of tools.c) and the function running them, NULL for none */
+static const cJSON *s_tools = NULL;
+static llm_tool_runner_t s_runner = NULL;
+/* Rounds of function calls answered per question before giving up */
+#define GEMINI_TOOL_ROUNDS_MAX  3
 /* Conversation history: contents [{role: "user" | "model", parts: [{text}]}] */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */
 static llm_http_t s_http = { .url = s_url, .key_header = "x-goog-api-key" };
 
+/* A round: one request and its streamed answer (its text added to the answer of the question) */
 typedef struct {
-    llm_answer_t answer;
+    llm_answer_t *answer;
     llm_sse_t sse;
+    cJSON *parts;               /* the parts of the model's content (thought signatures included), given back */
+    int call_count;             /* function calls among them */
+    bool retry;                 /* to be sent again (Google Search refused) */
     char *signature;            /* last thought signature, sent back with the answer */
     char finish[32];            /* finishReason: "STOP", "MAX_TOKENS", "SAFETY"... */
     bool blocked;               /* prompt blocked (promptFeedback.blockReason) */
@@ -130,11 +141,33 @@ static char *build_request(void)
         cJSON_AddItemToArray(cJSON_GetObjectItem(system, "parts"), part);
     }
     free(with_hint);
+    cJSON *tools = cJSON_CreateArray();
     if (!s_search_refused) {
-        // Grounding with Google Search: [{"google_search": {}}]
+        // Grounding with Google Search: {"google_search": {}}
         cJSON *search = cJSON_CreateObject();
         cJSON_AddObjectToObject(search, "google_search");
-        cJSON_AddItemToArray(cJSON_AddArrayToObject(req, "tools"), search);
+        cJSON_AddItemToArray(tools, search);
+    }
+    // The device's tools: {"functionDeclarations": [{name, description, parametersJsonSchema}]} (the definitions
+    // referenced, owned by tools.c; their schemas given as JSON Schema)
+    if (s_tools && s_runner && cJSON_GetArraySize(s_tools) > 0) {
+        cJSON *functions = cJSON_CreateObject();
+        cJSON *declarations = cJSON_AddArrayToObject(functions, "functionDeclarations");
+        const cJSON *def;
+        cJSON_ArrayForEach(def, s_tools) {
+            cJSON *declaration = cJSON_CreateObject();
+            cJSON_AddItemReferenceToObject(declaration, "name", cJSON_GetObjectItem(def, "name"));
+            cJSON_AddItemReferenceToObject(declaration, "description", cJSON_GetObjectItem(def, "description"));
+            cJSON_AddItemReferenceToObject(declaration, "parametersJsonSchema",
+                                           cJSON_GetObjectItem(def, "input_schema"));
+            cJSON_AddItemToArray(declarations, declaration);
+        }
+        cJSON_AddItemToArray(tools, functions);
+    }
+    if (cJSON_GetArraySize(tools) > 0) {
+        cJSON_AddItemToObject(req, "tools", tools);
+    } else {
+        cJSON_Delete(tools);
     }
     /* Referenced, not copied: the history stays owned by s_messages */
     cJSON_AddItemReferenceToObject(req, "contents", s_messages);
@@ -178,11 +211,18 @@ static void sse_dispatch(const char *data, void *ctx)
         if (cJSON_IsString(signature)) {
             llm_str_set(&st->signature, signature->valuestring);
         }
-        const cJSON *text = cJSON_GetObjectItem(part, "text");
-        if (cJSON_IsTrue(cJSON_GetObjectItem(part, "thought")) || !cJSON_IsString(text)) {
+        if (cJSON_IsTrue(cJSON_GetObjectItem(part, "thought"))) {
             continue;   // thought summaries are not spoken
         }
-        llm_answer_add(&st->answer, text->valuestring, strlen(text->valuestring));
+        // Kept as they came: given back with the results of the calls (their thought signatures are checked)
+        cJSON_AddItemToArray(st->parts, cJSON_Duplicate(part, true));
+        if (cJSON_IsObject(cJSON_GetObjectItem(part, "functionCall"))) {
+            st->call_count++;
+        }
+        const cJSON *text = cJSON_GetObjectItem(part, "text");
+        if (cJSON_IsString(text)) {
+            llm_answer_add(st->answer, text->valuestring, strlen(text->valuestring));
+        }
     }
     // The searches made, given with the grounding of the answer (the last events)
     const cJSON *queries = cJSON_GetObjectItem(cJSON_GetObjectItem(candidate, "groundingMetadata"), "webSearchQueries");
@@ -247,6 +287,113 @@ static void add_message(const char *role, const char *text, const char *signatur
     cJSON_AddItemToArray(s_messages, msg);
 }
 
+/* One request on the current history, its answer streamed into st (its text added to st->answer) */
+static void stream_once(stream_t *st)
+{
+    char *body = build_request();
+    int status = 0;
+    if (!body) {
+        st->error = LLM_ERR_OTHER;
+        return;
+    }
+    if (llm_http_send(&s_http, body, &status) != ESP_OK) {
+        free(body);
+        st->error = LLM_ERR_NETWORK;
+        return;
+    }
+    free(body);
+    if (status != 200) {
+        llm_buf_t err_body = {0};
+        st->error = llm_http_error(&s_http, status, error_from_json, NULL, &err_body);
+        if (status == 400 && !s_search_refused && err_body.len &&
+                (strcasestr(err_body.p, "google_search") || strcasestr(err_body.p, "grounding") ||
+                 strcasestr(err_body.p, "tool"))) {
+            // Google Search refused by this model, or with the functions: asked again without it
+            ESP_LOGW(TAG, "%s refuses Google Search: answered without it", s_model);
+            s_search_refused = true;
+            st->retry = true;
+        }
+        llm_buf_free(&err_body);
+        return;
+    }
+    /* The last event carries finishReason; the body ends right after it */
+    llm_http_stream(&s_http, &st->sse, NULL);
+    if (st->error == LLM_OK && !st->done) {
+        ESP_LOGE(TAG, "Stream ended before finishReason");
+        st->error = LLM_ERR_NETWORK;
+    }
+    llm_http_finish(&s_http, st->error == LLM_OK);
+    ESP_LOGI(TAG, "round: finish: %s, %d function call(s), tokens in %d (cached %d), out %d (thoughts %d)",
+             st->finish[0] ? st->finish : "-", st->call_count, st->input_tokens, st->cached_tokens, st->output_tokens,
+             st->thoughts_tokens);
+    // promptTokenCount counts the cached ones; the thoughts are billed as output. Each round is billed.
+    costs_add_tokens(COST_LLM, s_model, st->input_tokens - st->cached_tokens, st->cached_tokens, 0,
+                     st->output_tokens + st->thoughts_tokens);
+    costs_add_calls("gemini:web_search", st->web_searches);
+}
+
+/*
+ * The functions the model called: its content given back as it came (thought signatures included), then a user
+ * content with a functionResponse for each call (only for the rounds of this question: the history keeps the
+ * question and the final answer)
+ */
+static void run_tools(stream_t *st)
+{
+    cJSON *model = cJSON_CreateObject();
+    cJSON_AddStringToObject(model, "role", "model");
+    cJSON *parts = st->parts;
+    st->parts = NULL;
+    cJSON_AddItemToObject(model, "parts", parts);
+    cJSON_AddItemToArray(s_messages, model);
+
+    cJSON *user = cJSON_CreateObject();
+    cJSON_AddStringToObject(user, "role", "user");
+    cJSON *responses = cJSON_AddArrayToObject(user, "parts");
+    const cJSON *part;
+    cJSON_ArrayForEach(part, parts) {
+        const cJSON *call = cJSON_GetObjectItem(part, "functionCall");
+        if (!cJSON_IsObject(call)) {
+            continue;
+        }
+        const cJSON *name = cJSON_GetObjectItem(call, "name");
+        const cJSON *id = cJSON_GetObjectItem(call, "id");
+        const cJSON *args = cJSON_GetObjectItem(call, "args");
+        cJSON *input = cJSON_IsObject(args) ? cJSON_Duplicate(args, true) : cJSON_CreateObject();
+        char *args_text = cJSON_PrintUnformatted(input);
+        ESP_LOGI(TAG, "tool %s(%.200s)", cJSON_IsString(name) ? name->valuestring : "?", args_text ? args_text : "");
+        free(args_text);
+        bool is_error = false;
+        char *output = s_runner(cJSON_IsString(name) ? name->valuestring : "", input, &is_error);
+        cJSON_Delete(input);
+        // The response is an object: the result as JSON when it is, else its text
+        cJSON *result = output ? cJSON_Parse(output) : NULL;
+        if (!cJSON_IsObject(result)) {
+            cJSON_Delete(result);
+            result = cJSON_CreateObject();
+            cJSON_AddStringToObject(result, is_error || !output ? "error" : "result",
+                                    output ? output : "tool unavailable");
+        }
+        free(output);
+        cJSON *response_part = cJSON_CreateObject();
+        cJSON *response = cJSON_AddObjectToObject(response_part, "functionResponse");
+        if (cJSON_IsString(id)) {
+            cJSON_AddStringToObject(response, "id", id->valuestring);
+        }
+        cJSON_AddStringToObject(response, "name", cJSON_IsString(name) ? name->valuestring : "");
+        cJSON_AddItemToObject(response, "response", result);
+        cJSON_AddItemToArray(responses, response_part);
+    }
+    cJSON_AddItemToArray(s_messages, user);
+}
+
+static void stream_free(stream_t *st)
+{
+    llm_sse_free(&st->sse);
+    cJSON_Delete(st->parts);
+    free(st->signature);
+    free(st);
+}
+
 static llm_error_t gemini_stream(void *state, const char *text, llm_text_cb_t on_text, void *ctx, char **full_text)
 {
     if (full_text) {
@@ -256,106 +403,99 @@ static llm_error_t gemini_stream(void *state, const char *text, llm_text_cb_t on
         return LLM_ERR_NO_KEY;
     }
 
-    stream_t st = {
-        .sse = { .on_event = sse_dispatch },
-        .error = LLM_OK,
-    };
-    st.sse.ctx = &st;
-    llm_answer_begin(&st.answer, on_text, ctx);
-    int status = 0;
-    char *body = NULL;
+    llm_answer_t answer;
+    llm_answer_begin(&answer, on_text, ctx);
+    llm_error_t error = LLM_OK;
+    int answer_tokens = 0;
+    int thoughts_tokens = 0;
+    char finish[32] = "";
+    bool blocked = false;
+    char *signature = NULL;
 
-    /* Append the question; removed again if the exchange fails */
+    /* Append the question; the contents of this exchange are removed again if it fails */
     int start_count = cJSON_GetArraySize(s_messages);
     add_message("user", text, NULL);
 
-    body = build_request();
-    if (!body) {
-        st.error = LLM_ERR_OTHER;
-        goto end;
-    }
-    if (llm_http_send(&s_http, body, &status) != ESP_OK) {
-        st.error = LLM_ERR_NETWORK;
-        goto end;
-    }
-    if (status != 200) {
-        llm_buf_t err_body = {0};
-        st.error = llm_http_error(&s_http, status, error_from_json, NULL, &err_body);
-        bool search_refused = status == 400 && !s_search_refused && err_body.len &&
-                              (strcasestr(err_body.p, "google_search") || strcasestr(err_body.p, "grounding") ||
-                               strcasestr(err_body.p, "tool"));
-        llm_buf_free(&err_body);
-        if (search_refused) {
-            ESP_LOGW(TAG, "%s refuses Google Search: answered without it", s_model);
-            s_search_refused = true;
-            free(body);
-            body = build_request();
-            st.error = LLM_OK;
-            if (!body || llm_http_send(&s_http, body, &status) != ESP_OK) {
-                st.error = body ? LLM_ERR_NETWORK : LLM_ERR_OTHER;
-                goto end;
-            }
-            if (status != 200) {
-                st.error = llm_http_error(&s_http, status, error_from_json, NULL, NULL);
-                goto end;
-            }
-        } else {
-            goto end;
+    for (int round = 0; ; round++) {
+        // In PSRAM: the caller's stack (the SR handler task) is short
+        stream_t *st = heap_caps_calloc(1, sizeof(stream_t), MALLOC_CAP_SPIRAM);
+        if (!st) {
+            error = LLM_ERR_OTHER;
+            break;
         }
+        st->answer = &answer;
+        st->sse.on_event = sse_dispatch;
+        st->sse.ctx = st;
+        st->error = LLM_OK;
+        st->parts = cJSON_CreateArray();
+        stream_once(st);
+        if (st->retry && round == 0) {
+            stream_free(st);
+            round = -1;         // the same question, without Google Search
+            continue;
+        }
+        error = st->error;
+        strlcpy(finish, st->finish, sizeof(finish));
+        blocked |= st->blocked;
+        answer_tokens += st->output_tokens;
+        thoughts_tokens += st->thoughts_tokens;
+        llm_str_set(&signature, st->signature);
+        if (error != LLM_OK || st->call_count == 0 || !s_runner) {
+            stream_free(st);
+            break;
+        }
+        if (round >= GEMINI_TOOL_ROUNDS_MAX) {
+            ESP_LOGE(TAG, "Function call not answered (round %d)", round + 1);
+            stream_free(st);
+            error = LLM_ERR_OTHER;
+            break;
+        }
+        // What was said before the call ("Je regarde.") is spoken while the tools run
+        if (on_text) {
+            on_text(NULL, ctx);
+        }
+        run_tools(st);
+        stream_free(st);
     }
 
-    /* The last event carries finishReason; the body ends right after it */
-    llm_http_stream(&s_http, &st.sse, NULL);
-    if (st.error == LLM_OK && !st.done) {
-        ESP_LOGE(TAG, "Stream ended before finishReason");
-        st.error = LLM_ERR_NETWORK;
-    }
-    llm_http_finish(&s_http, st.error == LLM_OK);
-
-    if (st.error == LLM_OK) {
-        bool safety = strcmp(st.finish, "SAFETY") == 0 || strcmp(st.finish, "PROHIBITED_CONTENT") == 0 ||
-                      strcmp(st.finish, "BLOCKLIST") == 0 || strcmp(st.finish, "SPII") == 0;
-        if ((st.blocked || safety) && st.answer.text.len == 0) {
-            ESP_LOGW(TAG, "Request declined (%s)", st.blocked ? "prompt blocked" : st.finish);
-            st.error = LLM_ERR_REFUSAL;
-        } else if (strcmp(st.finish, "MAX_TOKENS") == 0) {
+    if (error == LLM_OK) {
+        bool safety = strcmp(finish, "SAFETY") == 0 || strcmp(finish, "PROHIBITED_CONTENT") == 0 ||
+                      strcmp(finish, "BLOCKLIST") == 0 || strcmp(finish, "SPII") == 0;
+        if ((blocked || safety) && answer.text.len == 0) {
+            ESP_LOGW(TAG, "Request declined (%s)", blocked ? "prompt blocked" : finish);
+            error = LLM_ERR_REFUSAL;
+        } else if (strcmp(finish, "MAX_TOKENS") == 0) {
             ESP_LOGW(TAG, "Answer truncated (MAX_TOKENS)");
         }
-        if (st.error == LLM_OK && st.answer.text.len == 0) {
-            ESP_LOGE(TAG, "No text in answer (finish: %s)", st.finish[0] ? st.finish : "-");
-            st.error = LLM_ERR_OTHER;
+        if (error == LLM_OK && answer.text.len == 0) {
+            ESP_LOGE(TAG, "No text in answer (finish: %s)", finish[0] ? finish : "-");
+            error = LLM_ERR_OTHER;
         }
     }
+    ESP_LOGI(TAG, "first text after %d ms, total %d ms, finish: %s", llm_answer_first_ms(&answer),
+             llm_answer_total_ms(&answer), finish[0] ? finish : "-");
+    llm_answer_stats(&answer, answer_tokens, thoughts_tokens);
 
-    ESP_LOGI(TAG, "first text after %d ms, total %d ms, finish: %s, tokens in %d (cached %d), out %d (thoughts %d)",
-             llm_answer_first_ms(&st.answer), llm_answer_total_ms(&st.answer), st.finish[0] ? st.finish : "-",
-             st.input_tokens, st.cached_tokens, st.output_tokens, st.thoughts_tokens);
-    llm_answer_stats(&st.answer, st.output_tokens, st.thoughts_tokens);
-    // promptTokenCount counts the cached ones; the thoughts are billed as output
-    costs_add_tokens(COST_LLM, s_model, st.input_tokens - st.cached_tokens, st.cached_tokens, 0,
-                     st.output_tokens + st.thoughts_tokens);
-    costs_add_calls("gemini:web_search", st.web_searches);
-    if (st.web_searches) {
-        ESP_LOGI(TAG, "%d Google search(es)", st.web_searches);
-    }
-
-end:
-    if (st.error == LLM_OK) {
-        add_message("model", st.answer.text.p, st.signature);
+    // The history keeps the question and the final answer: the calls and their results (used already) would be
+    // sent again with every later question
+    llm_history_drop_from(s_messages, start_count + (error == LLM_OK));
+    if (error == LLM_OK) {
+        add_message("model", answer.text.p, signature);
         llm_history_trim(s_messages, NULL);
         if (full_text) {
-            *full_text = st.answer.text.p;
-            st.answer.text.p = NULL;
+            *full_text = answer.text.p;
+            answer.text.p = NULL;
         }
-    } else {
-        /* Drop the unanswered question so that the history keeps alternating user/model */
-        llm_history_drop_from(s_messages, start_count);
     }
-    llm_sse_free(&st.sse);
-    llm_buf_free(&st.answer.text);
-    free(st.signature);
-    free(body);
-    return st.error;
+    llm_buf_free(&answer.text);
+    free(signature);
+    return error;
+}
+
+static void gemini_set_tools(void *state, const cJSON *definitions, llm_tool_runner_t runner)
+{
+    s_tools = definitions;
+    s_runner = definitions ? runner : NULL;
 }
 
 const llm_backend_t llm_backend_gemini = {
@@ -366,4 +506,5 @@ const llm_backend_t llm_backend_gemini = {
     .set_history = gemini_set_history,
     .prewarm = gemini_prewarm,
     .stream = gemini_stream,
+    .set_tools = gemini_set_tools,
 };

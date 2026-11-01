@@ -8,7 +8,8 @@
  * "0", answering text to text (no code or moderation model), in that order, plus "openrouter/free" (OpenRouter
  * picks a free model for each question). The list is kept on
  * SPIFFS, so that the models are offered at start-up and when OpenRouter cannot be reached. OpenRouter_free of
- * CONFIG.INI: how many are offered (0: none, the list is not read); [openrouter_free_exclude] of AGENTS.INI. More
+ * CONFIG.INI: how many are offered (0: none, the list is not read); [openrouter_free] of AGENTS.INI lists those
+ * found, a "-" before those never offered. More
  * candidates than offered are kept, so that a change of these applies at the next start, without reading again.
  */
 
@@ -187,6 +188,10 @@ static bool apply(const char *const *ids, const char *const *names, int n)
     }
     if (!llm_free_excluded(FREE_AUTO_ID)) {
         models[count++] = (llm_model_t) { FREE_AUTO_ID, "Free (auto)", "low", "Free" };
+    }
+    // The models found, listed in [openrouter_free] of AGENTS.INI (a "-" there: never offered)
+    if (n > 0) {
+        llm_free_found(ids, names, n);
     }
     bool enough = (n == 0 || offered_free(count) >= wanted);
     llm_set_openrouter_free_models(models, count);

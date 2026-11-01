@@ -26,6 +26,7 @@
 #include "ai_provider_perplexity.h"
 #include "ai_providers.h"
 #include "tools.h"
+#include "llm_sse.h"
 
 static const char *TAG = "llm";
 
@@ -44,9 +45,13 @@ size_t llm_model_count = 0;
 llm_stats_t llm_last_stats;
 /* Models of AGENTS.INI, then the free OpenRouter ones */
 static size_t s_file_count = 0;
-/* Free OpenRouter models never offered: [openrouter_free_exclude] of AGENTS.INI */
+/* Free OpenRouter models never offered: [openrouter_free_exclude] of an older AGENTS.INI (its exact ids moved to
+ * [openrouter_free] with a "-"; an id ending with * stays there) */
 #define FREE_EXCLUDED_MAX   32
 #define FREE_EXCLUDE_SECTION    "openrouter_free_exclude"
+/* [openrouter_free]: the free OpenRouter models found ("id = name"), a "-" before those never offered */
+#define FREE_SECTION            "openrouter_free"
+#define FREE_LINES_MAX          48
 /*
  * [stt], [tts]: the transcription and speech models offered, with their provider and prices ([speech]: the prices
  * only, in a file of an older firmware); [per_call]: prices per call (web search)
@@ -79,6 +84,12 @@ static struct {
 static int s_call_count = 0;
 static char *s_free_excluded[FREE_EXCLUDED_MAX];
 static int s_free_excluded_count = 0;
+static struct {
+    char *id;
+    char *name;
+    bool disabled;
+} s_free_lines[FREE_LINES_MAX];
+static int s_free_line_count = 0;
 
 /* Without the blanks around it (in place) */
 static char *trim(char *s)
@@ -169,8 +180,11 @@ static void split_fields(char *rest, fields_t *f)
 /* Section of a line ("[anthropic]"): its provider, or one of the special sections */
 typedef enum {
     SECTION_NONE, SECTION_MODELS, SECTION_EXCLUDE, SECTION_SPEECH, SECTION_STT, SECTION_TTS, SECTION_PER_CALL,
-    SECTION_VOICES
+    SECTION_VOICES, SECTION_FREE
 } section_t;
+
+static bool set_line_disabled(const char *id, section_t wanted, bool disabled);
+static void migrate_free_excluded(void);
 
 static section_t section_of(char *name, int *provider)
 {
@@ -189,7 +203,8 @@ static section_t section_of(char *name, int *provider)
            strcasecmp(name, STT_SECTION) == 0 ? SECTION_STT :
            strcasecmp(name, TTS_SECTION) == 0 ? SECTION_TTS :
            strcasecmp(name, PER_CALL_SECTION) == 0 ? SECTION_PER_CALL :
-           strcasecmp(name, VOICES_SECTION) == 0 ? SECTION_VOICES : SECTION_NONE;
+           strcasecmp(name, VOICES_SECTION) == 0 ? SECTION_VOICES :
+           strcasecmp(name, FREE_SECTION) == 0 ? SECTION_FREE : SECTION_NONE;
 }
 
 /* "-" or nothing: none */
@@ -267,6 +282,11 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
             free(s_free_excluded[i]);
         }
         s_free_excluded_count = 0;
+        for (int i = 0; i < s_free_line_count; i++) {
+            free(s_free_lines[i].id);
+            free(s_free_lines[i].name);
+        }
+        s_free_line_count = 0;
         for (int i = 0; i < s_speech_count; i++) {
             free((char *)s_speech[i].model.id);
             free((char *)s_speech[i].model.label);
@@ -327,9 +347,19 @@ static size_t parse_models(const char *text, llm_model_t *models, size_t max, bo
         const char *id = trim(line);
         // "-id = ...": a model disabled (Settings screen), kept in the file
         bool disabled = (id[0] == '-' && (section == SECTION_MODELS || section == SECTION_STT ||
-                                          section == SECTION_TTS));
+                                          section == SECTION_TTS || section == SECTION_FREE));
         if (disabled) {
             id = trim((char *)id + 1);
+        }
+        if (section == SECTION_FREE) {
+            // "vendor/model:free = Name", "-vendor/model:free = Name" (never offered)
+            if (lists && id[0] && s_free_line_count < FREE_LINES_MAX) {
+                const char *name = trim(eq + 1);
+                s_free_lines[s_free_line_count].id = strdup(id);
+                s_free_lines[s_free_line_count].name = strdup(name[0] ? name : id);
+                s_free_lines[s_free_line_count++].disabled = disabled;
+            }
+            continue;
         }
         if (section == SECTION_PER_CALL) {
             // "claude:web_search = 0.0086"
@@ -773,7 +803,7 @@ void llm_load_models(void)
         // A file of an older firmware: the sections added since, and the prices of the models it lacks. The
         // [per_call] line first: it rewrites the file from text, which the sections appended would not be in
         add_missing_calls(text);
-        add_missing_section(text, FREE_EXCLUDE_SECTION);
+        add_missing_section(text, FREE_SECTION);   // the free OpenRouter models, "-" for those never offered
         add_missing_section(text, STT_SECTION);    // the transcription and speech models to choose from
         add_missing_section(text, TTS_SECTION);
         add_missing_section(text, VOICES_SECTION);     // the voices to choose from
@@ -801,6 +831,7 @@ void llm_load_models(void)
     }
     free(text);
     llm_model_count = s_file_count;
+    migrate_free_excluded();
     ESP_LOGI(TAG, "%u models from AGENTS.INI (%u disabled), %d free OpenRouter model(s) excluded, %d speech model(s), "
              "%d voice(s), %d per-call price(s)", (unsigned)s_file_count, (unsigned)s_disabled_count,
              s_free_excluded_count, s_speech_count,
@@ -946,6 +977,12 @@ bool llm_call_price_of(const char *id, double *price)
 
 bool llm_free_excluded(const char *id)
 {
+    for (int i = 0; i < s_free_line_count; i++) {
+        if (strcmp(id, s_free_lines[i].id) == 0) {
+            return s_free_lines[i].disabled;
+        }
+    }
+    // An id ending with * of the [openrouter_free_exclude] of an older file
     for (int i = 0; i < s_free_excluded_count; i++) {
         const char *x = s_free_excluded[i];
         size_t len = strlen(x);
@@ -956,43 +993,139 @@ bool llm_free_excluded(const char *id)
     return false;
 }
 
+/*
+ * Lines added at the end of [openrouter_free] (created if missing): "id = name", with a "-" if disabled. Only the
+ * ids it does not list yet; the lists in memory follow. Returns how many were added.
+ */
+static int free_lines_add(const char *const *ids, const char *const *names, int n, bool disabled)
+{
+    char *text = read_agents_file();
+    if (!text || s_agents_cut) {
+        free(text);
+        return 0;
+    }
+    llm_buf_t lines = {0};
+    int added = 0;
+    for (int i = 0; i < n; i++) {
+        bool known = false;
+        for (int k = 0; k < s_free_line_count && !known; k++) {
+            known = strcmp(s_free_lines[k].id, ids[i]) == 0;
+        }
+        if (known || s_free_line_count >= FREE_LINES_MAX) {
+            continue;
+        }
+        char line[200];
+        snprintf(line, sizeof(line), "%s%s = %s\n", disabled ? "-" : "", ids[i], names[i] ? names[i] : ids[i]);
+        llm_buf_append(&lines, line, strlen(line));
+        s_free_lines[s_free_line_count].id = strdup(ids[i]);
+        s_free_lines[s_free_line_count].name = strdup(names[i] ? names[i] : ids[i]);
+        s_free_lines[s_free_line_count++].disabled = disabled;
+        added++;
+    }
+    if (!added) {
+        free(text);
+        llm_buf_free(&lines);
+        return 0;
+    }
+    size_t size = strlen(text) + lines.len + 64;
+    char *out = heap_caps_calloc(1, size, MALLOC_CAP_SPIRAM);
+    const char *header = section_line(text, "[" FREE_SECTION "]");
+    if (out && header) {
+        // After the last line of the section (its blank lines and the comments of the next section after)
+        const char *end = section_end(header);
+        while (end > header && (end[-1] == '\n' || end[-1] == '\r' || end[-1] == ' ')) {
+            end--;
+        }
+        const char *eol = strchr(end, '\n');
+        end = eol ? eol + 1 : end + strlen(end);
+        memcpy(out, text, (size_t)(end - text));
+        size_t at = (size_t)(end - text);
+        if (at && out[at - 1] != '\n') {
+            out[at++] = '\n';
+        }
+        memcpy(out + at, lines.p, lines.len);
+        strlcpy(out + at + lines.len, end, size - at - lines.len);
+    } else if (out) {
+        snprintf(out, size, "%s%s\n[" FREE_SECTION "]\n%s", text, text[0] && text[strlen(text) - 1] != '\n' ? "\n" : "",
+                 lines.p);
+    }
+    bool ok = out && write_agents_file(out);
+    ESP_LOGI(TAG, "%d free OpenRouter model(s) added to [" FREE_SECTION "]%s", added, ok ? "" : ": could not write");
+    free(out);
+    free(text);
+    llm_buf_free(&lines);
+    return added;
+}
+
+void llm_free_found(const char *const *ids, const char *const *names, int n)
+{
+    free_lines_add(ids, names, n, false);
+}
+
 void llm_free_exclude_add(const char *id, const char *comment)
 {
-    if (llm_free_excluded(id) || s_free_excluded_count >= FREE_EXCLUDED_MAX) {
-        return;
+    for (int i = 0; i < s_free_line_count; i++) {
+        if (strcmp(id, s_free_lines[i].id) == 0) {
+            if (!s_free_lines[i].disabled && set_line_disabled(id, SECTION_FREE, true)) {
+                s_free_lines[i].disabled = true;
+            }
+            return;
+        }
     }
-    s_free_excluded[s_free_excluded_count++] = strdup(id);
-    char *text = read_agents_file();
-    size_t size = (text ? strlen(text) : 0) + strlen(id) + (comment ? strlen(comment) : 0) + 96;
-    char *out = calloc(1, size);
-    if (!out) {
-        free(text);
-        return;
+    const char *names[] = { id };
+    free_lines_add(&id, names, 1, true);
+}
+
+size_t llm_free_count(void)
+{
+    return (size_t)s_free_line_count;
+}
+
+const char *llm_free_line(size_t index, const char **name, bool *enabled)
+{
+    if (index >= (size_t)s_free_line_count) {
+        return NULL;
     }
-    char line[160];
-    snprintf(line, sizeof(line), "%s%s%s\n", id, comment ? "   # " : "", comment ? comment : "");
-    const char *header = text ? strstr(text, "[" FREE_EXCLUDE_SECTION "]") : NULL;
-    const char *after = header ? strchr(header, '\n') : NULL;
-    if (after) {
-        // Right under the section's header
-        strncat(out, text, (size_t)(after + 1 - text));
-        strlcat(out, line, size);
-        strlcat(out, after + 1, size);
-    } else {
-        strlcat(out, text ? text : "", size);
-        size_t len = strlen(out);
-        strlcat(out, (len && out[len - 1] != '\n') ? "\n" : "", size);
-        strlcat(out, header ? "\n" : "\n[" FREE_EXCLUDE_SECTION "]\n", size);
-        strlcat(out, line, size);
+    if (name) {
+        *name = s_free_lines[index].name;
     }
-    FILE *f = s_agents_cut ? NULL : fopen(AGENTS_FILE, "w");
-    bool ok = f && fputs(out, f) >= 0;
-    if (f) {
-        ok &= (fclose(f) == 0);
+    if (enabled) {
+        *enabled = !s_free_lines[index].disabled;
     }
-    ESP_LOGI(TAG, "%s %s excluded in %s", ok ? "" : "Could not write:", id, AGENTS_FILE);
-    free(text);
-    free(out);
+    return s_free_lines[index].id;
+}
+
+bool llm_set_free_enabled(const char *id, bool enabled)
+{
+    for (int i = 0; i < s_free_line_count; i++) {
+        if (strcmp(id, s_free_lines[i].id) == 0) {
+            if (!set_line_disabled(id, SECTION_FREE, !enabled)) {
+                return false;
+            }
+            s_free_lines[i].disabled = !enabled;
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
+ * The exact ids of the [openrouter_free_exclude] of an older file: lines with a "-" in [openrouter_free]; the
+ * ids ending with * stay in the old section (still read)
+ */
+static void migrate_free_excluded(void)
+{
+    const char *ids[FREE_EXCLUDED_MAX];
+    int n = 0;
+    for (int i = 0; i < s_free_excluded_count; i++) {
+        size_t len = strlen(s_free_excluded[i]);
+        if (len && s_free_excluded[i][len - 1] != '*') {
+            ids[n++] = s_free_excluded[i];
+        }
+    }
+    if (n && free_lines_add(ids, ids, n, true)) {
+        ESP_LOGI(TAG, "%d id(s) of [" FREE_EXCLUDE_SECTION "] now disabled in [" FREE_SECTION "]", n);
+    }
 }
 
 size_t llm_disabled_count(void)
@@ -1009,7 +1142,7 @@ const llm_model_t *llm_disabled_model(size_t index)
  * The line "id = ..." of AGENTS.INI in a section of these kinds, given a "-" before its id or freed of it. The
  * rest of the file (comments, other lines, line ends) is kept.
  */
-static bool set_line_disabled(const char *id, bool chat, int speech_section, bool disabled)
+static bool set_line_disabled(const char *id, section_t wanted, bool disabled)
 {
     char *text = read_agents_file();
     if (!text || s_agents_cut) {
@@ -1041,7 +1174,7 @@ static bool set_line_disabled(const char *id, bool chat, int speech_section, boo
                 name[close - p - 1] = '\0';
                 section = section_of(name, &provider);
             }
-        } else if (!done && ((chat && section == SECTION_MODELS) || (!chat && (int)section == speech_section))) {
+        } else if (!done && section == wanted) {
             const char *q = (*p == '-') ? p + 1 : p;
             while (*q == ' ' || *q == '\t') {
                 q++;
@@ -1084,7 +1217,7 @@ bool llm_set_model_enabled(const char *id, bool enabled)
                 continue;
             }
             if (llm_model_count >= LLM_FILE_MODELS_MAX + LLM_OPENROUTER_FREE_MAX ||
-                    !set_line_disabled(id, true, 0, false)) {
+                    !set_line_disabled(id, SECTION_MODELS, false)) {
                 return false;
             }
             llm_model_t m = s_disabled[i];
@@ -1107,7 +1240,7 @@ bool llm_set_model_enabled(const char *id, bool enabled)
         if (strcmp(llm_models[i].id, id) != 0) {
             continue;
         }
-        if (!s_disabled || s_disabled_count >= LLM_FILE_MODELS_MAX || !set_line_disabled(id, true, 0, true)) {
+        if (!s_disabled || s_disabled_count >= LLM_FILE_MODELS_MAX || !set_line_disabled(id, SECTION_MODELS, true)) {
             return false;
         }
         llm_model_t m = llm_models[i];
@@ -1130,7 +1263,7 @@ bool llm_set_speech_enabled(llm_speech_kind_t kind, const char *id, bool enabled
 {
     for (int i = 0; i < s_speech_count; i++) {
         if (s_speech[i].kind == (int)kind && strcmp(s_speech[i].model.id, id) == 0) {
-            if (!set_line_disabled(id, false, kind == LLM_SPEECH_STT ? SECTION_STT : SECTION_TTS, !enabled)) {
+            if (!set_line_disabled(id, kind == LLM_SPEECH_STT ? SECTION_STT : SECTION_TTS, !enabled)) {
                 return false;
             }
             s_speech[i].disabled = !enabled;

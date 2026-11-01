@@ -172,16 +172,27 @@ extern char llm_effort_values[64];
 void llm_set_openrouter_free_models(const llm_model_t *models, size_t count);
 
 /**
- * Free OpenRouter model excluded by the [openrouter_free_exclude] section of AGENTS.INI: its id, or an id
- * ending with '*' that it starts with ("nvidia/" followed by '*')
+ * Free OpenRouter model never offered: a "-" before its line of [openrouter_free] in AGENTS.INI, or an id of the
+ * [openrouter_free_exclude] of an older file (its id, or an id ending with '*' that it starts with: "nvidia/"
+ * followed by '*')
  */
 bool llm_free_excluded(const char *id);
 
 /**
- * @brief Exclude a free OpenRouter model: added under [openrouter_free_exclude] of AGENTS.INI (the section is
- *        created if missing), with a comment. Offered models are not changed (openrouter_free_init() does it).
+ * @brief Never offer a free OpenRouter model: a "-" before its line of [openrouter_free] in AGENTS.INI (the line
+ *        added if missing). Offered models are not changed (openrouter_free_init() does it).
  */
 void llm_free_exclude_add(const char *id, const char *comment);
+
+/** Free OpenRouter models found in its live list: those [openrouter_free] does not list yet added to it */
+void llm_free_found(const char *const *ids, const char *const *names, int n);
+
+/** The lines of [openrouter_free] (file order): its id, its name, enabled (no "-"); NULL past the end */
+size_t llm_free_count(void);
+const char *llm_free_line(size_t index, const char **name, bool *enabled);
+
+/** A "-" before the line of a free OpenRouter model, or removed (openrouter_free_init() then offers again) */
+bool llm_set_free_enabled(const char *id, bool enabled);
 
 /**
  * @brief Prices per million tokens of a model (llm_models) or of a speech model ([speech] of AGENTS.INI), in the

@@ -90,6 +90,9 @@ void ui_ctrl_reply_show_end(const char *text);
 
 void ui_ctrl_guide_jump(void);
 
+/** Listening while the reply stays shown: a small robot head at its top right (hidden by any panel change) */
+void ui_ctrl_reply_listening(bool on);
+
 #ifdef __cplusplus
 }
 #endif

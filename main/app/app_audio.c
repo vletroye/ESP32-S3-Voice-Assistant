@@ -319,13 +319,6 @@ void sr_handler_task(void *pvParam)
             }
         }
 #endif
-        if (result.show_listen) {
-            // Listening since the end of the reply, whose list was being read: the listen panel now
-            ui_ctrl_guide_jump();
-            ui_ctrl_show_panel(UI_CTRL_PANEL_LISTEN, 0);
-            continue;
-        }
-
         if (ESP_MN_STATE_TIMEOUT == result.state && result.no_speech && stt_stream_has_text() && !llm_cancelled()) {
             // The local VAD missed it (e.g. a very short question), but the transcription heard words
             ESP_LOGI(TAG, "No speech detected locally, but the transcription has text: answering");
@@ -371,8 +364,11 @@ void sr_handler_task(void *pvParam)
             // Connect to the transcription service while the user speaks (the audio is buffered meanwhile)
             assistant_listen_start();
 
-            // UI show listen (or later: the reply shows a list to read, the user may answer meanwhile)
-            if (!result.listen_panel_later) {
+            // UI show listen, or the reply kept shown (a list to read, a question asked: the user answers it) with
+            // the small listening head
+            if (result.keep_reply) {
+                ui_ctrl_reply_listening(true);
+            } else {
                 ui_ctrl_guide_jump();
                 ui_ctrl_show_panel(UI_CTRL_PANEL_LISTEN, 0);
             }

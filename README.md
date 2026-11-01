@@ -1791,8 +1791,11 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   Corrigez-le dans AGENTS.INI, valeurs acceptées : high, none." / "The model Mistral Medium 3.5 refuses the
   reasoning level low. Correct it in AGENTS.INI, accepted values: high, none."): the file is to be corrected, nothing is changed
   behind your back. The speech and the transcription (OpenAI) without credit cannot speak: their message is
-  **shown**, and stays on screen the time to read it before the listen panel comes back.
+  **shown**, and stays on screen while the device listens.
 - **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
+  A text shown but not read (a list of models, of radios...) stays on screen while the device listens for the
+  answer, until it is given or the usual delay ends (its reading time added): a small robot head with moving bars
+  at the top right shows that the device listens, instead of the listening robot.
 - **Internet radio** ([Radio-Browser](https://www.radio-browser.info), free): "joue du jazz" / "play some jazz",
   "joue la radio Nostalgie" / "play the radio Nostalgie", "joue de la musique italienne" / "play italian music",
   "suivante" / "next", "stop", favourites (`RADIO.TXT`) and a radio screen;

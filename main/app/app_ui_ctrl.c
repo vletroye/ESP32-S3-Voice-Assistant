@@ -1097,6 +1097,94 @@ static void model_row_show(bool shown)
     lv_obj_clear_flag(s_model_name, LV_OBJ_FLAG_HIDDEN);
 }
 
+/*
+ * Listening while the reply stays shown (it asks something): a small robot head at its top right, with bars rising
+ * and falling beside it
+ */
+#define LISTEN_HEAD_COLOR       0x1F2A44
+#define LISTEN_EYES_COLOR       0x4FC3F7
+#define LISTEN_BARS             3
+static lv_obj_t *s_listen_head = NULL;
+static lv_obj_t *s_listen_bars[LISTEN_BARS];
+
+static lv_obj_t *listen_head_part(lv_obj_t *parent, lv_coord_t w, lv_coord_t h, lv_coord_t radius, uint32_t color)
+{
+    lv_obj_t *part = lv_obj_create(parent);
+    lv_obj_remove_style_all(part);
+    lv_obj_set_size(part, w, h);
+    lv_obj_set_style_radius(part, radius, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(part, lv_color_hex(color), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(part, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_clear_flag(part, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    return part;
+}
+
+static void listen_head_create(void)
+{
+    s_listen_head = listen_head_part(ui_PanelReply, 50, 32, 0, 0);
+    lv_obj_set_style_bg_opa(s_listen_head, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_align(s_listen_head, LV_ALIGN_TOP_RIGHT, -8, 6);
+    // The antenna, the head and its eyes
+    lv_obj_t *ball = listen_head_part(s_listen_head, 6, 6, LV_RADIUS_CIRCLE, LISTEN_EYES_COLOR);
+    lv_obj_align(ball, LV_ALIGN_TOP_LEFT, 11, 0);
+    lv_obj_t *stick = listen_head_part(s_listen_head, 2, 5, 0, LISTEN_HEAD_COLOR);
+    lv_obj_align(stick, LV_ALIGN_TOP_LEFT, 13, 5);
+    lv_obj_t *head = listen_head_part(s_listen_head, 28, 22, 6, LISTEN_HEAD_COLOR);
+    lv_obj_align(head, LV_ALIGN_TOP_LEFT, 0, 10);
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t *eye = listen_head_part(head, 6, 8, 2, LISTEN_EYES_COLOR);
+        lv_obj_align(eye, LV_ALIGN_LEFT_MID, 6 + i * 10, 0);
+    }
+    // The bars: animated while shown
+    for (int i = 0; i < LISTEN_BARS; i++) {
+        s_listen_bars[i] = listen_head_part(s_listen_head, 3, 4, 1, LISTEN_EYES_COLOR);
+        lv_obj_align(s_listen_bars[i], LV_ALIGN_LEFT_MID, 34 + i * 6, 5);
+    }
+    lv_obj_add_flag(s_listen_head, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void listen_bar_anim_cb(void *bar, int32_t height)
+{
+    lv_obj_set_height(bar, height);
+}
+
+/* Shown or hidden (display locked) */
+static void listen_head_show(bool on)
+{
+    if (!s_listen_head || lv_obj_has_flag(s_listen_head, LV_OBJ_FLAG_HIDDEN) == !on) {
+        return;
+    }
+    for (int i = 0; i < LISTEN_BARS; i++) {
+        lv_anim_del(s_listen_bars[i], listen_bar_anim_cb);
+        lv_obj_set_height(s_listen_bars[i], 4);
+        if (on) {
+            lv_anim_t a;
+            lv_anim_init(&a);
+            lv_anim_set_var(&a, s_listen_bars[i]);
+            lv_anim_set_exec_cb(&a, listen_bar_anim_cb);
+            lv_anim_set_values(&a, 4, 16);
+            lv_anim_set_time(&a, 350);
+            lv_anim_set_playback_time(&a, 350);
+            lv_anim_set_delay(&a, i * 120);
+            lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+            lv_anim_start(&a);
+        }
+    }
+    if (on) {
+        lv_obj_move_foreground(s_listen_head);
+        lv_obj_clear_flag(s_listen_head, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_listen_head, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+void ui_ctrl_reply_listening(bool on)
+{
+    bsp_display_lock(0);
+    listen_head_show(on && current_panel == UI_CTRL_PANEL_REPLY);
+    bsp_display_unlock();
+}
+
 static void cost_label_create(void)
 {
     s_cost_label = lv_label_create(ui_ScreenListen);
@@ -1130,6 +1218,7 @@ void ui_ctrl_init(void)
     app_clock_create(ui_PanelSleep, app_lang_get()->weekdays);
     app_clock_show(settings_get_parameter()->show_clock);
     cost_label_create();
+    listen_head_create();
     model_row_create();
     head_icons_create();
     ui_radio_init();
@@ -1397,6 +1486,8 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
     }
 
     current_panel = panel;
+    // Listening over the reply: until the next panel
+    listen_head_show(false);
     // The model in use: shown while listening, "Entendu", "Je réfléchis"
     model_row_show(panel == UI_CTRL_PANEL_LISTEN || panel == UI_CTRL_PANEL_GET);
     head_icons_refresh();

@@ -256,8 +256,8 @@ Every feature in detail: [Features in detail](#410-features-in-detail).
    ("D'accord, on laisse tomber. Je t'écoute." / "All right, forget it. I am listening."): you can ask something
    else. Said without a question asked, the same words just make it listen again ("stop" stops a radio first).
 5. Without speech, it goes back to sleep (no API call is made for silence). If a voice command had asked something
-   (which provider, model, town…), the question is **asked again** when the assistant wakes up, its list shown
-   again: answer it, or say "Abandon" / "Cancel" to ask something else. "Au revoir" / "Goodbye" or a double tap
+   (which provider, model, town…), the question is **asked again** when the assistant wakes up within 5 minutes,
+   its list shown again (later, it is dropped): answer it, or say "Abandon" / "Cancel" to ask something else. "Au revoir" / "Goodbye" or a double tap
    drops it.
 6. Saying just "**Au revoir**" / "**Goodbye**" (or another closing phrase, see below) sends it back to sleep at once, without
    an answer and without listening again, and clears the saved conversation: the next one starts afresh.

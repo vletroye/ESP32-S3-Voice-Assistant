@@ -38,6 +38,8 @@
  * the end of the question (the list of models takes 10 to 15 s to read)
  */
 #define CMD_ANSWER_TIMEOUT_US   (60 * 1000 * 1000LL)    /* the list read on screen first */
+/* Woken up within this delay after a question left unanswered: it is asked again (later: dropped) */
+#define CMD_ASK_AGAIN_US        (5 * 60 * 1000 * 1000LL)
 
 static const char *TAG = "voice_cmd";
 
@@ -1143,6 +1145,10 @@ void voice_cmd_cancel_question(void)
 
 const char *voice_cmd_question(void)
 {
+    if (s_asked != ASKED_NOTHING && s_question && esp_timer_get_time() - s_asked_us >= CMD_ASK_AGAIN_US) {
+        ESP_LOGI(TAG, "question left unanswered too long ago: not asked again");
+        voice_cmd_cancel_question();
+    }
     return s_asked != ASKED_NOTHING ? s_question : NULL;
 }
 

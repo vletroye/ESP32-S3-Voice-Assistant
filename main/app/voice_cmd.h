@@ -63,7 +63,8 @@ void voice_cmd_cancel_question(void);
 
 /**
  * The reply that asked the question still waiting for its answer (gone to sleep without it): asked again when the
- * assistant wakes up; NULL for none (or a question of the model test)
+ * assistant wakes up within 5 minutes (later, the question is dropped); NULL for none (or a question of the model
+ * test)
  */
 const char *voice_cmd_question(void);
 

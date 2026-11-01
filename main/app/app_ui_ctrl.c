@@ -601,9 +601,30 @@ static void settings_row_add(lv_obj_t *row, uint8_t page)
     s_settings_row_page[s_settings_row_count++] = page;
 }
 
+/* The language and the model chosen but not confirmed: dropped, the stored ones shown again */
+static void settings_unconfirmed_drop(void)
+{
+    if (!s_save_btn || lv_obj_has_state(s_save_btn, LV_STATE_DISABLED)) {
+        return;
+    }
+    ESP_LOGI(TAG, "language / model not confirmed: dropped");
+    lv_dropdown_set_selected(ui_DropdownSettingsRegion, s_lang_stored);
+    lv_dropdown_set_selected(s_model_dropdown, s_model_stored);
+    lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+}
+
+/* A page shown; the language and the model not confirmed are dropped, the Confirm button only on their page */
 static void settings_page_show(int page)
 {
+    settings_unconfirmed_drop();
     s_settings_page = (page + SETTINGS_PAGES) % SETTINGS_PAGES;
+    if (s_save_btn) {
+        if (s_settings_page == 0) {
+            lv_obj_clear_flag(s_save_btn, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(s_save_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
     for (size_t i = 0; i < s_settings_row_count; i++) {
         if (s_settings_row_page[i] == s_settings_page) {
             lv_obj_clear_flag(s_settings_rows[i], LV_OBJ_FLAG_HIDDEN);
@@ -622,6 +643,12 @@ static void settings_page_clicked_cb(lv_event_t *e)
 static void settings_screen_loaded_cb(lv_event_t *e)
 {
     settings_page_show(0);
+}
+
+/* The screen left without confirming: the language and the model chosen are dropped */
+static void settings_screen_unload_cb(lv_event_t *e)
+{
+    settings_unconfirmed_drop();
 }
 
 /* A button at the bottom of the Settings screen (arrows, Save) */
@@ -680,7 +707,7 @@ static void settings_screen_setup(void)
     s_model_stored = model_selected;
     settings_dropdown_setup(s_model_dropdown, options, model_selected, settings_changed_cb, NULL);
 
-    // Second page: transcription (STT) and speech (TTS) models, then the voice, all applied immediately (no Save
+    // Second page: transcription (STT) and speech (TTS) models, then the voice, all applied immediately (no Confirm
     // button); the short labels leave the dropdowns room for the models' names
     const char *speech_texts[2] = { lang->settings_stt, lang->settings_tts };
     for (size_t i = 0; i < 2; i++) {
@@ -703,16 +730,18 @@ static void settings_screen_setup(void)
     settings_arrow_create(LV_ALIGN_BOTTOM_LEFT, 10, LV_SYMBOL_LEFT, -1);
     settings_arrow_create(LV_ALIGN_BOTTOM_RIGHT, -10, LV_SYMBOL_RIGHT, 1);
     lv_obj_add_event_cb(ui_ScreenSettings, settings_screen_loaded_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
-    settings_page_show(0);
+    lv_obj_add_event_cb(ui_ScreenSettings, settings_screen_unload_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 
-    // Save button (bottom middle), enabled once the language or the model differs from the stored settings
+    // Confirm button (bottom middle, first page only), enabled once the language or the model differs from the
+    // stored settings; not confirmed, they are dropped when the page or the screen is left
     s_save_btn = settings_button_create(LV_ALIGN_BOTTOM_MID, 0);
     lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
     lv_obj_add_event_cb(s_save_btn, settings_save_clicked_cb, LV_EVENT_CLICKED, NULL);
     s_save_label = lv_label_create(s_save_btn);
-    lv_label_set_text(s_save_label, lang->settings_save);
+    lv_label_set_text(s_save_label, lang->settings_confirm);
     lv_obj_set_style_text_font(s_save_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_center(s_save_label);
+    settings_page_show(0);
 }
 
 /* Texts of the screens, applied at start-up and again when the language changes */
@@ -729,7 +758,7 @@ static void ui_ctrl_apply_texts(void)
         lv_label_set_text(s_voice_row_label, lang->settings_voice);
         lv_label_set_text(s_settings_speech[0].label, lang->settings_stt);
         lv_label_set_text(s_settings_speech[1].label, lang->settings_tts);
-        lv_label_set_text(s_save_label, lang->settings_save);
+        lv_label_set_text(s_save_label, lang->settings_confirm);
     }
     label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);
     label_localize(ui_LabelResetContent, lang->reset_content, &ui_font_Latin14);

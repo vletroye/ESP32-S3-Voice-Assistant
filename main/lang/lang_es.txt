@@ -399,7 +399,7 @@ settings_stt = STT
 voice_sample = Hola, soy %s. ¿Te gusta mi voz?
 
 # Save button, enabled once the language or the model is changed
-settings_save = Guardar
+settings_confirm = Confirmar
 
 # Shown while the device restarts after saving
 settings_saved = Guardado.

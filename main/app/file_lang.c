@@ -286,7 +286,7 @@ static const lang_field_t s_fields[] = {
     { "settings_tts", offsetof(app_lang_t, settings_tts), FIELD_TEXT, 1 },
     { "settings_stt", offsetof(app_lang_t, settings_stt), FIELD_TEXT, 1 },
     { "voice_sample", offsetof(app_lang_t, voice_sample), FIELD_TEXT, 1 },
-    { "settings_save", offsetof(app_lang_t, settings_save), FIELD_TEXT, 1 },
+    { "settings_confirm", offsetof(app_lang_t, settings_confirm), FIELD_TEXT, 1 },
     { "settings_saved", offsetof(app_lang_t, settings_saved), FIELD_TEXT, 1 },
     { "soft_title", offsetof(app_lang_t, soft_title), FIELD_TEXT, 1 },
     { "soft_text", offsetof(app_lang_t, soft_text), FIELD_TEXT, 1 },
@@ -328,6 +328,21 @@ static char *trim(char *s)
         s[--n] = '\0';
     }
     return s;
+}
+
+/* Keys of older firmwares, still in the files of the device: ignored without a warning */
+static bool key_retired(const char *key)
+{
+    static const char *const retired[] = {
+        "settings_save",        /* the Settings button, now "settings_confirm" */
+        NULL,
+    };
+    for (const char *const *k = retired; *k; k++) {
+        if (strcmp(key, *k) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /* "\n" and "\\" (and \" in a quoted text) replaced in place; quotes around the text removed */
@@ -449,7 +464,7 @@ static void parse(char *text, app_lang_t *texts, const app_lang_t *base, const c
             const lang_field_t *field = field_of(trim(t));
             char *value = trim(eq + 1);
             uint8_t *slot = (uint8_t *)texts + (field ? field->offset : 0);
-            if (!field) {
+            if (!field && !key_retired(trim(t))) {
                 ESP_LOGW(TAG, "%s: unknown key '%s'", code, trim(t));
             } else if (field->kind == FIELD_TEXT) {
                 value = unescape(value);

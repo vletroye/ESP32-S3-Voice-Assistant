@@ -400,7 +400,7 @@ settings_stt = STT
 voice_sample = Hallo, ik ben %s. Vind je mijn stem mooi?
 
 # Save button, enabled once the language or the model is changed
-settings_save = Opslaan
+settings_confirm = Bevestigen
 
 # Shown while the device restarts after saving
 settings_saved = Opgeslagen.

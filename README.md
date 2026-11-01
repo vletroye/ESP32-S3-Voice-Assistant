@@ -302,11 +302,12 @@ Second page:
   leaving the lists room for the models' names.
 - **Voix / Voice**: the voice reading the answers, among the voices of `[voices]` (`AGENTS.INI`) of the speech
   provider in use that speak the language in use (OpenAI: Marin, Cedar, Alloy…; Mistral in French: Lea, Marie,
-  Manon, Camille). Applied **at once**, without Save or restart: the speech session reconnects (~2 s) and the new
+  Manon, Camille). Applied **at once**, without Confirm or restart: the speech session reconnects (~2 s) and the new
   voice introduces itself. The list follows the speech provider and the language.
 
-For the language and the model, press **Save** (bottom middle, enabled once one of them changed): the choice is
-saved to the device's NVS and applied at once, without restarting (the speech session reconnects, ~2 s).
+For the language and the model, press **Confirmer** / **Confirm** (bottom middle, on their page only, enabled once
+one of them changed): the choice is saved to the device's NVS and applied at once, without restarting (the speech
+session reconnects, ~2 s). Not confirmed, the choice is dropped when the page or the Settings screen is left.
 The folder-and-gear icon (top right) opens the **Configuration** screen: its button at the bottom right
 ("OK (30)") counts down from 30 and switches to the configuration mode described below at 0 (tap it to switch
 at once, or the back arrow to stay).

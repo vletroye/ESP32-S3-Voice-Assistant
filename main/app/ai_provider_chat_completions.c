@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "esp_check.h"
 #include "cJSON.h"
 #include "ai_provider_chat_completions.h"
@@ -450,27 +451,33 @@ llm_error_t cc_stream(void *client, const char *text, llm_text_cb_t on_text, voi
     llm_history_add(c->messages, "user", text);
 
     for (int round = 0; ; round++) {
-        stream_t st = {
-            .config = c->config,
-            .answer = &answer,
-            .sse = { .on_event = sse_dispatch },
-            .error = LLM_OK,
-        };
-        st.sse.ctx = &st;
+        // In PSRAM: the tool calls take more than a KB, and the caller's stack (the SR handler task) is short
+        stream_t *st = heap_caps_calloc(1, sizeof(stream_t), MALLOC_CAP_SPIRAM);
+        if (!st) {
+            error = LLM_ERR_OTHER;
+            break;
+        }
+        st->config = c->config;
+        st->answer = &answer;
+        st->sse.on_event = sse_dispatch;
+        st->sse.ctx = st;
+        st->error = LLM_OK;
         size_t text_before = answer.text.len;
-        stream_once(c, &st);
-        error = st.error;
-        strlcpy(finish, st.finish, sizeof(finish));
-        answer_tokens += st.billed_out - st.reasoning_tokens;
-        reasoning_tokens += st.reasoning_tokens;
-        bool tool_calls = error == LLM_OK && st.call_count > 0 && c->runner && strcmp(st.finish, "tool_calls") == 0;
+        stream_once(c, st);
+        error = st->error;
+        strlcpy(finish, st->finish, sizeof(finish));
+        answer_tokens += st->billed_out - st->reasoning_tokens;
+        reasoning_tokens += st->reasoning_tokens;
+        bool tool_calls = error == LLM_OK && st->call_count > 0 && c->runner && strcmp(st->finish, "tool_calls") == 0;
         if (!tool_calls) {
-            stream_free(&st);
+            stream_free(st);
+            free(st);
             break;
         }
         if (round >= CC_TOOL_ROUNDS_MAX) {
             ESP_LOGE(tag, "Tool call not answered (round %d)", round + 1);
-            stream_free(&st);
+            stream_free(st);
+            free(st);
             error = LLM_ERR_OTHER;
             break;
         }
@@ -480,9 +487,10 @@ llm_error_t cc_stream(void *client, const char *text, llm_text_cb_t on_text, voi
         }
         char *round_text = answer.text.len > text_before ?
                            strndup(answer.text.p + text_before, answer.text.len - text_before) : NULL;
-        run_tools(c, &st, round_text);
+        run_tools(c, st, round_text);
         free(round_text);
-        stream_free(&st);
+        stream_free(st);
+        free(st);
     }
 
     if (error == LLM_OK) {

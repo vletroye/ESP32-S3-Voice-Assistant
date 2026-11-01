@@ -277,7 +277,7 @@ Every feature in detail: [Features in detail](#410-features-in-detail).
 
 ### 2.4 On the device: Settings screen
 
-Tap the gear icon on the home screen. The settings are split over two pages, browsed with the arrows at the
+Tap the gear icon on the home screen. The settings are split over five pages, browsed with the arrows at the
 bottom left and right (from the last page, the right arrow goes back to the first, and the other way round); the
 screen opens on the first page.
 
@@ -304,6 +304,24 @@ Second page:
   provider in use that speak the language in use (OpenAI: Marin, Cedar, Alloy…; Mistral in French: Lea, Marie,
   Manon, Camille). Applied **at once**, without Confirm or restart: the speech session reconnects (~2 s) and the new
   voice introduces itself. The list follows the speech provider and the language.
+
+Third, fourth and fifth pages: **Modèles LLM / LLM models**, **Modèles STT / STT models** and **Modèles TTS / TTS
+models** (the page's name replaces the title), every model of `AGENTS.INI` of that kind, in the file's order (the
+LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scrolled with the finger:
+
+- On each line: a **check box** (checked: the model is offered), the **provider** in grey, the **name**, and on the
+  right the time to the first words (or audio, or transcript) of its **last test** ("1,2 s", "indisponible" /
+  "unavailable"; nothing if never tested). A model whose provider has no key is shown greyed out.
+- **Unchecked**, a model is offered nowhere (Settings lists, "change de modèle" / "change the model", "change de
+  transcription"…) and is not tested by "teste les modèles" / "test the models": a `-` is put before its id in
+  `AGENTS.INI` (see [AGENTS.INI](#332-agentsini-the-models-offered)), at once, without restart. Checked again, it comes back at its
+  place. The model in use cannot be unchecked (its box is locked).
+- **A long press** on a line opens **Test performance** / **Performance test**: "Tester la rapidité de Haiku ?" /
+  "Test how fast Haiku is?", **Oui / Yes** or **Non / No**. Yes tests that model alone, even an unchecked one, as the
+  [model test](#334-model-test-teste-les-modèles) does: "..." on its line meanwhile, its result is spoken ("Résultat
+  de Haiku : 0,8 seconde." / "Result of Haiku: 0.8 seconds."), then the line shows its new time. The screen stays on
+  the list; the time goes into `SPEED.TXT` as for the other tests. A transcription model is given the audio of the
+  speech model in use.
 
 For the language and the model, press **Confirmer** / **Confirm** (bottom middle, on their page only, shown once
 one of them changed): the choice is saved to the device's NVS and applied at once, without restarting (the speech
@@ -812,8 +830,9 @@ How to read this table:
   **Free (auto)**
   (`openrouter/free`: OpenRouter picks a free model for each question). They come after the other OpenRouter
   models, shown as "… (free)". `OpenRouter_free = 0` stops reading the list (only Free (auto) is offered).
-  Models listed in the **`[openrouter_free_exclude]`** section of `AGENTS.INI` (slow, poor answers…) are never
-  offered and are not counted: the next most used ones take their place. The 24 first free models of the last list
+  The free models found are added to the **`[openrouter_free]`** section of `AGENTS.INI` (`id = name`); those with
+  a **`-` before their id** (slow, poor answers…: unchecked on the LLM page of the Settings screen, or excluded after
+  a model test) are never offered and are not counted: the next most used ones take their place. The 24 first free models of the last list
   read are kept in `/spiffs/or_free.json` (a list kept by an older firmware, sorted by date, is read again at once) (offered at start-up, and when OpenRouter cannot be reached: tried again an hour
   later), so that a change of `OpenRouter_free` or of the exclusions applies at the next start; when they are not
   enough, the list is read again at the next opportunity. They still need `OpenRouter_key`, and have usage limits
@@ -961,9 +980,14 @@ perplexity:web_search = 0.0022
 - The file given with the firmware (`main/agents/agents.ini`) is installed as `/spiffs/agents.ini` at the first
   start, or when it is emptied; it is read at start-up (at most 32 models). In configuration mode it appears on the
   drive as **`AGENTS.INI`**, editable with its comments (wait a few seconds after saving, then press **Restart**).
-- **`[openrouter_free_exclude]`**: free OpenRouter models never offered, one id per line (`vendor/model:free`, as
-  shown in `SPEED.TXT` or the Settings list); an id ending with `*` excludes every model starting with it
-  (`nvidia/*`), and `openrouter/free` removes Free (auto). Added empty to the file of an older firmware.
+- **A `-` before a model's id** (`-claude-opus-5-5 = Claude Opus 5.5 | …`), in a provider section, `[stt]`, `[tts]`
+  or `[openrouter_free]`: the model is **disabled**, offered nowhere and not tested by "teste les modèles" (it can
+  still be tested alone from the Settings screen). The check boxes of the pages of the models write it (see
+  [Settings screen](#24-on-the-device-settings-screen)); the model in use stays enabled.
+- **`[openrouter_free]`**: the free OpenRouter models found in its live list, added by the device as they come
+  (`vendor/model:free = name`, the most used first), and `openrouter/free = Free (auto)`; a `-` before one: never
+  offered. The ids of the **`[openrouter_free_exclude]`** section of an older firmware are moved there with a `-`
+  (an id ending with `*` there still excludes every model starting with it). Added to the file of an older firmware.
 - **`[xai]`**, **`[mistral]`**, **`[perplexity]`**: the Grok (key `XAI_key`), Mistral (`Mistral_key`) and
   Perplexity (`Perplexity_key`) models. Added with their default models to the file of an older firmware (after
   the other sections, so their numbers do not change), and `perplexity:web_search` to its `[per_call]`; the lines
@@ -1033,8 +1057,8 @@ conversation nor tools** but with the same instructions. The model chosen and it
   assistant asks: "Le modèle gratuit Flint fait 7,2 secondes en moyenne. Dois-je l'exclure ?" / "Le modèle gratuit
   Flint n'était pas disponible. Dois-je l'exclure ?" (`exclude_ask_unavailable` of `LANG_<XX>.TXT`; in English "The free model Flint takes 7.2 seconds on average.
   Should I exclude it?") and listens.
-  "Oui" / "yes" adds it to `[openrouter_free_exclude]` of `AGENTS.INI` (with its time, or why it was not available, as a
-  comment), "non" / "no" keeps it; then it asks about the next one. The models of the other sections of `AGENTS.INI`
+  "Oui" / "yes" puts a `-` before it in `[openrouter_free]` of `AGENTS.INI` (with its time, or why it was not
+  available, as a comment), "non" / "no" keeps it; then it asks about the next one. The models of the other sections of `AGENTS.INI`
   are never excluded. Any other sentence ends the questions (and is answered as usual); the answer can also be given
   within 60 s after "Bonjour ESP". Once answered, the free models offered are chosen again at once: an excluded
   model is replaced by the next most recent one (`MODEL_TEST_SLOW_FREE_MS` in `model_test.c`).
@@ -1059,7 +1083,8 @@ conversation nor tools** but with the same instructions. The model chosen and it
   or the chat models. A provider named after "teste les modèles" ("teste les modèles Google") tests its models only,
   however the sentence was transcribed. "**Teste le modèle Argon**" ("test the model Argon") tests that chat model
   only ("Je teste le modèle Argon." / "I am testing the model Argon."); "le modèle Mistral Large", in the singular,
-  is one model, "les modèles de Mistral" those of the provider. Their results go into `SPEED.TXT` and the means as usual; the
+  is one model, "les modèles de Mistral" those of the provider. A long press on a model of the pages of the models
+  (Settings screen) tests that one alone, a transcription or speech model too. Their results go into `SPEED.TXT` and the means as usual; the
   fastest is named only when more than one chat model was tested, and only the free models tested this time can
   be asked about for exclusion.
 
@@ -1579,7 +1604,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `radio_browser.c` | Radio-Browser: server chosen from its list, searches by name, tag and country, listens counted |
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
-| `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request |
+| `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |
 | `tools.c` | Tools offered to the models (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |

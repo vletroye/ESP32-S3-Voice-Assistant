@@ -52,6 +52,7 @@ void rc_reset(void *state)
 {
     rc_client_t *c = state;
     llm_history_reset(&c->messages);
+    llm_conv_id_new(c->conv_id);
 }
 
 esp_err_t rc_init(void *state, const char *api_key, const char *model, const char *instructions, const char *effort)
@@ -133,6 +134,9 @@ static char *build_request(rc_client_t *c)
     cJSON_AddStringToObject(req, "model", c->model);
     cJSON_AddBoolToObject(req, "stream", true);
     cJSON_AddBoolToObject(req, "store", false);
+    if (c->config->cache_key) {
+        cJSON_AddStringToObject(req, "prompt_cache_key", c->conv_id);
+    }
     cJSON_AddNumberToObject(req, "max_output_tokens", llm_max_output_tokens());
     if (c->effort) {
         cJSON *reasoning = cJSON_AddObjectToObject(req, "reasoning");
@@ -300,6 +304,7 @@ void rc_set_history(void *state, cJSON *messages)
 {
     rc_client_t *c = state;
     llm_history_set(&c->messages, messages);
+    llm_conv_id_new(c->conv_id);
 }
 
 /* One request on the current history, its answer streamed into st (its text added to st->answer) */

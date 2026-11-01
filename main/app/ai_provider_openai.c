@@ -16,6 +16,7 @@ static const rc_config_t s_config = {
     .base_url = "https://api.openai.com/v1/",
     .search = RC_SEARCH_OPENAI,
     .web_search_cost = "openai:web_search",
+    .cache_key = true,
 };
 
 static rc_client_t s_client = { .config = &s_config };

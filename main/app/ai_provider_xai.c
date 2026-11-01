@@ -17,6 +17,7 @@ static const rc_config_t s_rc_config = {
     .base_url = "https://api.x.ai/v1/",
     .search = RC_SEARCH_PLAIN,
     .web_search_cost = "xai:web_search",
+    .cache_key = true,
 };
 
 /* A team without credit gets a 403 that says so */
@@ -30,6 +31,8 @@ static const cc_config_t s_cc_config = {
     .reasoning = CC_REASONING_EFFORT,
     .usage = CC_USAGE_STREAM_OPTIONS,
     .credit_words = s_credit_words,
+    // The questions of a conversation to the server holding its prompt cache
+    .conv_header = "x-grok-conv-id",
     // Function calling: the device's tools (weather, radio, volume, Homey)
     .tools = true,
 };

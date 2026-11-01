@@ -64,6 +64,8 @@ esp_err_t cc_init(void *client, const char *api_key, const char *model, const ch
     c->http.key_header = "Authorization";
     c->http.key = c->auth;
     c->http.headers = c->config->headers;
+    c->http.conv_header = c->config->conv_header;
+    c->http.conv_id = c->conv_id;
     c->tools_refused = false;
     cc_reset(c);
     ESP_LOGI(tag, "model: %s, reasoning effort: %s, streaming", c->model, c->effort ? c->effort : "(default)");
@@ -77,7 +79,9 @@ void cc_set_instructions(void *client, const char *instructions)
 
 void cc_reset(void *client)
 {
-    llm_history_reset(&((cc_client_t *)client)->messages);
+    cc_client_t *c = client;
+    llm_history_reset(&c->messages);
+    llm_conv_id_new(c->conv_id);
 }
 
 const cJSON *cc_history(void *client)
@@ -87,7 +91,9 @@ const cJSON *cc_history(void *client)
 
 void cc_set_history(void *client, cJSON *messages)
 {
-    llm_history_set(&((cc_client_t *)client)->messages, messages);
+    cc_client_t *c = client;
+    llm_history_set(&c->messages, messages);
+    llm_conv_id_new(c->conv_id);
 }
 
 void cc_prewarm(void *client)

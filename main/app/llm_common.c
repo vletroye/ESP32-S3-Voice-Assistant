@@ -11,6 +11,7 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_random.h"
 #include "esp_crt_bundle.h"
 #include "llm_common.h"
 
@@ -47,6 +48,16 @@ void llm_history_reset(cJSON **messages)
 {
     cJSON_Delete(*messages);
     *messages = cJSON_CreateArray();
+}
+
+void llm_conv_id_new(char *id)
+{
+    uint8_t b[16];
+    esp_fill_random(b, sizeof(b));
+    b[6] = (b[6] & 0x0f) | 0x40;    // version 4 (random)
+    b[8] = (b[8] & 0x3f) | 0x80;    // variant RFC 4122
+    snprintf(id, LLM_CONV_ID_LEN, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+             b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
 }
 
 void llm_history_set(cJSON **messages, cJSON *taken)
@@ -281,6 +292,9 @@ esp_http_client_handle_t llm_http_client(llm_http_t *h)
     if (h->client) {
         // The key may have changed (another model of the same provider), and so the URL (Gemini, Mistral)
         esp_http_client_set_header(h->client, h->key_header, h->key ? h->key : "");
+        if (h->conv_header && h->conv_id) {
+            esp_http_client_set_header(h->client, h->conv_header, h->conv_id);
+        }
         esp_http_client_set_url(h->client, h->url);
         esp_http_client_set_method(h->client, HTTP_METHOD_POST);
     }

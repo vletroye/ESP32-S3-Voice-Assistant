@@ -55,6 +55,13 @@ bool llm_bearer_set(char **dst, const char *api_key);
 /** An empty history in place of *messages */
 void llm_history_reset(cJSON **messages);
 
+/* An id of the conversation (a UUID): sent with each request, the provider routes them to the server holding its
+   prompt cache (xAI's x-grok-conv-id, the prompt_cache_key of the Responses APIs) */
+#define LLM_CONV_ID_LEN     37
+
+/** A new random id in id (LLM_CONV_ID_LEN bytes), for a new conversation */
+void llm_conv_id_new(char *id);
+
 /** *messages replaced by messages (taken over), trimmed */
 void llm_history_set(cJSON **messages, cJSON *taken);
 
@@ -118,6 +125,9 @@ typedef struct {
     const char *key_header;         /* "Authorization", "x-api-key", "x-goog-api-key" */
     const char *key;                /* its value (owned by the client), NULL before the configuration */
     const char *const *headers;     /* more headers: name, value, ..., NULL; NULL for none */
+    /* A header of each request that changes with the conversation (x-grok-conv-id), NULL for none, and its value */
+    const char *conv_header;
+    const char *conv_id;
     esp_http_client_handle_t client;
 } llm_http_t;
 

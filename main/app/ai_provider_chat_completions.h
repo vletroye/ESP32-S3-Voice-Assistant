@@ -35,6 +35,8 @@ typedef struct {
     const char *url;                /* ".../v1/chat/completions" */
     const char *prewarm_url;        /* a free GET with a small answer; a "%s" in it: the model */
     const char *const *headers;     /* more headers: name, value, ..., NULL; NULL for none */
+    /* The header of the conversation id, for the provider's prompt cache ("x-grok-conv-id"), NULL for none */
+    const char *conv_header;
     cc_reasoning_t reasoning;
     cc_usage_t usage;
     /* Words of an error message meaning no credit, besides "credit": "billing", "spending limit"... NULL-ended */
@@ -51,6 +53,7 @@ typedef struct {
     char *instructions;
     char *effort;
     char prewarm_url[160];
+    char conv_id[LLM_CONV_ID_LEN];  /* new with each conversation (config's conv_header) */
     /* Conversation history: [{role: "user" | "assistant", content}] (the instructions are added per request) */
     cJSON *messages;
     /* The device's tools offered (definitions of tools.c) and the function running them, NULL for none */

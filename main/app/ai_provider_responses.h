@@ -30,6 +30,7 @@ typedef struct {
     const char *base_url;           /* ".../v1/" ("responses" and "models/<model>" follow), unless set by the client */
     rc_search_t search;
     const char *web_search_cost;    /* "openai:web_search": its key in [per_call] of AGENTS.INI */
+    bool cache_key;                 /* "prompt_cache_key": the conversation id, routing to its prompt cache */
 } rc_config_t;
 
 /* A provider's state: static, { .config = &its_config }, the rest made by rc_init */
@@ -43,6 +44,7 @@ typedef struct {
     char *model;
     char *instructions;
     char *effort;
+    char conv_id[LLM_CONV_ID_LEN];  /* new with each conversation (config's cache_key) */
     bool web_refused;               /* the model refused the web search: asked without it, until another model */
     bool encrypted_refused;         /* the model refused to give its reasoning items */
     bool api_refused;               /* the model refused the Responses API itself (404...): the provider decides */

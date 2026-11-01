@@ -1875,12 +1875,14 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - **Costs**: transcription is billed by the duration of audio sent (only while listening); according to
   OpenAI's documentation, idle open connections are not billed. Answer costs depend on the chosen model
   (Opus and Astra are the most expensive).
-- **Tools**: `ai_provider_anthropic.c` loops on `stop_reason: tool_use` (up to 3 rounds per question): the tool
+- **Tools**: `ai_provider_anthropic.c` loops on `stop_reason: tool_use` (up to 5 rounds per question): the tool
   results go back as `tool_result` blocks and stay in the history (shortened). The Chat Completions client
   (`ai_provider_chat_completions.c`, for Mistral, xAI and OpenRouter: `tools = true` in their `cc_config_t`) offers
   the same tools as functions (`input_schema` given as `parameters`), reads the calls streamed (their arguments
-  may come in pieces), answers them with `role: "tool"` messages, up to 3 rounds; its history keeps only the
-  question and the final answer. A model refusing the tools (HTTP 400 or 404 about tools: "No endpoints found
+  may come in pieces), answers them with `role: "tool"` messages, up to 5 rounds (the Chat Completions, Responses and Mistral
+  clients ask the last one with `tool_choice: "none"`: a model still calling, through Homey's zones and devices
+  for instance, answers with what it has instead of failing); its history keeps only the question and the final
+  answer. A model refusing the tools (HTTP 400 or 404 about tools: "No endpoints found
   that support tool use") is asked again without them, until another model is chosen. Mistral reads the
   instructions and the tools (~4,400 tokens) from its prompt cache. To add a tool, declare it in `tools.c` (JSON
   definition + a case in `tools_run()`). GPT models get them as functions of the Responses API (their

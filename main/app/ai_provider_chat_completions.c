@@ -20,7 +20,7 @@
 
 /* Tool calls of a round, and rounds of calls answered per question before giving up */
 #define CC_TOOL_CALLS_MAX   8
-#define CC_TOOL_ROUNDS_MAX  3
+#define CC_TOOL_ROUNDS_MAX  5
 
 /* A round: one request and its streamed answer (its text added to the answer of the question) */
 typedef struct {
@@ -229,7 +229,7 @@ static char *build_request(const cc_client_t *c)
             cJSON_AddItemReferenceToObject(function, "parameters", cJSON_GetObjectItem(def, "input_schema"));
             cJSON_AddItemToArray(tools, tool);
         }
-        cJSON_AddStringToObject(req, "tool_choice", "auto");
+        cJSON_AddStringToObject(req, "tool_choice", c->tools_off ? "none" : "auto");
     }
     char *body = cJSON_PrintUnformatted(req);
     cJSON_Delete(req);
@@ -519,7 +519,10 @@ llm_error_t cc_stream(void *client, const char *text, llm_text_cb_t on_text, voi
         free(round_text);
         stream_free(st);
         free(st);
+        // Still calling after the rounds allowed: the last one without calls, it answers with what it has
+        c->tools_off = (round + 1 >= CC_TOOL_ROUNDS_MAX);
     }
+    c->tools_off = false;
 
     if (error == LLM_OK) {
         if (strcmp(finish, "content_filter") == 0 && answer.text.len == 0) {

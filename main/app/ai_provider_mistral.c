@@ -43,9 +43,9 @@ static const char *TAG = "mistral";
                                 "prices, opening hours...): search at once when needed, without announcing it. " \
                                 "Never read out web addresses, citations or source names unless asked."
 
-/* Function calls of a round, and rounds of calls answered per question before giving up */
+/* Function calls of a round, and rounds of calls answered per question (the last one asked without them) */
 #define MC_TOOL_CALLS_MAX   8
-#define MC_TOOL_ROUNDS_MAX  3
+#define MC_TOOL_ROUNDS_MAX  5
 
 static const char *const s_credit_words[] = { "billing", "payment", "quota", NULL };
 
@@ -79,6 +79,7 @@ static struct {
     char prewarm_url[160];
     bool web_refused;           /* the model refused the web search: asked without it, until another model */
     bool api_refused;           /* the model refused the Conversations API: Chat Completions */
+    bool tools_off;             /* the last round of a question: no more calls (tool_choice none), an answer is due */
     const cJSON *tools;
     llm_tool_runner_t runner;
     /* Conversation history: [{role, content}] at rest, the entries of the tool rounds while a question is asked */
@@ -126,6 +127,9 @@ static char *build_request(void)
     cJSON_AddNumberToObject(args, "max_tokens", llm_max_output_tokens());
     if (s_mc.effort) {
         cJSON_AddStringToObject(args, "reasoning_effort", s_mc.effort);
+    }
+    if (s_mc.tools_off) {
+        cJSON_AddStringToObject(args, "tool_choice", "none");
     }
     cJSON *tools = cJSON_AddArrayToObject(req, "tools");
     if (!s_mc.web_refused) {
@@ -380,6 +384,7 @@ static llm_error_t mc_stream(const char *text, llm_text_cb_t on_text, void *ctx,
     /* Append the question; the entries of this exchange are removed again if it fails */
     int start_count = cJSON_GetArraySize(s_mc.messages);
     llm_history_add(s_mc.messages, "user", text);
+    s_mc.tools_off = false;
 
     for (int round = 0; ; round++) {
         // In PSRAM: the function calls take room, and the caller's stack (the SR handler task) is short
@@ -418,7 +423,10 @@ static llm_error_t mc_stream(const char *text, llm_text_cb_t on_text, void *ctx,
         }
         run_tools(st);
         stream_free(st);
+        // Still calling after the rounds allowed: the last one without calls, it answers with what it has
+        s_mc.tools_off = (round + 1 >= MC_TOOL_ROUNDS_MAX);
     }
+    s_mc.tools_off = false;
 
     if (error == LLM_OK && !s_mc.api_refused && answer.text.len == 0) {
         ESP_LOGE(TAG, "No text in answer");

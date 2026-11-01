@@ -48,6 +48,7 @@ typedef struct {
     bool web_refused;               /* the model refused the web search: asked without it, until another model */
     bool encrypted_refused;         /* the model refused to give its reasoning items */
     bool api_refused;               /* the model refused the Responses API itself (404...): the provider decides */
+    bool tools_off;                 /* the last round of a question: no more calls (tool_choice none), an answer is due */
     /* The device's tools (definitions of tools.c) and the function running them, NULL for none */
     const cJSON *tools;
     llm_tool_runner_t runner;

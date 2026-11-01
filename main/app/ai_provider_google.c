@@ -38,7 +38,7 @@ static bool s_search_refused = false;
 static const cJSON *s_tools = NULL;
 static llm_tool_runner_t s_runner = NULL;
 /* Rounds of function calls answered per question before giving up */
-#define GEMINI_TOOL_ROUNDS_MAX  3
+#define GEMINI_TOOL_ROUNDS_MAX  5
 /* Conversation history: contents [{role: "user" | "model", parts: [{text}]}] */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */

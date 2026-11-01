@@ -20,7 +20,7 @@
 
 /* Function calls of a round, and rounds of calls answered per question before giving up */
 #define RC_TOOL_CALLS_MAX   8
-#define RC_TOOL_ROUNDS_MAX  3
+#define RC_TOOL_ROUNDS_MAX  5
 
 /* A round: one request and its streamed answer (its text added to the answer of the question) */
 typedef struct {
@@ -183,6 +183,9 @@ static char *build_request(rc_client_t *c)
             cJSON_AddItemReferenceToObject(tool, "description", cJSON_GetObjectItem(def, "description"));
             cJSON_AddItemReferenceToObject(tool, "parameters", cJSON_GetObjectItem(def, "input_schema"));
             cJSON_AddItemToArray(tools, tool);
+        }
+        if (c->tools_off) {
+            cJSON_AddStringToObject(req, "tool_choice", "none");
         }
         // Stateless: the reasoning items come encrypted, to be given back with the results of the calls
         if (c->effort && !c->encrypted_refused) {
@@ -465,7 +468,10 @@ llm_error_t rc_stream(void *state, const char *text, llm_text_cb_t on_text, void
         }
         run_tools(c, st);
         stream_free(st);
+        // Still calling after the rounds allowed: the last one without calls, it answers with what it has
+        c->tools_off = (round + 1 >= RC_TOOL_ROUNDS_MAX);
     }
+    c->tools_off = false;
 
     if (error == LLM_OK) {
         if (refused && answer.text.len == 0) {

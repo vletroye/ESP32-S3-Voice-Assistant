@@ -27,7 +27,7 @@
 /* Added to the instructions when web search is offered */
 #define CLAUDE_API_VERSION      "2023-06-01"
 /* Tool calls answered per question, before giving up */
-#define CLAUDE_MAX_TOOL_ROUNDS  3
+#define CLAUDE_MAX_TOOL_ROUNDS  5
 
 static const char *TAG = "claude";
 

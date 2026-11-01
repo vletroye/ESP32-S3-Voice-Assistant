@@ -62,6 +62,8 @@ typedef struct {
     /* The model refused the tools (many free models of OpenRouter): its questions asked without, until another
        model */
     bool tools_refused;
+    /* The last round of a question: no more calls (tool_choice none), an answer is due */
+    bool tools_off;
 } cc_client_t;
 
 esp_err_t cc_init(void *client, const char *api_key, const char *model, const char *instructions, const char *effort);

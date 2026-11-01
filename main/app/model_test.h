@@ -54,6 +54,9 @@ void model_test_start(void);
  */
 bool model_test_one(model_test_kind_t kind, const char *id, void (*done)(void));
 
+/** The free OpenRouter models offered chosen again (one enabled or disabled), by the main task (model_test_poll) */
+void model_test_free_reload(void);
+
 /**
  * @brief Run the test if asked: from the main task's loop, whose stack (in internal RAM, needed by the TLS
  *        handshakes) is free meanwhile. Blocking for several minutes; each result is spoken as it comes.

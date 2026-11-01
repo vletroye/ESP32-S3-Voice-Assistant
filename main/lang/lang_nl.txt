@@ -396,6 +396,15 @@ settings_voice = Stem
 settings_tts = TTS
 settings_stt = STT
 
+# Pages of the models: a check box enables one (not the one in use), a long press tests it
+settings_llm_list = LLM-modellen
+settings_stt_list = STT-modellen
+settings_tts_list = TTS-modellen
+settings_test_title = Prestatietest
+settings_test_text = Testen hoe snel %s is?
+settings_yes = Ja
+settings_no = Nee
+
 # Spoken with a voice just chosen, %s = its name
 voice_sample = Hallo, ik ben %s. Vind je mijn stem mooi?
 

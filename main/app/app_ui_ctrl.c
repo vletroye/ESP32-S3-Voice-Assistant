@@ -24,6 +24,8 @@
 #include "settings.h"
 #include "assistant.h"
 #include "voice_cmd.h"
+#include "model_test.h"
+#include "ai_providers.h"
 #include "file_costs.h"
 #include "radio.h"
 #include "app_ui_radio.h"
@@ -550,9 +552,9 @@ static char *dropdown_options(void)
     return options;
 }
 
-void ui_ctrl_models_changed(void)
+/* The models offered in the model row (under the display lock) */
+static void model_dropdown_refresh(void)
 {
-    bsp_display_lock(0);
     if (s_model_dropdown) {
         char *options = dropdown_options();
         uint16_t selected = model_options(options, SETTINGS_OPTIONS_SIZE);
@@ -561,6 +563,12 @@ void ui_ctrl_models_changed(void)
         s_model_stored = selected;
         confirm_button_update(false);
     }
+}
+
+void ui_ctrl_models_changed(void)
+{
+    bsp_display_lock(0);
+    model_dropdown_refresh();
     bsp_display_unlock();
 }
 
@@ -597,10 +605,13 @@ static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width
 
 /*
  * Pages of the Settings screen, browsed with the arrows at the bottom (looping): 1. language and model,
- * 2. speech, transcription and voice. The rows of the other pages are hidden (the panel's flex layout skips them).
+ * 2. speech, transcription and voice, 3. to 5. the LLM, STT and TTS models. The rows of the other pages are hidden
+ * (the panel's flex layout skips them).
  */
-#define SETTINGS_PAGES          2
-#define SETTINGS_ROWS_MAX       6
+#define SETTINGS_PAGES          5
+#define SETTINGS_PAGE_MODELS    2       /* the first page of the models (LLM, then STT, then TTS) */
+#define SETTINGS_ROWS_MAX       8
+static void model_list_show(int page);
 static lv_obj_t *s_settings_rows[SETTINGS_ROWS_MAX];
 static uint8_t s_settings_row_page[SETTINGS_ROWS_MAX];
 static size_t s_settings_row_count = 0;
@@ -630,6 +641,7 @@ static void settings_page_show(int page)
     settings_unconfirmed_drop();
     s_settings_page = (page + SETTINGS_PAGES) % SETTINGS_PAGES;
     confirm_button_update(s_settings_changed);
+    model_list_show(s_settings_page);
     for (size_t i = 0; i < s_settings_row_count; i++) {
         if (s_settings_row_page[i] == s_settings_page) {
             lv_obj_clear_flag(s_settings_rows[i], LV_OBJ_FLAG_HIDDEN);
@@ -675,6 +687,293 @@ static void settings_arrow_create(lv_align_t align, lv_coord_t x, const char *sy
     // The default font has the arrow symbols (the Latin ones do not)
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_center(label);
+}
+
+/*
+ * ---------- Pages of the models: those of AGENTS.INI (LLM: then the free OpenRouter ones of [openrouter_free]) ----------
+ * A check box on the left enables one (a "-" before its id when not: offered nowhere, not tested by "teste les
+ * modèles"); the one in use cannot be unchecked. Then its provider and name (grey: no key for it), and the time to
+ * the first words of its last test. The list scrolls; a long press asks whether to test that model alone.
+ */
+#define MODEL_ROWS_MAX      80
+#define MODEL_ROW_DIM       0x8A97BC
+#define MODEL_ROW_NO_KEY    0x5A6280
+
+typedef struct {
+    char id[80];
+    char name[48];
+    lv_obj_t *check;
+    lv_obj_t *time;
+    model_test_kind_t kind;
+    bool free;              /* a line of [openrouter_free] */
+} model_row_t;
+
+static lv_obj_t *s_model_lists[3];          /* LLM, STT, TTS: scrollable, filled when their page is shown */
+static model_row_t *s_model_rows = NULL;    /* of the list shown (PSRAM) */
+static size_t s_model_row_count = 0;
+static lv_obj_t *s_model_test_box = NULL;
+static int s_model_test_row = -1;
+
+/* Its last test without the parentheses: "1,2 s", "indisponible", "" when never tested */
+static void model_row_time(const cJSON *results, const char *key, char *buf, size_t size)
+{
+    char text[40];
+    model_test_result(results, key, text, sizeof(text));
+    const char *from = strncmp(text, " (", 2) == 0 ? text + 2 : text;
+    strlcpy(buf, from, size);
+    size_t n = strlen(buf);
+    if (n && buf[n - 1] == ')') {
+        buf[n - 1] = '\0';
+    }
+}
+
+/* The free OpenRouter models chosen again by the main task, the model row with them; the box left as it is */
+static void model_check_cb(lv_event_t *e)
+{
+    model_row_t *r = &s_model_rows[(intptr_t)lv_event_get_user_data(e)];
+    bool on = lv_obj_has_state(r->check, LV_STATE_CHECKED);
+    bool done = false;
+    if (!model_test_running()) {
+        if (r->free) {
+            done = llm_set_free_enabled(r->id, on);
+            if (done) {
+                model_test_free_reload();
+            }
+        } else if (r->kind == MODEL_TEST_KIND_LLM) {
+            done = llm_set_model_enabled(r->id, on);
+            if (done) {
+                model_dropdown_refresh();
+            }
+        } else {
+            settings_speech_t *row = &s_settings_speech[r->kind == MODEL_TEST_KIND_STT ? 0 : 1];
+            done = llm_set_speech_enabled(row->kind, r->id, on);
+            if (done) {
+                speech_options_refresh(row);
+            }
+        }
+    }
+    ESP_LOGI(TAG, "%s %s%s", r->id, on ? "enabled" : "disabled", done ? "" : ": refused");
+    if (!done) {
+        // Not written (a test running, AGENTS.INI not rewritten): as it was
+        if (on) {
+            lv_obj_clear_state(r->check, LV_STATE_CHECKED);
+        } else {
+            lv_obj_add_state(r->check, LV_STATE_CHECKED);
+        }
+    }
+}
+
+/* The test done (main task): the list shown again with its time */
+static void model_test_done_cb(void)
+{
+    bsp_display_lock(0);
+    s_model_test_row = -1;
+    if (lv_scr_act() == ui_ScreenSettings) {
+        model_list_show(s_settings_page);
+    }
+    bsp_display_unlock();
+}
+
+static void model_test_box_cb(lv_event_t *e)
+{
+    lv_obj_t *box = lv_event_get_current_target(e);
+    bool yes = lv_msgbox_get_active_btn(box) == 0;
+    int index = s_model_test_row;
+    if (yes && index >= 0 && index < (int)s_model_row_count &&
+            model_test_one(s_model_rows[index].kind, s_model_rows[index].id, model_test_done_cb)) {
+        ESP_LOGI(TAG, "%s: tested alone", s_model_rows[index].id);
+        lv_label_set_text(s_model_rows[index].time, "...");
+    } else {
+        s_model_test_row = -1;
+    }
+    s_model_test_box = NULL;
+    lv_msgbox_close_async(box);
+}
+
+/* A long press on a model: "Test performance", yes or no */
+static void model_long_pressed_cb(lv_event_t *e)
+{
+    int index = (int)(intptr_t)lv_event_get_user_data(e);
+    if (model_test_running() || s_model_test_box || index >= (int)s_model_row_count) {
+        return;
+    }
+    const app_lang_t *lang = app_lang_get();
+    static const char *buttons[3];
+    buttons[0] = lang->settings_yes;
+    buttons[1] = lang->settings_no;
+    buttons[2] = "";
+    char text[96];
+    snprintf(text, sizeof(text), lang->settings_test_text, s_model_rows[index].name);
+    s_model_test_row = index;
+    s_model_test_box = lv_msgbox_create(NULL, lang->settings_test_title, text, buttons, false);
+    lv_obj_set_width(s_model_test_box, 280);
+    lv_obj_set_style_text_font(lv_msgbox_get_title(s_model_test_box), &ui_font_Latin16, LV_PART_MAIN);
+    lv_obj_set_style_text_font(lv_msgbox_get_text(s_model_test_box), &ui_font_Latin16, LV_PART_MAIN);
+    lv_obj_set_style_text_font(lv_msgbox_get_btns(s_model_test_box), &ui_font_Latin16, LV_PART_ITEMS);
+    lv_obj_center(s_model_test_box);
+    lv_obj_add_event_cb(s_model_test_box, model_test_box_cb, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+static void model_row_add(lv_obj_t *list, model_test_kind_t kind, const char *id, const char *provider,
+                          const char *name, bool enabled, bool current, bool has_key, const cJSON *results, bool free)
+{
+    if (!s_model_rows || s_model_row_count >= MODEL_ROWS_MAX) {
+        return;
+    }
+    size_t index = s_model_row_count++;
+    model_row_t *r = &s_model_rows[index];
+    strlcpy(r->id, id, sizeof(r->id));
+    strlcpy(r->name, name, sizeof(r->name));
+    r->kind = kind;
+    r->free = free;
+
+    lv_obj_t *row = lv_obj_create(list);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, lv_pct(100), 30);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(row, model_long_pressed_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)index);
+
+    r->check = lv_checkbox_create(row);
+    lv_checkbox_set_text(r->check, "");
+    // The check mark is a symbol: of the default font (the Latin ones have none)
+    lv_obj_set_style_text_font(r->check, &lv_font_montserrat_14, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    if (enabled) {
+        lv_obj_add_state(r->check, LV_STATE_CHECKED);
+    }
+    if (current) {
+        lv_obj_add_state(r->check, LV_STATE_DISABLED);      // the one in use stays enabled
+    }
+    lv_obj_add_event_cb(r->check, model_check_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)index);
+    lv_obj_add_event_cb(r->check, model_long_pressed_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)index);
+
+    lv_obj_t *label = lv_label_create(row);
+    char text[128];
+    snprintf(text, sizeof(text), "#%06X %s# %s", MODEL_ROW_DIM, provider, name);
+    lv_label_set_recolor(label, true);
+    lv_label_set_text(label, text);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    lv_obj_set_height(label, LV_SIZE_CONTENT);
+    lv_obj_set_flex_grow(label, 1);
+    lv_obj_set_style_text_font(label, &ui_font_Latin14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(label, lv_color_hex(has_key ? 0xFFFFFF : MODEL_ROW_NO_KEY),
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    r->time = lv_label_create(row);
+    // Kept by its id, a speech model by "stt:<id>" / "tts:<id>"
+    char key[96], time_text[32];
+    snprintf(key, sizeof(key), "%s%s", kind == MODEL_TEST_KIND_LLM ? "" : kind == MODEL_TEST_KIND_STT ? "stt:" : "tts:",
+             id);
+    model_row_time(results, key, time_text, sizeof(time_text));
+    lv_label_set_text(r->time, s_model_test_row == (int)index && model_test_running() ? "..." : time_text);
+    lv_obj_set_style_text_font(r->time, &ui_font_Latin14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(r->time, lv_color_hex(MODEL_ROW_DIM), LV_PART_MAIN | LV_STATE_DEFAULT);
+}
+
+static int compare_order(const void *a, const void *b)
+{
+    return (*(const llm_model_t * const *)a)->order - (*(const llm_model_t * const *)b)->order;
+}
+
+/* The chat models of AGENTS.INI in its order (enabled or not), then the free OpenRouter ones */
+static void model_list_llm(lv_obj_t *list, const cJSON *results)
+{
+    const char *current = settings_get_parameter()->chat_model;
+    size_t count = 0;
+    const llm_model_t **models = heap_caps_calloc(llm_model_count + llm_disabled_count() + 1, sizeof(*models),
+                                                  MALLOC_CAP_SPIRAM);
+    if (!models) {
+        return;
+    }
+    for (size_t i = 0; i < llm_model_count; i++) {
+        if (llm_models[i].order >= 0) {
+            models[count++] = &llm_models[i];
+        }
+    }
+    for (size_t i = 0; i < llm_disabled_count(); i++) {
+        models[count++] = llm_disabled_model(i);
+    }
+    qsort(models, count, sizeof(*models), compare_order);
+    for (size_t i = 0; i < count; i++) {
+        const ai_provider_t *p = ai_provider_of_llm(models[i]->provider);
+        bool enabled = models[i] >= llm_models && models[i] < llm_models + llm_model_count;
+        model_row_add(list, MODEL_TEST_KIND_LLM, models[i]->id, p->company, models[i]->label, enabled,
+                      strcmp(models[i]->id, current) == 0, ai_provider_key(p)[0], results, false);
+    }
+    free(models);
+    const ai_provider_t *openrouter = ai_provider_of_llm(LLM_PROVIDER_OPENROUTER);
+    const char *name, *id;
+    bool enabled;
+    for (size_t i = 0; (id = llm_free_line(i, &name, &enabled)) != NULL; i++) {
+        model_row_add(list, MODEL_TEST_KIND_LLM, id, openrouter->company, name, enabled, strcmp(id, current) == 0,
+                      ai_provider_key(openrouter)[0], results, true);
+    }
+}
+
+/* The transcription or speech models of [stt] / [tts], enabled or not */
+static void model_list_speech(lv_obj_t *list, model_test_kind_t kind, const cJSON *results)
+{
+    llm_speech_kind_t speech = kind == MODEL_TEST_KIND_STT ? LLM_SPEECH_STT : LLM_SPEECH_TTS;
+    const sys_param_t *param = settings_get_parameter();
+    const char *current = speech == LLM_SPEECH_STT ? param->stt_model : param->tts_model;
+    bool enabled;
+    for (size_t i = 0; i < llm_speech_all_count(speech); i++) {
+        const llm_speech_model_t *m = llm_speech_all(speech, i, &enabled);
+        const ai_provider_t *p = ai_provider_find(m->provider);
+        model_row_add(list, kind, m->id, p ? p->company : m->provider, m->label, enabled,
+                      strcmp(m->id, current) == 0, assistant_speech_key(m->provider)[0], results, false);
+    }
+}
+
+/* The title of the page; a page of models filled again (the others emptied: their rows are many) */
+static void model_list_show(int page)
+{
+    const app_lang_t *lang = app_lang_get();
+    const char *titles[3] = { lang->settings_llm_list, lang->settings_stt_list, lang->settings_tts_list };
+    int list = page - SETTINGS_PAGE_MODELS;
+    if (ui_LabelSettingsTile) {
+        lv_label_set_text(ui_LabelSettingsTile, list >= 0 && list < 3 ? titles[list] : lang->settings_title);
+    }
+    for (int i = 0; i < 3; i++) {
+        if (s_model_lists[i]) {
+            lv_obj_clean(s_model_lists[i]);
+        }
+    }
+    s_model_row_count = 0;
+    if (list < 0 || list >= 3 || !s_model_lists[list]) {
+        return;
+    }
+    if (!s_model_rows) {
+        s_model_rows = heap_caps_calloc(MODEL_ROWS_MAX, sizeof(*s_model_rows), MALLOC_CAP_SPIRAM);
+    }
+    cJSON *results = model_test_results();
+    static const model_test_kind_t kinds[3] = { MODEL_TEST_KIND_LLM, MODEL_TEST_KIND_STT, MODEL_TEST_KIND_TTS };
+    if (kinds[list] == MODEL_TEST_KIND_LLM) {
+        model_list_llm(s_model_lists[list], results);
+    } else {
+        model_list_speech(s_model_lists[list], kinds[list], results);
+    }
+    cJSON_Delete(results);
+    lv_obj_scroll_to_y(s_model_lists[list], 0, LV_ANIM_OFF);
+}
+
+/* The scrollable list of a page of models, between the line under the title and the arrows */
+static void model_list_create(int index)
+{
+    lv_obj_t *list = lv_obj_create(ui_PanelSettings);
+    lv_obj_remove_style_all(list);
+    lv_obj_set_size(list, lv_pct(100), 124);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_left(list, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(list, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_row(list, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+    s_model_lists[index] = list;
+    settings_row_add(list, SETTINGS_PAGE_MODELS + index);
 }
 
 static void settings_screen_setup(void)
@@ -731,6 +1030,11 @@ static void settings_screen_setup(void)
     settings_dropdown_setup(voice_dropdown, "-", 0, settings_voice_changed_cb, NULL);
     voice_options_refresh();
 
+    // Pages 3 to 5: the LLM, STT and TTS models
+    for (int i = 0; i < 3; i++) {
+        model_list_create(i);
+    }
+
     // Arrows to the previous / next page at the bottom left and right
     settings_arrow_create(LV_ALIGN_BOTTOM_LEFT, 10, LV_SYMBOL_LEFT, -1);
     settings_arrow_create(LV_ALIGN_BOTTOM_RIGHT, -10, LV_SYMBOL_RIGHT, 1);
@@ -763,6 +1067,7 @@ static void ui_ctrl_apply_texts(void)
         lv_label_set_text(s_settings_speech[0].label, lang->settings_stt);
         lv_label_set_text(s_settings_speech[1].label, lang->settings_tts);
         lv_label_set_text(s_save_label, lang->settings_confirm);
+        model_list_show(s_settings_page);   // the title of the page
     }
     label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);
     label_localize(ui_LabelResetContent, lang->reset_content, &ui_font_Latin14);
@@ -789,6 +1094,9 @@ void ui_ctrl_settings_sync(void)
     speech_options_refresh(&s_settings_speech[0]);
     speech_options_refresh(&s_settings_speech[1]);
     voice_options_refresh();
+    if (s_settings_page >= SETTINGS_PAGE_MODELS && s_model_test_row < 0) {
+        model_list_show(s_settings_page);   // the model in use changed by voice
+    }
     confirm_button_update(false);
     bsp_display_unlock();
 }

@@ -196,6 +196,13 @@ typedef struct {
     const char *settings_voice;
     const char *settings_tts;       /* Speech model row */
     const char *settings_stt;       /* Transcription model row */
+    const char *settings_llm_list;  /* Titles of the pages of the models (enabled with a check box) */
+    const char *settings_stt_list;
+    const char *settings_tts_list;
+    const char *settings_test_title;    /* Popup of a long press on a model: its title, its text (%s: the model) */
+    const char *settings_test_text;
+    const char *settings_yes;
+    const char *settings_no;
     const char *voice_sample;       /* Spoken with a voice just chosen, %s = its name */
     const char *settings_confirm;   /* Confirm button (language and model), enabled once one of them is changed */
     const char *settings_saved;     /* Shown while the device restarts after saving */

@@ -962,6 +962,11 @@ void model_test_poll(void)
     }
 }
 
+void model_test_free_reload(void)
+{
+    s_free_reload = true;
+}
+
 bool model_test_one(model_test_kind_t kind, const char *id, void (*done)(void))
 {
     if (s_running || !id) {

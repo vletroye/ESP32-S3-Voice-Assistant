@@ -395,6 +395,15 @@ settings_voice = Voice
 settings_tts = TTS
 settings_stt = STT
 
+# Pages of the models: a check box enables one (not the one in use), a long press tests it
+settings_llm_list = LLM models
+settings_stt_list = STT models
+settings_tts_list = TTS models
+settings_test_title = Performance test
+settings_test_text = Test how fast %s is?
+settings_yes = Yes
+settings_no = No
+
 # Spoken with a voice just chosen, %s = its name
 voice_sample = Hello, I am %s. Do you like my voice?
 

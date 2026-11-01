@@ -767,11 +767,11 @@ How to read this table:
 
   | Provider | <img src="docs/icons/web.png" width="16" alt="web"> Weather | <img src="docs/icons/web.png" width="16" alt="web"> Web search | <img src="docs/icons/local.png" width="16" alt="local"> Homey (home automation) | <img src="docs/icons/local.png" width="16" alt="local"> Radio | <img src="docs/icons/local.png" width="16" alt="local"> Volume |
   | --- | :---: | :---: | :---: | :---: | :---: |
-  | <img src="docs/icons/claude.png" width="16" alt=""> Claude (Anthropic) | ✅ | ✅ Anthropic's | ✅ | ✅ | ✅ |
-  | <img src="docs/icons/openai.png" width="16" alt=""> GPT (OpenAI) | ✅ | ✅ OpenAI's | ✅ | ✅ | ✅ |
-  | <img src="docs/icons/gemini.png" width="16" alt=""> Gemini (Google) | ❌ | ✅ Google Search | ❌ | ❌ | ❌ |
+  | <img src="docs/icons/claude.png" width="16" alt=""> Anthropic (Claude) | ✅ | ✅ Anthropic's | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/openai.png" width="16" alt=""> OpenAI (GPT) | ✅ | ✅ OpenAI's | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/gemini.png" width="16" alt=""> Google (Gemini) | ❌ | ✅ Google Search | ❌ | ❌ | ❌ |
   | <img src="docs/icons/mistral.png" width="16" alt=""> Mistral AI | ✅ | ❌ | ✅ | ✅ | ✅ |
-  | <img src="docs/icons/xai.png" width="16" alt=""> Grok (xAI) | ✅ | ❌ | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/xai.png" width="16" alt=""> xAI (Grok) | ✅ | ❌ | ✅ | ✅ | ✅ |
   | <img src="docs/icons/openrouter.png" width="16" alt=""> OpenRouter | ✅ ¹ | ❌ | ✅ ¹ | ✅ ¹ | ✅ ¹ |
   | <img src="docs/icons/perplexity.png" width="16" alt=""> Perplexity | ❌ | ✅ built in | ❌ | ❌ | ❌ |
 

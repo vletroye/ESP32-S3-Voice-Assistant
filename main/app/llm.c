@@ -1117,6 +1117,17 @@ static bool s_reasoning = false;
 static int64_t s_last_exchange_us = 0;
 
 /*
+ * The tools for the provider in use: the device's, and web_search (by Perplexity) for a provider without a web
+ * search of its own, when a Perplexity key is set
+ */
+static const cJSON *provider_tools(void)
+{
+    const ai_provider_t *p = ai_provider_of_llm(s_provider);
+    bool search = !p->own_web_search && ai_provider_key(ai_provider_of_llm(LLM_PROVIDER_PERPLEXITY))[0];
+    return search ? tools_definitions_with_search() : tools_definitions();
+}
+
+/*
  * The client of the model's provider (s_provider) configured for it, with the keys and instructions kept; for the
  * conversation (not the model test): with the tools, and the effort of the reasoning mode when it is on
  */
@@ -1137,7 +1148,7 @@ static esp_err_t client_init(const char *model, bool conversation)
     }
     // The device's tools (weather, volume, radio, Homey...) to the clients that take them; none for the model test
     if (b->set_tools) {
-        b->set_tools(b->state, tools ? tools_definitions() : NULL, tools ? tools_run : NULL);
+        b->set_tools(b->state, tools ? provider_tools() : NULL, tools ? tools_run : NULL);
     }
     const char *effort = reasoning ? ai_provider_of_llm(s_provider)->reasoning_effort : effort_of(model);
     return b->init(b->state, key, model, s_system, effort);
@@ -1232,7 +1243,7 @@ void llm_set_tools(const cJSON *definitions)
         xSemaphoreTake(s_lock, portMAX_DELAY);
     }
     if (s_ready && backend()->set_tools) {
-        backend()->set_tools(backend()->state, definitions, tools_run);
+        backend()->set_tools(backend()->state, provider_tools(), tools_run);
     }
     if (s_lock) {
         xSemaphoreGive(s_lock);

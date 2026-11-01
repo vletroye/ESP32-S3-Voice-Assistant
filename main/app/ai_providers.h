@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include "llm.h"
 
@@ -30,6 +31,7 @@ typedef struct {
     const char *key_name;       /* "Claude_key" of CONFIG.INI */
     llm_provider_t llm;         /* its chat models, LLM_PROVIDER_COUNT for a speech service only */
     const char *reasoning_effort;   /* the effort of the reasoning mode ("j'ai une question difficile"), NULL if none */
+    bool own_web_search;        /* its models search the web themselves (else the web_search tool, by Perplexity) */
     const struct llm_backend *chat;         /* its chat client, NULL if none */
     const struct stt_backend *stt;          /* its transcription service, NULL if none */
     const struct tts_backend *tts;          /* its speech service, NULL if none */

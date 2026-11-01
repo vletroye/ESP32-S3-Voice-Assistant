@@ -16,6 +16,7 @@
 #include "tools.h"
 #include "radio.h"
 #include "radio_browser.h"
+#include "ai_provider_perplexity.h"
 
 static const char *TAG = "tools";
 
@@ -52,7 +53,24 @@ static const char s_definitions_json[] =
     "\"countrycode\":{\"type\":\"string\",\"description\":\"ISO 3166-1 alpha-2 code, e.g. 'BE'\"}}}}"
     "]";
 
+/*
+ * Web search by Perplexity (Sonar), offered to the models whose provider has no search of its own (Mistral,
+ * OpenRouter), when a Perplexity key is set
+ */
+static const char s_web_search_json[] =
+    "{\"name\":\"web_search\","
+    "\"description\":\"Search the web for current information (news, sports results, schedules, prices, opening "
+    "hours, recent events...) and get a short answer with the facts found. Before calling it, say a very short "
+    "sentence in the user's language, such as 'Je regarde.'. Never read out web addresses, citations or source "
+    "names unless asked.\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"query\":{\"type\":\"string\",\"description\":\"The question to search, complete on its own (with the place "
+    "and the date when they matter), in the user's language\"}},"
+    "\"required\":[\"query\"]}}";
+
 static cJSON *s_definitions = NULL;
+/* The same tools, followed by web_search */
+static cJSON *s_with_search = NULL;
 /* The device's tools followed by the added ones (Homey), once there are some */
 static cJSON *s_all = NULL;
 /* Set by a tool whose answer ends the exchange (no follow-up listening) */
@@ -67,6 +85,8 @@ bool tools_sleep_after_reply(void)
 {
     return s_sleep_after_reply;
 }
+
+static const char *string_input(const cJSON *input, const char *key);
 
 static const cJSON *own_definitions(void)
 {
@@ -84,6 +104,28 @@ const cJSON *tools_definitions(void)
     return s_all ? s_all : own_definitions();
 }
 
+/* tools_definitions() followed by web_search (allocated) */
+static cJSON *with_search(void)
+{
+    cJSON *list = cJSON_Duplicate(tools_definitions(), true);
+    cJSON *search = cJSON_Parse(s_web_search_json);
+    if (list && search) {
+        cJSON_AddItemToArray(list, search);
+    } else {
+        ESP_LOGE(TAG, "Invalid web_search definition");
+        cJSON_Delete(search);
+    }
+    return list;
+}
+
+const cJSON *tools_definitions_with_search(void)
+{
+    if (!s_with_search) {
+        s_with_search = with_search();
+    }
+    return s_with_search;
+}
+
 void tools_add(cJSON *extra)
 {
     cJSON *all = cJSON_Duplicate(own_definitions(), true);
@@ -92,11 +134,36 @@ void tools_add(cJSON *extra)
         cJSON_AddItemToArray(all, item);
     }
     cJSON_Delete(extra);
-    // Swapped while no answer is being generated; the previous list can then be freed
-    llm_set_tools(all);
-    cJSON_Delete(s_all);
+    // The new lists given to the model while no answer is being generated; the previous ones can then be freed
+    cJSON *old_all = s_all;
+    cJSON *old_with_search = s_with_search;
     s_all = all;
+    s_with_search = with_search();
+    llm_set_tools(all);
+    cJSON_Delete(old_all);
+    cJSON_Delete(old_with_search);
     ESP_LOGI(TAG, "%d tools offered", cJSON_GetArraySize(all));
+}
+
+/* The web search, asked to Perplexity: its answer, short and without sources */
+static char *run_web_search(const cJSON *input, bool *is_error)
+{
+    const char *query = string_input(input, "query");
+    if (!query || !query[0]) {
+        *is_error = true;
+        return strdup("{\"error\":\"give 'query'\"}");
+    }
+    char *answer = perplexity_search(query);
+    if (!answer) {
+        *is_error = true;
+        return strdup("{\"error\":\"the web search failed\"}");
+    }
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddStringToObject(result, "answer", answer);
+    free(answer);
+    char *text = cJSON_PrintUnformatted(result);
+    cJSON_Delete(result);
+    return text;
 }
 
 static char *run_set_volume(const cJSON *input, bool *is_error)
@@ -169,6 +236,8 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
         result = run_set_volume(input, is_error);
     } else if (strcmp(name, "play_radio") == 0) {
         result = run_play_radio(input, is_error);
+    } else if (strcmp(name, "web_search") == 0) {
+        result = run_web_search(input, is_error);
     } else if (homey_mcp_has_tool(name)) {
         result = homey_mcp_call(name, input, is_error);
     } else {

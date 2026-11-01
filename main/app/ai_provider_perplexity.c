@@ -18,6 +18,7 @@
 #include "ai_provider_perplexity.h"
 #include "file_costs.h"
 #include "llm_common.h"
+#include "ai_providers.h"
 
 #define PERPLEXITY_URL                  "https://api.perplexity.ai/v1/agent"
 /* A tiny free answer (the list of models): opens the TLS connection in advance */
@@ -367,6 +368,34 @@ end:
     llm_buf_free(&st.answer.text);
     free(body);
     return st.error;
+}
+
+/* The web_search tool of the other models: what Perplexity is asked to answer */
+#define PERPLEXITY_SEARCH_INSTRUCTIONS     "You find current facts on the web for a voice assistant, which tells them to the user in its own words. "     "Answer in 2 to 4 short sentences, in the language of the question, with the facts and figures asked, "     "without links, citations, source names or markdown."
+
+char *perplexity_search(const char *query)
+{
+    const char *key = ai_provider_key(ai_provider_of_llm(LLM_PROVIDER_PERPLEXITY));
+    if (!key[0]) {
+        ESP_LOGW(TAG, "web_search: no Perplexity_key");
+        return NULL;
+    }
+    // The first model of [perplexity] in AGENTS.INI (Sonar), configured for this question only
+    const char *model = "perplexity/sonar";
+    for (size_t i = 0; i < llm_model_count; i++) {
+        if (llm_models[i].provider == LLM_PROVIDER_PERPLEXITY) {
+            model = llm_models[i].id;
+            break;
+        }
+    }
+    if (perplexity_init(NULL, key, model, PERPLEXITY_SEARCH_INSTRUCTIONS, "-") != ESP_OK) {
+        return NULL;
+    }
+    char *answer = NULL;
+    llm_error_t err = perplexity_stream(NULL, query, NULL, NULL, &answer);
+    perplexity_reset(NULL);
+    ESP_LOGI(TAG, "web_search for another model: %s", err == LLM_OK ? "answered" : "failed");
+    return err == LLM_OK ? answer : NULL;
 }
 
 const llm_backend_t llm_backend_perplexity = {

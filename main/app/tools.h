@@ -18,6 +18,9 @@ extern "C" {
 /** Tool definitions: JSON array of {name, description, input_schema}, owned by this module */
 const cJSON *tools_definitions(void);
 
+/** The same, followed by web_search (by Perplexity): for a provider without a web search of its own */
+const cJSON *tools_definitions_with_search(void);
+
 /**
  * @brief Add tools of another source (Homey) to the device's own ones; the model gets the new list.
  *

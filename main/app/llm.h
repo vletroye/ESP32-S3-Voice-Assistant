@@ -213,7 +213,10 @@ void llm_set_system_prompt(const char *system_prompt);
 /** Web searches made for the current (or last) answer */
 int llm_web_searches(void);
 
-/** Tool definitions offered to the model from now on (kept by the caller), swapped between two answers */
+/**
+ * The tools changed (Homey's added): given to the model in use from now on, between two answers (the list of its
+ * provider: tools_definitions(), with web_search for a provider without its own search)
+ */
 void llm_set_tools(const cJSON *definitions);
 
 /** Where the user lives (2-letter country code, town): localizes the web search (Claude) */

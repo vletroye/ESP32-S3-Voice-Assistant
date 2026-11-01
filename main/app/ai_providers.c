@@ -41,45 +41,45 @@ static const size_t s_key_offsets[] = {
  */
 static const ai_provider_t s_providers[] = {
     {
-        "anthropic", "Anthropic", "Claude", "Claude_key", LLM_PROVIDER_CLAUDE, "high", &llm_backend_claude, NULL, NULL,
+        "anthropic", "Anthropic", "Claude", "Claude_key", LLM_PROVIDER_CLAUDE, "high", true, &llm_backend_claude, NULL, NULL,
         { "anthropic", "anthropique", "anthropik", "claude", "clode", NULL },
     },
     {
-        "openai", "OpenAI", "GPT", "ChatGPT_key", LLM_PROVIDER_OPENAI, "high", &llm_backend_openai, &stt_backend_openai,
+        "openai", "OpenAI", "GPT", "ChatGPT_key", LLM_PROVIDER_OPENAI, "high", true, &llm_backend_openai, &stt_backend_openai,
         &tts_backend_openai, { "openai", "open ai", "open a i", "openaï", "gpt", "chatgpt", "chat gpt" },
     },
     {
-        "google", "Google", "Gemini", "Gemini_key", LLM_PROVIDER_GEMINI, "high", &llm_backend_gemini, NULL, NULL,
+        "google", "Google", "Gemini", "Gemini_key", LLM_PROVIDER_GEMINI, "high", true, &llm_backend_gemini, NULL, NULL,
         { "google", "gougle", "gemini", "gémini", "jemini", NULL },
     },
     {
-        "openrouter", "OpenRouter", "OpenRouter", "OpenRouter_key", LLM_PROVIDER_OPENROUTER, "high",
+        "openrouter", "OpenRouter", "OpenRouter", "OpenRouter_key", LLM_PROVIDER_OPENROUTER, "high", false,
         &llm_backend_openrouter, NULL, &tts_backend_openrouter,
         { "openrouter", "open router", "open routeur", "openrouteur", "open rooter", NULL },
     },
     {
-        "xai", "xAI", "Grok", "XAI_key", LLM_PROVIDER_XAI, "high", &llm_backend_xai, NULL, NULL,
+        "xai", "xAI", "Grok", "XAI_key", LLM_PROVIDER_XAI, "high", true, &llm_backend_xai, NULL, NULL,
         { "xai", "x ai", "ix ai", "grok", "grock", "groc", "groque" },
     },
     {
-        "mistral", "Mistral AI", "Mistral", "Mistral_key", LLM_PROVIDER_MISTRAL, "high", &llm_backend_mistral,
+        "mistral", "Mistral AI", "Mistral", "Mistral_key", LLM_PROVIDER_MISTRAL, "high", false, &llm_backend_mistral,
         &stt_backend_mistral, &tts_backend_mistral, { "mistral", "mistrale", "mistral ai", NULL },
     },
     {
-        "perplexity", "Perplexity", "Perplexity", "Perplexity_key", LLM_PROVIDER_PERPLEXITY, "high",
+        "perplexity", "Perplexity", "Perplexity", "Perplexity_key", LLM_PROVIDER_PERPLEXITY, "high", true,
         &llm_backend_perplexity, NULL, NULL,
         { "perplexity", "perplexité", "perplexiti", "perplexite", "sonar", "sonare", NULL },
     },
     // Speech services only
     {
-        "deepgram", "Deepgram", "Deepgram", "Deepgram_key", LLM_PROVIDER_COUNT, NULL, NULL, &stt_backend_deepgram,
+        "deepgram", "Deepgram", "Deepgram", "Deepgram_key", LLM_PROVIDER_COUNT, NULL, false, NULL, &stt_backend_deepgram,
         &tts_backend_deepgram, { "deepgram", "deep gram", NULL },
     },
     {
-        "groq", "Groq", "Groq", "Groq_key", LLM_PROVIDER_COUNT, NULL, NULL, &stt_backend_groq, NULL, { "groq", NULL },
+        "groq", "Groq", "Groq", "Groq_key", LLM_PROVIDER_COUNT, NULL, false, NULL, &stt_backend_groq, NULL, { "groq", NULL },
     },
     {
-        "elevenlabs", "ElevenLabs", "ElevenLabs", "ElevenLabs_key", LLM_PROVIDER_COUNT, NULL, NULL,
+        "elevenlabs", "ElevenLabs", "ElevenLabs", "ElevenLabs_key", LLM_PROVIDER_COUNT, NULL, false, NULL,
         &stt_backend_elevenlabs, &tts_backend_elevenlabs, { "elevenlabs", "eleven labs", NULL },
     },
 };

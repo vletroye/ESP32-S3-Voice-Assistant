@@ -497,7 +497,13 @@ llm_error_t cc_stream(void *client, const char *text, llm_text_cb_t on_text, voi
             error = LLM_ERR_OTHER;
             break;
         }
-        // What was said before the tool call ("Je regarde.") is spoken while the tools run
+        // A web search (by Perplexity) shows the web icon; what was said before the tool call ("Je regarde.") is
+        // spoken while the tools run
+        for (int i = 0; i < st->call_count; i++) {
+            if (strcmp(st->calls[i].name, "web_search") == 0) {
+                llm_web_search_started();
+            }
+        }
         if (on_text) {
             on_text(NULL, ctx);
         }

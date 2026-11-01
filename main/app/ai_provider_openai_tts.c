@@ -146,9 +146,7 @@ static void handle_message(const char *text)
             const cJSON *details = cJSON_GetObjectItem(cJSON_GetObjectItem(json, "response"), "status_details");
             char *why = details ? cJSON_PrintUnformatted(details) : NULL;
             ESP_LOGE(TAG, "response %s: %.300s", s_response_status, why ? why : "(no details)");
-            if (tts_backend_is_no_credit(why)) {
-                tts_backend_no_credit();
-            }
+            tts_backend_refused(0, why);
             free(why);
         }
         s_response_active = false;
@@ -159,10 +157,10 @@ static void handle_message(const char *text)
         const cJSON *message = cJSON_GetObjectItem(error, "message");
         ESP_LOGE(TAG, "error: %s: %s", cJSON_IsString(code) ? code->valuestring : "-",
                  cJSON_IsString(message) ? message->valuestring : "-");
-        if (tts_backend_is_no_credit(cJSON_IsString(code) ? code->valuestring : NULL) ||
-                tts_backend_is_no_credit(cJSON_IsString(message) ? message->valuestring : NULL)) {
-            tts_backend_no_credit();
-        }
+        char why[200];
+        snprintf(why, sizeof(why), "%s: %s", cJSON_IsString(code) ? code->valuestring : "",
+                 cJSON_IsString(message) ? message->valuestring : "");
+        tts_backend_refused(0, why);
         if (s_response_active) {
             strlcpy(s_response_status, "error", sizeof(s_response_status));
             s_response_active = false;
@@ -202,6 +200,9 @@ static void ws_event_handler(void *arg, esp_event_base_t base, int32_t event_id,
         break;
     case WEBSOCKET_EVENT_ERROR:
         ESP_LOGW(TAG, "WebSocket error (handshake status %d)", data->error_handle.esp_ws_handshake_status_code);
+        if (data->error_handle.esp_ws_handshake_status_code > 0) {
+            tts_backend_refused(data->error_handle.esp_ws_handshake_status_code, NULL);
+        }
         xEventGroupClearBits(s_events, EV_CONNECTED);
         break;
     case WEBSOCKET_EVENT_DISCONNECTED:

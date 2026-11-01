@@ -38,6 +38,7 @@
 #include "app_wifi.h"
 #include "stt_stream.h"
 #include "stt_backend.h"
+#include "llm_common.h"
 
 #define STT_INPUT_RATE          16000
 #define STT_AUDIO_BUFFER_BYTES  (10 * STT_INPUT_RATE * 2)   /* 10 s of audio while (re)connecting */
@@ -164,6 +165,8 @@ static size_t upsample(upsampler_t *u, const int16_t *in, size_t n, int16_t *out
 
 /* The last transcription refused for lack of credit */
 static volatile bool s_no_credit = false;
+/* Why the transcription was refused last (llm_speech_error), LLM_OK if it was not: said by the model test */
+static volatile llm_error_t s_refusal = LLM_OK;
 
 void stt_backend_delta(const char *text)
 {
@@ -196,6 +199,7 @@ void stt_backend_final(const char *text, int in_tokens, int out_tokens, double s
     ESP_LOGI(TAG, "final transcript %lld ms after commit: \"%s\"", (esp_timer_get_time() - s_commit_us) / 1000,
              s_transcript ? s_transcript : "");
     s_no_credit = false;
+    s_refusal = LLM_OK;
     xEventGroupSetBits(s_events, EV_TRANSCRIPT);
 }
 
@@ -203,11 +207,14 @@ void stt_backend_failed(const char *code, const char *message)
 {
     ESP_LOGE(TAG, "%s error: %s: %s", s_backend ? s_backend->name : "?", code && code[0] ? code : "-",
              message ? message : "-");
-    // The credit exhausted: "insufficient_quota", "You exceeded your current quota...", 402...
+    // Why: the credit exhausted ("insufficient_quota", "You exceeded your current quota...", 402), the key
+    // refused (401...), busy (429...)
     const char *c = code ? code : "";
     const char *m = message ? message : "";
-    s_no_credit = strstr(c, "quota") || strcmp(c, "402") == 0 || strcasestr(m, "quota") ||
-                  strcasestr(m, "billing") || strcasestr(m, "credit");
+    char both[200];
+    snprintf(both, sizeof(both), "%s %s", c, m);
+    s_refusal = llm_speech_error(atoi(c), both);
+    s_no_credit = (s_refusal == LLM_ERR_CREDIT);
     if (s_awaiting || s_turn_active) {
         s_awaiting = false;
         s_turn_active = false;
@@ -258,6 +265,11 @@ static void ws_event_handler(void *arg, esp_event_base_t base, int32_t event_id,
     case WEBSOCKET_EVENT_ERROR:
         ESP_LOGW(TAG, "WebSocket error (handshake status %d, tls 0x%x)",
                  data->error_handle.esp_ws_handshake_status_code, data->error_handle.esp_tls_last_esp_err);
+        if (data->error_handle.esp_ws_handshake_status_code > 0) {
+            // The connection refused: why (401: the key, 402: the credit...)
+            s_refusal = llm_speech_error(data->error_handle.esp_ws_handshake_status_code, NULL);
+            s_no_credit = (s_refusal == LLM_ERR_CREDIT);
+        }
         xEventGroupClearBits(s_events, EV_CONNECTED);
         break;
     case WEBSOCKET_EVENT_DISCONNECTED:
@@ -750,6 +762,7 @@ char *stt_stream_finish(uint32_t timeout_ms)
 char *stt_stream_test(const int16_t *audio, size_t samples, int *ms)
 {
     *ms = -1;
+    s_refusal = LLM_OK;
     if (!stt_stream_wait_connected(s_backend && s_backend->session_per_turn ? 0 : 10000) &&
             !(s_backend && s_backend->session_per_turn)) {
         return NULL;
@@ -781,6 +794,11 @@ char *stt_stream_test(const int16_t *audio, size_t samples, int *ms)
 bool stt_stream_no_credit(void)
 {
     return s_no_credit;
+}
+
+llm_error_t stt_stream_refusal(void)
+{
+    return s_refusal;
 }
 
 bool stt_backend_awaiting(void)

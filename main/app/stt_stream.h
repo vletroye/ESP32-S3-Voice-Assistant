@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "llm.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,6 +83,9 @@ char *stt_stream_test(const int16_t *audio, size_t samples, int *ms);
 
 /** The last transcription refused for lack of credit (insufficient_quota, 402...) */
 bool stt_stream_no_credit(void);
+
+/** Why the last transcription (or its test) was refused: LLM_ERR_CREDIT, _AUTH, _BUSY, _OTHER; LLM_OK if not */
+llm_error_t stt_stream_refusal(void);
 
 /**
  * @brief Wait until the session is connected (or failed / ended).

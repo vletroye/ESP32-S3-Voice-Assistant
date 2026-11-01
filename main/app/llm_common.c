@@ -42,6 +42,27 @@ bool llm_bearer_set(char **dst, const char *api_key)
     return asprintf(dst, "Bearer %s", api_key ? api_key : "") >= 0;
 }
 
+/* ---------- errors of the speech services ---------- */
+
+llm_error_t llm_speech_error(int status, const char *text)
+{
+    const char *t = text ? text : "";
+    if (status == 402 || strcasestr(t, "quota") || strcasestr(t, "billing") || strcasestr(t, "credit") ||
+            strcasestr(t, "insufficient")) {
+        return LLM_ERR_CREDIT;
+    }
+    if (status == 401 || status == 403 || strstr(t, "401") || strstr(t, "403") || strcasestr(t, "unauthorized") ||
+            strcasestr(t, "forbidden") || strcasestr(t, "api key") || strcasestr(t, "api_key") ||
+            strcasestr(t, "invalid key") || strcasestr(t, "authenticat")) {
+        return LLM_ERR_AUTH;
+    }
+    if (status == 429 || status >= 500 || strstr(t, "429") || strcasestr(t, "rate limit") ||
+            strcasestr(t, "too many") || strcasestr(t, "overloaded")) {
+        return LLM_ERR_BUSY;
+    }
+    return LLM_ERR_OTHER;
+}
+
 /* ---------- conversation history ---------- */
 
 void llm_history_reset(cJSON **messages)

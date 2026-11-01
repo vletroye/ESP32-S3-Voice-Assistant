@@ -1007,7 +1007,8 @@ conversation nor tools** but with the same instructions. The model chosen and it
 - The screen lists the models one line each as they are tested, numbered: "02 Sonnet…" while it is tested, then
   "02 Sonnet : 1,2 s", or why it is not available: "09 Argon : crédit épuisé ou modèle hors de ton offre" (the
   `test_why_...` of `LANG_<XX>.TXT`: missing key, no answer, key refused, no credit or model not in the plan, service
-  busy, request refused, reasoning effort refused, error; no audio or no text for the speech models); the last line
+  busy, request refused, reasoning effort refused, error; for the speech models too when their service says why:
+  key refused, no credit, busy, else no audio or no text); the last line
   stays visible. The answers are not spoken, only each result: "Résultat de Sonnet : 1,2 seconde." / "Result of
   Sonnet: 1.2 seconds.", or "Argon : non disponible, clé refusée." / "Argon: not available, key refused."
   (queued: the next model is

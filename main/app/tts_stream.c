@@ -31,6 +31,7 @@
 #include "app_wifi.h"
 #include "tts_stream.h"
 #include "tts_backend.h"
+#include "llm_common.h"
 
 #define TTS_SAMPLE_RATE_IN      24000   /* audio given by the services: 24 kHz, 16-bit signed, mono */
 #define TTS_AUDIO_BUFFER_BYTES  (256 * 1024)    /* 8 s of 16 kHz mono audio, in PSRAM */
@@ -165,6 +166,8 @@ static volatile unsigned s_cuts = 0;
 static volatile bool s_failed = false;
 /* The speech refused for lack of credit: said on screen after the reply */
 static volatile bool s_no_credit = false;
+/* Why the speech was refused last (llm_speech_error), LLM_OK if it was not: said by the model test */
+static volatile llm_error_t s_refusal = LLM_OK;
 static int16_t *s_resampled = NULL;
 static size_t s_resampled_cap = 0;
 /* Model test: the audio of the sentences kept here (16 kHz, PSRAM) instead of being played */
@@ -316,6 +319,20 @@ void tts_backend_sentence_end(const char *status, bool failed)
 void tts_backend_no_credit(void)
 {
     s_no_credit = true;
+    s_refusal = LLM_ERR_CREDIT;
+}
+
+void tts_backend_refused(int status, const char *text)
+{
+    s_refusal = llm_speech_error(status, text);
+    if (s_refusal == LLM_ERR_CREDIT) {
+        s_no_credit = true;
+    }
+}
+
+llm_error_t tts_stream_refusal(void)
+{
+    return s_refusal;
 }
 
 bool tts_backend_is_no_credit(const char *text)
@@ -566,6 +583,7 @@ bool tts_stream_test(const tts_backend_t *backend, const char *base_url, const c
     *audio = NULL;
     *samples = 0;
     *first_ms = *total_ms = -1;
+    s_refusal = LLM_OK;
     tts_stream_configure(backend, base_url, api_key, model, voice, NULL, NULL);
     for (int i = 0; i < 50 && s_backend != backend; i++) {
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -630,6 +648,7 @@ void tts_stream_begin(tts_event_cb_t cb)
     s_cuts = 0;
     s_failed = false;
     s_no_credit = false;
+    s_refusal = LLM_OK;
     drop_queued_sentences();
     s_flush = true;
     s_event_cb = cb;

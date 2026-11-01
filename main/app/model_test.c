@@ -423,8 +423,12 @@ static void test_speech(char *screen, size_t screen_size)
         int16_t *got = NULL;
         size_t got_samples = 0;
         bool ok = synthesize(m, &got, &got_samples, &r->first_ms, &r->total_ms);
-        strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : "unavailable: no audio", sizeof(r->status));
-        r->reason = !key ? lang->test_why_no_key : ok ? NULL : lang->test_why_no_audio;
+        // Refused: why, when the service said it (credit, key, busy), as for the chat models
+        llm_error_t why = ok ? LLM_OK : tts_stream_refusal();
+        bool known = why != LLM_OK && why != LLM_ERR_OTHER;
+        strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : known ? status_of(why) : "unavailable: no audio",
+                sizeof(r->status));
+        r->reason = !key ? lang->test_why_no_key : ok ? NULL : known ? reason_of(why) : lang->test_why_no_audio;
         ESP_LOGI(TAG, "TTS %s: %s, first audio %d ms, total %d ms, %u samples", m->id, r->status, r->first_ms,
                  r->total_ms, (unsigned)got_samples);
         if (ok && !audio) {
@@ -472,8 +476,11 @@ static void test_speech(char *screen, size_t screen_size)
             text = stt_stream_test(audio, samples, &r->first_ms);
         }
         r->words = text ? words_found(lang->speech_test_phrase, text) : -1;
-        strlcpy(r->status, !key ? "unavailable: no key" : text ? "ok" : "unavailable: no text", sizeof(r->status));
-        r->reason = !key ? lang->test_why_no_key : text ? NULL : lang->test_why_no_text;
+        llm_error_t why = text || !key ? LLM_OK : stt_stream_refusal();
+        bool known = why != LLM_OK && why != LLM_ERR_OTHER;
+        strlcpy(r->status, !key ? "unavailable: no key" : text ? "ok" : known ? status_of(why) : "unavailable: no text",
+                sizeof(r->status));
+        r->reason = !key ? lang->test_why_no_key : text ? NULL : known ? reason_of(why) : lang->test_why_no_text;
         ESP_LOGI(TAG, "STT %s: %s, %d ms, %d %% of the words: \"%s\"", m->id, r->status, r->first_ms, r->words,
                  text ? text : "");
         free(text);

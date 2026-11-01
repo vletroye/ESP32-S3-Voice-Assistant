@@ -109,9 +109,7 @@ void tts_http_request(tts_http_t *h, const char *text, char *body, uint32_t gene
             llm_buf_append(&err, chunk, n);
         }
         ESP_LOGE(h->tag, "HTTP %d: %.300s", status, err.len ? err.p : "(no answer)");
-        if (status == 402 || tts_backend_is_no_credit(err.p)) {
-            tts_backend_no_credit();
-        }
+        tts_backend_refused(status, err.p);
         llm_buf_free(&err);
         drop_client(h);
         status_text = "failed";
@@ -146,9 +144,7 @@ void tts_http_request(tts_http_t *h, const char *text, char *body, uint32_t gene
         bool done = reader->done && *reader->done;
         if (reader->error && reader->error[0]) {
             ESP_LOGE(h->tag, "error: %s", reader->error);
-            if (tts_backend_is_no_credit(reader->error)) {
-                tts_backend_no_credit();
-            }
+            tts_backend_refused(0, reader->error);
             status_text = "failed";
         } else if (!done && strcmp(status_text, "cancelled") != 0 &&
                    !esp_http_client_is_complete_data_received(h->client)) {

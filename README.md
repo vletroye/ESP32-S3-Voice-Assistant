@@ -776,7 +776,7 @@ How to read this table:
   | <img src="docs/icons/claude.png" width="16" alt=""> Anthropic (Claude) | ✅ | ✅ Anthropic's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/openai.png" width="16" alt=""> OpenAI (GPT) | ✅ | ✅ OpenAI's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/gemini.png" width="16" alt=""> Google (Gemini) | ✅ | ✅ Google Search | ✅ | ✅ | ✅ |
-  | <img src="docs/icons/mistral.png" width="16" alt=""> Mistral AI | ✅ | ✅ ² Perplexity | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/mistral.png" width="16" alt=""> Mistral AI | ✅ | ✅ Mistral's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/xai.png" width="16" alt=""> xAI (Grok) | ✅ | ✅ xAI's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/openrouter.png" width="16" alt=""> OpenRouter | ✅ ¹ | ✅ ¹ ² Perplexity | ✅ ¹ | ✅ ¹ | ✅ ¹ |
   | <img src="docs/icons/perplexity.png" width="16" alt=""> Perplexity | ❌ | ✅ built in | ❌ | ❌ | ❌ |
@@ -790,10 +790,13 @@ How to read this table:
   - Web search is the provider's own: the model decides when to search. The sources GPT and Grok add to their
     text (" ([site.com](https://...))") are taken out before the answer is shown and spoken
     (`llm_answer_add_cited`). A model refusing it (HTTP 400 about it) is asked again without it, until another model
-    is chosen. Each search is billed per call: `openai:web_search`, `gemini:web_search` and `xai:web_search` in
+    is chosen. Each search is billed per call: `openai:web_search`, `gemini:web_search`, `xai:web_search` and
+    `mistral:web_search` (Mistral's: $30 a thousand searches, the dearest) in
     `[per_call]` of `AGENTS.INI` (in the firmware's file: add them to yours to count them).
-  - Mistral (no search in its Chat Completions API) and OpenRouter (its plugin searches at every question) get the
-    device's `web_search` tool instead, answered by Perplexity (`perplexity_search()`; its tokens and its search
+  - Mistral searches through its Conversations API (`/v1/conversations`, stateless: `store: false`, the history
+    sent as `inputs`; its sources, `tool_reference` chunks, left out); a model refusing that API is asked through
+    Chat Completions, without search, until another model.
+  - OpenRouter (its plugin searches at every question) gets the device's `web_search` tool instead, answered by Perplexity (`perplexity_search()`; its tokens and its search
     billed as Perplexity's). A provider with its own search does not get it (`own_web_search` in `ai_providers.c`).
   - Commands said to the device itself (`VOICE_FR.TXT`: "mets la radio jazz", "parle plus fort"...) work with every
     model, as the model is not asked.
@@ -1478,7 +1481,7 @@ flowchart LR
 | Answer (GPT) | OpenAI Responses API | `stream: true`, `store: false`, reasoning effort `none` (Luna) or `low`, 6 to 12 exchanges of history (cut in blocks, so the prompt cache keeps working), `prompt_cache_key`: an id of the conversation (a new UUID with each conversation), so its questions go to the server holding its prompt cache |
 | Answer (OpenRouter) | OpenRouter Chat Completions API (OpenAI-compatible) | `stream: true`, `reasoning.effort` `low` with `exclude` (not returned), 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Answer (Grok) | xAI Responses API (xAI's web search and the device's tools), else Chat Completions for a model refusing it | `stream: true`, `store: false`, `reasoning_effort` `low`, 6 to 12 exchanges of history kept on the device (cut in blocks); the conversation's id (a new UUID with each conversation) as `prompt_cache_key` (Responses) or header `x-grok-conv-id` (Chat Completions), so its questions go to the server holding its prompt cache |
-| Answer (Mistral) | Mistral AI Chat Completions API | `stream: true`, `reasoning_effort` `none` (no `stream_options`: Mistral rejects the fields it does not know; the usage comes with the last chunk), 6 to 12 exchanges of history kept on the device |
+| Answer (Mistral) | Mistral AI Conversations API (Mistral's web search and the device's tools), else Chat Completions for a model refusing it | Conversations: `stream: true`, `store: false`, `completion_args` (`max_tokens`, `reasoning_effort`), tools `web_search` and the device's functions, the history as `inputs` entries (`message.input`, then `message.output` / `function.call` / `function.result` for the tool rounds). Chat Completions: `reasoning_effort` (no `stream_options`: Mistral rejects the fields it does not know; the usage comes with the last chunk). 6 to 12 exchanges of history kept on the device |
 | Answer (Perplexity) | Perplexity Agent API (`/v1/agent`, shaped like OpenAI's Responses API) | `stream: true`, `store: false`, `web_search` tool (`search_type: web`, 5 results), the "[1]" source marks taken out of the text, 6 to 12 exchanges of history kept on the device |
 | Answer (Gemini) | Gemini API `streamGenerateContent?alt=sse` | `thinkingLevel` `minimal` (Flash-Lite) or `low`, 6 to 12 exchanges of history kept on the device (cut in blocks) |
 | Speech synthesis (OpenAI) | OpenAI Realtime, `gpt-realtime-2.1-mini`, a voice of `[voices]` (default Marin) | Permanent WebSocket, one response per sentence, read verbatim |
@@ -1542,7 +1545,8 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `ai_provider_responses.c` | Client of the Responses APIs, shared by OpenAI and xAI: request, stream, the provider's web search, the device's tools as functions (their output items given back), sources taken out of the text, errors |
 | `ai_provider_openai.c` | What differs for OpenAI (`rc_config_t`): its URL (`OpenAI_url`), its web search located where the user lives |
 | `ai_provider_chat_completions.c` | Client of the OpenAI-compatible Chat Completions APIs, shared by OpenRouter, xAI and Mistral: request, stream, errors (no credit, key, busy), reasoning effort refused, reasoning models' text parts, billing of the reasoning tokens |
-| `ai_provider_openrouter.c`, `ai_provider_mistral.c` | What differs for each of them (`cc_config_t`): URLs, headers, how the reasoning and the usage are asked for, the words of a no-credit error |
+| `ai_provider_openrouter.c` | What differs for it (`cc_config_t`): URLs, headers, how the reasoning and the usage are asked for, the words of a no-credit error |
+| `ai_provider_mistral.c` | Mistral: its Conversations API (Mistral's web search and the device's tools); a model refusing it is asked through Chat Completions (`cc_config_t`), until another model |
 | `ai_provider_xai.c` | xAI: its Responses API (xAI's web search and the device's tools); a model refusing it is asked through Chat Completions, until another model |
 | `ai_provider_perplexity.c` | Perplexity client (Agent API, SSE streaming, web search, source marks taken out), history kept on the device |
 | `file_costs.c` | Costs: tokens and calls of each request priced with `AGENTS.INI`, by model, for today, this month, since the start and the last 12 months (`costs.json`, `COSTS.TXT`) |

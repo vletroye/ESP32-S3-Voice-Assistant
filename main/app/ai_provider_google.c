@@ -54,7 +54,8 @@ typedef struct {
     char *signature;            /* last thought signature, sent back with the answer */
     char finish[32];            /* finishReason: "STOP", "MAX_TOKENS", "SAFETY"... */
     bool blocked;               /* prompt blocked (promptFeedback.blockReason) */
-    int web_searches;           /* Google searches made (groundingMetadata.webSearchQueries), billed per query */
+    int web_searches;           /* Google searches made, billed per query: the most of the two counts below */
+    int tool_queries;           /* queries of the "toolCall" parts (with the device's tools: server-side calls) */
     bool done;                  /* finishReason received */
     llm_error_t error;
 
@@ -189,6 +190,21 @@ static char *build_request(void)
 
 /* ---------- SSE event handling ---------- */
 
+/* The searches counted now n: the web icon for each new one, what was said before ("Je regarde.") spoken */
+static void searches_seen(stream_t *st, int n)
+{
+    if (n <= st->web_searches) {
+        return;
+    }
+    for (int i = st->web_searches; i < n; i++) {
+        llm_web_search_started();
+    }
+    st->web_searches = n;
+    if (st->answer->on_text) {
+        st->answer->on_text(NULL, st->answer->ctx);
+    }
+}
+
 /* Each event is a GenerateContentResponse: candidates[0].content.parts[] text, then finishReason and usage */
 static void sse_dispatch(const char *data, void *ctx)
 {
@@ -224,18 +240,27 @@ static void sse_dispatch(const char *data, void *ctx)
         if (cJSON_IsObject(cJSON_GetObjectItem(part, "functionCall"))) {
             st->call_count++;
         }
+        // With the device's tools, Google Search comes as server-side calls: {"toolCall": {"toolType":
+        // "GOOGLE_SEARCH_WEB", "args": {"queries": [...]}, "id"}} (groundingMetadata may not list them)
+        const cJSON *tool_call = cJSON_GetObjectItem(part, "toolCall");
+        const cJSON *tool_type = cJSON_GetObjectItem(tool_call, "toolType");
+        if (cJSON_IsString(tool_type) && strstr(tool_type->valuestring, "SEARCH")) {
+            const cJSON *queries = cJSON_GetObjectItem(cJSON_GetObjectItem(tool_call, "args"), "queries");
+            int n = cJSON_IsArray(queries) && cJSON_GetArraySize(queries) > 0 ? cJSON_GetArraySize(queries) : 1;
+            st->tool_queries += n;
+            ESP_LOGI(TAG, "Google Search (%d quer%s)", n, n > 1 ? "ies" : "y");
+            searches_seen(st, st->tool_queries);
+        }
         const cJSON *text = cJSON_GetObjectItem(part, "text");
         if (cJSON_IsString(text)) {
             llm_answer_add(st->answer, text->valuestring, strlen(text->valuestring));
         }
     }
-    // The searches made, given with the grounding of the answer (the last events)
+    // The searches made, given with the grounding of the answer (the last events); the same ones as the toolCall
+    // parts when both come: the most of the two counted
     const cJSON *queries = cJSON_GetObjectItem(cJSON_GetObjectItem(candidate, "groundingMetadata"), "webSearchQueries");
-    if (cJSON_IsArray(queries) && cJSON_GetArraySize(queries) > st->web_searches) {
-        for (int i = st->web_searches; i < cJSON_GetArraySize(queries); i++) {
-            llm_web_search_started();
-        }
-        st->web_searches = cJSON_GetArraySize(queries);
+    if (cJSON_IsArray(queries)) {
+        searches_seen(st, cJSON_GetArraySize(queries));
     }
     const cJSON *finish = cJSON_GetObjectItem(candidate, "finishReason");
     if (cJSON_IsString(finish)) {
@@ -328,8 +353,9 @@ static void stream_once(stream_t *st)
         st->error = LLM_ERR_NETWORK;
     }
     llm_http_finish(&s_http, st->error == LLM_OK);
-    ESP_LOGI(TAG, "round: finish: %s, %d function call(s), tokens in %d (cached %d), out %d (thoughts %d)",
-             st->finish[0] ? st->finish : "-", st->call_count, st->input_tokens, st->cached_tokens, st->output_tokens,
+    ESP_LOGI(TAG, "round: finish: %s, %d function call(s), %d search quer%s, tokens in %d (cached %d), out %d "
+             "(thoughts %d)", st->finish[0] ? st->finish : "-", st->call_count, st->web_searches,
+             st->web_searches == 1 ? "y" : "ies", st->input_tokens, st->cached_tokens, st->output_tokens,
              st->thoughts_tokens);
     // promptTokenCount counts the cached ones; the thoughts are billed as output. Each round is billed.
     costs_add_tokens(COST_LLM, s_model, st->input_tokens - st->cached_tokens, st->cached_tokens, 0,

@@ -1890,6 +1890,8 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   models get them as `functionDeclarations` (their schemas as `parametersJsonSchema`), next to Google Search: the
   model's parts are given back as they came (their thought signatures are checked), the results as
   `functionResponse` parts; with both, `toolConfig.includeServerSideToolInvocations` is set, as Google asks.
+  Its searches are then counted from its `toolCall` parts (`toolType` `GOOGLE_SEARCH_WEB`, one per query of
+  `args.queries`), else from `groundingMetadata.webSearchQueries`: the larger of the two, billed per query.
   A Gemini model refusing Google Search with the functions keeps the functions.
 - **Homey**: with `Homey_url` set, the main task opens an MCP session (`initialize`, then
   `notifications/initialized`) once the Wi-Fi is up, reads `tools/list` (~190 tools, ~180 KB, parsed in

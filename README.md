@@ -771,7 +771,7 @@ How to read this table:
   | <img src="docs/icons/openai.png" width="16" alt=""> OpenAI (GPT) | ✅ | ✅ OpenAI's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/gemini.png" width="16" alt=""> Google (Gemini) | ✅ | ✅ Google Search | ✅ | ✅ | ✅ |
   | <img src="docs/icons/mistral.png" width="16" alt=""> Mistral AI | ✅ | ❌ | ✅ | ✅ | ✅ |
-  | <img src="docs/icons/xai.png" width="16" alt=""> xAI (Grok) | ✅ | ❌ | ✅ | ✅ | ✅ |
+  | <img src="docs/icons/xai.png" width="16" alt=""> xAI (Grok) | ✅ | ✅ xAI's | ✅ | ✅ | ✅ |
   | <img src="docs/icons/openrouter.png" width="16" alt=""> OpenRouter | ✅ ¹ | ❌ | ✅ ¹ | ✅ ¹ | ✅ ¹ |
   | <img src="docs/icons/perplexity.png" width="16" alt=""> Perplexity | ❌ | ✅ built in | ❌ | ❌ | ❌ |
 
@@ -782,8 +782,8 @@ How to read this table:
   - Web search is the provider's own: the model decides when to search. The sources GPT adds to its text
     (" ([site.com](https://...))") are taken out before the answer is shown and spoken (`llm_answer_add_cited`).
     A model refusing it (HTTP 400 about it) is asked again without it, until another model is chosen. Not yet for Mistral (none in its Chat Completions
-    API), xAI (only in its Responses API) and OpenRouter (its plugin searches at every question). Each search is
-    billed per call: `openai:web_search` and `gemini:web_search` in `[per_call]` of `AGENTS.INI` (in the
+    API) and OpenRouter (its plugin searches at every question). Each search is
+    billed per call: `openai:web_search`, `gemini:web_search` and `xai:web_search` in `[per_call]` of `AGENTS.INI` (in the
     firmware's file: add them to yours to count them).
   - Commands said to the device itself (`VOICE_FR.TXT`: "mets la radio jazz", "parle plus fort"...) work with every
     model, as the model is not asked.
@@ -1526,9 +1526,11 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `llm.c` | Models offered (read from `AGENTS.INI`, installed from `main/agents/agents.ini`) and dispatch to the provider of the chosen model, through its client (`llm_backend.h`: init, instructions, history, prewarm, stream), with its key of the settings |
 | `llm_common.c` | Helpers shared by the chat clients: settings strings, the conversation history (kept short in pairs, cut in one go for the prompt caches), the answer being streamed (first-word time, stats), the HTTPS connection kept alive (retry on a stale one, prewarm, error body, end of the stream) |
 | `ai_provider_anthropic.c` | Claude client (SSE streaming), history, per-model thinking, tool loop, web search, `pause_turn` |
-| `ai_provider_openai.c` | GPT client (Responses API, SSE streaming), history |
+| `ai_provider_responses.c` | Client of the Responses APIs, shared by OpenAI and xAI: request, stream, the provider's web search, the device's tools as functions (their output items given back), sources taken out of the text, errors |
+| `ai_provider_openai.c` | What differs for OpenAI (`rc_config_t`): its URL (`OpenAI_url`), its web search located where the user lives |
 | `ai_provider_chat_completions.c` | Client of the OpenAI-compatible Chat Completions APIs, shared by OpenRouter, xAI and Mistral: request, stream, errors (no credit, key, busy), reasoning effort refused, reasoning models' text parts, billing of the reasoning tokens |
-| `ai_provider_openrouter.c`, `ai_provider_xai.c`, `ai_provider_mistral.c` | What differs for each of them (`cc_config_t`): URLs, headers, how the reasoning and the usage are asked for, the words of a no-credit error |
+| `ai_provider_openrouter.c`, `ai_provider_mistral.c` | What differs for each of them (`cc_config_t`): URLs, headers, how the reasoning and the usage are asked for, the words of a no-credit error |
+| `ai_provider_xai.c` | xAI: its Responses API (xAI's web search and the device's tools); a model refusing it is asked through Chat Completions, until another model |
 | `ai_provider_perplexity.c` | Perplexity client (Agent API, SSE streaming, web search, source marks taken out), history kept on the device |
 | `file_costs.c` | Costs: tokens and calls of each request priced with `AGENTS.INI`, by model, for today, this month, since the start and the last 12 months (`costs.json`, `COSTS.TXT`) |
 | `ai_provider_openrouter_free.c` | Free OpenRouter models from its live list (once a day, parsed model by model), kept on SPIFFS |

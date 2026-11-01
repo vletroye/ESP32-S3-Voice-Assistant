@@ -305,7 +305,7 @@ Second page:
   Manon, Camille). Applied **at once**, without Confirm or restart: the speech session reconnects (~2 s) and the new
   voice introduces itself. The list follows the speech provider and the language.
 
-For the language and the model, press **Confirmer** / **Confirm** (bottom middle, on their page only, enabled once
+For the language and the model, press **Confirmer** / **Confirm** (bottom middle, on their page only, shown once
 one of them changed): the choice is saved to the device's NVS and applied at once, without restarting (the speech
 session reconnects, ~2 s). Not confirmed, the choice is dropped when the page or the Settings screen is left.
 The folder-and-gear icon (top right) opens the **Configuration** screen: its button at the bottom right

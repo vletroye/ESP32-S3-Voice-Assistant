@@ -290,6 +290,22 @@ static uint16_t settings_language_index(const char *code)
     return found;
 }
 static lv_obj_t *s_save_btn = NULL;
+static int s_settings_page = 0;
+/* The Confirm button: shown only when the language or the model was changed, on their page (the first) */
+static bool s_settings_changed = false;
+
+static void confirm_button_update(bool changed)
+{
+    s_settings_changed = changed;
+    if (!s_save_btn) {
+        return;
+    }
+    if (changed && s_settings_page == 0) {
+        lv_obj_clear_flag(s_save_btn, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_save_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+}
 /* Selections matching the stored settings */
 static uint16_t s_lang_stored = 0;
 static uint16_t s_model_stored = 0;
@@ -331,11 +347,7 @@ static void settings_changed_cb(lv_event_t *e)
 {
     bool changed = lv_dropdown_get_selected(ui_DropdownSettingsRegion) != s_lang_stored ||
                    lv_dropdown_get_selected(s_model_dropdown) != s_model_stored;
-    if (changed) {
-        lv_obj_clear_state(s_save_btn, LV_STATE_DISABLED);
-    } else {
-        lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
-    }
+    confirm_button_update(changed);
 }
 
 static void settings_save_clicked_cb(lv_event_t *e)
@@ -356,8 +368,8 @@ static void settings_save_clicked_cb(lv_event_t *e)
             assistant_request_model(llm_models[model].id);
         }
     }
-    // Applied by the main task within a second; meanwhile the button is greyed out again
-    lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+    // Applied by the main task within a second; meanwhile the button is hidden again
+    confirm_button_update(false);
     if (ret == ESP_OK) {
         settings_saved();
     }
@@ -547,7 +559,7 @@ void ui_ctrl_models_changed(void)
         lv_dropdown_set_options(s_model_dropdown, options);
         lv_dropdown_set_selected(s_model_dropdown, selected);
         s_model_stored = selected;
-        lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+        confirm_button_update(false);
     }
     bsp_display_unlock();
 }
@@ -592,7 +604,6 @@ static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width
 static lv_obj_t *s_settings_rows[SETTINGS_ROWS_MAX];
 static uint8_t s_settings_row_page[SETTINGS_ROWS_MAX];
 static size_t s_settings_row_count = 0;
-static int s_settings_page = 0;
 
 static void settings_row_add(lv_obj_t *row, uint8_t page)
 {
@@ -604,13 +615,13 @@ static void settings_row_add(lv_obj_t *row, uint8_t page)
 /* The language and the model chosen but not confirmed: dropped, the stored ones shown again */
 static void settings_unconfirmed_drop(void)
 {
-    if (!s_save_btn || lv_obj_has_state(s_save_btn, LV_STATE_DISABLED)) {
+    if (!s_save_btn || !s_settings_changed) {
         return;
     }
     ESP_LOGI(TAG, "language / model not confirmed: dropped");
     lv_dropdown_set_selected(ui_DropdownSettingsRegion, s_lang_stored);
     lv_dropdown_set_selected(s_model_dropdown, s_model_stored);
-    lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+    confirm_button_update(false);
 }
 
 /* A page shown; the language and the model not confirmed are dropped, the Confirm button only on their page */
@@ -618,13 +629,7 @@ static void settings_page_show(int page)
 {
     settings_unconfirmed_drop();
     s_settings_page = (page + SETTINGS_PAGES) % SETTINGS_PAGES;
-    if (s_save_btn) {
-        if (s_settings_page == 0) {
-            lv_obj_clear_flag(s_save_btn, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_add_flag(s_save_btn, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
+    confirm_button_update(s_settings_changed);
     for (size_t i = 0; i < s_settings_row_count; i++) {
         if (s_settings_row_page[i] == s_settings_page) {
             lv_obj_clear_flag(s_settings_rows[i], LV_OBJ_FLAG_HIDDEN);
@@ -732,10 +737,9 @@ static void settings_screen_setup(void)
     lv_obj_add_event_cb(ui_ScreenSettings, settings_screen_loaded_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
     lv_obj_add_event_cb(ui_ScreenSettings, settings_screen_unload_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 
-    // Confirm button (bottom middle, first page only), enabled once the language or the model differs from the
+    // Confirm button (bottom middle, first page only), shown once the language or the model differs from the
     // stored settings; not confirmed, they are dropped when the page or the screen is left
     s_save_btn = settings_button_create(LV_ALIGN_BOTTOM_MID, 0);
-    lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
     lv_obj_add_event_cb(s_save_btn, settings_save_clicked_cb, LV_EVENT_CLICKED, NULL);
     s_save_label = lv_label_create(s_save_btn);
     lv_label_set_text(s_save_label, lang->settings_confirm);
@@ -785,7 +789,7 @@ void ui_ctrl_settings_sync(void)
     speech_options_refresh(&s_settings_speech[0]);
     speech_options_refresh(&s_settings_speech[1]);
     voice_options_refresh();
-    lv_obj_add_state(s_save_btn, LV_STATE_DISABLED);
+    confirm_button_update(false);
     bsp_display_unlock();
 }
 

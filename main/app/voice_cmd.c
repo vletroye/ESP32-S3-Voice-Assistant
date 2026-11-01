@@ -622,7 +622,7 @@ static char *model_list(llm_provider_t provider)
         number++;
     }
     cJSON_Delete(results);
-    snprintf(out, CMD_REPLY_SIZE, lang->model_ask_intro, ai_provider_of_llm(provider)->company, list);
+    snprintf(out, CMD_REPLY_SIZE, lang->model_ask, ai_provider_of_llm(provider)->company, list);
     free(list);
     return out;
 }
@@ -865,25 +865,25 @@ static bool is_voice_only(const char *rest)
     return word[0] && find_voice(word) && is_only(rest, word);
 }
 
-/* "Voici les voix disponibles. 1, Marin, celle que j'utilise. 2, Cedar. ... Dites son numéro ou son nom." */
+/* "Quelle voix voulez-vous : 1, Marin, celle que j'utilise. 2, Cedar. ...": the %s of the text of LANG_<CODE>.TXT
+ * is the numbered list of the voices */
 static char *voice_list(void)
 {
     const app_lang_t *lang = app_lang_get();
     load_voices();
     const llm_voice_t *current = assistant_voice();
-    char *out = malloc(CMD_REPLY_SIZE);
-    if (!out) {
-        return NULL;
+    char *list = calloc(1, CMD_REPLY_SIZE);
+    if (!list) {
+        return reply_dup("");
     }
-    strlcpy(out, lang->voice_ask_intro, CMD_REPLY_SIZE);
     for (size_t i = 0; i < s_voice_count; i++) {
-        size_t n = strlen(out);
-        snprintf(out + n, CMD_REPLY_SIZE - n, "\n%u, %s%s.", (unsigned)(i + 1), s_voices[i]->name,
+        size_t n = strlen(list);
+        snprintf(list + n, CMD_REPLY_SIZE - n, "\n%u, %s%s.", (unsigned)(i + 1), s_voices[i]->name,
                  s_voices[i] == current ? lang->voice_current : "");
     }
-    strlcat(out, VOICE_CMD_LIST_END " ", CMD_REPLY_SIZE);
-    strlcat(out, lang->voice_ask_question, CMD_REPLY_SIZE);
-    return out;
+    char *text = reply_printf(lang->voice_ask, list);
+    free(list);
+    return text;
 }
 
 static bool has_any(const char *norm, const phrase_list_t *list);

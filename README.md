@@ -1182,9 +1182,9 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
   between quotes; lists are separated by commas; `#` lines are comments.
 - Keep the `%s`, `%d`, `%02d`… of each text in the same order.
 - **`::` and `..` stop the reading**: shown as a single `:` or `.`; with `Read_lists = off`, what follows (the list)
-  is shown but not read (`provider_ask = Quel fournisseur voulez-vous :: %s`). For the voices, the reading starts
-  again for the question after the list. `...` stays an ellipsis. `model_ask_intro` takes the provider and the
-  numbered list: `Quel modèle de %s voulez-vous utiliser :: %s`.
+  is shown but not read (`provider_ask = Quel fournisseur voulez-vous :: %s`, `voice_ask = Quelle voix voulez-vous
+  :: %s`). `...` stays an ellipsis. `model_ask` takes the provider and the numbered list: `Quel modèle de %s
+  voulez-vous utiliser :: %s`. `\n` is a line break on the screen.
 - **Checked at start-up and after each change of language** (about 0.1 s), against the firmware's English file,
   the reference:
   - a **missing key** is appended to the file: from the firmware's file of that language when it has one (already

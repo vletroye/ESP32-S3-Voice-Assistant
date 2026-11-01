@@ -168,14 +168,13 @@ static const lang_field_t s_fields[] = {
     { "second_one_below_ms", offsetof(app_lang_t, second_one_below_ms), FIELD_INT, 1 },
     { "provider_ask", offsetof(app_lang_t, provider_ask), FIELD_TEXT, 1 },
     { "provider_unknown", offsetof(app_lang_t, provider_unknown), FIELD_TEXT, 1 },
-    { "model_ask_intro", offsetof(app_lang_t, model_ask_intro), FIELD_TEXT, 1 },
+    { "model_ask", offsetof(app_lang_t, model_ask), FIELD_TEXT, 1 },
     { "model_current", offsetof(app_lang_t, model_current), FIELD_TEXT, 1 },
     { "model_already", offsetof(app_lang_t, model_already), FIELD_TEXT, 1 },
     { "model_unknown", offsetof(app_lang_t, model_unknown), FIELD_TEXT, 1 },
     { "model_switched", offsetof(app_lang_t, model_switched), FIELD_TEXT, 1 },
-    { "voice_ask_intro", offsetof(app_lang_t, voice_ask_intro), FIELD_TEXT, 1 },
+    { "voice_ask", offsetof(app_lang_t, voice_ask), FIELD_TEXT, 1 },
     { "voice_current", offsetof(app_lang_t, voice_current), FIELD_TEXT, 1 },
-    { "voice_ask_question", offsetof(app_lang_t, voice_ask_question), FIELD_TEXT, 1 },
     { "voice_already", offsetof(app_lang_t, voice_already), FIELD_TEXT, 1 },
     { "voice_kept", offsetof(app_lang_t, voice_kept), FIELD_TEXT, 1 },
     { "voice_unknown", offsetof(app_lang_t, voice_unknown), FIELD_TEXT, 1 },
@@ -336,6 +335,11 @@ static bool key_retired(const char *key)
 {
     static const char *const retired[] = {
         "settings_save",        /* the Settings button, now "settings_confirm" */
+        "model_ask_intro",      /* now "model_ask" */
+        "voice_ask_intro",      /* now "voice_ask", the list in its %s */
+        "voice_ask_question",   /* the question after the voices: in "voice_ask" now */
+        "test_unavailable", "test_unavailable_short", "speech_no_credit",
+        "settings_robot", "settings_robot_level", "robot_effects",
         NULL,
     };
     for (const char *const *k = retired; *k; k++) {

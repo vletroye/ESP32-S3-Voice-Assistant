@@ -1932,8 +1932,13 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 
 - More tools: timers and alarms…
 - Spoken confirmation before other sensitive Homey actions (locks, alarm), as done for turning plugs off.
-- Tools for the GPT models.
 - NVS encryption to protect the API keys.
+- Faster answers: a 1-hour prompt cache for Claude (the first question after a pause of more than 5 minutes would
+  still read its instructions from the cache), and a long first sentence sent to the speech at its first comma.
+- Transcription through OpenRouter (Deepgram Nova, Whisper…), with the OpenRouter key; then the whole assistant
+  with a single OpenRouter key (answers, voice and transcription).
+- Some voice commands as tools of the models (a pilot first: the voice, the language), the fast ones staying on the
+  device.
 
 ## 6. Credits and licenses
 

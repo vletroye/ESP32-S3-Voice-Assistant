@@ -45,7 +45,7 @@
 static const char *TAG = "voice_cmd";
 
 /*
- * Phrase lists: their patterns are in the phrase files (main/phrases/phrases_<lang>.txt, VOICE_<LANG>.TXT on the
+ * Phrase lists: their patterns are in the phrase files (main/commands/commands_<lang>.txt, VOICE_<LANG>.TXT on the
  * configuration drive), in the section named after the variable (file_phrases.h). Only the current language's
  * phrases are recognised, except "change la langue", recognised in every language.
  */

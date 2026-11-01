@@ -1204,7 +1204,7 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
   ejected) before pressing **Restart**, or the file may be cut, and its texts lost.
 
 **Languages given with the firmware**: French, English, Dutch, German, Spanish and Italian (`main/lang/`,
-`main/phrases/`, `main/persona/`), all made from the French files, the reference. Their files are installed at the
+`main/commands/`, `main/persona/`), all made from the French files, the reference. Their files are installed at the
 first start, after a factory reset and when emptied, for the languages of `Languages` (all six by default).
 
 **Adding a language**: add `XX:name` to `Languages` in `CONFIG.INI` (up to 12 languages, 2-letter codes); at
@@ -1368,7 +1368,7 @@ the factory reset erases them.
 ### 3.9 Writing voice phrases (patterns)
 
 The phrases of the voice commands of `voice_cmd.c` and `file_memory.c` are in **one file per language**:
-`main/phrases/phrases_<code>.txt` (`fr`, `en`, `nl`, `de`, `es`, `it`). Each list of the code is a **section named after
+`main/commands/commands_<code>.txt` (`fr`, `en`, `nl`, `de`, `es`, `it`). Each list of the code is a **section named after
 its variable**, one pattern per line, `#` for comments:
 
 ```text
@@ -1408,7 +1408,7 @@ writes either (`(é|e)diter` works too).
 
 #### 3.9.2 Where the files are
 
-- The files of `main/phrases/` are built into the firmware. At start-up, each one missing on SPIFFS (first start)
+- The files of `main/commands/` are built into the firmware. At start-up, each one missing on SPIFFS (first start)
   or emptied is installed as `/spiffs/phrases_<code>.txt`; the files of SPIFFS are then read (a few KB, kept in
   RAM).
 - In configuration mode they appear on the drive as **`VOICE_FR.TXT`** and **`VOICE_EN.TXT`** (one per
@@ -1583,7 +1583,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `tools.c` | Tools offered to the models (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
-| `file_phrases.c` | Phrase files of the voice commands (`main/phrases/phrases_<lang>.txt`, installed on SPIFFS): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |
+| `file_phrases.c` | Phrase files of the voice commands (`main/commands/commands_<lang>.txt`, installed on SPIFFS as `phrases_<lang>.txt`): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |
 | `voice_cmd.c` | Settings by voice: language, model (provider, then model), transcription and speech synthesis models, voice of the speech service in use, country and town, configuration mode ("change la langue", "change de modèle", "change de transcription", "change de synthèse vocale", "prends la voix Cedar", "change ma ville", "édite la config") |
 | `homey_mcp.c` | MCP client for a Homey Pro (local network, JSON answers): tool list at start-up, selected tools offered to the models |
 | `file_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |

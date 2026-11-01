@@ -20,12 +20,12 @@ idf_component_register(
         ${SETTINGS_DIR}
     # Phrase files of the voice commands, installed on SPIFFS when missing (main/app/file_phrases.c)
     EMBED_TXTFILES
-        "phrases/phrases_fr.txt"
-        "phrases/phrases_en.txt"
-        "phrases/phrases_nl.txt"
-        "phrases/phrases_de.txt"
-        "phrases/phrases_es.txt"
-        "phrases/phrases_it.txt"
+        "commands/commands_fr.txt"
+        "commands/commands_en.txt"
+        "commands/commands_nl.txt"
+        "commands/commands_de.txt"
+        "commands/commands_es.txt"
+        "commands/commands_it.txt"
         # Models offered (AGENTS.INI), installed on SPIFFS when missing (main/app/llm.c)
         "agents/agents.ini"
         # Who the assistant is, per language (PERSO_FR.TXT...), installed on SPIFFS when missing (main/app/file_persona.c)

@@ -15,7 +15,7 @@
  * Only the files of the languages of file_lang.c are read. A list takes the phrases of the current language
  * (a section missing there is taken from the English file); a list declared for all languages takes the
  * phrases of every language (e.g. "change la langue" works whatever the language). The files given with the
- * firmware (main/phrases/) are installed when missing or emptied. The phrases are given longest first: a
+ * firmware (main/commands/commands_<code>.txt) are installed when missing or emptied. The phrases are given longest first: a
  * phrase that begins another one ("parle" in "parle en") never hides it.
  */
 

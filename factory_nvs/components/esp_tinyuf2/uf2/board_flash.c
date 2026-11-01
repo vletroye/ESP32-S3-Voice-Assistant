@@ -385,8 +385,14 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
             p++;
         }
         const char *eq = memchr(p, '=', line + len - p);
-        if (p == line + len || *p == '#' || *p == ';' || *p == '[' || !eq) {
-            ini_insert_line(line, len);
+        if (p == line + len || *p == '#' || *p == ';' || *p == '[') {
+            ini_insert_line(line, len);     // blank line, comment or section: kept as written
+            line = next;
+            continue;
+        }
+        if (!eq) {
+            // Text without "=": a fragment of a line saved while the PC was still writing the file ("Radio_re")
+            PRINTFE("CONFIG.INI: fragment '%.*s' left out", (int)(len < 40 ? len : 40), p);
             line = next;
             continue;
         }

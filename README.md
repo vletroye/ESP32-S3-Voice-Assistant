@@ -757,8 +757,14 @@ How to read this table:
   and GPT-6 Astra (larger models that reason before answering). Measured on the device: Haiku 5.5 0.7 to 1.6 s
   (see the latencies below), GPT-6 Luna 4 to 9 s despite no reasoning (time spent waiting on OpenAI's side);
   the other ratings are expected, not measured.
-- **Tools** (weather, volume, web search, Homey) are offered to the Claude models only; GPT, Gemini, Grok, Mistral
-  and the OpenRouter models answer from their own knowledge; the Perplexity models search the web.
+- **Tools**: what each provider's models can do besides answering (see [Features in detail](#410-features-in-detail)):
+
+  | Provider | Weather, volume, radio, Homey (the device's tools) | Web search |
+  | --- | --- | --- |
+  | Claude | yes | yes (Anthropic's) |
+  | Mistral AI, xAI (Grok), OpenRouter | yes (function calling); an OpenRouter model refusing tools (many free ones) answers without them | not yet |
+  | Perplexity | no | yes (built in) |
+  | GPT (OpenAI), Gemini | not yet | not yet |
 - **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three
   default models were among the most used on OpenRouter in October 2026 (prices as shown there then); change them
   in the `[openrouter]` section of `AGENTS.INI`.
@@ -1531,12 +1537,12 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request |
-| `tools.c` | Tools offered to Claude (definitions, dispatch) |
+| `tools.c` | Tools offered to the models (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
 | `file_phrases.c` | Phrase files of the voice commands (`main/phrases/phrases_<lang>.txt`, installed on SPIFFS): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |
 | `voice_cmd.c` | Settings by voice: language, model (provider, then model), transcription and speech synthesis models, voice of the speech service in use, country and town, configuration mode ("change la langue", "change de modèle", "change de transcription", "change de synthèse vocale", "prends la voix Cedar", "change ma ville", "édite la config") |
-| `homey_mcp.c` | MCP client for a Homey Pro (local network, JSON answers): tool list at start-up, selected tools offered to Claude |
+| `homey_mcp.c` | MCP client for a Homey Pro (local network, JSON answers): tool list at start-up, selected tools offered to the models |
 | `file_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
 | `app_ui_ctrl.c` | LVGL UI (SquareLine): panels, answer scrolling, answer icon, double tap, translations, Settings screen |
@@ -1706,7 +1712,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   "New conversation", "J'ai une autre question" / "I have another question" or "Passons à autre chose" / "Let's move
   on" clear it too, without going to sleep. Changing the model starts a new
   one; a full `idf.py flash` erases it (the `storage` partition is rewritten).
-- **Tools** (Claude models), called by Claude when the question needs them:
+- **Tools** (Claude, Mistral, Grok and OpenRouter models), called by the model when the question needs them:
   - **weather** ("Quel temps fera-t-il demain à Namur ?" / "What will the weather be tomorrow in Namur?"), from Open-Meteo, free and without key;
   - **volume** ("Parle plus fort" / "Speak louder", "Mets le volume à 50" / "Set the volume to 50"), applied at once if nothing is playing (else after
     the answer), kept across restarts; the assistant then goes back to sleep;
@@ -1818,10 +1824,15 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - **Costs**: transcription is billed by the duration of audio sent (only while listening); according to
   OpenAI's documentation, idle open connections are not billed. Answer costs depend on the chosen model
   (Opus and Astra are the most expensive).
-- **Tools**: `claude_client.c` loops on `stop_reason: tool_use` (up to 3 rounds per question): the tool
-  results go back as `tool_result` blocks and stay in the history. To add a tool, declare it in `tools.c`
-  (JSON definition + a case in `tools_run()`). GPT models get no tools yet (OpenAI's function calling with
-  `store: false` and reasoning models needs more work).
+- **Tools**: `ai_provider_anthropic.c` loops on `stop_reason: tool_use` (up to 3 rounds per question): the tool
+  results go back as `tool_result` blocks and stay in the history (shortened). The Chat Completions client
+  (`ai_provider_chat_completions.c`, for Mistral, xAI and OpenRouter: `tools = true` in their `cc_config_t`) offers
+  the same tools as functions (`input_schema` given as `parameters`), reads the calls streamed (their arguments
+  may come in pieces), answers them with `role: "tool"` messages, up to 3 rounds; its history keeps only the
+  question and the final answer. A model refusing the tools (HTTP 400 or 404 about tools: "No endpoints found
+  that support tool use") is asked again without them, until another model is chosen. Mistral reads the
+  instructions and the tools (~4,400 tokens) from its prompt cache. To add a tool, declare it in `tools.c` (JSON
+  definition + a case in `tools_run()`). GPT and Gemini models get no tools yet.
 - **Homey**: with `Homey_url` set, the main task opens an MCP session (`initialize`, then
   `notifications/initialized`) once the Wi-Fi is up, reads `tools/list` (~190 tools, ~180 KB, parsed in
   PSRAM) and keeps 16 of them (`s_selected` in `homey_mcp.c`, ~2,900 tokens of definitions instead of ~50,000).

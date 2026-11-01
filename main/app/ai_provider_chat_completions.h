@@ -56,6 +56,9 @@ typedef struct {
     /* The device's tools offered (definitions of tools.c) and the function running them, NULL for none */
     const cJSON *tools;
     llm_tool_runner_t runner;
+    /* The model refused the tools (many free models of OpenRouter): its questions asked without, until another
+       model */
+    bool tools_refused;
 } cc_client_t;
 
 esp_err_t cc_init(void *client, const char *api_key, const char *model, const char *instructions, const char *effort);

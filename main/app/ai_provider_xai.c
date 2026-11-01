@@ -20,6 +20,8 @@ static const cc_config_t s_config = {
     .reasoning = CC_REASONING_EFFORT,
     .usage = CC_USAGE_STREAM_OPTIONS,
     .credit_words = s_credit_words,
+    // Function calling: the device's tools (weather, radio, volume, Homey)
+    .tools = true,
 };
 
 static cc_client_t s_client = { .config = &s_config };

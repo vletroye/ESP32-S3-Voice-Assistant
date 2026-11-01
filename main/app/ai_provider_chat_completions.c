@@ -44,6 +44,7 @@ typedef struct {
     int reasoning_tokens;
     int total_tokens;
     int billed_out;
+    bool retry;                 /* the request is to be sent again (the tools refused) */
 } stream_t;
 
 esp_err_t cc_init(void *client, const char *api_key, const char *model, const char *instructions, const char *effort)
@@ -63,6 +64,7 @@ esp_err_t cc_init(void *client, const char *api_key, const char *model, const ch
     c->http.key_header = "Authorization";
     c->http.key = c->auth;
     c->http.headers = c->config->headers;
+    c->tools_refused = false;
     cc_reset(c);
     ESP_LOGI(tag, "model: %s, reasoning effort: %s, streaming", c->model, c->effort ? c->effort : "(default)");
     return ESP_OK;
@@ -209,7 +211,7 @@ static char *build_request(const cc_client_t *c)
     }
     // The device's tools, as functions: {"type": "function", "function": {name, description, parameters}} (the
     // definitions referenced, owned by tools.c)
-    if (c->tools && c->runner && cJSON_GetArraySize(c->tools) > 0) {
+    if (c->tools && c->runner && !c->tools_refused && cJSON_GetArraySize(c->tools) > 0) {
         cJSON *tools = cJSON_AddArrayToObject(req, "tools");
         const cJSON *def;
         cJSON_ArrayForEach(def, c->tools) {
@@ -356,6 +358,14 @@ static void stream_once(cc_client_t *c, stream_t *st)
         if (status == 400 && c->effort && err_body.len && effort_refused(c->effort, err_body.p)) {
             st->error = LLM_ERR_EFFORT;
         }
+        // "No endpoints found that support tool use" (OpenRouter, 404), "does not support tools" (400): asked again
+        // without the tools
+        if ((status == 400 || status == 404) && c->tools && !c->tools_refused && err_body.len &&
+                (strcasestr(err_body.p, "tool") || strcasestr(err_body.p, "function"))) {
+            ESP_LOGW(tag, "%s refuses the tools: answered without them", c->model);
+            c->tools_refused = true;
+            st->retry = true;
+        }
         llm_buf_free(&err_body);
         return;
     }
@@ -464,6 +474,12 @@ llm_error_t cc_stream(void *client, const char *text, llm_text_cb_t on_text, voi
         st->error = LLM_OK;
         size_t text_before = answer.text.len;
         stream_once(c, st);
+        if (st->retry && round == 0) {
+            stream_free(st);
+            free(st);
+            round = -1;         // the same question, without the tools
+            continue;
+        }
         error = st->error;
         strlcpy(finish, st->finish, sizeof(finish));
         answer_tokens += st->billed_out - st->reasoning_tokens;

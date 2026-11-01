@@ -26,6 +26,8 @@ static const cc_config_t s_config = {
     // Reasoning ignored by the models that do not reason
     .reasoning = CC_REASONING_OBJECT,
     .usage = CC_USAGE_INCLUDE,
+    // Function calling: the device's tools (weather, radio, volume, Homey); a model refusing them answers without
+    .tools = true,
 };
 
 static cc_client_t s_client = { .config = &s_config };

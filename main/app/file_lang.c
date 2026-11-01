@@ -464,8 +464,10 @@ static void parse(char *text, app_lang_t *texts, const app_lang_t *base, const c
             const lang_field_t *field = field_of(trim(t));
             char *value = trim(eq + 1);
             uint8_t *slot = (uint8_t *)texts + (field ? field->offset : 0);
-            if (!field && !key_retired(trim(t))) {
-                ESP_LOGW(TAG, "%s: unknown key '%s'", code, trim(t));
+            if (!field) {
+                if (!key_retired(trim(t))) {
+                    ESP_LOGW(TAG, "%s: unknown key '%s'", code, trim(t));
+                }
             } else if (field->kind == FIELD_TEXT) {
                 value = unescape(value);
                 if (base) {

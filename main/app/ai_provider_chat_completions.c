@@ -130,7 +130,7 @@ static llm_error_t classify_error(const cc_config_t *config, int code, const cha
  * HTTP errors), {"object": "error", "message", "code"} (Mistral's errors) or {"detail": "message"} (Mistral's
  * authentication)
  */
-static llm_error_t error_from_json(const void *ctx, int status, const cJSON *json)
+llm_error_t cc_error_from_json(const void *ctx, int status, const cJSON *json)
 {
     const cc_config_t *config = ctx;
     if (!json) {
@@ -159,7 +159,7 @@ static llm_error_t error_from_json(const void *ctx, int status, const cJSON *jso
  * <ReasoningEffort.none: 'none'>]" (Mistral): the effort of AGENTS.INI is to be corrected; the values it takes,
  * "high, none", in llm_effort_values
  */
-static bool effort_refused(const char *effort, const char *body)
+bool cc_effort_refused(const char *effort, const char *body)
 {
     const char *values = strstr(body, "reasoning_effort") ? strstr(body, "supported values") : NULL;
     if (!values) {
@@ -260,7 +260,7 @@ static void sse_dispatch(const char *data, void *ctx)
     const cJSON *object = cJSON_GetObjectItem(json, "object");
     if (cJSON_IsObject(api_error) || cJSON_IsString(api_error) ||
             (cJSON_IsString(object) && strcmp(object->valuestring, "error") == 0)) {
-        st->error = error_from_json(st->config, 200, json);
+        st->error = cc_error_from_json(st->config, 200, json);
         st->done = true;
         cJSON_Delete(json);
         return;
@@ -360,8 +360,8 @@ static void stream_once(cc_client_t *c, stream_t *st)
     free(body);
     if (status != 200) {
         llm_buf_t err_body = {0};
-        st->error = llm_http_error(&c->http, status, error_from_json, c->config, &err_body);
-        if (status == 400 && c->effort && err_body.len && effort_refused(c->effort, err_body.p)) {
+        st->error = llm_http_error(&c->http, status, cc_error_from_json, c->config, &err_body);
+        if (status == 400 && c->effort && err_body.len && cc_effort_refused(c->effort, err_body.p)) {
             st->error = LLM_ERR_EFFORT;
         }
         // "No endpoints found that support tool use" (OpenRouter, 404), "does not support tools" (400): asked again

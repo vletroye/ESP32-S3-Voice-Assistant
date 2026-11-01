@@ -62,7 +62,7 @@ static const ai_provider_t s_providers[] = {
         { "xai", "x ai", "ix ai", "grok", "grock", "groc", "groque" },
     },
     {
-        "mistral", "Mistral AI", "Mistral", "Mistral_key", LLM_PROVIDER_MISTRAL, "high", false, &llm_backend_mistral,
+        "mistral", "Mistral AI", "Mistral", "Mistral_key", LLM_PROVIDER_MISTRAL, "high", true, &llm_backend_mistral,
         &stt_backend_mistral, &tts_backend_mistral, { "mistral", "mistrale", "mistral ai", NULL },
     },
     {

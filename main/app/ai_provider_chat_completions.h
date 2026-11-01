@@ -73,6 +73,14 @@ void cc_prewarm(void *client);
 llm_error_t cc_stream(void *client, const char *text, llm_text_cb_t on_text, void *ctx, char **full_text);
 void cc_set_tools(void *client, const cJSON *definitions, llm_tool_runner_t runner);
 
+/* Shared with Mistral's Conversations client (its errors are those of Mistral's Chat Completions) */
+
+/** An error body or event read into an error kind (ctx: the cc_config_t; credit words, tag of the logs) */
+llm_error_t cc_error_from_json(const void *ctx, int status, const cJSON *json);
+
+/** A reasoning effort refused, with the values the model takes (llm_effort_refused, llm_effort_values) */
+bool cc_effort_refused(const char *effort, const char *body);
+
 /* The table of a Chat Completions provider: CC_BACKEND(s_client) */
 #define CC_BACKEND(client) {                                                                            \
         .state = &(client), .init = cc_init, .set_instructions = cc_set_instructions,                    \

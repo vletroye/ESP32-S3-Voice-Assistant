@@ -17,6 +17,15 @@
 #define LLM_HTTP_TIMEOUT_MS     30000
 #define LLM_HTTP_READ_CHUNK     512
 
+/* ---------- web search ---------- */
+
+char *llm_with_web_hint(const char *instructions)
+{
+    char *text = NULL;
+    asprintf(&text, "%s%s%s", instructions ? instructions : "", instructions ? "\n\n" : "", LLM_WEB_SEARCH_HINT);
+    return text;
+}
+
 /* ---------- strings ---------- */
 
 void llm_str_set(char **dst, const char *src)

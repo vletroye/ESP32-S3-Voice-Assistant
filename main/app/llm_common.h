@@ -22,6 +22,18 @@
 extern "C" {
 #endif
 
+/* Added to the instructions when the model can search the web (spoken answers: no addresses read out) */
+#define LLM_WEB_SEARCH_HINT     "You can search the web for current information (news, results, schedules, " \
+                                "prices, opening hours...). Before searching, say a very short sentence in the " \
+                                "user's language, such as \"Je regarde.\". Never read out web addresses, " \
+                                "citations or source names unless asked."
+
+/** "instructions\n\nLLM_WEB_SEARCH_HINT" (allocated), NULL without instructions or memory */
+char *llm_with_web_hint(const char *instructions);
+
+/** A web search started by the provider for this answer: counted (the web icon of the answer, llm_web_searches) */
+void llm_web_search_started(void);
+
 /* ---------- strings ---------- */
 
 /** *dst replaced by a copy of src; NULL for NULL or "" */

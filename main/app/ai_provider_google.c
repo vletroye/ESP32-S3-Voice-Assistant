@@ -5,7 +5,8 @@
  *
  * Gemini client: Gemini API generateContent with server-sent events (streamGenerateContent?alt=sse),
  * the conversation kept on the device and sent with each request. The effort of AGENTS.INI is its
- * thinkingConfig.thinkingLevel ("minimal", "low", ...).
+ * thinkingConfig.thinkingLevel ("minimal", "low", ...). With Google Search grounding: the model decides when to
+ * search (a model refusing it is asked again without, until another model).
  */
 
 #include <stdio.h>
@@ -29,6 +30,8 @@ static char *s_key = NULL;
 static char *s_model = NULL;
 static char *s_instructions = NULL;
 static char *s_thinking_level = NULL;
+/* The model refused the Google Search tool: its questions asked without, until another model */
+static bool s_search_refused = false;
 /* Conversation history: contents [{role: "user" | "model", parts: [{text}]}] */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */
@@ -40,6 +43,7 @@ typedef struct {
     char *signature;            /* last thought signature, sent back with the answer */
     char finish[32];            /* finishReason: "STOP", "MAX_TOKENS", "SAFETY"... */
     bool blocked;               /* prompt blocked (promptFeedback.blockReason) */
+    int web_searches;           /* Google searches made (groundingMetadata.webSearchQueries), billed per query */
     bool done;                  /* finishReason received */
     llm_error_t error;
 
@@ -65,6 +69,7 @@ static esp_err_t gemini_init(void *state, const char *api_key, const char *model
     llm_str_set(&s_key, api_key);
     s_http.tag = TAG;
     s_http.key = s_key;
+    s_search_refused = false;
     llm_str_set(&s_instructions, instructions);
     llm_str_set(&s_thinking_level, thinking_level);
     gemini_reset(state);
@@ -116,12 +121,20 @@ static llm_error_t error_from_json(const void *ctx, int status, const cJSON *jso
 static char *build_request(void)
 {
     cJSON *req = cJSON_CreateObject();
-    if (s_instructions) {
+    char *with_hint = s_search_refused ? NULL : llm_with_web_hint(s_instructions);
+    if (with_hint || s_instructions) {
         cJSON *system = cJSON_AddObjectToObject(req, "systemInstruction");
         cJSON *part = cJSON_CreateObject();
-        cJSON_AddStringToObject(part, "text", s_instructions);
+        cJSON_AddStringToObject(part, "text", with_hint ? with_hint : s_instructions);
         cJSON_AddItemToObject(system, "parts", cJSON_CreateArray());
         cJSON_AddItemToArray(cJSON_GetObjectItem(system, "parts"), part);
+    }
+    free(with_hint);
+    if (!s_search_refused) {
+        // Grounding with Google Search: [{"google_search": {}}]
+        cJSON *search = cJSON_CreateObject();
+        cJSON_AddObjectToObject(search, "google_search");
+        cJSON_AddItemToArray(cJSON_AddArrayToObject(req, "tools"), search);
     }
     /* Referenced, not copied: the history stays owned by s_messages */
     cJSON_AddItemReferenceToObject(req, "contents", s_messages);
@@ -170,6 +183,14 @@ static void sse_dispatch(const char *data, void *ctx)
             continue;   // thought summaries are not spoken
         }
         llm_answer_add(&st->answer, text->valuestring, strlen(text->valuestring));
+    }
+    // The searches made, given with the grounding of the answer (the last events)
+    const cJSON *queries = cJSON_GetObjectItem(cJSON_GetObjectItem(candidate, "groundingMetadata"), "webSearchQueries");
+    if (cJSON_IsArray(queries) && cJSON_GetArraySize(queries) > st->web_searches) {
+        for (int i = st->web_searches; i < cJSON_GetArraySize(queries); i++) {
+            llm_web_search_started();
+        }
+        st->web_searches = cJSON_GetArraySize(queries);
     }
     const cJSON *finish = cJSON_GetObjectItem(candidate, "finishReason");
     if (cJSON_IsString(finish)) {
@@ -258,8 +279,29 @@ static llm_error_t gemini_stream(void *state, const char *text, llm_text_cb_t on
         goto end;
     }
     if (status != 200) {
-        st.error = llm_http_error(&s_http, status, error_from_json, NULL, NULL);
-        goto end;
+        llm_buf_t err_body = {0};
+        st.error = llm_http_error(&s_http, status, error_from_json, NULL, &err_body);
+        bool search_refused = status == 400 && !s_search_refused && err_body.len &&
+                              (strcasestr(err_body.p, "google_search") || strcasestr(err_body.p, "grounding") ||
+                               strcasestr(err_body.p, "tool"));
+        llm_buf_free(&err_body);
+        if (search_refused) {
+            ESP_LOGW(TAG, "%s refuses Google Search: answered without it", s_model);
+            s_search_refused = true;
+            free(body);
+            body = build_request();
+            st.error = LLM_OK;
+            if (!body || llm_http_send(&s_http, body, &status) != ESP_OK) {
+                st.error = body ? LLM_ERR_NETWORK : LLM_ERR_OTHER;
+                goto end;
+            }
+            if (status != 200) {
+                st.error = llm_http_error(&s_http, status, error_from_json, NULL, NULL);
+                goto end;
+            }
+        } else {
+            goto end;
+        }
     }
 
     /* The last event carries finishReason; the body ends right after it */
@@ -292,6 +334,10 @@ static llm_error_t gemini_stream(void *state, const char *text, llm_text_cb_t on
     // promptTokenCount counts the cached ones; the thoughts are billed as output
     costs_add_tokens(COST_LLM, s_model, st.input_tokens - st.cached_tokens, st.cached_tokens, 0,
                      st.output_tokens + st.thoughts_tokens);
+    costs_add_calls("gemini:web_search", st.web_searches);
+    if (st.web_searches) {
+        ESP_LOGI(TAG, "%d Google search(es)", st.web_searches);
+    }
 
 end:
     if (st.error == LLM_OK) {

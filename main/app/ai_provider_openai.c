@@ -3,7 +3,8 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * GPT client: OpenAI Responses API with server-sent events (stream: true), stateless (store: false).
+ * GPT client: OpenAI Responses API with server-sent events (stream: true), stateless (store: false), with OpenAI's
+ * web search (the model decides when to search; a model refusing it is asked again without, until another model).
  */
 
 #include <stdio.h>
@@ -15,6 +16,7 @@
 #include "ai_provider_openai.h"
 #include "file_costs.h"
 #include "llm_common.h"
+#include "settings.h"
 
 #define OPENAI_URL_SIZE             160
 
@@ -27,6 +29,8 @@ static char *s_auth = NULL;             /* "Bearer <key>" */
 static char *s_model = NULL;
 static char *s_instructions = NULL;
 static char *s_effort = NULL;
+/* The model refused the web search tool: its questions asked without, until another model */
+static bool s_web_refused = false;
 /* Conversation history, sent with each request (nothing is stored on the OpenAI side) */
 static cJSON *s_messages = NULL;
 /* Kept between requests so that the TLS connection can be reused (keep-alive) */
@@ -38,6 +42,7 @@ typedef struct {
     char status[24];            /* "completed", "incomplete", "failed" */
     bool refused;
     bool done;                  /* response.completed / incomplete / failed received */
+    int web_searches;           /* web searches made (billed per call) */
     llm_error_t error;
 
     int input_tokens;
@@ -69,6 +74,7 @@ static esp_err_t openai_init(void *state, const char *api_key, const char *model
     ESP_RETURN_ON_FALSE(llm_bearer_set(&s_auth, api_key), ESP_ERR_NO_MEM, TAG, "no memory");
     s_http.tag = TAG;
     s_http.key = s_auth;
+    s_web_refused = false;
     llm_str_set(&s_instructions, instructions);
     llm_str_set(&s_effort, effort);
     openai_reset(state);
@@ -131,8 +137,28 @@ static char *build_request(void)
         cJSON *reasoning = cJSON_AddObjectToObject(req, "reasoning");
         cJSON_AddStringToObject(reasoning, "effort", s_effort);
     }
-    if (s_instructions) {
-        cJSON_AddStringToObject(req, "instructions", s_instructions);
+    char *with_hint = s_web_refused ? NULL : llm_with_web_hint(s_instructions);
+    if (with_hint || s_instructions) {
+        cJSON_AddStringToObject(req, "instructions", with_hint ? with_hint : s_instructions);
+    }
+    free(with_hint);
+    if (!s_web_refused) {
+        // OpenAI's web search, located where the user lives (CONFIG.INI), with little context (short spoken answers)
+        cJSON *search = cJSON_CreateObject();
+        cJSON_AddStringToObject(search, "type", "web_search");
+        cJSON_AddStringToObject(search, "search_context_size", "low");
+        const sys_param_t *param = settings_get_parameter();
+        if (param->country[0] || param->city[0]) {
+            cJSON *where = cJSON_AddObjectToObject(search, "user_location");
+            cJSON_AddStringToObject(where, "type", "approximate");
+            if (param->country[0]) {
+                cJSON_AddStringToObject(where, "country", param->country);
+            }
+            if (param->city[0]) {
+                cJSON_AddStringToObject(where, "city", param->city);
+            }
+        }
+        cJSON_AddItemToArray(cJSON_AddArrayToObject(req, "tools"), search);
     }
     /* Referenced, not copied: the history stays owned by s_messages */
     cJSON_AddItemReferenceToObject(req, "input", s_messages);
@@ -186,6 +212,13 @@ static void sse_dispatch(const char *data, void *ctx)
         }
     } else if (strcmp(t, "response.refusal.delta") == 0) {
         st->refused = true;
+    } else if (strcmp(t, "response.web_search_call.in_progress") == 0) {
+        // A search starts: what was said so far ("Je regarde.") is spoken meanwhile, the web icon shown
+        st->web_searches++;
+        llm_web_search_started();
+        if (st->answer.on_text) {
+            st->answer.on_text(NULL, st->answer.ctx);
+        }
     } else if (strcmp(t, "response.completed") == 0 || strcmp(t, "response.incomplete") == 0) {
         on_response_end(st, cJSON_GetObjectItem(json, "response"));
     } else if (strcmp(t, "response.failed") == 0) {
@@ -250,8 +283,29 @@ static llm_error_t openai_stream(void *state, const char *text, llm_text_cb_t on
         goto end;
     }
     if (status != 200) {
-        st.error = llm_http_error(&s_http, status, error_from_json, NULL, NULL);
-        goto end;
+        llm_buf_t err_body = {0};
+        st.error = llm_http_error(&s_http, status, error_from_json, NULL, &err_body);
+        bool web_refused = status == 400 && !s_web_refused && err_body.len &&
+                           (strstr(err_body.p, "web_search") || strcasestr(err_body.p, "tool"));
+        llm_buf_free(&err_body);
+        if (web_refused) {
+            // "Web search is not supported with this model / reasoning effort": asked again without it
+            ESP_LOGW(TAG, "%s refuses the web search: answered without it", s_model);
+            s_web_refused = true;
+            free(body);
+            body = build_request();
+            st.error = LLM_OK;
+            if (!body || llm_http_send(&s_http, body, &status) != ESP_OK) {
+                st.error = body ? LLM_ERR_NETWORK : LLM_ERR_OTHER;
+                goto end;
+            }
+            if (status != 200) {
+                st.error = llm_http_error(&s_http, status, error_from_json, NULL, NULL);
+                goto end;
+            }
+        } else {
+            goto end;
+        }
     }
 
     llm_http_stream(&s_http, &st.sse, &st.done);
@@ -281,6 +335,10 @@ static llm_error_t openai_stream(void *state, const char *text, llm_text_cb_t on
     llm_answer_stats(&st.answer, st.output_tokens - st.reasoning_tokens, st.reasoning_tokens);
     // input_tokens counts the cached ones; output_tokens the reasoning (billed too)
     costs_add_tokens(COST_LLM, s_model, st.input_tokens - st.cached_tokens, st.cached_tokens, 0, st.output_tokens);
+    costs_add_calls("openai:web_search", st.web_searches);
+    if (st.web_searches) {
+        ESP_LOGI(TAG, "%d web search(es)", st.web_searches);
+    }
 
 end:
     if (st.error == LLM_OK) {

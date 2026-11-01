@@ -25,10 +25,6 @@
 /* Web search (server tool run by Anthropic): searches per question, $10 per 1000 */
 #define WEB_SEARCH_MAX_USES     3
 /* Added to the instructions when web search is offered */
-#define WEB_SEARCH_HINT         "You can search the web for current information (news, results, schedules, " \
-                                "prices, opening hours...). Before searching, say a very short sentence in the " \
-                                "user's language, such as \"Je regarde.\". Never read out web addresses, " \
-                                "citations or source names unless asked."
 #define CLAUDE_API_VERSION      "2023-06-01"
 /* Tool calls answered per question, before giving up */
 #define CLAUDE_MAX_TOOL_ROUNDS  3
@@ -209,7 +205,7 @@ static char *build_request(void)
          */
         char *with_hint = NULL;
         if (s_web_search == 1) {
-            asprintf(&with_hint, "%s\n\n%s", s_system, WEB_SEARCH_HINT);
+            asprintf(&with_hint, "%s\n\n%s", s_system, LLM_WEB_SEARCH_HINT);
         }
         cJSON *system = cJSON_AddArrayToObject(req, "system");
         cJSON *block = cJSON_CreateObject();

@@ -1244,9 +1244,17 @@ void llm_set_location(const char *country, const char *city)
     claude_client_set_location(country, city);
 }
 
+/* Web searches of the current answer started by the provider of the model (not Claude, which counts its own) */
+static volatile int s_web_searches = 0;
+
+void llm_web_search_started(void)
+{
+    s_web_searches++;
+}
+
 int llm_web_searches(void)
 {
-    return (s_ready && s_provider == LLM_PROVIDER_CLAUDE) ? claude_client_web_searches() : 0;
+    return !s_ready ? 0 : s_provider == LLM_PROVIDER_CLAUDE ? claude_client_web_searches() : s_web_searches;
 }
 
 llm_provider_t llm_provider(void)
@@ -1317,6 +1325,7 @@ llm_error_t llm_stream(const char *text, llm_text_cb_t on_text, void *ctx, char 
         return LLM_ERR_NO_KEY;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_web_searches = 0;
     llm_error_t err = client_stream(text, on_text, ctx, full_text);
     if (err == LLM_OK) {
         s_dirty = true;

@@ -762,9 +762,14 @@ How to read this table:
   | Provider | Weather, volume, radio, Homey (the device's tools) | Web search |
   | --- | --- | --- |
   | Claude | yes | yes (Anthropic's) |
-  | Mistral AI, xAI (Grok), OpenRouter | yes (function calling); an OpenRouter model refusing tools (many free ones) answers without them | not yet |
+  | Mistral AI, xAI (Grok), OpenRouter | yes (function calling); an OpenRouter model refusing tools (many free ones) answers without them | not yet (xAI's needs its Responses API; OpenRouter's plugin searches at every question; Mistral has none in Chat Completions) |
   | Perplexity | no | yes (built in) |
-  | GPT (OpenAI), Gemini | not yet | not yet |
+  | GPT (OpenAI) | not yet | yes (OpenAI's `web_search`, located where the user lives) |
+  | Gemini | not yet | yes (Grounding with Google Search) |
+
+  The model decides when to search; a model refusing the search (HTTP 400 about it) is asked again without it,
+  until another model is chosen. Each search is billed per call: `openai:web_search` and `gemini:web_search` in
+  `[per_call]` of `AGENTS.INI` (added to the firmware's file: add them to yours to count them).
 - **OpenRouter**: one key gives access to the models of many providers (openrouter.ai, prepaid credit). The three
   default models were among the most used on OpenRouter in October 2026 (prices as shown there then); change them
   in the `[openrouter]` section of `AGENTS.INI`.

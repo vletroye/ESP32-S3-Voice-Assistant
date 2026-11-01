@@ -207,6 +207,7 @@ static const lang_field_t s_fields[] = {
     { "resume_ask", offsetof(app_lang_t, resume_ask), FIELD_TEXT, 1 },
     { "resume_yes", offsetof(app_lang_t, resume_yes), FIELD_TEXT, 1 },
     { "resume_no", offsetof(app_lang_t, resume_no), FIELD_TEXT, 1 },
+    { "test_result_unavailable", offsetof(app_lang_t, test_result_unavailable), FIELD_TEXT, 1 },
     { "cancelled", offsetof(app_lang_t, cancelled), FIELD_TEXT, 1 },
     { "voice_choppy", offsetof(app_lang_t, voice_choppy), FIELD_TEXT, 1 },
     { "speech_test_phrase", offsetof(app_lang_t, speech_test_phrase), FIELD_TEXT, 1 },

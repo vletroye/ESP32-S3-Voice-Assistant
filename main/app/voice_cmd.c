@@ -32,7 +32,7 @@
 #include "file_radio_favorites.h"
 
 #define CMD_NORM_SIZE           160
-#define CMD_REPLY_SIZE          512
+#define CMD_REPLY_SIZE          1024
 /*
  * After a question ("Quelle langue ?", "Quel modèle ?"), the answer is expected within this delay, counted from
  * the end of the question (the list of models takes 10 to 15 s to read)
@@ -597,15 +597,20 @@ static char *model_list(llm_provider_t provider)
         return NULL;
     }
     unsigned number = 0;
+    cJSON *results = model_test_results();
     for (size_t i = 0; i < llm_model_count; i++) {
         if (!model_listed(i, provider)) {
             continue;
         }
+        char result[48];
+        model_test_result(results, llm_models[i].id, result, sizeof(result));
         size_t n = strlen(list);
-        snprintf(list + n, CMD_REPLY_SIZE - n, "%s%u, %s%s.", number ? " " : "", number + 1, llm_models[i].spoken,
+        snprintf(list + n, CMD_REPLY_SIZE - n, "\n%u, %s%s%s%s%s.", number + 1, llm_models[i].spoken,
+                 result[0] ? VOICE_CMD_SHOWN_ONLY : "", result, result[0] ? VOICE_CMD_SHOWN_ONLY : "",
                  strcmp(llm_models[i].id, current) == 0 ? lang->model_current : "");
         number++;
     }
+    cJSON_Delete(results);
     snprintf(out, CMD_REPLY_SIZE, lang->model_ask_intro, ai_provider_of_llm(provider)->company, list);
     free(list);
     return out;
@@ -734,11 +739,10 @@ static char *provider_list(const char *format)
 {
     llm_provider_t offered[LLM_PROVIDER_COUNT];
     size_t count = providers_offered(offered);
-    char list[160] = "";
+    char list[256] = "";
     for (size_t i = 0; i < count; i++) {
         size_t n = strlen(list);
-        snprintf(list + n, sizeof(list) - n, "%s%u, %s.", i ? " " : "", (unsigned)(i + 1),
-                 ai_provider_of_llm(offered[i])->company);
+        snprintf(list + n, sizeof(list) - n, "\n%u, %s.", (unsigned)(i + 1), ai_provider_of_llm(offered[i])->company);
     }
     char *text = NULL;
     asprintf(&text, format, list);
@@ -923,13 +927,19 @@ static const char *speech_current(llm_speech_kind_t kind)
 static char *speech_list(llm_speech_kind_t kind, const char *format)
 {
     const app_lang_t *lang = app_lang_get();
-    char list[256] = "";
+    char list[640] = "";
+    cJSON *results = model_test_results();
     for (size_t i = 0; i < llm_speech_count(kind); i++) {
         const llm_speech_model_t *m = llm_speech_model(kind, i);
+        char key[56], result[48];
+        snprintf(key, sizeof(key), "%s:%s", kind == LLM_SPEECH_STT ? "stt" : "tts", m->id);
+        model_test_result(results, key, result, sizeof(result));
         size_t n = strlen(list);
-        snprintf(list + n, sizeof(list) - n, "%s%u, %s%s.", i ? " " : "", (unsigned)(i + 1), m->spoken,
+        snprintf(list + n, sizeof(list) - n, "\n%u, %s%s%s%s%s.", (unsigned)(i + 1), m->spoken,
+                 result[0] ? VOICE_CMD_SHOWN_ONLY : "", result, result[0] ? VOICE_CMD_SHOWN_ONLY : "",
                  strcmp(m->id, speech_current(kind)) == 0 ? lang->speech_current : "");
     }
+    cJSON_Delete(results);
     char *text = NULL;
     asprintf(&text, format, list);
     return text ? text : reply_dup("");

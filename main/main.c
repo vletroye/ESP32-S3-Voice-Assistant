@@ -437,7 +437,8 @@ static void reply_begin(void)
 /*
  * A "::" or ".." of the LANG texts comes before a list ("Quel fournisseur voulez-vous :: 1, Anthropic. 2, OpenAI."):
  * shown as ":" or ".", and with Read_lists = off the list after it is not read, up to the end of the reply or
- * VOICE_CMD_LIST_END (a question follows). "..." stays an ellipsis. shown and spoken: as long as the message.
+ * VOICE_CMD_LIST_END (a question follows); a part between two VOICE_CMD_SHOWN_ONLY is never read. "..." stays an
+ * ellipsis. shown and spoken: as long as the message.
  */
 static void list_reply_texts(const char *message, char *shown, char *spoken)
 {
@@ -454,6 +455,14 @@ static void list_reply_texts(const char *message, char *shown, char *spoken)
             p++;
         } else if (*p == VOICE_CMD_LIST_END[0]) {
             silent = false;
+        } else if (*p == VOICE_CMD_SHOWN_ONLY[0]) {
+            // Up to the next one: shown, never spoken
+            for (p++; *p && *p != VOICE_CMD_SHOWN_ONLY[0]; p++) {
+                *shown++ = *p;
+            }
+            if (!*p) {
+                break;
+            }
         } else {
             *shown++ = *p;
             if (!silent) {

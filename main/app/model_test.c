@@ -31,6 +31,8 @@
 
 #define MODEL_TIMES_FILE        "/spiffs/model_times.json"
 #define MODEL_TIMES_FILE_MAX    8192
+/* The last results of the speech models, by "tts:<id>" / "stt:<id>" (shown in the lists of the models) */
+#define SPEECH_TIMES_FILE       "/spiffs/speech_times.json"
 #define SPEED_FILE              "/spiffs/speed.txt"
 /* Its name before (LOG.TXT): removed by the next test */
 #define OLD_SPEED_FILE          "/spiffs/log.txt"
@@ -120,9 +122,9 @@ bool model_test_cancelled(void)
 
 /* ---------- results, by model id ---------- */
 
-static cJSON *load_times(void)
+static cJSON *load_file(const char *path)
 {
-    FILE *f = fopen(MODEL_TIMES_FILE, "r");
+    FILE *f = fopen(path, "r");
     char *text = f ? malloc(MODEL_TIMES_FILE_MAX) : NULL;
     size_t n = text ? fread(text, 1, MODEL_TIMES_FILE_MAX - 1, f) : 0;
     if (f) {
@@ -141,15 +143,25 @@ static cJSON *load_times(void)
     return times;
 }
 
-static void save_times(const cJSON *times)
+static cJSON *load_times(void)
+{
+    return load_file(MODEL_TIMES_FILE);
+}
+
+static void save_file(const char *path, const cJSON *times)
 {
     char *text = cJSON_PrintUnformatted(times);
-    FILE *f = text ? fopen(MODEL_TIMES_FILE, "w") : NULL;
+    FILE *f = text ? fopen(path, "w") : NULL;
     if (f) {
         fputs(text, f);
         fclose(f);
     }
     free(text);
+}
+
+static void save_times(const cJSON *times)
+{
+    save_file(MODEL_TIMES_FILE, times);
 }
 
 static void set_number(cJSON *entry, const char *name, double value)
@@ -360,6 +372,28 @@ static int16_t *audio_for_stt(size_t *samples)
     return NULL;
 }
 
+/* The results of this test kept by "tts:<id>" / "stt:<id>", with those of the speech models not tested now */
+static void save_speech_results(void)
+{
+    if (s_speech_result_count == 0) {
+        return;
+    }
+    cJSON *times = load_file(SPEECH_TIMES_FILE);
+    for (int i = 0; i < s_speech_result_count; i++) {
+        char key[56];
+        snprintf(key, sizeof(key), "%s:%s", s_speech_results[i].stt ? "stt" : "tts", s_speech_results[i].model);
+        cJSON_DeleteItemFromObject(times, key);
+        cJSON *entry = cJSON_AddObjectToObject(times, key);
+        bool ok = strcmp(s_speech_results[i].status, "ok") == 0 && s_speech_results[i].first_ms >= 0;
+        set_string(entry, "status", s_speech_results[i].status);
+        if (ok) {
+            set_number(entry, "first", s_speech_results[i].first_ms);
+        }
+    }
+    save_file(SPEECH_TIMES_FILE, times);
+    cJSON_Delete(times);
+}
+
 static void test_speech(char *screen, size_t screen_size)
 {
     const app_lang_t *lang = app_lang_get();
@@ -456,6 +490,7 @@ static void test_speech(char *screen, size_t screen_size)
     free(audio);
     // The transcription of the settings again
     assistant_set_stt(NULL);
+    save_speech_results();
 }
 
 /* ---------- SPEED.TXT ---------- */
@@ -665,6 +700,34 @@ static void spoken_seconds(char *buf, size_t size, int ms, bool short_unit)
     int tenths = (ms + 50) / 100;
     snprintf(buf, size, "%d%c%d %s", tenths / 10, lang->decimal_mark, tenths % 10,
              short_unit ? "s" : (ms < lang->second_one_below_ms ? lang->second_one : lang->seconds));
+}
+
+cJSON *model_test_results(void)
+{
+    cJSON *results = load_times();
+    cJSON *speech = load_file(SPEECH_TIMES_FILE);
+    cJSON *entry;
+    while ((entry = cJSON_DetachItemFromArray(speech, 0)) != NULL) {
+        cJSON_AddItemToObject(results, entry->string, entry);
+    }
+    cJSON_Delete(speech);
+    return results;
+}
+
+void model_test_result(const cJSON *results, const char *key, char *buf, size_t size)
+{
+    const cJSON *entry = cJSON_GetObjectItem(results, key);
+    buf[0] = '\0';
+    if (!entry) {
+        return;
+    }
+    if (strcmp(string_of(entry, "status"), "ok") != 0) {
+        snprintf(buf, size, " (%s)", app_lang_get()->test_result_unavailable);
+        return;
+    }
+    char time_text[24];
+    spoken_seconds(time_text, sizeof(time_text), (int)number_of(entry, "first"), true);
+    snprintf(buf, size, " (%s)", time_text);
 }
 
 #define FASTEST_COUNT       3

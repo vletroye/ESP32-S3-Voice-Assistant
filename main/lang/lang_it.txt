@@ -108,6 +108,9 @@ test_result = Risultato di %s: %s.
 # a model not available, %s spoken name, %s why (test_why_...)
 test_unavailable_why = %s: non disponibile, %s.
 # why: on screen after the model's name, and said
+# in the lists of the models, after a model that did not answer its last test: "3, Grok (...)"
+test_result_unavailable = non disponibile
+
 test_why_no_key = chiave mancante
 test_why_network = nessuna risposta
 test_why_auth = chiave rifiutata

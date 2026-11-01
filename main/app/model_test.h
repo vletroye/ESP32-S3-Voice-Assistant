@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "cJSON.h"
 #include <stdbool.h>
 #include "llm.h"
 
@@ -71,6 +72,15 @@ void model_test_exclusions_drop(void);
  *        "Haiku (0,8 seconde), Flash-Lite (1,1 seconde) et Luna (1,4 seconde)"; false if none was tested yet
  */
 bool model_test_fastest(char *buf, size_t size);
+
+/** The results of the last tests, for model_test_result (to be freed with cJSON_Delete) */
+cJSON *model_test_results(void);
+
+/**
+ * @brief " (1,2 s)": the time to the first words (first audio, transcript) of a model's last test (key: its id; a
+ *        speech model: "tts:<id>", "stt:<id>"), " (indisponible)" if it did not answer, "" if never tested
+ */
+void model_test_result(const cJSON *results, const char *key, char *buf, size_t size);
 
 #ifdef __cplusplus
 }

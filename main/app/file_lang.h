@@ -160,6 +160,7 @@ typedef struct {
     const char *resume_ask;
     const char *resume_yes;
     const char *resume_no;
+    const char *test_result_unavailable;    /* lists of the models: after one that did not answer its last test */
     const char *cancelled;          /* "abandon", "stop": the question asked dropped, listened to again */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
     const char *speech_test_phrase; /* model test: spoken by each speech model, then transcribed */

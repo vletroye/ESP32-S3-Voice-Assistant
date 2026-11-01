@@ -344,6 +344,29 @@ bool assistant_resume_ask(void)
     return true;
 }
 
+/*
+ * Woken up while a question of a voice command (model, language, town...) is still unanswered (the assistant went
+ * to sleep without its answer): it is asked again, its answer listened to after it ("abandon" drops it). Called
+ * from app_audio.c (SR handler task); false: listen as usual.
+ */
+bool assistant_question_ask(void)
+{
+    const char *question = voice_cmd_question();
+    if (!question) {
+        return false;
+    }
+    ESP_LOGI(TAG, "Woken up with a question unanswered: asked again");
+    s_cancelled = false;
+    llm_cancel_clear();
+    char *text = strdup(question);
+    if (!text) {
+        return false;
+    }
+    speak_message(text);
+    free(text);
+    return true;
+}
+
 /* Stop the reply being spoken. Called from app_audio.c when a new listening session starts. */
 void assistant_reply_stop(void)
 {
@@ -907,6 +930,7 @@ void assistant_listen_end(void)
     if (voice_cmd_is_goodbye(text)) {
         // Back to sleep: no answer, no follow-up listening, the next conversation starts afresh
         ESP_LOGI(TAG, "Goodbye: \"%s\", going to sleep", text);
+        voice_cmd_cancel_question();    // not asked again on waking up
         llm_reset();
         ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
         goto err;

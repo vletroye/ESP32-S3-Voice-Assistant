@@ -274,6 +274,15 @@ auf keinen fall
 schließ es nicht aus
 niemals
 
+[s_cancel]
+# Allein gesagt: die gestellte Frage (Modell, Sprache, Stadt...) entfällt, der Assistent hört wieder zu
+abbrechen
+abbruch
+stopp
+stop
+vergiss es
+egal
+
 [s_courtesy]
 # Wörter, die nach der Antwort einer Abkürzung erlaubt sind ("sprich Englisch bitte")
 bitte

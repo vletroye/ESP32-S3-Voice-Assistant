@@ -306,6 +306,9 @@ resume_ask = Hallo! Wil je het vorige gesprek voortzetten?
 resume_yes = Goed, ik luister.
 resume_no = Goed, we beginnen opnieuw. Ik luister.
 
+# "abandon", "stop": the question asked (model, language...) dropped, listened to again
+cancelled = Goed, laat maar. Ik luister.
+
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Verbinding te traag: de stem kon niet vloeiend worden voorgelezen.)
 

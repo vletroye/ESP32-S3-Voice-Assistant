@@ -258,6 +258,16 @@ zeker niet
 sluit het niet uit
 nooit
 
+[s_cancel]
+# Alleen gezegd: de gestelde vraag (model, taal, stad...) vervalt en de assistent luistert opnieuw
+annuleer
+annuleren
+afbreken
+stop
+stoppen
+laat maar[ zitten]
+vergeet het
+
 [s_courtesy]
 # Woorden die na het antwoord van een snelkoppeling mogen ("spreek Engels alsjeblieft")
 alsjeblieft

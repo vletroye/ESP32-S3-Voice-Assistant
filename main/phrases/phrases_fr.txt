@@ -255,6 +255,17 @@ garde le
 ne l exclus pas
 jamais
 
+[s_cancel]
+# Dites seules : la question posée (modèle, langue, ville...) est abandonnée et l'assistant écoute à nouveau
+# (sans question posée, l'assistant écoute à nouveau ; "stop" arrête d'abord une radio en cours)
+abandon
+abandonne[r]
+annule[r]
+laisse tomber
+stop
+(arrête|arrete)
+on (arrête|arrete)
+
 [s_courtesy]
 # Mots admis après la réponse d'un raccourci ("parle anglais s'il te plaît")
 s il (te|vous) pla(i|î)t

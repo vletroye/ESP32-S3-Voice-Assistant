@@ -260,6 +260,15 @@ para nada
 no lo excluyas
 nunca
 
+[s_cancel]
+# Dichas solas: la pregunta hecha (modelo, idioma, ciudad...) se abandona y el asistente vuelve a escuchar
+cancela[r]
+anula[r]
+para
+stop
+(olvídalo|olvidalo)
+(déjalo|dejalo)
+
 [s_courtesy]
 # Palabras admitidas tras la respuesta de un atajo ("habla inglés por favor")
 por favor

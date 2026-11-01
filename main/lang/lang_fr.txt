@@ -305,6 +305,9 @@ resume_ask = Bonjour ! Veux-tu continuer la conversation précédente ?
 resume_yes = D'accord, je t'écoute.
 resume_no = D'accord, on recommence. Je t'écoute.
 
+# "abandon", "stop": the question asked (model, language...) dropped, listened to again
+cancelled = D'accord, on laisse tomber. Je t'écoute.
+
 # shown after a reply whose speech was cut (slow connection)
 voice_choppy = (Connexion trop lente : la voix n'a pas pu être lue de façon fluide.)
 

@@ -251,8 +251,14 @@ Every feature in detail: [Features in detail](#410-features-in-detail).
    back to sleep, nothing said. When a voice
    command has asked something (which language, provider, model, voice, town…), a double tap, while the question
    is spoken or while its answer is listened for, drops the command: back to sleep, and the next words are no
-   longer taken as its answer.
-5. Without speech, it goes back to sleep (no API call is made for silence).
+   longer taken as its answer. Saying "**Abandon**" / "**Cancel**" (also "abandonne", "annule", "laisse tomber",
+   "stop" / "abort", "stop", "never mind", "forget it") drops it too, and the assistant listens again at once
+   ("D'accord, on laisse tomber. Je t'écoute." / "All right, forget it. I am listening."): you can ask something
+   else. Said without a question asked, the same words just make it listen again ("stop" stops a radio first).
+5. Without speech, it goes back to sleep (no API call is made for silence). If a voice command had asked something
+   (which provider, model, town…), the question is **asked again** when the assistant wakes up, its list shown
+   again: answer it, or say "Abandon" / "Cancel" to ask something else. "Au revoir" / "Goodbye" or a double tap
+   drops it.
 6. Saying just "**Au revoir**" / "**Goodbye**" (or another closing phrase, see below) sends it back to sleep at once, without
    an answer and without listening again, and clears the saved conversation: the next one starts afresh.
    Likewise, when the **assistant's answer ends with a closing phrase** ("… Bonne soirée !" / "… Have a nice

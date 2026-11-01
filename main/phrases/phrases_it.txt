@@ -254,6 +254,14 @@ assolutamente no
 non escluderlo
 mai
 
+[s_cancel]
+# Dette da sole: la domanda posta (modello, lingua, città...) è abbandonata e l'assistente ascolta di nuovo
+annulla
+stop
+basta
+lascia perdere
+lascia stare
+
 [s_courtesy]
 # Parole ammesse dopo la risposta di una scorciatoia ("parla inglese per favore")
 per favore

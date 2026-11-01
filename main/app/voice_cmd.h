@@ -58,8 +58,14 @@ bool voice_cmd_is_goodbye(const char *text);
 /** The last reply asked the user a question (provider, model, town...): its answer is listened for */
 bool voice_cmd_waiting_answer(void);
 
-/** That question is dropped (double tap): its answer is no longer listened for */
+/** That question is dropped (double tap, "abandon"): its answer is no longer listened for */
 void voice_cmd_cancel_question(void);
+
+/**
+ * The reply that asked the question still waiting for its answer (gone to sleep without it): asked again when the
+ * assistant wakes up; NULL for none (or a question of the model test)
+ */
+const char *voice_cmd_question(void);
 
 /** The next answer is about going on with the conversation of the reasoning mode after a pause: yes / no */
 void voice_cmd_expect_resume(void);

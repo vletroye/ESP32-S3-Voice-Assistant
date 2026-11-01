@@ -160,6 +160,7 @@ typedef struct {
     const char *resume_ask;
     const char *resume_yes;
     const char *resume_no;
+    const char *cancelled;          /* "abandon", "stop": the question asked dropped, listened to again */
     const char *voice_choppy;       /* shown after a reply whose speech was cut (slow connection) */
     const char *speech_test_phrase; /* model test: spoken by each speech model, then transcribed */
     const char *test_tts_name;      /* %s: spoken name of a speech model ("la synthèse %s") */

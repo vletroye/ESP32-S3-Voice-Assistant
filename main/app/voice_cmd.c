@@ -100,6 +100,8 @@ static PHRASE_LIST(s_change_city);
 static PHRASE_LIST(s_answer_prefix);
 static PHRASE_LIST(s_yes);
 static PHRASE_LIST(s_no);
+/* "Abandon", "stop" said alone: the question asked is dropped, the assistant listens again */
+static PHRASE_LIST(s_cancel);
 
 /* Words allowed after the answer of a shortcut ("parle anglais s'il te plaît", "modèle 3 please") */
 static PHRASE_LIST(s_courtesy);
@@ -128,6 +130,14 @@ typedef enum {
 static asked_t s_asked = ASKED_NOTHING;
 static int64_t s_asked_us = 0;
 static char s_pending[48];
+/* The reply that asked the question (its list included): asked again when the assistant wakes up unanswered */
+static char *s_question = NULL;
+
+static void question_keep(const char *reply)
+{
+    free(s_question);
+    s_question = reply ? strdup(reply) : NULL;
+}
 
 /* Normalized text starts with one of the phrases (alone or followed by more words); length matched in *len */
 static bool starts_with(const char *norm, const char *const *phrases, size_t *len)
@@ -1128,18 +1138,27 @@ void voice_cmd_cancel_question(void)
     }
     s_asked = ASKED_NOTHING;
     s_asked_us = 0;
+    question_keep(NULL);
+}
+
+const char *voice_cmd_question(void)
+{
+    return s_asked != ASKED_NOTHING ? s_question : NULL;
 }
 
 void voice_cmd_expect_resume(void)
 {
     s_asked = CONFIRM_RESUME;
     s_asked_us = esp_timer_get_time();
+    question_keep(app_lang_get()->resume_ask);
 }
 
 void voice_cmd_expect_exclusion(void)
 {
     s_asked = CONFIRM_EXCLUDE;
     s_asked_us = esp_timer_get_time();
+    // Asked by the model test (not asked again); by an answer of the user: its reply, kept by voice_cmd_handle
+    question_keep(NULL);
 }
 
 static bool has_any(const char *norm, const phrase_list_t *list)
@@ -1216,7 +1235,7 @@ void voice_cmd_init(void)
         &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
         &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut, &s_change_stt, &s_change_tts,
         &s_new_conversation, &s_reasoning_on, &s_reasoning_off, &s_edit_config, &s_restart, &s_version, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
-        &s_answer_prefix, &s_yes, &s_no, &s_courtesy, &s_one_alone,
+        &s_answer_prefix, &s_yes, &s_no, &s_cancel, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
         phrases_of(lists[i]);
@@ -1551,7 +1570,7 @@ static voice_cmd_t ask_test_provider(const char *format, char **reply)
     return VOICE_CMD_ANSWERED;
 }
 
-voice_cmd_t voice_cmd_handle(const char *text, char **reply)
+static voice_cmd_t handle(const char *text, char **reply)
 {
     char norm[CMD_NORM_SIZE];
     app_text_normalize(text, norm, sizeof(norm));
@@ -1833,4 +1852,37 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
         return choose_voice(norm + len, reply);
     }
     return VOICE_CMD_NONE;
+}
+
+/* "Abandon", "stop", alone (or with "s'il te plaît") */
+static bool is_cancel(const char *norm)
+{
+    size_t len = 0;
+    if (!starts_with(norm, phrases_of(&s_cancel), &len)) {
+        return false;
+    }
+    const char *rest = norm + len + (norm[len] == ' ');
+    return !*rest || starts_with(rest, phrases_of(&s_courtesy), NULL);
+}
+
+voice_cmd_t voice_cmd_handle(const char *text, char **reply)
+{
+    char norm[CMD_NORM_SIZE];
+    app_text_normalize(text, norm, sizeof(norm));
+    // "Abandon", "stop": the question asked is dropped, then listened to again (before its answers: "stop" is not
+    // one, nor the radio's "stop" while a question waits)
+    if (s_asked != ASKED_NOTHING && is_cancel(norm)) {
+        voice_cmd_cancel_question();
+        *reply = reply_dup(app_lang_get()->cancelled);
+        return VOICE_CMD_LISTEN;
+    }
+    voice_cmd_t cmd = handle(text, reply);
+    if (cmd == VOICE_CMD_NONE && is_cancel(norm)) {
+        // Without a question (the radio's "stop" handled first): not for the model, listened to again
+        *reply = reply_dup(app_lang_get()->cancelled);
+        cmd = VOICE_CMD_LISTEN;
+    }
+    // A question asked: its reply kept, to ask it again if the assistant goes to sleep unanswered
+    question_keep(s_asked != ASKED_NOTHING ? *reply : NULL);
+    return cmd;
 }

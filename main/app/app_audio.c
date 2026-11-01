@@ -50,6 +50,7 @@ extern void assistant_listen_end(void);
 extern void assistant_listen_abort(void);
 extern void assistant_prewarm(void);
 extern bool assistant_resume_ask(void);
+extern bool assistant_question_ask(void);
 extern void assistant_reply_stop(void);
 extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
 
@@ -358,6 +359,10 @@ void sr_handler_task(void *pvParam)
             assistant_reply_stop();
             // The reasoning mode after a pause: asked first whether to go on with the conversation
             if (assistant_resume_ask()) {
+                continue;
+            }
+            // Woken up (not a follow-up) with a question unanswered: asked again first
+            if (!result.followup && assistant_question_ask()) {
                 continue;
             }
             audio_record_start();

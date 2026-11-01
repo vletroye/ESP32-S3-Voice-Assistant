@@ -253,6 +253,15 @@ keep it
 don t exclude it
 never
 
+[s_cancel]
+# Said alone: the question asked (model, language, town...) is dropped and the assistant listens again
+# (without a question asked, the assistant listens again; "stop" first stops a radio playing)
+cancel
+abort
+stop
+never mind
+forget it
+
 [s_courtesy]
 # Words allowed after the answer of a shortcut ("speak French please")
 please

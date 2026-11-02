@@ -750,23 +750,17 @@ static size_t s_model_row_count = 0;
 static lv_obj_t *s_model_test_box = NULL;
 static int s_model_test_row = -1;
 static lv_obj_t *s_model_test_wait = NULL;
-static bool s_busy_saving = false;     /* that screen shown for the saves, as the assistant went to sleep */
 
 /*
- * While the device is busy (a model tested alone, the saves as it goes to sleep): over the whole screen (nothing
- * can be touched), the robot's head in a ring, and a text; then removed
+ * While a model is tested alone: over the whole screen (nothing can be touched), the robot's head looking from
+ * side to side in a turning ring, and a text; removed when the test is done
  */
 static void model_test_eyes_anim_cb(void *eyes, int32_t x)
 {
     lv_obj_set_x(eyes, x);
 }
 
-/*
- * animated: the ring turns and the eyes move (a model tested alone: the CPU is free meanwhile); else all still on
- * an opaque background, drawn once (the saves: an animation over the sleep screen took the CPU from them, 28 s
- * instead of 5)
- */
-static void busy_show(const char *text, bool animated)
+static void busy_show(const char *text)
 {
     if (s_model_test_wait) {
         return;
@@ -778,15 +772,9 @@ static void busy_show(const char *text, bool animated)
     lv_obj_add_flag(wait, LV_OBJ_FLAG_CLICKABLE);     // the touches stop here
     lv_obj_clear_flag(wait, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(wait, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(wait, animated ? LV_OPA_80 : LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(wait, LV_OPA_80, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_t *ring = animated ? lv_spinner_create(wait, 1200, 70) : lv_arc_create(wait);
-    if (!animated) {
-        // Still: a quarter of the ring lit, as the spinner shows it
-        lv_arc_set_bg_angles(ring, 0, 360);
-        lv_arc_set_angles(ring, 270, 0);
-        lv_obj_remove_style(ring, NULL, LV_PART_KNOB);
-    }
+    lv_obj_t *ring = lv_spinner_create(wait, 1200, 70);
     lv_obj_set_size(ring, 156, 156);
     lv_obj_align(ring, LV_ALIGN_CENTER, 0, -18);
     lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
@@ -805,18 +793,16 @@ static void busy_show(const char *text, bool animated)
     lv_obj_t *eyes = lv_img_create(screen);
     lv_img_set_src(eyes, &ui_img_listen_body_eyes_1_png);
     lv_obj_align(eyes, LV_ALIGN_CENTER, 0, 0);
-    if (animated) {
-        lv_anim_t a;
-        lv_anim_init(&a);
-        lv_anim_set_var(&a, eyes);
-        lv_anim_set_exec_cb(&a, model_test_eyes_anim_cb);
-        lv_anim_set_values(&a, -12, 12);
-        lv_anim_set_time(&a, 900);
-        lv_anim_set_playback_time(&a, 900);
-        lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-        lv_anim_start(&a);
-    }
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, eyes);
+    lv_anim_set_exec_cb(&a, model_test_eyes_anim_cb);
+    lv_anim_set_values(&a, -12, 12);
+    lv_anim_set_time(&a, 900);
+    lv_anim_set_playback_time(&a, 900);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_start(&a);
 
     lv_obj_t *label = lv_label_create(wait);
     lv_label_set_text(label, text);
@@ -879,31 +865,10 @@ static void model_check_cb(lv_event_t *e)
 
 static void busy_hide(void)
 {
-    s_busy_saving = false;
     if (s_model_test_wait) {
         lv_obj_del(s_model_test_wait);      // its animations with it
         s_model_test_wait = NULL;
     }
-}
-
-void ui_ctrl_saving_over(void)
-{
-    bsp_display_lock(0);
-    if (s_busy_saving) {
-        busy_hide();
-    }
-    bsp_display_unlock();
-}
-
-void ui_ctrl_busy(const char *text)
-{
-    bsp_display_lock(0);
-    if (text) {
-        busy_show(text, false);
-    } else {
-        busy_hide();
-    }
-    bsp_display_unlock();
 }
 
 /* The test done (main task): the list shown again with its time */
@@ -929,7 +894,7 @@ static void model_test_box_cb(lv_event_t *e)
         lv_label_set_text(s_model_rows[index].time, "...");
         char text[96];
         snprintf(text, sizeof(text), app_lang_get()->settings_testing, s_model_rows[index].name);
-        busy_show(text, true);
+        busy_show(text);
     } else {
         s_model_test_row = -1;
     }
@@ -2210,11 +2175,8 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
 
     switch (panel) {
     case UI_CTRL_PANEL_SLEEP:
-        // Something to save (the main task does it within two seconds): the saving screen at once, the robot asleep
-        // only once it is done (it showed for a moment before)
+        // Something to save: by the main task at once (not within the next second)
         if (llm_history_unsaved() || costs_unsaved()) {
-            busy_show(app_lang_get()->saving, false);
-            s_busy_saving = true;
             assistant_save_soon();
         }
         show_panel = ui_PanelSleep;
@@ -2227,10 +2189,6 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         radio_on_sleep();
         break;
     case UI_CTRL_PANEL_LISTEN:
-        // Woken up before the saves started: they wait for the next sleep, the saving screen goes
-        if (s_busy_saving) {
-            busy_hide();
-        }
         if (current_panel == UI_CTRL_PANEL_SLEEP) {
             costs_conversation_start();     // woken up: the cost of the conversation starts again
         }

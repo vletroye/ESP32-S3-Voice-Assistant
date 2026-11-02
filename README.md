@@ -1853,13 +1853,8 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 8 s
   (with the history of the last exchanges).
 - **Saved as it goes to sleep**: the conversation (restored after a restart) and the costs are written to the flash
-  as the assistant goes back to sleep (the saving screen comes at once, instead of the sleeping robot, which shows
-  once the saves are done; woken up before they start, they wait for the next sleep). They go to the LittleFS
-  partition `state` (a fraction of a second; on SPIFFS they took 2 to 9 s); everything stops meanwhile (a wake word,
-  a touch or a question would be lost), so the robot's head in a ring covers the screen with
-  "Sauvegarde en cours..." / "Saving..." (`saving` of `LANG_<XX>.TXT`) until it is done. It is drawn once and stays
-  still, on an opaque background, then the display is stopped until the saves are done (the screen keeps that
-  picture): the sleep screen's animations, drawn beneath, made the saves 3 to 5 times longer.
+  as soon as the assistant goes back to sleep, never during an exchange: on the LittleFS partition `state`, in a
+  fraction of a second (on SPIFFS it took 2 to 9 s, everything stopping meanwhile).
 - **Lists shown, not read** (`Read_lists = off`, the default): the replies offering languages, providers, models or
   voices say their question and show the list without reading it. The assistant listens at once, but the reply
   stays on screen for the time it takes to read the list (its characters at `Scroll_speed`, at most 20 s): the

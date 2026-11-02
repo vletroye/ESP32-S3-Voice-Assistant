@@ -84,8 +84,6 @@ static uint32_t reading_ms(size_t chars)
  * nothing has been heard or played for this long, i.e. after the follow-up listening, not during it
  */
 #define SAVE_AFTER_SILENCE_MS           300
-/* The saving screen given this long to be drawn before the display is stopped for the saves */
-#define SAVE_SHOWN_MS                   150
 /* A language added to Languages: its message stays this long before the configuration mode */
 #define NEW_LANGUAGE_MESSAGE_MS         6000
 /* Homey's tools were added */
@@ -1370,27 +1368,12 @@ void app_main()
         // progress, not listening, nothing played for a while): never during an exchange, follow-up included.
         // The saves do nothing when unchanged. This task's stack is in internal RAM, as flash writes need.
         if (ui_ctrl_is_asleep() && !s_reply_active && !record_flag && tts_stream_is_silent(SAVE_AFTER_SILENCE_MS)) {
-            // Seconds in the flash, everything stopping meanwhile (a wake word or a question then lost): the
-            // robot's head over the sleep screen (still: an animation took the CPU from the saves) says it is not the moment
-            bool long_saves = llm_history_unsaved() || costs_unsaved();
-            if (long_saves) {
-                ui_ctrl_busy(app_lang_get()->saving);
-                // Drawn, then the display stopped (its lock held): the screen keeps that picture and the CPU goes
-                // to the saves (the sleep screen's animations, drawn beneath, made them 3 to 5 times longer)
-                vTaskDelay(pdMS_TO_TICKS(SAVE_SHOWN_MS));
-                bsp_display_lock(0);
-            }
+            // (a fraction of a second on LittleFS, file_state.h)
             llm_history_save();
             app_volume_save();
             weather_places_save();
             // The costs counted, saved (the conversation's stays shown until the next wake-up)
             costs_save();
-            if (long_saves) {
-                bsp_display_unlock();
-                ui_ctrl_busy(NULL);
-            }
-            // (shown as it went to sleep, also when the saves had nothing left to do)
-            ui_ctrl_saving_over();
         }
         if (seconds % 30) {
             continue;

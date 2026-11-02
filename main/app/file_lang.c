@@ -199,7 +199,6 @@ static const lang_field_t s_fields[] = {
     { "clock_hidden", offsetof(app_lang_t, clock_hidden), FIELD_TEXT, 1 },
     { "version_reply", offsetof(app_lang_t, version_reply), FIELD_TEXT, 1 },
     { "mark_done", offsetof(app_lang_t, mark_done), FIELD_TEXT, 1 },
-    { "saving", offsetof(app_lang_t, saving), FIELD_TEXT, 1 },
     { "home_rules", offsetof(app_lang_t, home_rules), FIELD_TEXT, 1 },
     { "mark_off", offsetof(app_lang_t, mark_off), FIELD_TEXT, 1 },
     { "new_conversation", offsetof(app_lang_t, new_conversation), FIELD_TEXT, 1 },

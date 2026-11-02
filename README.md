@@ -326,7 +326,7 @@ LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scr
   the list; the time goes into `SPEED.TXT` as for the other tests. A transcription model is given the audio of the
   speech model in use.
 
-Sixth page: **Debug**, the [debug traces](#410-debug-traces-debugtxt): **Traces** on or off (saved as `Debug`),
+Sixth page: **Debug**, the [debug traces](#410-debug-traces-debugtxt): **Traces** on or off (saved as `Debug`, so that a start-up can be traced; the Dump sets it back to off),
 the lines and KB kept so far, and **Dump vers USB** / **Dump to USB**: the traces are written, then the device restarts
 in configuration mode, where they are `DEBUG.TXT` (with no PC connected: written anyway, and "Connecte-moi à ton
 PC." / "Connect me to your PC." is shown).
@@ -743,7 +743,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `OpenRouter_free` | How many free OpenRouter models are offered, `0` to `5`: the most used ones of its live list (read once a day), besides Free (auto); the excluded ones (`AGENTS.INI`) are not counted, the next ones take their place. `0`: none, the list is not read (only Free (auto)). Replaces the `OpenRouter_free = on / off` and `Free_models` of older versions, merged into it by the configuration mode (`off` → `0`, `on` → the value of `Free_models`) | `3` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
-| `Debug` | `on`: the [debug traces](#410-debug-traces-debugtxt) are kept in memory, to be dumped as `DEBUG.TXT` (also switched on the Debug page of the Settings screen) | `off` |
+| `Debug` | `on`: the [debug traces](#410-debug-traces-debugtxt) are kept in memory from the start-up, to be dumped as `DEBUG.TXT` (also switched on the Debug page of the Settings screen); the Dump sets it back to `off` | `off` |
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
@@ -1778,7 +1778,8 @@ To find out afterwards what happened during a test session (a command not unders
 without a PC connected while testing:
 
 1. Turn the traces on: **Debug** page of the Settings screen (sixth page), or `Debug = on` in `CONFIG.INI`. They
-   stay on after a restart until turned off.
+   stay on after a restart (a start-up can be traced) until the **Dump**, which turns them off for the next start
+   (forgotten on, they would take memory and time for nothing).
 2. Use the assistant. When something goes wrong, put a **mark** right after: a **long press** anywhere on the
    assistant's screen (asleep, listening, thinking or answering; "Repère 3 noté." / "Mark 3 noted." is shown), or
    say "**note ça**" / "**mark this**". Note what you noticed with the number of the mark, or the time.

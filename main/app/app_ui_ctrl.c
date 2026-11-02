@@ -1128,6 +1128,10 @@ static void debug_switch_cb(lv_event_t *e)
 static void dump_clicked_cb(lv_event_t *e)
 {
     lv_label_set_text(s_dump_label, "...");
+    // Dumped: the traces off from the next start (they go on until then), not left on by mistake to take memory
+    // and time for nothing; switched on again here to trace a start-up
+    settings_get_parameter()->debug = false;
+    settings_save_str("Debug", "off");
     assistant_request_dump();
 }
 

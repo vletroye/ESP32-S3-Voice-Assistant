@@ -59,7 +59,7 @@ void ui_ctrl_show_message(const char *text);
 void ui_ctrl_toast(const char *text);
 
 /**
- * @brief Over the whole screen (nothing can be touched), the robot's head looking around in a turning ring with
+ * @brief Over the whole screen (nothing can be touched), the robot's head in a still ring with
  *        this text ("Sauvegarde en cours..."), while the device is busy; NULL takes it away
  */
 void ui_ctrl_busy(const char *text);

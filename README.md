@@ -1841,8 +1841,9 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
   (with the history of the last exchanges).
 - **Saved as it goes to sleep**: the conversation (restored after a restart) and the costs are written to the flash
   once the assistant sleeps again. It takes a few seconds and everything stops meanwhile (a wake word, a touch or a
-  question would be lost), so the robot's head, looking around in a turning ring, covers the screen with
-  "Sauvegarde en cours..." / "Saving..." (`saving` of `LANG_<XX>.TXT`) until it is done.
+  question would be lost), so the robot's head in a ring covers the screen with
+  "Sauvegarde en cours..." / "Saving..." (`saving` of `LANG_<XX>.TXT`) until it is done. It is drawn once and stays
+  still, on an opaque background: animated over the sleep screen, it took the CPU from the saves (28 s instead of 5).
 - **Lists shown, not read** (`Read_lists = off`, the default): the replies offering languages, providers, models or
   voices say their question and show the list without reading it. The assistant listens at once, but the reply
   stays on screen for the time it takes to read the list (its characters at `Scroll_speed`, at most 20 s): the

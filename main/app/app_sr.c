@@ -17,6 +17,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "app_sr.h"
+#include "debug_trace.h"
 #include "esp_mn_speech_commands.h"
 #include "esp_process_sdkconfig.h"
 #include "esp_afe_sr_models.h"
@@ -157,6 +158,7 @@ static void audio_detect_task(void *arg)
             continue;
         }
         if (res->wakeup_state == WAKENET_DETECTED) {
+            debug_trace_turn("wake word");
             ESP_LOGI(TAG,  "wakeword detected (model %d)", res->wakenet_model_index);
             sr_result_t result = {
                 .wakenet_mode = WAKENET_DETECTED,
@@ -184,6 +186,7 @@ static void audio_detect_task(void *arg)
                     s_followup_keep_reply = false;
                 }
                 manul_detect_flag = false;
+                debug_trace_turn(followup ? "listening again after the reply" : "tap");
                 sr_result_t result = {
                     .wakenet_mode = WAKENET_DETECTED,
                     .state = ESP_MN_STATE_DETECTING,
@@ -207,6 +210,9 @@ static void audio_detect_task(void *arg)
             }
 
             if (local_state != res->vad_state) {
+                TRACE(TAG, "voice activity: %s at %" PRIu32 " ms, volume %.1f dBFS",
+                      res->vad_state == VAD_SPEECH ? "speech" : "silence",
+                      pdTICKS_TO_MS(xTaskGetTickCount() - listen_start), res->data_volume);
                 local_state = res->vad_state;
                 frame_keep = 0;
             } else {

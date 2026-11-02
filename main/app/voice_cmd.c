@@ -24,6 +24,7 @@
 #include "tts_stream.h"
 #include "app_ui_ctrl.h"
 #include "driver/usb_serial_jtag.h"
+#include "debug_trace.h"
 #include "model_test.h"
 #include "ai_providers.h"
 #include "file_country.h"
@@ -93,6 +94,7 @@ static PHRASE_LIST(s_edit_config);
 static PHRASE_LIST(s_restart);
 /* "Quelle est ta version ?": the version of the firmware (version.txt, built in) */
 static PHRASE_LIST(s_version);
+static PHRASE_LIST(s_mark);
 static PHRASE_LIST(s_clock_on);
 static PHRASE_LIST(s_clock_off);
 static PHRASE_LIST(s_open_settings);
@@ -1250,7 +1252,7 @@ void voice_cmd_init(void)
         &s_test_llm, &s_fastest_models, &s_radio_station, &s_radio_music,
         &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
         &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut, &s_change_stt, &s_change_tts,
-        &s_new_conversation, &s_reasoning_on, &s_reasoning_off, &s_edit_config, &s_restart, &s_version, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
+        &s_new_conversation, &s_reasoning_on, &s_reasoning_off, &s_edit_config, &s_restart, &s_version, &s_mark, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_cancel, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
@@ -1807,6 +1809,20 @@ static voice_cmd_t handle(const char *text, char **reply)
         *reply = voice_list();
         return VOICE_CMD_ANSWERED;
     }
+    // "Note ça", alone: a mark in the debug traces, where a problem was just noticed
+    if (starts_with(norm, phrases_of(&s_mark), &len)) {
+        const char *rest = norm + len + (norm[len] == ' ');
+        if (!*rest || starts_with(rest, phrases_of(&s_courtesy), NULL)) {
+            if (!debug_trace_on()) {
+                *reply = reply_dup(app_lang_get()->mark_off);
+                return VOICE_CMD_ANSWERED;
+            }
+            char *text = NULL;
+            asprintf(&text, app_lang_get()->mark_done, debug_trace_mark("said"));
+            *reply = text ? text : reply_dup("");
+            return VOICE_CMD_ANSWERED;
+        }
+    }
     if (starts_with(norm, phrases_of(&s_version), NULL)) {
         char *text = NULL;
         asprintf(&text, app_lang_get()->version_reply, esp_app_get_description()->version);
@@ -1900,5 +1916,7 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply)
     }
     // A question asked: its reply kept, to ask it again if the assistant goes to sleep unanswered
     question_keep(s_asked != ASKED_NOTHING ? *reply : NULL);
+    TRACE(TAG, "\"%s\": %s %d%s%.80s", norm, cmd == VOICE_CMD_NONE ? "for the model" : "voice command", (int)cmd,
+          *reply ? ", reply: " : "", *reply ? *reply : "");
     return cmd;
 }

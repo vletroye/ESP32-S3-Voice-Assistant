@@ -30,6 +30,7 @@
 #include "llm.h"
 #include "file_memory.h"
 #include "voice_cmd.h"
+#include "debug_trace.h"
 #include "file_phrases.h"
 #include "ai_provider_openrouter_free.h"
 #include "ai_providers.h"
@@ -105,6 +106,8 @@ static volatile bool s_reply_local_cmd = false;
 /* The reply ended with a goodbye ("Au revoir !", "Bonne soirée."): sleep and a new conversation once spoken */
 static volatile bool s_reply_goodbye = false;
 static volatile bool s_reset_requested = false;
+/* Dump button of the Debug page: the traces written, then the configuration mode (with a PC) */
+static volatile bool s_dump_requested = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -155,6 +158,9 @@ static void on_sentence(const char *sentence, void *ctx);
 static void speak_message(const char *message);
 static char *speech_refused_text(llm_speech_kind_t kind);
 
+static int64_t s_first_text_us = 0;
+static int64_t elapsed_ms(int64_t start_us);
+
 static void on_llm_text(const char *delta, void *ctx)
 {
     reply_view_t *v = (reply_view_t *)ctx;
@@ -175,6 +181,10 @@ static void on_llm_text(const char *delta, void *ctx)
             reply_view_refresh(v);
         }
         return;
+    }
+    if (!s_first_text_us) {
+        s_first_text_us = esp_timer_get_time();
+        TRACE(TAG, "first text of the model %lld ms after the transcript", elapsed_ms(s_reply_t0));
     }
     sentence_splitter_feed(&s_splitter, delta);
     reply_view_append(v, delta);
@@ -230,6 +240,8 @@ static bool transcription_is_noise(const char *text)
 static void on_sentence(const char *sentence, void *ctx)
 {
     s_reply_goodbye = voice_cmd_ends_with_goodbye(sentence);
+    TRACE(TAG, "sentence to the speech %lld ms after the transcript: \"%.60s%s\"", elapsed_ms(s_reply_t0), sentence,
+          strlen(sentence) > 60 ? "..." : "");
     tts_stream_say(sentence);
 }
 
@@ -425,6 +437,7 @@ void assistant_test_done(void)
 /* Start a spoken answer (its sentences follow with tts_stream_say) */
 static void reply_begin(void)
 {
+    s_first_text_us = 0;
     s_reply_active = true;
     s_reply_local_cmd = false;
     s_reply_goodbye = false;
@@ -708,6 +721,11 @@ static void show_lang_problems(void)
 void assistant_request_config(void)
 {
     s_config_requested = true;      // the main task saves and restarts in configuration mode
+}
+
+void assistant_request_dump(void)
+{
+    s_dump_requested = true;        // done by the main task
 }
 
 void assistant_set_language(const char *code)
@@ -1138,6 +1156,8 @@ void app_main()
     ESP_ERROR_CHECK(ret);
     ESP_ERROR_CHECK(settings_read_parameter_from_nvs());
     sys_param = settings_get_parameter();
+    // Debug traces: from now on, every log line kept (DEBUG.TXT)
+    debug_trace_set(sys_param->debug);
 
     bsp_spiffs_mount();
     // The backup of CONFIG.INI made by the factory reset of an older firmware (keys included): no longer kept
@@ -1290,6 +1310,16 @@ void app_main()
         if (s_reset_requested) {
             s_reset_requested = false;
             llm_reset();
+        }
+        if (s_dump_requested) {
+            s_dump_requested = false;
+            if (usb_serial_jtag_is_connected()) {
+                s_config_requested = true;      // dumped by settings_factory_reset()
+            } else {
+                // No PC to show the drive: written anyway, DEBUG.TXT of the next configuration mode
+                debug_trace_dump();
+                ui_ctrl_toast(app_lang_get()->config_need_pc);
+            }
         }
         if (s_config_requested) {
             s_config_requested = false;

@@ -212,6 +212,12 @@ welche version (hast du|bist du|der firmware)
 (sag|nenn) mir (deine|die) [firmware ]version
 firmware version
 
+[s_mark]
+# Mit den Debug-Traces an (Debug = on), allein gesagt: eine Markierung in den Traces, gleich nach einem Problem
+(markiere|notiere) (das|dies|das problem)
+(setz|setze|mach) eine markierung
+markierung
+
 [s_clock_on]
 # Allein gesagt: Uhrzeit und Datum werden auf dem Ruhebildschirm angezeigt (Show_clock von CONFIG.INI)
 (zeige|zeig) die (uhrzeit|uhr)[ an]

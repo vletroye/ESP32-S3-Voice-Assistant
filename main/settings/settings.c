@@ -12,6 +12,7 @@
 #include <strings.h>
 #include <stdio.h>
 #include "esp_heap_caps.h"
+#include "debug_trace.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -45,6 +46,10 @@ esp_err_t settings_factory_reset(void)
 {
     const esp_partition_t *update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
     ESP_LOGI(TAG, "Switch to partition UF2");
+    // The traces, if on, to be read on the configuration drive (DEBUG.TXT)
+    if (debug_trace_on()) {
+        debug_trace_dump();
+    }
     esp_ota_set_boot_partition(update_partition);
     // No pop from the speaker when the audio output stops with the restart
     bsp_codec_mute_set(true);
@@ -293,6 +298,8 @@ esp_err_t settings_read_parameter_from_nvs(void)
     g_sys_param.sleep_after_cmd = read_bool("Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD);
     // Lists of the voice commands read aloud
     g_sys_param.read_lists = read_bool("Read_lists", CONFIG_ASSISTANT_READ_LISTS);
+    // Debug traces (also switched on the Debug page of the Settings screen)
+    g_sys_param.debug = read_bool("Debug", CONFIG_ASSISTANT_DEBUG);
 
     // Free OpenRouter models offered (Free_models of CONFIG.INI, 0 to 5, the most used; 0: none, the list is not
     // read), kept as OpenRouter_free. An older version's "on" / "off" there (until the configuration mode merges

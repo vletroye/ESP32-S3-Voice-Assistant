@@ -196,6 +196,12 @@ riavvio
 (dimmi|dammi) (la tua|la) versione[ del firmware]
 versione del firmware
 
+[s_mark]
+# Con le tracce di debug attive (Debug = on), detta da sola: un segno nelle tracce, subito dopo un problema
+(segna|annota) (questo|quello|il problema)
+(metti|aggiungi) un segno
+segno
+
 [s_clock_on]
 # Detta da sola: l'ora e la data appaiono sullo schermo di standby (Show_clock di CONFIG.INI)
 (mostra|visualizza|rimetti|attiva) (l ora|l orologio)

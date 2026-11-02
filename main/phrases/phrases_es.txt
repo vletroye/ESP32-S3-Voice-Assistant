@@ -202,6 +202,12 @@ reiniciar
 (dime|dame) (tu|la) versión[ del firmware]
 versión del firmware
 
+[s_mark]
+# Con las trazas de depuración activadas (Debug = on), dicha sola: una marca en las trazas, justo tras un problema
+(marca|anota) (esto|eso|el problema)
+(pon|añade|coloca) una marca
+marca
+
 [s_clock_on]
 # Dicha sola: la hora y la fecha se muestran en la pantalla de reposo (Show_clock de CONFIG.INI)
 (muestra|enseña|ensena|pon|activa) (la hora|el reloj)

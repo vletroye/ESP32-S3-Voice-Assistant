@@ -56,6 +56,7 @@ typedef struct {
     bool show_clock;                  /* Time and date shown while the assistant sleeps. */
     bool sleep_after_cmd;             /* Back to sleep after a voice command handled locally (no follow-up). */
     bool read_lists;                  /* Lists of the voice commands read aloud, not only shown (after "::"). */
+    bool debug;                       /* Debug traces kept in memory (debug_trace.c), dumped as DEBUG.TXT. */
     char languages[160];              /* Languages offered: "FR:Français, EN:English" */
     char currency[8];                 /* Of the prices of AGENTS.INI and of the costs: "EUR", "USD"... */
     int free_models;                  /* How many of them are offered (0..5, the most used), besides "openrouter/free". */

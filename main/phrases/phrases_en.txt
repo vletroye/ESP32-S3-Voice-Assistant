@@ -196,6 +196,12 @@ what (firmware |)version (are you|do you run|is installed)
 (tell|give) me (your|the) [firmware ]version
 firmware version
 
+[s_mark]
+# With the debug traces on (Debug = on), said alone: a mark in the traces, just after a problem
+mark (this|that|it|the problem)
+(add|put|set|place) a (mark|marker)
+(mark|marker)
+
 [s_clock_on]
 # Said alone: the time and date are shown on the sleep screen (Show_clock of CONFIG.INI)
 (show|display|turn on) the (time|clock)

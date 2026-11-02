@@ -95,6 +95,13 @@ const char *board_flash_text_fat_name(int text);
 char *board_flash_text_content(int text);
 char *board_flash_text_dummy(int text);
 
+/*
+ * [Voice assistant] The debug traces dumped by the assistant (/spiffs/debug.txt), shown read-only as DEBUG.TXT:
+ * its content (PSRAM) and size, NULL when there is none
+ */
+#define CFG_UF2_DEBUG_MAX           (1280 * 1024)
+const char *board_flash_debug_content(uint32_t *size);
+
 //--------------------------------------------------------------------+
 // Basic API
 //--------------------------------------------------------------------+

@@ -25,6 +25,7 @@
 #include "assistant.h"
 #include "voice_cmd.h"
 #include "model_test.h"
+#include "debug_trace.h"
 #include "ai_providers.h"
 #include "file_costs.h"
 #include "radio.h"
@@ -322,8 +323,8 @@ static void settings_toast_timer_cb(lv_timer_t *timer)
     lv_timer_del(timer);
 }
 
-/* Show the confirmation over the screen for a moment: the settings apply at once, without restarting */
-static void settings_saved(void)
+/* A text over the screen for a moment (under the display lock) */
+static void toast_show(const char *text)
 {
     lv_obj_t *overlay = lv_obj_create(lv_scr_act());
     lv_obj_set_size(overlay, lv_pct(100), lv_pct(100));
@@ -335,13 +336,43 @@ static void settings_saved(void)
     lv_obj_set_style_bg_opa(overlay, LV_OPA_80, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_t *label = lv_label_create(overlay);
-    lv_label_set_text(label, app_lang_get()->settings_saved);
+    lv_label_set_text(label, text);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label, 280);
     lv_obj_set_style_text_font(label, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_center(label);
 
     lv_timer_create(settings_toast_timer_cb, SETTINGS_RESTART_DELAY_MS, overlay);
+}
+
+void ui_ctrl_toast(const char *text)
+{
+    bsp_display_lock(0);
+    toast_show(text);
+    bsp_display_unlock();
+}
+
+/* Show the confirmation over the screen for a moment: the settings apply at once, without restarting */
+static void settings_saved(void)
+{
+    toast_show(app_lang_get()->settings_saved);
+}
+
+/* With the debug traces on: a long press on the assistant's screen puts a mark in them (and says its number) */
+static void mark_long_pressed_cb(lv_event_t *e)
+{
+    static int64_t last_us = 0;
+    int64_t now = esp_timer_get_time();
+    // Once per press (the text of the reply and its panel both get it)
+    if (!debug_trace_on() || now - last_us < 1000 * 1000) {
+        return;
+    }
+    last_us = now;
+    char text[64];
+    snprintf(text, sizeof(text), app_lang_get()->mark_done, debug_trace_mark("long press"));
+    toast_show(text);
 }
 
 /* Enable the Save button when the selection differs from the stored settings */
@@ -605,13 +636,16 @@ static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width
 
 /*
  * Pages of the Settings screen, browsed with the arrows at the bottom (looping): 1. language and model,
- * 2. speech, transcription and voice, 3. to 5. the LLM, STT and TTS models. The rows of the other pages are hidden
+ * 2. speech, transcription and voice, 3. to 5. the LLM, STT and TTS models, 6. the debug traces. The rows of the other
+ * pages are hidden
  * (the panel's flex layout skips them).
  */
-#define SETTINGS_PAGES          5
+#define SETTINGS_PAGES          6
 #define SETTINGS_PAGE_MODELS    2       /* the first page of the models (LLM, then STT, then TTS) */
-#define SETTINGS_ROWS_MAX       8
+#define SETTINGS_PAGE_DEBUG     5
+#define SETTINGS_ROWS_MAX       12
 static void model_list_show(int page);
+static void debug_page_refresh(void);
 static lv_obj_t *s_settings_rows[SETTINGS_ROWS_MAX];
 static uint8_t s_settings_row_page[SETTINGS_ROWS_MAX];
 static size_t s_settings_row_count = 0;
@@ -642,6 +676,7 @@ static void settings_page_show(int page)
     s_settings_page = (page + SETTINGS_PAGES) % SETTINGS_PAGES;
     confirm_button_update(s_settings_changed);
     model_list_show(s_settings_page);
+    debug_page_refresh();
     for (size_t i = 0; i < s_settings_row_count; i++) {
         if (s_settings_row_page[i] == s_settings_page) {
             lv_obj_clear_flag(s_settings_rows[i], LV_OBJ_FLAG_HIDDEN);
@@ -1006,7 +1041,8 @@ static void model_list_show(int page)
     const char *titles[3] = { lang->settings_llm_list, lang->settings_stt_list, lang->settings_tts_list };
     int list = page - SETTINGS_PAGE_MODELS;
     if (ui_LabelSettingsTile) {
-        lv_label_set_text(ui_LabelSettingsTile, list >= 0 && list < 3 ? titles[list] : lang->settings_title);
+        lv_label_set_text(ui_LabelSettingsTile, list >= 0 && list < 3 ? titles[list] :
+                          page == SETTINGS_PAGE_DEBUG ? lang->settings_debug_title : lang->settings_title);
     }
     for (int i = 0; i < 3; i++) {
         if (s_model_lists[i]) {
@@ -1045,6 +1081,88 @@ static void model_list_create(int index)
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
     s_model_lists[index] = list;
     settings_row_add(list, SETTINGS_PAGE_MODELS + index);
+}
+
+/* ---------- Debug page: the traces on or off (Debug), what they keep, and the Dump button ---------- */
+
+static lv_obj_t *s_debug_switch = NULL;
+static lv_obj_t *s_debug_label = NULL;
+static lv_obj_t *s_debug_info = NULL;
+static lv_obj_t *s_dump_label = NULL;
+
+static void debug_page_refresh(void)
+{
+    if (!s_debug_info) {
+        return;
+    }
+    const app_lang_t *lang = app_lang_get();
+    if (debug_trace_on()) {
+        lv_obj_add_state(s_debug_switch, LV_STATE_CHECKED);
+    } else {
+        lv_obj_clear_state(s_debug_switch, LV_STATE_CHECKED);
+    }
+    size_t lines, bytes;
+    debug_trace_stats(&lines, &bytes);
+    char text[64];
+    snprintf(text, sizeof(text), lang->settings_debug_info, (unsigned)lines, (unsigned)((bytes + 1023) / 1024));
+    lv_label_set_text(s_debug_info, text);
+    lv_label_set_text(s_debug_label, lang->settings_debug);
+    lv_label_set_text(s_dump_label, lang->settings_dump);
+}
+
+static void debug_switch_cb(lv_event_t *e)
+{
+    bool on = lv_obj_has_state(s_debug_switch, LV_STATE_CHECKED);
+    settings_get_parameter()->debug = on;
+    settings_save_str("Debug", on ? "on" : "off");
+    debug_trace_set(on);
+    debug_page_refresh();
+}
+
+static void dump_clicked_cb(lv_event_t *e)
+{
+    lv_label_set_text(s_dump_label, "...");
+    assistant_request_dump();
+}
+
+/* A row of the Debug page (no dropdown): the switch, the lines kept, or the button */
+static lv_obj_t *debug_row_create(lv_flex_align_t align)
+{
+    lv_obj_t *row = lv_obj_create(ui_PanelSettings);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, lv_pct(100), lv_pct(19));
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, align, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_left(row, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(row, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    settings_row_add(row, SETTINGS_PAGE_DEBUG);
+    return row;
+}
+
+static void debug_page_create(void)
+{
+    lv_obj_t *row = debug_row_create(LV_FLEX_ALIGN_SPACE_BETWEEN);
+    s_debug_label = lv_label_create(row);
+    lv_obj_set_style_text_color(s_debug_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(s_debug_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    s_debug_switch = lv_switch_create(row);
+    lv_obj_set_style_bg_color(s_debug_switch, lv_color_hex(0x6E47BD), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(s_debug_switch, debug_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    row = debug_row_create(LV_FLEX_ALIGN_START);
+    s_debug_info = lv_label_create(row);
+    lv_obj_set_style_text_color(s_debug_info, lv_color_hex(MODEL_ROW_DIM), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(s_debug_info, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    row = debug_row_create(LV_FLEX_ALIGN_CENTER);
+    lv_obj_t *btn = lv_btn_create(row);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x6E47BD), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_event_cb(btn, dump_clicked_cb, LV_EVENT_CLICKED, NULL);
+    s_dump_label = lv_label_create(btn);
+    lv_obj_set_style_text_font(s_dump_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_center(s_dump_label);
+    debug_page_refresh();
 }
 
 static void settings_screen_setup(void)
@@ -1105,6 +1223,8 @@ static void settings_screen_setup(void)
     for (int i = 0; i < 3; i++) {
         model_list_create(i);
     }
+    // Page 6: the debug traces
+    debug_page_create();
 
     // Arrows to the previous / next page at the bottom left and right
     settings_arrow_create(LV_ALIGN_BOTTOM_LEFT, 10, LV_SYMBOL_LEFT, -1);
@@ -1139,6 +1259,7 @@ static void ui_ctrl_apply_texts(void)
         lv_label_set_text(s_settings_speech[1].label, lang->settings_tts);
         lv_label_set_text(s_save_label, lang->settings_confirm);
         model_list_show(s_settings_page);   // the title of the page
+        debug_page_refresh();
     }
     label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);
     label_localize(ui_LabelResetContent, lang->reset_content, &ui_font_Latin14);
@@ -1848,6 +1969,11 @@ void ui_ctrl_init(void)
     lv_obj_add_event_cb(ui_PanelListen, cancel_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_PanelGet, cancel_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
+    // A long press anywhere (asleep, listening, thinking, answering): a mark in the debug traces, if on
+    lv_obj_t *const marked[] = { ui_PanelSleep, ui_PanelListen, ui_PanelGet, ui_PanelReply, ui_ContainerReplyContent };
+    for (size_t i = 0; i < sizeof(marked) / sizeof(marked[0]); i++) {
+        lv_obj_add_event_cb(marked[i], mark_long_pressed_cb, LV_EVENT_LONG_PRESSED, NULL);
+    }
 
     scroll_timer_handle = lv_timer_create(reply_content_scroll_timer_handler, REPLY_SCROLL_TIMER_INTERVAL_MS, NULL);
     lv_timer_pause(scroll_timer_handle);

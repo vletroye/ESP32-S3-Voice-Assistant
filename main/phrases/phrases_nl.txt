@@ -196,6 +196,12 @@ herstarten
 (zeg|geef) me (je|jouw|de) [firmware ]versie
 firmware versie
 
+[s_mark]
+# Met de debugtraces aan (Debug = on), alleen gezegd: een markering in de traces, net na een probleem
+(markeer|noteer) (dit|dat|het probleem)
+(zet|plaats) een markering
+markering
+
 [s_clock_on]
 # Alleen gezegd: de tijd en de datum worden getoond op het slaapscherm (Show_clock van CONFIG.INI)
 toon de (tijd|klok)

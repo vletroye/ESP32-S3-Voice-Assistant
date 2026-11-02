@@ -80,6 +80,12 @@ void assistant_request_restore(bool factory);
 /** Restart in configuration mode, done by the main task (conversation, volume and costs saved first) */
 void assistant_request_config(void);
 
+/**
+ * @brief Dump button of the Debug page, done by the main task: with a PC, restart in configuration mode, where the
+ *        traces are DEBUG.TXT (dumped on the way); without, they are written for the next time and that is said
+ */
+void assistant_request_dump(void);
+
 /** Double tap while "J'écoute" / "Je réfléchis": dropped, back to sleep (from the LVGL task) */
 void assistant_cancel(void);
 

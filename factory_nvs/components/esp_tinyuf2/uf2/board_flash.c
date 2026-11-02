@@ -199,6 +199,24 @@ char *board_flash_text_content(int text)
     return s_text_files[text].content;
 }
 
+const char *board_flash_debug_content(uint32_t *size)
+{
+    static char *content = NULL;
+    static uint32_t len = 0;
+    if (!content) {
+        FILE *f = fopen(PHRASES_DIR "/debug.txt", "r");
+        if (!f) {
+            return NULL;
+        }
+        content = heap_caps_malloc(CFG_UF2_DEBUG_MAX, MALLOC_CAP_SPIRAM);
+        len = content ? fread(content, 1, CFG_UF2_DEBUG_MAX, f) : 0;
+        fclose(f);
+        PRINTF("%s shown as DEBUG.TXT (%u bytes)", PHRASES_DIR "/debug.txt", (unsigned)len);
+    }
+    *size = len;
+    return content;
+}
+
 char *board_flash_text_dummy(int text)
 {
     return s_text_files[text].dummy;
@@ -458,7 +476,7 @@ static const char *const s_ini_key_order[] = {
     "OpenRouter_free", "XAI_key", "Mistral_key", "Perplexity_key", "Deepgram_key", "Groq_key",
     "ElevenLabs_key",
     "Screen_off_s", "Resume_ask_min", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Read_lists", "Currency", "Radio_resume",
-    "Radio_level", "Radio_treble",
+    "Radio_level", "Radio_treble", "Debug",
 };
 
 /* A key of CONFIG.INI (anything else read from the file is a fragment of a line, not saved) */

@@ -101,6 +101,14 @@ menu "Example Configuration"
             of the LANG text (shown as ":"), the list is only shown; on: the list is read too. Default of
             Read_lists in CONFIG.INI, which takes precedence.
 
+    config ASSISTANT_DEBUG
+        string "Debug traces (on or off)"
+        default "off"
+        help
+            on: every log line is kept in memory with the time of day and the number of the exchange, to be
+            written as DEBUG.TXT on the configuration drive (Dump button of the Debug page of the Settings
+            screen). Default of Debug in CONFIG.INI, which takes precedence.
+
     config ASSISTANT_RADIO_LEVEL
         int "Radio: level the stations are brought to (dBFS)"
         default -16

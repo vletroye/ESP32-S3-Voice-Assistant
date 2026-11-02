@@ -149,7 +149,7 @@ STATIC_ASSERT(FAT_ENTRIES_PER_SECTOR                       ==       256); // FAT
  * free space after the files (CURRENT.UF2 in TinyUF2, not listed: no firmware is read nor written through the drive).
  * TinyUF2's INFO_UF2.TXT and INDEX.HTM are left out.
  */
-static FileContent_t info[1 + UF2_TEXT_COUNT + 1] = {
+static FileContent_t info[1 + UF2_TEXT_COUNT + 1 + 1] = {
     {.name = "CONFIG  INI", .content = NULL, .size = 0  },
     {.name = "MEMORY  TXT", .content = NULL, .size = 0  },
 };
@@ -160,6 +160,7 @@ enum {
     FID_INI = 0,
     FID_TEXT = 1,       // FID_TEXT + UF2_TEXT_xxx: the text files
     FID_TEXT_LAST = FID_TEXT + UF2_TEXT_COUNT - 1,
+    FID_DEBUG = FID_TEXT_LAST + 1,      // DEBUG.TXT, read-only (what the PC writes there is ignored)
     NUM_DIRENTRIES = NUM_FILES + 1 // including volume label as first root directory entry
 };
 
@@ -283,6 +284,15 @@ void uf2_init(void)
             info[FID_TEXT + i].size = strlen(content);
             info[FID_TEXT + i].reserved = CFG_UF2_TEXT_FILE_SIZE;
         }
+    }
+    // The traces dumped by the assistant (Debug page), when there are some
+    uint32_t debug_size = 0;
+    const char *debug = board_flash_debug_content(&debug_size);
+    if (debug) {
+        memcpy(info[FID_DEBUG].name, "DEBUG   TXT", 11);
+        info[FID_DEBUG].content = debug;
+        info[FID_DEBUG].size = debug_size;
+        info[FID_DEBUG].reserved = debug_size;
     }
     init_starting_clusters();
 }

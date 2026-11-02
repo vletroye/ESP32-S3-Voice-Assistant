@@ -287,6 +287,10 @@ costs_cost = Cost
 clock_hidden = All right, I no longer show the time.
 
 # "quelle est ta version": %s the firmware version ("1.4.2")
+# "Note ça" or a long press on the screen with the debug traces on (%d: the number of the mark), or off
+mark_done = Mark %d noted.
+mark_off = The debug traces are off.
+
 version_reply = My firmware is version %s.
 
 # "nouvelle discussion": the conversation is cleared
@@ -402,6 +406,12 @@ settings_tts_list = TTS models
 settings_test_title = Performance test
 settings_test_text = Test how fast %s is?
 settings_testing = Testing %s...
+
+# Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
+settings_debug_title = Debug
+settings_debug = Traces
+settings_debug_info = %u lines, %u KB
+settings_dump = Dump to USB
 settings_yes = Yes
 settings_no = No
 

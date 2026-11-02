@@ -198,6 +198,12 @@ quelle (est|et) (ta|la|ton) version[ du firmware]
 (dis|donne) moi (ta|la) version[ du firmware]
 version du firmware
 
+[s_mark]
+# Avec les traces de debug (Debug = on), dite seule : un repère dans les traces, juste après un problème
+(note|marque) (ça|ca|le problème|ce problème)
+(pose|mets|ajoute|place) un repère
+repère
+
 [s_clock_on]
 # Dite seule : l'heure et la date s'affichent sur l'écran de veille (Show_clock de CONFIG.INI)
 (affiche|montre|remets|active) l (heure|horloge)

@@ -288,6 +288,10 @@ costs_cost = Kosten
 clock_hidden = Goed, ik toon de tijd niet meer.
 
 # "quelle est ta version": %s the firmware version ("1.4.2")
+# "Note ça" or a long press on the screen with the debug traces on (%d: the number of the mark), or off
+mark_done = Markering %d genoteerd.
+mark_off = De debugtraces staan uit.
+
 version_reply = Mijn firmware is versie %s.
 
 # "nouvelle discussion": the conversation is cleared
@@ -403,6 +407,12 @@ settings_tts_list = TTS-modellen
 settings_test_title = Prestatietest
 settings_test_text = Testen hoe snel %s is?
 settings_testing = %s wordt getest...
+
+# Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
+settings_debug_title = Debug
+settings_debug = Traces
+settings_debug_info = %u regels, %u KB
+settings_dump = Dump naar USB
 settings_yes = Ja
 settings_no = Nee
 

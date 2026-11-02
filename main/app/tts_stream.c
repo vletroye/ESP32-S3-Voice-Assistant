@@ -30,6 +30,7 @@
 #include "radio.h"
 #include "app_wifi.h"
 #include "tts_stream.h"
+#include "debug_trace.h"
 #include "tts_backend.h"
 
 #define TTS_SAMPLE_RATE_IN      24000   /* audio given by the services: 24 kHz, 16-bit signed, mono */
@@ -462,6 +463,10 @@ static void playback_task(void *arg)
             size_t resume = start / 2 > PREBUFFER_RESUME_BYTES ? start / 2 : PREBUFFER_RESUME_BYTES;
             size_t needed = started ? (resume << shift) : start;
             if (available >= needed || (synth_done && available > 0)) {
+                if (started) {
+                    TRACE(TAG, "playing again after %lld ms of silence (%u ms of audio waiting)",
+                          (esp_timer_get_time() - s_last_play_us) / 1000, (unsigned)(available / 32));
+                }
                 playing = true;
             } else {
                 if (synth_done && available == 0 && !done_sent) {
@@ -501,9 +506,12 @@ static void playback_task(void *arg)
             if (!synth_done) {
                 underruns++;
                 /* Not a pause between two sentences: speech cut while a sentence was arriving */
-                if (s_sentence_active && s_sentence_has_audio && s_sentence_generation == playing_generation) {
+                bool cut = s_sentence_active && s_sentence_has_audio && s_sentence_generation == playing_generation;
+                if (cut) {
                     s_cuts++;
                 }
+                TRACE(TAG, "speaker ran dry (underrun %u)%s", underruns,
+                      cut ? ": cut in the middle of a sentence" : ", between two sentences");
             }
         }
     }

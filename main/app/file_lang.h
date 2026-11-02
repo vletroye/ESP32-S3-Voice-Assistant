@@ -149,6 +149,8 @@ typedef struct {
     const char *costs_total;
     const char *costs_cost;         /* row of the amounts (the tokens In / Out below) */        /* its last column */
     const char *clock_hidden;       /* "cache l'heure" */
+    const char *mark_done;          /* "note ça" or a long press, %d: the number of the mark in the traces */
+    const char *mark_off;           /* "note ça" with Debug = off */
     const char *version_reply;      /* "quelle est ta version", %s: the firmware version ("1.4.2") */
     const char *new_conversation;   /* "nouvelle discussion": the conversation is cleared */
     /* The reasoning mode ("j'ai une question difficile"), and going on with its conversation after a pause */
@@ -202,6 +204,10 @@ typedef struct {
     const char *settings_test_title;    /* Popup of a long press on a model: its title, its text (%s: the model) */
     const char *settings_test_text;
     const char *settings_testing;       /* Over the list while it is tested, %s: the model */
+    const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
+    const char *settings_debug;
+    const char *settings_debug_info;
+    const char *settings_dump;
     const char *settings_yes;
     const char *settings_no;
     const char *voice_sample;       /* Spoken with a voice just chosen, %s = its name */

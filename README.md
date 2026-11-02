@@ -58,8 +58,9 @@ been largely rewritten.
   - [4.7 At build time: `sdkconfig.defaults` / `idf.py menuconfig`](#47-at-build-time-sdkconfigdefaults--idfpy-menuconfig)
   - [4.8 System sounds](#48-system-sounds)
   - [4.9 Logs and diagnostics](#49-logs-and-diagnostics)
-  - [4.10 Features in detail](#410-features-in-detail)
-  - [4.11 Design notes](#411-design-notes)
+  - [4.10 Debug traces: `DEBUG.TXT`](#410-debug-traces-debugtxt)
+  - [4.11 Features in detail](#411-features-in-detail)
+  - [4.12 Design notes](#412-design-notes)
 - [5. Roadmap](#5-roadmap)
 - [6. Credits and licenses](#6-credits-and-licenses)
 
@@ -233,7 +234,7 @@ settings of the [Quick start](#1-quick-start).
   the fastest; "teste les modèles en cours" / "test the current models" tests only those in use, "teste les modèles
   de Google" / "test the models of Google" those of a provider.
 
-Every feature in detail: [Features in detail](#410-features-in-detail).
+Every feature in detail: [Features in detail](#411-features-in-detail).
 
 ### 2.2 Everyday use
 
@@ -277,7 +278,7 @@ Every feature in detail: [Features in detail](#410-features-in-detail).
 
 ### 2.4 On the device: Settings screen
 
-Tap the gear icon on the home screen. The settings are split over five pages, browsed with the arrows at the
+Tap the gear icon on the home screen. The settings are split over six pages, browsed with the arrows at the
 bottom left and right (from the last page, the right arrow goes back to the first, and the other way round); the
 screen opens on the first page.
 
@@ -324,6 +325,11 @@ LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scr
   de Haiku : 0,8 seconde." / "Result of Haiku: 0.8 seconds."), then the line shows its new time. The screen stays on
   the list; the time goes into `SPEED.TXT` as for the other tests. A transcription model is given the audio of the
   speech model in use.
+
+Sixth page: **Debug**, the [debug traces](#410-debug-traces-debugtxt): **Traces** on or off (saved as `Debug`), the
+lines and KB kept so far, and **Dump vers USB** / **Dump to USB**: the traces are written, then the device restarts
+in configuration mode, where they are `DEBUG.TXT` (with no PC connected: written anyway, and "Connecte-moi à ton
+PC." / "Connect me to your PC." is shown).
 
 For the language and the model, press **Confirmer** / **Confirm** (bottom middle, on their page only, shown once
 one of them changed): the choice is saved to the device's NVS and applied at once, without restarting (the speech
@@ -474,6 +480,7 @@ de 1 à 3, ou le nom du modèle." / "I did not understand. Say a number from 1 t
 | French | English | Effect |
 | --- | --- | --- |
 | ouvre les paramètres · montre les paramètres · affiche les paramètres · ouvre les réglages · montre les réglages · affiche les réglages · va dans les paramètres · va dans les réglages | open the settings · show the settings · open settings · show settings · display the settings · go to the settings | The Settings screen is shown at once, without a spoken reply (no follow-up listening) |
+| note ça · marque ça · pose un repère · repère (alone) | mark this · add a mark · marker (alone) | With the [debug traces](#410-debug-traces-debugtxt) on: a mark in them, just after a problem ("Repère 3 noté." / "Mark 3 noted."); off: "Les traces de debug sont désactivées." / "The debug traces are off." (section `[s_mark]`) |
 | quelle est ta version (du firmware) · quelle version es-tu · dis-moi ta version · version du firmware | what is your (firmware) version · what version are you · tell me your version · firmware version | The version of the installed firmware is said ("Mon firmware est en version 1.1.0." / "My firmware is version 1.1.0."; section `[s_version]`, see [Firmware version](#45-firmware-version)) |
 | affiche / montre / remets / active l'heure · l'horloge · la date et l'heure (alone) | show / display the time · the clock · turn on the clock | The time and date are shown on the sleep screen again ("D'accord, j'affiche l'heure." / "All right, I show the time."); saved as `Show_clock = on` |
 | cache / masque / enlève / retire / désactive / éteins l'heure · l'horloge · la date et l'heure · n'affiche plus l'heure (alone) | hide the time · the clock · turn off the clock · don't show the time | The time and date are no longer shown on the sleep screen (volume and Wi-Fi stay); saved as `Show_clock = off` |
@@ -669,6 +676,7 @@ USB drive named "ESP-BOX" holding these files:
 | `COSTS.TXT` | Costs counted (written by the device: do not edit) | SPIFFS | factory reset (erased) |
 | `SPEED.TXT` | Results of the model test (written by the device) | SPIFFS | factory reset (erased) |
 | `RADIO.TXT` | Favourite radios (see [Radio](#264-favourites-radiotxt)) | SPIFFS | kept by the soft reset, factory reset (erased) |
+| `DEBUG.TXT` | The last dump of the [debug traces](#410-debug-traces-debugtxt) (read-only: what is written there is ignored) | SPIFFS | replaced by the next dump |
 
 - Edit a file, save it, then **wait before pressing Restart** (bottom right of the screen): saving on the PC is not
   enough, the PC copies the file into the BOX a little later. About 10 seconds for `CONFIG.INI`, up to tens of
@@ -730,6 +738,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `OpenRouter_free` | How many free OpenRouter models are offered, `0` to `5`: the most used ones of its live list (read once a day), besides Free (auto); the excluded ones (`AGENTS.INI`) are not counted, the next ones take their place. `0`: none, the list is not read (only Free (auto)). Replaces the `OpenRouter_free = on / off` and `Free_models` of older versions, merged into it by the configuration mode (`off` → `0`, `on` → the value of `Free_models`) | `3` |
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
+| `Debug` | `on`: the [debug traces](#410-debug-traces-debugtxt) are kept in memory, to be dumped as `DEBUG.TXT` (also switched on the Debug page of the Settings screen) | `off` |
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
@@ -1475,7 +1484,7 @@ Turning off a **power plug** is confirmed first ("Tu veux vraiment éteindre la 
 want to switch off the fridge plug?"), so that an
 appliance is not switched off by mistake: `Confirm_off` lists the device classes to confirm (`socket` by default,
 `off` for none). Only 16 tools of the app are offered, none that deletes, installs or reconfigures anything. How it
-works: see the Homey items of the [Design notes](#411-design-notes).
+works: see the Homey items of the [Design notes](#412-design-notes).
 
 ## 4. Design and architecture
 
@@ -1606,6 +1615,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `radio_browser.c` | Radio-Browser: server chosen from its list, searches by name, tag and country, listens counted |
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
+| `debug_trace.c` | Debug traces: every log line caught (`esp_log_set_vprintf`), with the time of day and the number of the exchange, in a 1 MB ring buffer in PSRAM; marks; the dump to `/spiffs/debug.txt` |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |
 | `tools.c` | Tools offered to the models (definitions, dispatch) |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
@@ -1697,6 +1707,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_CURRENCY` | `EUR` | Currency when `Currency` is not set |
 | `CONFIG_ASSISTANT_SLEEP_AFTER_CMD` | `off` | Sleep after a local voice command when `Sleep_after_cmd` is not set |
 | `CONFIG_ASSISTANT_READ_LISTS` | `off` | Lists of the voice commands read when `Read_lists` is not set |
+| `CONFIG_ASSISTANT_DEBUG` | `off` | Debug traces when `Debug` is not set |
 | `CONFIG_ASSISTANT_RADIO_RESUME` | `on` | Radio resumed after a conversation when `Radio_resume` is not set |
 | `CONFIG_ASSISTANT_RADIO_LEVEL` | `-16` | Level of the radio stations when `Radio_level` is not set |
 | `CONFIG_ASSISTANT_RADIO_TREBLE` | `-6` | Treble of the radio when `Radio_treble` is not set |
@@ -1741,7 +1752,40 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 - `claude: web search: available` (capability read at the first wake)
 - `[heap] internal free …` every 30 s (internal RAM is the critical resource)
 
-### 4.10 Features in detail
+### 4.10 Debug traces: `DEBUG.TXT`
+
+To find out afterwards what happened during a test session (a command not understood, a lag, the sound cut…),
+without a PC connected while testing:
+
+1. Turn the traces on: **Debug** page of the Settings screen (sixth page), or `Debug = on` in `CONFIG.INI`. They
+   stay on after a restart until turned off.
+2. Use the assistant. When something goes wrong, put a **mark** right after: a **long press** anywhere on the
+   assistant's screen (asleep, listening, thinking or answering; "Repère 3 noté." / "Mark 3 noted." is shown), or
+   say "**note ça**" / "**mark this**". Note what you noticed with the number of the mark, or the time.
+3. **Dump vers USB** / **Dump to USB** (Debug page), with the PC connected: the device restarts in configuration
+   mode and **`DEBUG.TXT`** is on the drive. Going to the configuration mode another way (folder icon, "édite la
+   config" / "edit the config") dumps them too.
+
+What is kept: **every line of the logs** (the ones of the serial monitor, see above), each with the time of day
+and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only written while the traces are on:
+
+- `===== exchange 12 (wake word / tap / listening again after the reply)`: the Wi-Fi signal (dBm), the free
+  internal RAM and PSRAM, the volume;
+- `app_sr: [trace] voice activity: speech / silence at … ms, volume … dBFS`: what the microphone heard;
+- `voice_cmd: [trace] "<the transcript, normalized>": voice command N, reply: …` or `for the model`: how the
+  sentence was understood;
+- `main: [trace] first text of the model … ms after the transcript`, `sentence to the speech … ms after the
+  transcript: "…"`;
+- `tts: [trace] speaker ran dry (underrun N): cut in the middle of a sentence / between two sentences`, `playing
+  again after … ms of silence`: where the speech was cut;
+- `trace: *************** MARK 3 (long press / said) ***************`.
+
+The traces are kept in a **1 MB ring buffer in PSRAM** (about 10,000 lines, hours of use; the oldest are
+dropped): nothing is written to the flash while testing, which would itself cause lags. They are lost at a
+restart that is not a dump. The dump keeps the newest lines when SPIFFS has not room for all (64 KB left free);
+`DEBUG.TXT` shows at most 1.25 MB. The serial port still gets every line, as without the traces.
+
+### 4.11 Features in detail
 
 - Local wake word **"Bonjour ESP"** (or "Hi ESP"), or touch the screen while asleep.
 - **Live transcription** while you speak (streamed to the API, so the question is ready as soon as you stop;
@@ -1849,7 +1893,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
   stopped by the wake word and resumed after the answer, with fades and the same loudness on every station
   (see [Radio](#26-radio)).
 
-### 4.11 Design notes
+### 4.12 Design notes
 
 - **Presence radar**: the AT581X of the BOX-3-SENSOR dock is on the dock's own I2C bus (GPIO 40/41, the port the
   board does not use) and signals a presence on GPIO 21. `app_presence.c` probes it at start-up (nothing happens

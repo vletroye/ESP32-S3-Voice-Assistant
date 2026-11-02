@@ -47,6 +47,19 @@ esp_err_t audio_play_preload(const char *filepath);
 /** Play a system sound, once the spoken reply (if any) has left the speaker */
 esp_err_t audio_play_task(void *filepath);
 
+/**
+ * @brief A test (Debug page, until the restart): the speaker amplifier switched off after a second of silence (no
+ *        speech, sound nor radio), on again before anything plays; to hear whether a crackle comes through it
+ */
+void audio_amp_idle_off_set(bool on);
+bool audio_amp_idle_off(void);
+
+/** Something is about to be played: the amplifier on if the test switched it off */
+void audio_amp_need(void);
+
+/** Called every second (main task): the amplifier off when the test is on and nothing played for a second */
+void audio_amp_idle_check(void);
+
 void audio_record_init();
 
 void audio_record_save(int16_t *audio_buffer, int audio_chunksize);

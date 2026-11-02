@@ -26,6 +26,7 @@
 #include "voice_cmd.h"
 #include "model_test.h"
 #include "debug_trace.h"
+#include "app_audio.h"
 #include "ai_providers.h"
 #include "file_costs.h"
 #include "radio.h"
@@ -1089,6 +1090,14 @@ static lv_obj_t *s_debug_switch = NULL;
 static lv_obj_t *s_debug_label = NULL;
 static lv_obj_t *s_debug_info = NULL;
 static lv_obj_t *s_dump_label = NULL;
+static lv_obj_t *s_amp_switch = NULL;
+static lv_obj_t *s_amp_label = NULL;
+
+/* The test of the amplifier switched off in silence (until the restart) */
+static void amp_switch_cb(lv_event_t *e)
+{
+    audio_amp_idle_off_set(lv_obj_has_state(s_amp_switch, LV_STATE_CHECKED));
+}
 
 static void debug_page_refresh(void)
 {
@@ -1108,6 +1117,12 @@ static void debug_page_refresh(void)
     lv_label_set_text(s_debug_info, text);
     lv_label_set_text(s_debug_label, lang->settings_debug);
     lv_label_set_text(s_dump_label, lang->settings_dump);
+    lv_label_set_text(s_amp_label, lang->settings_amp_off);
+    if (audio_amp_idle_off()) {
+        lv_obj_add_state(s_amp_switch, LV_STATE_CHECKED);
+    } else {
+        lv_obj_clear_state(s_amp_switch, LV_STATE_CHECKED);
+    }
 }
 
 static void debug_switch_cb(lv_event_t *e)
@@ -1150,12 +1165,18 @@ static void debug_page_create(void)
     lv_obj_set_style_bg_color(s_debug_switch, lv_color_hex(0x6E47BD), LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(s_debug_switch, debug_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    row = debug_row_create(LV_FLEX_ALIGN_START);
+    row = debug_row_create(LV_FLEX_ALIGN_SPACE_BETWEEN);
+    s_amp_label = lv_label_create(row);
+    lv_obj_set_style_text_color(s_amp_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(s_amp_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    s_amp_switch = lv_switch_create(row);
+    lv_obj_set_style_bg_color(s_amp_switch, lv_color_hex(0x6E47BD), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(s_amp_switch, amp_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    row = debug_row_create(LV_FLEX_ALIGN_SPACE_BETWEEN);
     s_debug_info = lv_label_create(row);
     lv_obj_set_style_text_color(s_debug_info, lv_color_hex(MODEL_ROW_DIM), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(s_debug_info, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    row = debug_row_create(LV_FLEX_ALIGN_CENTER);
     lv_obj_t *btn = lv_btn_create(row);
     lv_obj_set_style_bg_color(btn, lv_color_hex(0x6E47BD), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_event_cb(btn, dump_clicked_cb, LV_EVENT_CLICKED, NULL);

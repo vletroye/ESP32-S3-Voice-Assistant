@@ -192,9 +192,12 @@ void debug_trace_turn(const char *how)
     }
     s_turn++;
     wifi_ap_record_t ap;
-    int rssi = esp_wifi_sta_get_ap_info(&ap) == ESP_OK ? ap.rssi : 0;
-    ESP_LOGI(TAG, "===== exchange %d (%s): Wi-Fi %d dBm, internal RAM %u free (largest %u), PSRAM %u free, "
-             "volume %d", s_turn, how, rssi, (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+    bool known = esp_wifi_sta_get_ap_info(&ap) == ESP_OK;
+    // The access point too (its address ends the line): a mesh may hold on to a far one
+    ESP_LOGI(TAG, "===== exchange %d (%s): Wi-Fi %d dBm (access point ..%02x:%02x:%02x, channel %d), internal RAM %u "
+             "free (largest %u), PSRAM %u free, volume %d", s_turn, how, known ? ap.rssi : 0, known ? ap.bssid[3] : 0,
+             known ? ap.bssid[4] : 0, known ? ap.bssid[5] : 0, known ? ap.primary : 0,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), app_volume_get());
 }

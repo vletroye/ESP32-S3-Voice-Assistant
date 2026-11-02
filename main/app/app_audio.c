@@ -279,6 +279,48 @@ esp_err_t audio_play_preload(const char *filepath)
     return sound_load(filepath, &s_sound);
 }
 
+/* ---------- the test of the amplifier switched off in silence ---------- */
+
+#define AMP_IDLE_OFF_MS         1000
+
+static volatile bool s_amp_idle_off = false;
+static volatile bool s_amp_is_off = false;
+static volatile int64_t s_sound_end_us = 0;     /* the system sound playing until then */
+
+void audio_amp_need(void)
+{
+    if (s_amp_is_off) {
+        s_amp_is_off = false;
+        bsp_codec_power_amp_on();
+        TRACE(TAG, "amplifier on (something to play)");
+    }
+}
+
+void audio_amp_idle_off_set(bool on)
+{
+    s_amp_idle_off = on;
+    ESP_LOGI(TAG, "Test: amplifier off in silence %s", on ? "on" : "off");
+    if (!on) {
+        audio_amp_need();
+    }
+}
+
+bool audio_amp_idle_off(void)
+{
+    return s_amp_idle_off;
+}
+
+void audio_amp_idle_check(void)
+{
+    if (!s_amp_idle_off || s_amp_is_off || radio_playing() || !tts_stream_is_silent(AMP_IDLE_OFF_MS) ||
+            esp_timer_get_time() < s_sound_end_us + AMP_IDLE_OFF_MS * 1000LL) {
+        return;
+    }
+    s_amp_is_off = true;
+    bsp_codec_power_amp_off();
+    TRACE(TAG, "amplifier off (silence)");
+}
+
 /* Play a short system sound from memory (loaded by audio_play_preload(), or here at the first call) */
 esp_err_t audio_play_task(void *filepath)
 {
@@ -289,6 +331,8 @@ esp_err_t audio_play_task(void *filepath)
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     int64_t waited_us = esp_timer_get_time() - t0;
+    s_sound_end_us = esp_timer_get_time() + (int64_t)s_sound.bytes / 64 * 1000;
+    audio_amp_need();
     // Written 20 ms at a time: a piece written long after the previous one means the speaker ran dry meanwhile (the
     // I2S DMA holds SOUND_DMA_MS of audio), heard as a crackle
     size_t written = 0;

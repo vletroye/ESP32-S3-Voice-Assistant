@@ -33,6 +33,7 @@
 #include "bsp_board.h"
 #include "settings.h"
 #include "radio.h"
+#include "app_audio.h"
 #include "radio_browser.h"
 
 #define RADIO_USER_AGENT        "ESP32-S3-Voice-Assistant/1.0"
@@ -709,6 +710,7 @@ static void play_stream(void)
                     int n = resample(rs, pcm, part, pcm16k, 2048);
                     resample_us += esp_timer_get_time() - t1;
                     size_t written = 0;
+                    audio_amp_need();   // (a test may have switched the amplifier off in silence)
                     bsp_i2s_write(pcm16k, n * 2 * sizeof(int16_t), &written, portMAX_DELAY);
                     audio_frames += n;
                     pcm += part * rs->channels;

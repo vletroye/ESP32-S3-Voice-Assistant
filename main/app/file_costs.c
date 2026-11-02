@@ -16,6 +16,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "cJSON.h"
 #include "file_lang.h"
 #include "llm.h"
@@ -514,6 +515,7 @@ void costs_save(void)
     if (!s_lock || !s_dirty) {
         return;
     }
+    int64_t t0 = esp_timer_get_time();
     xSemaphoreTake(s_lock, portMAX_DELAY);
     roll_over();
     char *text = cJSON_PrintUnformatted(s_root);
@@ -530,7 +532,9 @@ void costs_save(void)
         remove(COSTS_FILE);
         ok = (rename(COSTS_TMP_FILE, COSTS_FILE) == 0);
     }
-    ESP_LOGI(TAG, "%s (%u bytes)", ok ? "Costs saved" : "Could not save the costs", text ? (unsigned)strlen(text) : 0);
+    // (in flash: the screen may stop meanwhile)
+    ESP_LOGI(TAG, "%s (%u bytes, with COSTS.TXT, in %lld ms)", ok ? "Costs saved" : "Could not save the costs",
+             text ? (unsigned)strlen(text) : 0, (esp_timer_get_time() - t0) / 1000);
     free(text);
 }
 

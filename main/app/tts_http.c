@@ -22,6 +22,13 @@
 #define TTS_HTTP_READ_CHUNK     4096
 /* A connection unused for this long is likely closed by the server: opened again while the user speaks */
 #define TTS_HTTP_WARM_US        (30 * 1000000LL)
+/*
+ * The body read with short waits: a service that stops sending (a stream stalled, 35 s and more) is given up after
+ * TTS_HTTP_STALL_MS without audio (TTS_HTTP_FIRST_MS for the first bytes, which may take a few seconds)
+ */
+#define TTS_HTTP_READ_WAIT_MS   1000
+#define TTS_HTTP_FIRST_MS       6000
+#define TTS_HTTP_STALL_MS       4000
 /* Bytes of a frame cut between two blocks, kept before the next one */
 #define TTS_HTTP_FRAME_MAX      8
 
@@ -119,14 +126,30 @@ static size_t request_once(tts_http_t *h, const char *text, const char *body, ui
         unsigned frame = h->frame_bytes > 1 && h->frame_bytes <= TTS_HTTP_FRAME_MAX ? h->frame_bytes : 1;
         size_t carry = 0;
         int64_t first_us = 0;
-        while (!(reader->done && *reader->done) &&
-                (n = esp_http_client_read(h->client, chunk + carry, TTS_HTTP_READ_CHUNK)) > 0) {
+        int64_t last_data_us = esp_timer_get_time();
+        esp_http_client_set_timeout_ms(h->client, TTS_HTTP_READ_WAIT_MS);
+        while (!(reader->done && *reader->done)) {
+            n = esp_http_client_read(h->client, chunk + carry, TTS_HTTP_READ_CHUNK);
             if (!warm_up && generation != tts_backend_generation()) {
                 status_text = "cancelled";
                 break;
             }
+            if (n == -ESP_ERR_HTTP_EAGAIN) {
+                // Nothing for a while: waited for some more, then given up
+                int64_t quiet_ms = (esp_timer_get_time() - last_data_us) / 1000;
+                if (quiet_ms < (first_us ? TTS_HTTP_STALL_MS : TTS_HTTP_FIRST_MS)) {
+                    continue;
+                }
+                ESP_LOGW(h->tag, "No audio for %lld ms (%u KB received): the sentence is given up", quiet_ms,
+                         (unsigned)(received / 1024));
+                break;
+            }
+            if (n <= 0) {
+                break;
+            }
+            last_data_us = esp_timer_get_time();
             if (!first_us) {
-                first_us = esp_timer_get_time();
+                first_us = last_data_us;
             }
             received += n;
             // Whole frames only: a frame cut between two blocks waits for the next one
@@ -138,6 +161,7 @@ static size_t request_once(tts_http_t *h, const char *text, const char *body, ui
             carry = bytes - whole;
             memmove(chunk, chunk + whole, carry);
         }
+        esp_http_client_set_timeout_ms(h->client, TTS_HTTP_TIMEOUT_MS);
         int64_t now = esp_timer_get_time();
         ESP_LOGI(h->tag, "%s%u KB of audio received in %lld ms (first bytes after %lld ms)", warm_up ? "warm-up: " : "",
                  (unsigned)(received / 1024), (now - start_us) / 1000, first_us ? (first_us - start_us) / 1000 : -1LL);
@@ -179,9 +203,10 @@ void tts_http_request(tts_http_t *h, const char *text, char *body, uint32_t gene
     const char *status_text = "completed";
     bool failed = false;
     size_t received = request_once(h, text, body, generation, warm_up, reader, &status_text, &failed);
-    if (!warm_up && received == 0 && strcmp(status_text, "completed") == 0 && generation == tts_backend_generation()) {
-        // Answered without any audio (Mistral, now and then): the sentence would not be said; asked again once, on a
-        // fresh connection
+    if (!warm_up && received == 0 && (strcmp(status_text, "completed") == 0 || strcmp(status_text, "cut") == 0) &&
+            generation == tts_backend_generation()) {
+        // Answered without any audio, or nothing came (Mistral, now and then): the sentence would not be said; asked
+        // again once, on a fresh connection
         ESP_LOGW(h->tag, "No audio for \"%.40s\": asked again", text);
         drop_client(h);
         received = request_once(h, text, body, generation, warm_up, reader, &status_text, &failed);

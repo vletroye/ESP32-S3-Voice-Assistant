@@ -326,7 +326,9 @@ LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scr
   the list; the time goes into `SPEED.TXT` as for the other tests. A transcription model is given the audio of the
   speech model in use.
 
-Sixth page: **Debug**, the [debug traces](#410-debug-traces-debugtxt): **Traces** on or off (saved as `Debug`), the
+Sixth page: **Debug**, the [debug traces](#410-debug-traces-debugtxt): **Traces** on or off (saved as `Debug`),
+**Ampli coupé (silence)** / **Amp off in silence** (a test until the restart: the speaker amplifier switched off
+after a second with nothing to play, on again before any sound, to hear whether a crackle comes through it), the
 lines and KB kept so far, and **Dump vers USB** / **Dump to USB**: the traces are written, then the device restarts
 in configuration mode, where they are `DEBUG.TXT` (with no PC connected: written anyway, and "Connecte-moi à ton
 PC." / "Connect me to your PC." is shown).
@@ -1776,8 +1778,9 @@ without a PC connected while testing:
 What is kept: **every line of the logs** (the ones of the serial monitor, see above), each with the time of day
 and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only written while the traces are on:
 
-- `===== exchange 12 (wake word / tap / listening again after the reply)`: the Wi-Fi signal (dBm), the free
-  internal RAM and PSRAM, the volume;
+- `===== exchange 12 (wake word / tap / listening again after the reply)`: the Wi-Fi signal (dBm), the access
+  point (the end of its address, its channel: a mesh may hold on to a far one), the free internal RAM and PSRAM,
+  the volume;
 - `app_sr: [trace] voice activity: speech / silence at … ms, volume … dBFS`: what the microphone heard;
 - `voice_cmd: [trace] "<the transcript, normalized>": voice command N, reply: …` or `for the model`: how the
   sentence was understood;
@@ -1790,6 +1793,11 @@ and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only w
 - `app_audio: [trace] sound /spiffs/echo_en_wake.wav: … ms waited for silence, … ms of sound written in … ms,
   longest wait between two pieces … ms`, with `: the speaker ran dry (crackle)` above 80 ms: the wake sound, written
   20 ms at a time;
+- `tts_http: No audio for … ms (… KB received): the sentence is given up`: a speech stream that stopped (4 s
+  without audio, 6 s for its first bytes); then lost, or asked again when nothing came;
+- `costs: Costs saved (… bytes, with COSTS.TXT, in … ms)`, `llm: Conversation saved (… bytes, in … ms)`,
+  `Conversation cleared (its file removed in … ms)`: the writes to the flash, while the screen may stop;
+- `app_audio: [trace] amplifier off (silence)` / `amplifier on (something to play)`: the test of the Debug page;
 - `tts_http: No audio for "…": asked again`: a speech service answered a sentence without audio (Mistral, now and
   then); asked once more on a fresh connection, then counted as lost (the reply is said to have been heard badly);
 - `trace: *************** MARK 3 (long press / said) ***************`.

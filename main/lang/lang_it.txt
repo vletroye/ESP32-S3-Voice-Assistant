@@ -415,6 +415,8 @@ settings_debug_title = Debug
 settings_debug = Tracce
 settings_debug_info = %u righe, %u KB
 settings_dump = Dump su USB
+# Debug page: a test, the speaker amplifier switched off while nothing plays (until the restart)
+settings_amp_off = Ampli spento (silenzio)
 settings_yes = Sì
 settings_no = No
 

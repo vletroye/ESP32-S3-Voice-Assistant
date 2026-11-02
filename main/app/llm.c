@@ -1443,6 +1443,7 @@ void llm_history_save(void)
     }
 
     // Written to a temporary file first: a power cut during the write keeps the previous conversation
+    int64_t t0 = esp_timer_get_time();
     FILE *f = fopen(LLM_HISTORY_TMP_FILE, "w");
     size_t len = strlen(text);
     bool ok = f && fwrite(text, 1, len, f) == len;
@@ -1455,7 +1456,7 @@ void llm_history_save(void)
         ok = (rename(LLM_HISTORY_TMP_FILE, LLM_HISTORY_FILE) == 0);
     }
     if (ok) {
-        ESP_LOGI(TAG, "Conversation saved (%u bytes)", (unsigned)len);
+        ESP_LOGI(TAG, "Conversation saved (%u bytes, in %lld ms)", (unsigned)len, (esp_timer_get_time() - t0) / 1000);
     } else {
         ESP_LOGE(TAG, "Failed to save the conversation");
     }
@@ -1726,6 +1727,7 @@ void llm_reset(void)
     s_last_exchange_us = 0;
     s_dirty = false;
     xSemaphoreGive(s_lock);
+    int64_t t0 = esp_timer_get_time();
     remove(LLM_HISTORY_FILE);
-    ESP_LOGI(TAG, "Conversation cleared");
+    ESP_LOGI(TAG, "Conversation cleared (its file removed in %lld ms)", (esp_timer_get_time() - t0) / 1000);
 }

@@ -248,7 +248,7 @@ void weather_places_save(void)
     if (f) {
         fputs(text, f);
         fclose(f);
-        ESP_LOGI(TAG, "places saved (%u bytes)", (unsigned)strlen(text));
+        ESP_LOGI(TAG, "places saved (%u bytes)", (unsigned)strlen(text));     // (in flash)
     }
     free(text);
 }

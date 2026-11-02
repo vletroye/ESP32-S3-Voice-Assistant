@@ -1223,6 +1223,8 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
   numbered list: `Quel modèle de %s voulez-vous utiliser :: %s`.
 - **Checked at start-up and after each change of language** (about 0.1 s), against the firmware's English file,
   the reference:
+  - a key the firmware **no longer knows** (a feature of an older firmware, removed or renamed: `settings_robot`,
+    `voice_kept`…) is removed from the file, with the comment above it when its paragraph holds no other key;
   - a **missing key** is appended to the file: from the firmware's file of that language when it has one (already
     translated, with its comment), else in English, between `[TODO:` and `]`
     (`model_switched = [TODO: Very well, I now use %s.]`);

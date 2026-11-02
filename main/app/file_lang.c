@@ -612,6 +612,113 @@ static const char *key_line(const char *text, const char *key)
     return NULL;
 }
 
+/* A line of a file (up to '\n' or the end): its length with the '\n', and whether it is blank */
+static size_t line_len(const char *p, bool *blank)
+{
+    const char *end = strchr(p, '\n');
+    size_t n = end ? (size_t)(end + 1 - p) : strlen(p);
+    *blank = true;
+    for (size_t i = 0; i < n && *blank; i++) {
+        *blank = (p[i] == ' ' || p[i] == '\t' || p[i] == '\r' || p[i] == '\n');
+    }
+    return n;
+}
+
+/* A "key = text" line: 1 if its key is one of the firmware's, -1 if not (an older firmware's), 0 for no key */
+static int line_key(const char *p, size_t n, char *key, size_t size)
+{
+    while (n && (*p == ' ' || *p == '\t')) {
+        p++;
+        n--;
+    }
+    const char *eq = memchr(p, '=', n);
+    if (!n || *p == '#' || !eq) {
+        return 0;
+    }
+    size_t k = (size_t)(eq - p);
+    while (k && (p[k - 1] == ' ' || p[k - 1] == '\t')) {
+        k--;
+    }
+    snprintf(key, size, "%.*s", (int)k, p);
+    return field_of(key) ? 1 : -1;
+}
+
+/*
+ * Keys the firmware does not know (of an older firmware: a feature removed or renamed) are removed from the file
+ * of SPIFFS: their lines, and the comments above them when a paragraph (lines between blank lines) holds no other
+ * key. Written to a copy, then renamed. Returns true when something was removed.
+ */
+static bool remove_unknown_keys(const char *path, const char *text)
+{
+    size_t size = strlen(text);
+    char *out = heap_caps_malloc(size + 1, MALLOC_CAP_SPIRAM);
+    if (!out) {
+        return false;
+    }
+    size_t o = 0;
+    int removed = 0;
+    char key[64];
+    bool blank;
+    for (const char *p = text; *p;) {
+        size_t n = line_len(p, &blank);
+        if (blank) {
+            memcpy(out + o, p, n);
+            o += n;
+            p += n;
+            continue;
+        }
+        // A paragraph: its keys counted, then copied without the unknown ones (or left out if it has no other)
+        const char *end = p;
+        int keys = 0, unknown = 0;
+        while (*end && (n = line_len(end, &blank)) && !blank) {
+            int kind = line_key(end, n, key, sizeof(key));
+            keys += kind != 0;
+            unknown += kind < 0;
+            end += n;
+        }
+        if (unknown && unknown == keys) {
+            for (const char *l = p; l < end; l += line_len(l, &blank)) {
+                if (line_key(l, line_len(l, &blank), key, sizeof(key)) < 0) {
+                    ESP_LOGI(TAG, "%s: unknown key '%s' removed (with its comment)", path, key);
+                }
+            }
+            removed += unknown;
+            p = end;
+            if (*p && (n = line_len(p, &blank)) && blank) {
+                p += n;     // and the blank line after it
+            }
+            continue;
+        }
+        for (; p < end; p += n) {
+            n = line_len(p, &blank);
+            if (unknown && line_key(p, n, key, sizeof(key)) < 0) {
+                ESP_LOGI(TAG, "%s: unknown key '%s' removed", path, key);
+                removed++;
+                continue;
+            }
+            memcpy(out + o, p, n);
+            o += n;
+        }
+    }
+    bool ok = false;
+    if (removed) {
+        char tmp[56];
+        snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+        FILE *f = fopen(tmp, "w");
+        ok = f && fwrite(out, 1, o, f) == o;
+        ok &= f && fclose(f) == 0;
+        if (ok) {
+            remove(path);
+            ok = (rename(tmp, path) == 0);
+        } else {
+            remove(tmp);    // the file stays as it was
+        }
+        ESP_LOGW(TAG, "%s: %d unknown key(s) %s", path, removed, ok ? "removed" : "NOT removed");
+    }
+    free(out);
+    return ok;
+}
+
 /*
  * Keys missing in the file of SPIFFS (added by a newer firmware, or forgotten) are appended to it, with the
  * comment lines above them: from the firmware's file of the language, else from the English one (counted in
@@ -769,10 +876,16 @@ static const app_lang_t *load(const char *code)
         free(text);
         install_default(code, path);
         text = read_file(path);
-    } else if (strlen(text) < LANG_FILE_MAX - 1 && add_missing_keys(code, path, text, &english)) {
-        // (a file cut by read_file would get the keys of its end again at every start-up)
-        free(text);
-        text = read_file(path);
+    } else if (strlen(text) < LANG_FILE_MAX - 1) {
+        // (a file cut by read_file would lose, then get again, the keys of its end at every start-up)
+        if (remove_unknown_keys(path, text)) {
+            free(text);
+            text = read_file(path);
+        }
+        if (text && add_missing_keys(code, path, text, &english)) {
+            free(text);
+            text = read_file(path);
+        }
     }
     if (!text) {
         return NULL;

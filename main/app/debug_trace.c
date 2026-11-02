@@ -7,6 +7,7 @@
  * the exchange, kept in a ring buffer in PSRAM; written to SPIFFS only when dumped.
  */
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,6 +29,7 @@ static const char *TAG = "trace";
 #define TRACE_RING_SIZE     (1024 * 1024)   /* about 10 000 lines: hours of tests */
 #define TRACE_LINE_MAX      400
 #define TRACE_SPIFFS_SPARE  (64 * 1024)     /* left free on SPIFFS by the dump */
+#define TRACE_DUMP_PIECE    4096
 
 static char *s_ring = NULL;                 /* PSRAM */
 static size_t s_pos = 0;                    /* where the next byte goes */
@@ -221,18 +223,35 @@ bool debug_trace_dump(void)
         }
         from += from < len;
     }
-    FILE *f = fopen(DEBUG_TRACE_FILE, "w");
+    // Written through a buffer in internal RAM, a piece at a time: a single write of the whole PSRAM copy stopped
+    // after the first 128 bytes
+    char *piece = heap_caps_malloc(TRACE_DUMP_PIECE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    FILE *f = piece ? fopen(DEBUG_TRACE_FILE, "w") : NULL;
     bool ok = f != NULL;
+    size_t written = 0;
     if (f) {
         char now[32];
         time_prefix(now, sizeof(now));
-        fprintf(f, "# DEBUG.TXT: traces of firmware %s, dumped at %s (%u lines written since the traces started%s)\n",
-                esp_app_get_description()->version, now, (unsigned)s_lines,
-                s_wrapped || from > 0 ? ", the oldest dropped" : "");
-        ok = fwrite(copy + from, 1, len - from, f) == len - from;
+        int n = snprintf(piece, TRACE_DUMP_PIECE,
+                         "# DEBUG.TXT: traces of firmware %s, dumped at %s (%u lines written since the traces "
+                         "started%s)\n", esp_app_get_description()->version, now, (unsigned)s_lines,
+                         s_wrapped || from > 0 ? ", the oldest dropped" : "");
+        ok = fwrite(piece, 1, n, f) == (size_t)n;
+        while (ok && from + written < len) {
+            size_t chunk = len - from - written < TRACE_DUMP_PIECE ? len - from - written : TRACE_DUMP_PIECE;
+            memcpy(piece, copy + from + written, chunk);
+            ok = fwrite(piece, 1, chunk, f) == chunk;
+            written += ok ? chunk : 0;
+        }
+        if (!ok) {
+            ESP_LOGE(TAG, "Dump stopped after %u bytes: errno %d (SPIFFS %u of %u bytes used)", (unsigned)written,
+                     errno, (unsigned)used, (unsigned)total);
+        }
         ok &= fclose(f) == 0;
     }
+    free(piece);
     free(copy);
-    ESP_LOGI(TAG, "%s %u bytes%s", DEBUG_TRACE_FILE, (unsigned)(len - from), ok ? "" : ": not written");
+    ESP_LOGI(TAG, "%s: %u of %u bytes written%s", DEBUG_TRACE_FILE, (unsigned)written, (unsigned)(len - from),
+             ok ? "" : ", error");
     return ok;
 }

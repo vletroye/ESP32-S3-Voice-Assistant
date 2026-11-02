@@ -64,6 +64,9 @@ void ui_ctrl_toast(const char *text);
  */
 void ui_ctrl_busy(const char *text);
 
+/** The saves done: the saving screen shown as the assistant went to sleep taken away (if still there) */
+void ui_ctrl_saving_over(void);
+
 /** Problems of a language file: a screen with the text (scrolled when long), "Skip" (back) and "Config"
  *  (configuration mode, to correct the file) */
 void ui_ctrl_show_problems(const char *title, const char *text);

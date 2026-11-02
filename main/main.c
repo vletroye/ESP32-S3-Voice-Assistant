@@ -1375,6 +1375,8 @@ void app_main()
                 bsp_display_unlock();
                 ui_ctrl_busy(NULL);
             }
+            // (shown as it went to sleep, also when the saves had nothing left to do)
+            ui_ctrl_saving_over();
         }
         if (seconds % 30) {
             continue;

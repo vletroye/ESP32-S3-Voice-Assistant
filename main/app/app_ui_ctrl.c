@@ -750,6 +750,7 @@ static size_t s_model_row_count = 0;
 static lv_obj_t *s_model_test_box = NULL;
 static int s_model_test_row = -1;
 static lv_obj_t *s_model_test_wait = NULL;
+static bool s_busy_saving = false;     /* that screen shown for the saves, as the assistant went to sleep */
 
 /*
  * While the device is busy (a model tested alone, the saves as it goes to sleep): over the whole screen (nothing
@@ -878,10 +879,20 @@ static void model_check_cb(lv_event_t *e)
 
 static void busy_hide(void)
 {
+    s_busy_saving = false;
     if (s_model_test_wait) {
         lv_obj_del(s_model_test_wait);      // its animations with it
         s_model_test_wait = NULL;
     }
+}
+
+void ui_ctrl_saving_over(void)
+{
+    bsp_display_lock(0);
+    if (s_busy_saving) {
+        busy_hide();
+    }
+    bsp_display_unlock();
 }
 
 void ui_ctrl_busy(const char *text)
@@ -2221,6 +2232,12 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
 
     switch (panel) {
     case UI_CTRL_PANEL_SLEEP:
+        // Something to save (the main task does it within two seconds): the saving screen at once, the robot asleep
+        // only once it is done (it showed for a moment before)
+        if (llm_history_unsaved() || costs_unsaved()) {
+            busy_show(app_lang_get()->saving, false);
+            s_busy_saving = true;
+        }
         show_panel = ui_PanelSleep;
         hide_panel[0] = ui_PanelListen;
         hide_panel[1] = ui_PanelGet;
@@ -2231,6 +2248,10 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         radio_on_sleep();
         break;
     case UI_CTRL_PANEL_LISTEN:
+        // Woken up before the saves started: they wait for the next sleep, the saving screen goes
+        if (s_busy_saving) {
+            busy_hide();
+        }
         if (current_panel == UI_CTRL_PANEL_SLEEP) {
             costs_conversation_start();     // woken up: the cost of the conversation starts again
         }

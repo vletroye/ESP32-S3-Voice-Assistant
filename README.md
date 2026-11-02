@@ -1843,7 +1843,8 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
 - **Follow-up without the wake word**: after an answer, the assistant keeps listening for 8 s
   (with the history of the last exchanges).
 - **Saved as it goes to sleep**: the conversation (restored after a restart) and the costs are written to the flash
-  once the assistant sleeps again. It takes a few seconds and everything stops meanwhile (a wake word, a touch or a
+  as the assistant goes back to sleep (the saving screen comes at once, instead of the sleeping robot, which shows
+  once the saves are done; woken up before they start, they wait for the next sleep). It takes a few seconds and everything stops meanwhile (a wake word, a touch or a
   question would be lost), so the robot's head in a ring covers the screen with
   "Sauvegarde en cours..." / "Saving..." (`saving` of `LANG_<XX>.TXT`) until it is done. It is drawn once and stays
   still, on an opaque background, then the display is stopped until the saves are done (the screen keeps that

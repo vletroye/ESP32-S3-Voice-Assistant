@@ -713,6 +713,72 @@ static model_row_t *s_model_rows = NULL;    /* of the list shown (PSRAM) */
 static size_t s_model_row_count = 0;
 static lv_obj_t *s_model_test_box = NULL;
 static int s_model_test_row = -1;
+static lv_obj_t *s_model_test_wait = NULL;
+
+/*
+ * While a model is tested alone: over the whole screen (nothing can be touched), the robot's head looking from
+ * side to side in a turning ring, and the model's name; removed when the test is done
+ */
+static void model_test_eyes_anim_cb(void *eyes, int32_t x)
+{
+    lv_obj_set_x(eyes, x);
+}
+
+static void model_test_wait_show(const char *name)
+{
+    if (s_model_test_wait) {
+        return;
+    }
+    s_model_test_wait = lv_obj_create(lv_layer_top());
+    lv_obj_t *wait = s_model_test_wait;
+    lv_obj_remove_style_all(wait);
+    lv_obj_set_size(wait, lv_pct(100), lv_pct(100));
+    lv_obj_add_flag(wait, LV_OBJ_FLAG_CLICKABLE);     // the touches stop here
+    lv_obj_clear_flag(wait, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(wait, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(wait, LV_OPA_80, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_t *ring = lv_spinner_create(wait, 1200, 70);
+    lv_obj_set_size(ring, 156, 156);
+    lv_obj_align(ring, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_arc_width(ring, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(ring, lv_color_hex(0x2A2F45), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_width(ring, 6, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(ring, lv_color_hex(0x6E47BD), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+
+    // The head as on the listening screen: body, eye screen, eyes
+    lv_obj_t *body = lv_img_create(wait);
+    lv_img_set_src(body, &ui_img_body_png);
+    lv_obj_align(body, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_t *screen = lv_img_create(body);
+    lv_img_set_src(screen, &ui_img_body_eye_screen_png);
+    lv_obj_align(screen, LV_ALIGN_CENTER, 10, 5);
+    lv_obj_t *eyes = lv_img_create(screen);
+    lv_img_set_src(eyes, &ui_img_listen_body_eyes_1_png);
+    lv_obj_align(eyes, LV_ALIGN_CENTER, 0, 0);
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, eyes);
+    lv_anim_set_exec_cb(&a, model_test_eyes_anim_cb);
+    lv_anim_set_values(&a, -12, 12);
+    lv_anim_set_time(&a, 900);
+    lv_anim_set_playback_time(&a, 900);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_start(&a);
+
+    lv_obj_t *label = lv_label_create(wait);
+    char text[96];
+    snprintf(text, sizeof(text), app_lang_get()->settings_testing, name);
+    lv_label_set_text(label, text);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(label, 300);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(label, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
 
 /* Its last test without the parentheses: "1,2 s", "indisponible", "" when never tested */
 static void model_row_time(const cJSON *results, const char *key, char *buf, size_t size)
@@ -768,6 +834,10 @@ static void model_test_done_cb(void)
 {
     bsp_display_lock(0);
     s_model_test_row = -1;
+    if (s_model_test_wait) {
+        lv_obj_del(s_model_test_wait);      // its animations with it
+        s_model_test_wait = NULL;
+    }
     if (lv_scr_act() == ui_ScreenSettings) {
         model_list_show(s_settings_page);
     }
@@ -783,6 +853,7 @@ static void model_test_box_cb(lv_event_t *e)
             model_test_one(s_model_rows[index].kind, s_model_rows[index].id, model_test_done_cb)) {
         ESP_LOGI(TAG, "%s: tested alone", s_model_rows[index].id);
         lv_label_set_text(s_model_rows[index].time, "...");
+        model_test_wait_show(s_model_rows[index].name);
     } else {
         s_model_test_row = -1;
     }

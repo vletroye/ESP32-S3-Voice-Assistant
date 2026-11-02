@@ -401,6 +401,7 @@ settings_stt_list = Modelli STT
 settings_tts_list = Modelli TTS
 settings_test_title = Test prestazioni
 settings_test_text = Testare la velocità di %s?
+settings_testing = Test di %s in corso...
 settings_yes = Sì
 settings_no = No
 

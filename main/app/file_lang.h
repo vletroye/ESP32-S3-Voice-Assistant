@@ -201,6 +201,7 @@ typedef struct {
     const char *settings_tts_list;
     const char *settings_test_title;    /* Popup of a long press on a model: its title, its text (%s: the model) */
     const char *settings_test_text;
+    const char *settings_testing;       /* Over the list while it is tested, %s: the model */
     const char *settings_yes;
     const char *settings_no;
     const char *voice_sample;       /* Spoken with a voice just chosen, %s = its name */

@@ -402,6 +402,7 @@ settings_stt_list = STT-modellen
 settings_tts_list = TTS-modellen
 settings_test_title = Prestatietest
 settings_test_text = Testen hoe snel %s is?
+settings_testing = %s wordt getest...
 settings_yes = Ja
 settings_no = Nee
 

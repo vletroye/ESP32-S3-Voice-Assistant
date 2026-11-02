@@ -7,3 +7,5 @@ factory,    app,    factory,    0x10000,    6M,
 ota_0,      app,    ota_0,      0x700000,   2M,
 storage,    data,   spiffs,     0x900000,   2M,
 model,      data,   spiffs,     0xb00000,   4000K
+# The files written often (main/app/file_state.c): LittleFS, the 1120 KB left at the end of the 16 MB flash
+state,      data,   spiffs,     0xee8000,   0x118000,

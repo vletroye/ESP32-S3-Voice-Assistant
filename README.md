@@ -628,15 +628,20 @@ settings, conversation and the files you edited are kept):
 
 | File | Flash address | What it is |
 | --- | --- | --- |
+| `ESP32-S3-Assistant-<version>-partitions.bin` | `0x8000` | The partition table (since 2.23.0: the `state` partition was added) |
 | `ESP32-S3-Assistant-<version>-app.bin` | `0x10000` | The assistant |
 | `ESP32-S3-Assistant-<version>-config.bin` | `0x700000` | Its configuration mode |
 
-In [esptool-js](https://espressif.github.io/esptool-js/), add both files with **Add File**, each with its address,
-then **Program**. From a command line:
+In [esptool-js](https://espressif.github.io/esptool-js/), add the three files with **Add File**, each with its
+address, then **Program**. From a command line:
 
 ```bash
-esptool.py --chip esp32s3 -p COM3 write_flash 0x10000 ESP32-S3-Assistant-<version>-app.bin 0x700000 ESP32-S3-Assistant-<version>-config.bin
+esptool.py --chip esp32s3 -p COM3 write_flash 0x8000 ESP32-S3-Assistant-<version>-partitions.bin 0x10000 ESP32-S3-Assistant-<version>-app.bin 0x700000 ESP32-S3-Assistant-<version>-config.bin
 ```
+
+Updating from a version before 2.23.0, the partition table is needed: without it, the conversation, the costs and
+the results of the model tests are not kept across restarts (the log says `LittleFS partition "state" not mounted`).
+The first start then moves them from SPIFFS to the new partition.
 
 After an update, the files of the configuration drive you already have are kept: the new keys, sections and voice
 phrases of the firmware are added to them at the next start. To get the new versions of the texts, voice phrases
@@ -1029,7 +1034,7 @@ at 125 % (Anthropic).
 - **`COSTS.TXT`** (configuration drive), written on the way to the configuration mode (writing it each time the
   assistant went to sleep took seconds): for today, this month and
   since the start, one line per model (calls, tokens in with the cached ones, tokens out, cost) and the total by
-  kind; then the total by kind of each of the last 12 months. The figures are kept in `/spiffs/costs.json`
+  kind; then the total by kind of each of the last 12 months. The figures are kept in `/state/costs.json`
   (counters of today and this month started again on a new day or month); the factory reset erases them.
 
 #### 3.3.4 Model test ("teste les modèles")
@@ -1057,8 +1062,8 @@ conversation nor tools** but with the same instructions. The model chosen and it
   answers of similar length (models do not count their tokens, and each one cuts text into tokens differently).
 - **`SPEED.TXT`** (on SPIFFS, shown on the configuration drive): one line per model, sorted by mean time, with its
   last time, its **mean over every test** (`n` tests) and the date; models not available keep their mean. The
-  data is kept in `/spiffs/model_times.json`, the last results of the speech models in
-  `/spiffs/speech_times.json`; the factory reset erases them. The lists of the models (to change of model, of
+  data is kept in `/state/model_times.json`, the last results of the speech models in
+  `/state/speech_times.json`; the factory reset erases them. The lists of the models (to change of model, of
   transcription, of speech) show the time of each one's last test after its name, "(indisponible)" /
   "(unavailable)" if it did not answer.
 - At the end, the **speed** of each model of `AGENTS.INI` is written after its spoken name: `fast` in the third of
@@ -1571,7 +1576,8 @@ Two firmwares live side by side in flash:
 | `main/` (root project) | `factory` (6 MB) | The voice assistant |
 | `factory_nvs/` | `ota_0` (2 MB) | Configuration mode: the BOX shows up as a USB drive containing `CONFIG.INI`, `MEMORY.TXT` and the files kept on SPIFFS (`AGENTS.INI`, `LANG_FR.TXT`, `VOICE_FR.TXT`, `PERSO_FR.TXT`, `COUNTRY.TXT`…) (`factory_nvs/components/esp_tinyuf2`: copy of Espressif's `esp_tinyuf2` 1.2.0, extended with `MEMORY.TXT` and the files of SPIFFS, files that can grow when edited, a root directory of 8 sectors (up to 64 files of SPIFFS instead of 15 files in all), and a bound-checked `CONFIG.INI`; the `INFO_UF2.TXT`, `INDEX.HTM` and `CURRENT.UF2` files of TinyUF2 are not shown, no firmware being flashed through the drive) |
 | `bsp/` | — | Board component (audio codec, buttons), used by both projects |
-| `spiffs/` | `storage` | System sounds (`echo_en_wake.wav`, wake beep); the conversation (`history.json`) is saved there at run time |
+| `spiffs/` | `storage` (2 MB, SPIFFS) | System sounds (`echo_en_wake.wav`, wake beep); at run time the files of the configuration drive (`AGENTS.INI`, `LANG_`, `VOICE_`, `PERSO_`, `COSTS.TXT`, `SPEED.TXT`, `DEBUG.TXT`…) |
+| — | `state` (1120 KB, LittleFS, the end of the flash) | The files written often (`main/app/file_state.c`): the conversation (`history.json`), the costs (`costs.json`), the results of the model tests (`model_times.json`, `speech_times.json`), the weather places (`places.json`). SPIFFS took 2 to 9 s to write them (everything stopping meanwhile), LittleFS a fraction of a second; they were moved there from SPIFFS by the first start of 2.23.0 |
 | `version.txt`, `tools/bump_version.py` | — | Firmware version and the script raising it (see [Firmware version](#45-firmware-version)) |
 | `docs/icons/`, `tools/icons_to_png.py` | — | The icons of the screen (providers, web, local) as PNG for this README, made from `main/app/images/` |
 
@@ -1623,10 +1629,11 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `radio_browser.c` | Radio-Browser: server chosen from its list, searches by name, tag and country, listens counted |
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
+| `file_state.c` | The LittleFS partition `state` of the files written often (conversation, costs, test results, places): mounted on `/state`, those of an older firmware moved there from SPIFFS, erased by the factory reset |
 | `debug_trace.c` | Debug traces: every log line caught (`esp_log_set_vprintf`), with the time of day and the number of the exchange, in a 1 MB ring buffer in PSRAM; marks; the dump to `/spiffs/debug.txt` |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |
 | `tools.c` | Tools offered to the models (definitions, dispatch) |
-| `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/spiffs/places.json` (read at start-up, saved when idle) |
+| `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/state/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
 | `file_phrases.c` | Phrase files of the voice commands (`main/phrases/phrases_<lang>.txt`, installed on SPIFFS): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |
 | `voice_cmd.c` | Settings by voice: language, model (provider, then model), transcription and speech synthesis models, voice of the speech service in use, country and town, configuration mode ("change la langue", "change de modèle", "change de transcription", "change de synthèse vocale", "prends la voix Cedar", "change ma ville", "édite la config") |
@@ -1657,6 +1664,9 @@ idf.py -p COMx flash monitor
 - `idf.py flash` writes everything: bootloader, assistant, configuration mode, sounds (`spiffs/`) and
   ESP-SR models.
 - `idf.py app-flash` only rewrites the assistant (faster): **the sounds are not updated**.
+- `idf.py flash` rewrites the `storage` partition (SPIFFS) with `spiffs/`: the files of the configuration drive
+  are then installed again from the firmware. To keep them while changing the partition table, write only the
+  table and the assistant: `idf.py -p COMx partition-table-flash app-flash`.
 - External components (`managed_components/`) are downloaded automatically on the first build; their
   versions are pinned in `dependencies.lock`.
 - After changing a `Kconfig` file, run `idf.py reconfigure`.
@@ -1685,7 +1695,9 @@ full build (configuration mode first, then the assistant, as above), in the `bui
 cd build
 # Full image, flashed at 0x0 (first install: erases the settings and the files)
 esptool.py --chip esp32s3 merge_bin -o ESP32-S3-Assistant-<version>.bin @flash_args
-# Update without erasing anything: the assistant (0x10000) and its configuration mode (0x700000)
+# Update without erasing anything: the partition table (0x8000), the assistant (0x10000) and its configuration mode
+# (0x700000)
+cp partition_table/partition-table.bin ESP32-S3-Assistant-<version>-partitions.bin
 cp chatgpt_demo.bin ESP32-S3-Assistant-<version>-app.bin
 cp uf2/factory_nvs.bin ESP32-S3-Assistant-<version>-config.bin
 ```
@@ -1842,8 +1854,9 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
   (with the history of the last exchanges).
 - **Saved as it goes to sleep**: the conversation (restored after a restart) and the costs are written to the flash
   as the assistant goes back to sleep (the saving screen comes at once, instead of the sleeping robot, which shows
-  once the saves are done; woken up before they start, they wait for the next sleep). It takes a few seconds and everything stops meanwhile (a wake word, a touch or a
-  question would be lost), so the robot's head in a ring covers the screen with
+  once the saves are done; woken up before they start, they wait for the next sleep). They go to the LittleFS
+  partition `state` (a fraction of a second; on SPIFFS they took 2 to 9 s); everything stops meanwhile (a wake word,
+  a touch or a question would be lost), so the robot's head in a ring covers the screen with
   "Sauvegarde en cours..." / "Saving..." (`saving` of `LANG_<XX>.TXT`) until it is done. It is drawn once and stays
   still, on an opaque background, then the display is stopped until the saves are done (the screen keeps that
   picture): the sleep screen's animations, drawn beneath, made the saves 3 to 5 times longer.
@@ -1852,11 +1865,11 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
   stays on screen for the time it takes to read the list (its characters at `Scroll_speed`, at most 20 s): the
   listen screen comes after it, or as soon as you answer ("trois" / "three").
 - **Conversation memory**: the last 6 to 12 exchanges are kept across sleep and restarts (saved to flash in
-  `/spiffs/history.json` once the assistant is back to sleep, never during an exchange), so you can ask later "what
+  `/state/history.json` once the assistant is back to sleep, never during an exchange), so you can ask later "what
   were we talking about?". Saying "Au revoir" / "Goodbye" ends the conversation and clears it; "Nouvelle discussion" /
   "New conversation", "J'ai une autre question" / "I have another question" or "Passons à autre chose" / "Let's move
   on" clear it too, without going to sleep. Changing the model starts a new
-  one; a full `idf.py flash` erases it (the `storage` partition is rewritten).
+  one; the factory reset erases it.
 - **Tools** (Claude, GPT, Gemini, Mistral, Grok and OpenRouter models), called by the model when the question needs them:
   - **weather** ("Quel temps fera-t-il demain à Namur ?" / "What will the weather be tomorrow in Namur?"), from Open-Meteo, free and without key;
   - **volume** ("Parle plus fort" / "Speak louder", "Mets le volume à 50" / "Set the volume to 50"), applied at once if nothing is playing (else after

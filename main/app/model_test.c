@@ -24,15 +24,16 @@
 #include "voice_cmd.h"
 #include "app_ui_ctrl.h"
 #include "model_test.h"
+#include "file_state.h"
 #include "settings.h"
 #include "stt_stream.h"
 #include "tts_stream.h"
 #include "file_memory.h"
 
-#define MODEL_TIMES_FILE        "/spiffs/model_times.json"
+#define MODEL_TIMES_FILE        STATE_DIR "/model_times.json"   /* LittleFS (file_state.h) */
 #define MODEL_TIMES_FILE_MAX    8192
 /* The last results of the speech models, by "tts:<id>" / "stt:<id>" (shown in the lists of the models) */
-#define SPEECH_TIMES_FILE       "/spiffs/speech_times.json"
+#define SPEECH_TIMES_FILE       STATE_DIR "/speech_times.json"
 #define SPEED_FILE              "/spiffs/speed.txt"
 /* Its name before (LOG.TXT): removed by the next test */
 #define OLD_SPEED_FILE          "/spiffs/log.txt"

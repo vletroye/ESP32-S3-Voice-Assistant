@@ -21,9 +21,10 @@
 #include "file_lang.h"
 #include "llm.h"
 #include "file_costs.h"
+#include "file_state.h"
 
-#define COSTS_FILE          "/spiffs/costs.json"
-#define COSTS_TMP_FILE      "/spiffs/costs.tmp"
+#define COSTS_FILE          STATE_DIR "/costs.json"     /* written often: LittleFS (file_state.h) */
+#define COSTS_TMP_FILE      STATE_DIR "/costs.tmp"
 #define COSTS_TEXT_FILE     "/spiffs/costs.txt"
 #define COSTS_FILE_MAX      (24 * 1024)
 #define MONTHS_KEPT         12

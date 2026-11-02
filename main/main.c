@@ -31,6 +31,7 @@
 #include "file_memory.h"
 #include "voice_cmd.h"
 #include "debug_trace.h"
+#include "file_state.h"
 #include "file_phrases.h"
 #include "ai_provider_openrouter_free.h"
 #include "ai_providers.h"
@@ -688,6 +689,8 @@ static void remove_firmware_files(bool factory)
     // languages added are taken back into the firmware's file
     remove(COUNTRY_OLD_FILE);
     if (factory) {
+        // The conversation, the costs, the test results and the places (LittleFS)
+        state_erase();
         ESP_LOGI(TAG, "%s %s", remove(COUNTRY_FILE) == 0 ? "Removed" : "Could not remove", COUNTRY_FILE);
     } else {
         ESP_LOGI(TAG, "%s %s", rename(COUNTRY_FILE, COUNTRY_OLD_FILE) == 0 ? "Kept aside" : "Could not keep aside",
@@ -1175,6 +1178,8 @@ void app_main()
     debug_trace_set(sys_param->debug);
 
     bsp_spiffs_mount();
+    // The files written often (conversation, costs, test results, places): LittleFS, moved there from SPIFFS once
+    state_mount();
     // The backup of CONFIG.INI made by the factory reset of an older firmware (keys included): no longer kept
     if (remove("/spiffs/config.bkp") == 0) {
         ESP_LOGI(TAG, "CONFIG.BKP removed");

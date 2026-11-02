@@ -5,7 +5,7 @@
  *
  * Costs of the assistant: tokens read and written by each model (transcription, answer, speech) and calls of
  * tools billed per use, priced with AGENTS.INI (currency of CONFIG.INI), by model, for today, this month and since
- * the start, plus a total per month for the last 12 months. Kept in /spiffs/costs.json, shown in COSTS.TXT.
+ * the start, plus a total per month for the last 12 months. Kept in /state/costs.json (LittleFS), shown in COSTS.TXT.
  */
 
 #pragma once

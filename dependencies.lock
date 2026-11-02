@@ -358,6 +358,16 @@ dependencies:
     source:
       type: idf
     version: 5.3.6
+  joltwallet/littlefs:
+    component_hash: e1a0f4a6adf821759cb34703a91107bbdce5d7ff6f4728f40ab012bb87842974
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.23.1
   lvgl/lvgl:
     component_hash: d7c1ac037ae6e85d94897f807d6e7ba0946a83e720074fc95a4f6241da9f9f53
     dependencies: []
@@ -377,6 +387,7 @@ direct_dependencies:
 - espressif/esp_lcd_touch_gt911
 - espressif/esp_lcd_touch_tt21100
 - espressif/esp_websocket_client
-manifest_hash: 06597a22acbb6b1491a91d654e19e8f1e1b2764bee0bc281e28308174382f399
+- joltwallet/littlefs
+manifest_hash: 9635981b646be58091480fcab3ee0d91573aa25f10d99f6ae0dfcfb118f3ebb1
 target: esp32s3
 version: 2.0.0

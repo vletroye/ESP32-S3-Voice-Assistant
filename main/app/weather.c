@@ -17,6 +17,7 @@
 #include "cJSON.h"
 #include "llm_sse.h"
 #include "weather.h"
+#include "file_state.h"
 #include "file_memory.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -26,7 +27,7 @@
 #define GEOCODING_URL           "https://geocoding-api.open-meteo.com/v1/search"
 #define FORECAST_URL            "https://api.open-meteo.com/v1/forecast"
 /* Places already looked up (a city does not move): saved in this file, read once at start-up */
-#define PLACES_FILE             "/spiffs/places.json"
+#define PLACES_FILE             STATE_DIR "/places.json"    /* written often: LittleFS (file_state.h) */
 #define PLACES_FILE_MAX         2048
 #define PLACES_MAX              8
 

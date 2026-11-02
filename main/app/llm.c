@@ -17,6 +17,7 @@
 #include "esp_timer.h"
 #include "cJSON.h"
 #include "llm.h"
+#include "file_state.h"
 #include "ai_provider_anthropic.h"
 #include "ai_provider_openai.h"
 #include "ai_provider_google.h"
@@ -1316,8 +1317,8 @@ static const llm_model_t *model_of(const char *id)
 }
 
 /* Conversation history kept across sleep and restarts (SPIFFS "storage" partition) */
-#define LLM_HISTORY_FILE        "/spiffs/history.json"
-#define LLM_HISTORY_TMP_FILE    "/spiffs/history.tmp"
+#define LLM_HISTORY_FILE        STATE_DIR "/history.json"   /* written often: LittleFS (file_state.h) */
+#define LLM_HISTORY_TMP_FILE    STATE_DIR "/history.tmp"
 
 static llm_provider_t s_provider = LLM_PROVIDER_CLAUDE;
 /* Instructions of llm_init(): the model test configures other models with them (and the keys of the settings) */

@@ -123,7 +123,7 @@ static const llm_speech_model_t *speech_at(llm_speech_kind_t kind, size_t index)
 static void show(const char *screen)
 {
     if (!s_done) {
-        show(screen);
+        assistant_show(screen);
     }
 }
 

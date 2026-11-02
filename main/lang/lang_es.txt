@@ -418,8 +418,6 @@ settings_debug_title = Debug
 settings_debug = Trazas
 settings_debug_info = %u líneas, %u KB
 settings_dump = Volcar a USB
-# Debug page: a test, the speaker amplifier switched off while nothing plays (until the restart)
-settings_amp_off = Ampli apagado (silencio)
 settings_yes = Sí
 settings_no = No
 

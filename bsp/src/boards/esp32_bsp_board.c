@@ -247,13 +247,6 @@ void bsp_codec_power_amp_off(void)
 #endif
 }
 
-void bsp_codec_power_amp_on(void)
-{
-#ifdef BSP_POWER_AMP_IO
-    gpio_set_level(BSP_POWER_AMP_IO, 1);
-#endif
-}
-
 const boards_info_t *bsp_board_get_info(void)
 {
     return &g_boards_info;

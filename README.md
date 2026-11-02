@@ -327,9 +327,7 @@ LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scr
   speech model in use.
 
 Sixth page: **Debug**, the [debug traces](#410-debug-traces-debugtxt): **Traces** on or off (saved as `Debug`),
-**Ampli coupé (silence)** / **Amp off in silence** (a test until the restart: the speaker amplifier switched off
-after a second with nothing to play, on again before any sound, to hear whether a crackle comes through it), the
-lines and KB kept so far, and **Dump vers USB** / **Dump to USB**: the traces are written, then the device restarts
+the lines and KB kept so far, and **Dump vers USB** / **Dump to USB**: the traces are written, then the device restarts
 in configuration mode, where they are `DEBUG.TXT` (with no PC connected: written anyway, and "Connecte-moi à ton
 PC." / "Connect me to your PC." is shown).
 
@@ -1796,12 +1794,12 @@ and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only w
   playback task could not run in time (the I2S DMA holds about 90 ms);
 - `app_audio: [trace] sound /spiffs/echo_en_wake.wav: … ms waited for silence, … ms of sound written in … ms,
   longest wait between two pieces … ms`, with `: the speaker ran dry (crackle)` above 80 ms: the wake sound, written
-  20 ms at a time;
+  20 ms at a time. Woken by the wake word, the beep is played before the transcription connection is opened: opening
+  it while the beep played made it crackle each time;
 - `tts_http: No audio for … ms (… KB received): the sentence is given up`: a speech stream that stopped (4 s
   without audio, 6 s for its first bytes); then lost, or asked again when nothing came;
 - `costs: Costs saved (… bytes, in … ms)`, `COSTS.TXT written in … ms`, `llm: Conversation saved (… bytes, in … ms)`,
   `Conversation cleared (its file removed in … ms)`: the writes to the flash, while the screen may stop;
-- `app_audio: [trace] amplifier off (silence)` / `amplifier on (something to play)`: the test of the Debug page;
 - `tts_http: No audio for "…": asked again`: a speech service answered a sentence without audio (Mistral, now and
   then); asked once more on a fresh connection, then counted as lost (the reply is said to have been heard badly);
 - `trace: *************** MARK 3 (long press / said) ***************`.

@@ -210,7 +210,6 @@ typedef struct {
     const char *settings_debug;
     const char *settings_debug_info;
     const char *settings_dump;
-    const char *settings_amp_off;       /* Debug page: the test of the amplifier switched off in silence */
     const char *settings_yes;
     const char *settings_no;
     const char *voice_sample;       /* Spoken with a voice just chosen, %s = its name */

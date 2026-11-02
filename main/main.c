@@ -1268,8 +1268,6 @@ void app_main()
     for (int seconds = 0; ; seconds++) {
         // A second, or less when the assistant goes to sleep with something to save (assistant_save_soon)
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
-        // The test of the Debug page: the amplifier off in silence
-        audio_amp_idle_check();
 
         // Homey's tools, read once the Wi-Fi is up (again every minute while the server cannot be reached)
         static int homey_retry_s = 0;

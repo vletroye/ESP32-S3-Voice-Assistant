@@ -518,7 +518,6 @@ static void playback_task(void *arg)
                 TRACE(TAG, "speaker fed %lld ms after the previous piece: it ran dry (crackle)", late_us / 1000);
             }
             fed = true;
-            audio_amp_need();       // (a test may have switched the amplifier off in silence)
             size_t written = 0;
             bsp_i2s_write(stereo, frames * 2 * sizeof(int16_t), &written, portMAX_DELAY);
             s_last_play_us = esp_timer_get_time();

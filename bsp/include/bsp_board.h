@@ -152,9 +152,6 @@ esp_err_t bsp_codec_mute_set(bool enable);
  */
 void bsp_codec_power_amp_off(void);
 
-/** The speaker amplifier on again (after bsp_codec_power_amp_off) */
-void bsp_codec_power_amp_on(void);
-
 /**
  * @brief Player set volume.
  *

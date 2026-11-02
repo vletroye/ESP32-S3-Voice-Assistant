@@ -1354,11 +1354,20 @@ void app_main()
         // progress, not listening, nothing played for a while): never during an exchange, follow-up included.
         // The saves do nothing when unchanged. This task's stack is in internal RAM, as flash writes need.
         if (ui_ctrl_is_asleep() && !s_reply_active && !record_flag && tts_stream_is_silent(SAVE_AFTER_SILENCE_MS)) {
+            // Seconds in the flash, everything stopping meanwhile (a wake word or a question then lost): the
+            // robot's head turning over the sleep screen says it is not the moment
+            bool long_saves = llm_history_unsaved() || costs_unsaved();
+            if (long_saves) {
+                ui_ctrl_busy(app_lang_get()->saving);
+            }
             llm_history_save();
             app_volume_save();
             weather_places_save();
             // The costs counted, saved (the conversation's stays shown until the next wake-up)
             costs_save();
+            if (long_saves) {
+                ui_ctrl_busy(NULL);
+            }
         }
         if (seconds % 30) {
             continue;

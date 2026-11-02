@@ -313,6 +313,9 @@ int llm_answer_timeout_ms(void);
  */
 void llm_history_save(void);
 
+/** True when the conversation has changes not saved yet */
+bool llm_history_unsaved(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1329,6 +1329,11 @@ static SemaphoreHandle_t s_lock = NULL;
 /* History changed since the last save */
 static bool s_dirty = false;
 
+bool llm_history_unsaved(void)
+{
+    return s_ready && s_dirty;
+}
+
 llm_provider_t llm_provider_of(const char *model)
 {
     const llm_model_t *listed = model_of(model);

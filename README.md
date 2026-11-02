@@ -171,7 +171,7 @@ Every file of the drive is explained in the [Advanced user guide](#3-advanced-us
 
 - Say "**Bonjour ESP**" or "**Hi ESP**" (or touch the screen): a beep, then "J'écoute…" / "I'm listening…". Ask
   your question and stop: the answer is shown and spoken.
-- After the answer it keeps listening for 4 seconds: go on without the wake word.
+- After the answer it keeps listening for 8 seconds: go on without the wake word.
 - To interrupt it, say "Bonjour ESP" again or **double-tap** the screen.
 - Say "**Au revoir**" / "**Goodbye**" to send it back to sleep and start the next conversation afresh. Without
   it, the assistant remembers the conversation, even after sleeping or a restart: the next questions are answered
@@ -245,7 +245,7 @@ Every feature in detail: [Features in detail](#411-features-in-detail).
 2. After 0.9 s of silence (`End_speech_ms` in `CONFIG.INI`) the question is sent: "Entendu …" / "Heard …" is shown
    until its transcript arrives (0.7 to 1.2 s), then "Je réfléchis …" / "Thinking …" until the answer starts; the
    answer is shown and spoken.
-3. After the answer, the assistant keeps listening for 4 s: you can go on without saying "Bonjour ESP" / "Hi ESP"
+3. After the answer, the assistant keeps listening for 8 s: you can go on without saying "Bonjour ESP" / "Hi ESP"
    (not after a volume change, which sends it back to sleep).
 4. To interrupt an answer, say "Bonjour ESP" / "Hi ESP" again or **double-tap** the screen: it stops and listens. A
    double tap while "J'écoute …" / "I'm listening …" or "Je réfléchis …" / "Thinking …" is shown drops the question:
@@ -1028,7 +1028,8 @@ at 125 % (Anthropic).
   then below it the tokens **In** (read, cache included; for the transcription, the audio heard at 10 tokens a
   second) and **Out** (written), shortened ("42,3 k"), all models together (back arrow to return; it also closes
   when the assistant listens).
-- **`COSTS.TXT`** (configuration drive), written each time the assistant goes to sleep: for today, this month and
+- **`COSTS.TXT`** (configuration drive), written on the way to the configuration mode (writing it each time the
+  assistant went to sleep took seconds): for today, this month and
   since the start, one line per model (calls, tokens in with the cached ones, tokens out, cost) and the total by
   kind; then the total by kind of each of the last 12 months. The figures are kept in `/spiffs/costs.json`
   (counters of today and this month started again on a new day or month); the factory reset erases them.
@@ -1726,7 +1727,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_CONFIRM_OFF` | `socket` | Homey classes confirmed before being turned off when `Confirm_off` is not set |
 | `CONFIG_ASSISTANT_REPLY_SCROLL_CPS` | `16` | Answer scrolling speed when `Scroll_speed` is not set |
 | `CONFIG_ASSISTANT_TIMEZONE` | `CET-1CEST,M3.5.0,M10.5.0/3` | Time zone of the clock (POSIX TZ; default Brussels/Paris) |
-| `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `4000` | Listening time after an answer (0 = disabled) |
+| `CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS` | `8000` | Listening time after an answer (0 = disabled) |
 | `CONFIG_VOLUME_LEVEL` | `90` | Speaker volume when `Volume` is not set |
 
 An existing `sdkconfig` file takes precedence over `sdkconfig.defaults`: to change a value, use
@@ -1795,7 +1796,7 @@ and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only w
   20 ms at a time;
 - `tts_http: No audio for … ms (… KB received): the sentence is given up`: a speech stream that stopped (4 s
   without audio, 6 s for its first bytes); then lost, or asked again when nothing came;
-- `costs: Costs saved (… bytes, with COSTS.TXT, in … ms)`, `llm: Conversation saved (… bytes, in … ms)`,
+- `costs: Costs saved (… bytes, in … ms)`, `COSTS.TXT written in … ms`, `llm: Conversation saved (… bytes, in … ms)`,
   `Conversation cleared (its file removed in … ms)`: the writes to the flash, while the screen may stop;
 - `app_audio: [trace] amplifier off (silence)` / `amplifier on (something to play)`: the test of the Debug page;
 - `tts_http: No audio for "…": asked again`: a speech service answered a sentence without audio (Mistral, now and
@@ -1836,8 +1837,12 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
   e.g. `PT:Português`, to `Languages` in `CONFIG.INI` creates its files from the English ones, ready to be
   translated. Country names per language in `COUNTRY.TXT`.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
-- **Follow-up without the wake word**: after an answer, the assistant keeps listening for 4 s
+- **Follow-up without the wake word**: after an answer, the assistant keeps listening for 8 s
   (with the history of the last exchanges).
+- **Saved as it goes to sleep**: the conversation (restored after a restart) and the costs are written to the flash
+  once the assistant sleeps again. It takes a few seconds and everything stops meanwhile (a wake word, a touch or a
+  question would be lost), so the robot's head, looking around in a turning ring, covers the screen with
+  "Sauvegarde en cours..." / "Saving..." (`saving` of `LANG_<XX>.TXT`) until it is done.
 - **Lists shown, not read** (`Read_lists = off`, the default): the replies offering languages, providers, models or
   voices say their question and show the list without reading it. The assistant listens at once, but the reply
   stays on screen for the time it takes to read the list (its characters at `Scroll_speed`, at most 20 s): the

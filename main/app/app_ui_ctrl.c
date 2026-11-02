@@ -752,15 +752,15 @@ static int s_model_test_row = -1;
 static lv_obj_t *s_model_test_wait = NULL;
 
 /*
- * While a model is tested alone: over the whole screen (nothing can be touched), the robot's head looking from
- * side to side in a turning ring, and the model's name; removed when the test is done
+ * While the device is busy (a model tested alone, the saves as it goes to sleep): over the whole screen (nothing
+ * can be touched), the robot's head looking from side to side in a turning ring, and a text; then removed
  */
 static void model_test_eyes_anim_cb(void *eyes, int32_t x)
 {
     lv_obj_set_x(eyes, x);
 }
 
-static void model_test_wait_show(const char *name)
+static void busy_show(const char *text)
 {
     if (s_model_test_wait) {
         return;
@@ -805,8 +805,6 @@ static void model_test_wait_show(const char *name)
     lv_anim_start(&a);
 
     lv_obj_t *label = lv_label_create(wait);
-    char text[96];
-    snprintf(text, sizeof(text), app_lang_get()->settings_testing, name);
     lv_label_set_text(label, text);
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(label, 300);
@@ -865,15 +863,31 @@ static void model_check_cb(lv_event_t *e)
     }
 }
 
+static void busy_hide(void)
+{
+    if (s_model_test_wait) {
+        lv_obj_del(s_model_test_wait);      // its animations with it
+        s_model_test_wait = NULL;
+    }
+}
+
+void ui_ctrl_busy(const char *text)
+{
+    bsp_display_lock(0);
+    if (text) {
+        busy_show(text);
+    } else {
+        busy_hide();
+    }
+    bsp_display_unlock();
+}
+
 /* The test done (main task): the list shown again with its time */
 static void model_test_done_cb(void)
 {
     bsp_display_lock(0);
     s_model_test_row = -1;
-    if (s_model_test_wait) {
-        lv_obj_del(s_model_test_wait);      // its animations with it
-        s_model_test_wait = NULL;
-    }
+    busy_hide();
     if (lv_scr_act() == ui_ScreenSettings) {
         model_list_show(s_settings_page);
     }
@@ -889,7 +903,9 @@ static void model_test_box_cb(lv_event_t *e)
             model_test_one(s_model_rows[index].kind, s_model_rows[index].id, model_test_done_cb)) {
         ESP_LOGI(TAG, "%s: tested alone", s_model_rows[index].id);
         lv_label_set_text(s_model_rows[index].time, "...");
-        model_test_wait_show(s_model_rows[index].name);
+        char text[96];
+        snprintf(text, sizeof(text), app_lang_get()->settings_testing, s_model_rows[index].name);
+        busy_show(text);
     } else {
         s_model_test_row = -1;
     }

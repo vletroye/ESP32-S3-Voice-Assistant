@@ -287,6 +287,9 @@ costs_cost = Costo
 clock_hidden = D'accordo, non mostro più l'ora.
 
 # "quelle est ta version": %s the firmware version ("1.4.2")
+# Over the sleep screen while the conversation and the costs are saved (a few seconds)
+saving = Salvataggio in corso...
+
 # "Note ça" or a long press on the screen with the debug traces on (%d: the number of the mark), or off
 mark_done = Segno %d annotato.
 mark_off = Le tracce di debug sono disattivate.

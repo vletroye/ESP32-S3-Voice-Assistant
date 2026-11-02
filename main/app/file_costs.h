@@ -49,8 +49,14 @@ void costs_add_calls(const char *tool, int calls);
 /** The assistant wakes up: the cost of the conversation starts again at 0 (it stays shown while asleep) */
 void costs_conversation_start(void);
 
-/** Write costs.json and COSTS.TXT if they changed (main task, never during an exchange) */
+/** Write costs.json if it changed (main task, never during an exchange) */
 void costs_save(void);
+
+/** True when costs.json has changes not written yet */
+bool costs_unsaved(void);
+
+/** Write COSTS.TXT, read only on the configuration drive: on the way to the configuration mode */
+void costs_write_text(void);
 
 /**
  * @brief Cost since the assistant last woke up (the last conversation while it sleeps), by kind

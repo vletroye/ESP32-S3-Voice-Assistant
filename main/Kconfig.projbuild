@@ -183,7 +183,7 @@ menu "Example Configuration"
 
     config ASSISTANT_FOLLOWUP_WINDOW_MS
         int "Follow-up listening window (ms)"
-        default 4000
+        default 8000
         range 0 30000
         help
             After a spoken reply, keep listening this long without wake word so that the

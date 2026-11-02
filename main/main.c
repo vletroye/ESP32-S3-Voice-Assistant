@@ -544,11 +544,12 @@ static char *build_system_prompt(void)
         snprintf(location, sizeof(location), lang->location_line, where);
     }
     const char *home = sys_param->homey_url[0] ? lang->home_line : "";
+    const char *home_rules = sys_param->homey_url[0] ? lang->home_rules : "";
     // Identity, personality and instructions of PERSO_<LANG>.TXT, then what the working requires (file_lang.c),
     // the location, the home and the notes to remember
     const char *parts[] = {
         persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY), persona_get(PERSONA_INSTRUCTIONS),
-        lang->system_prompt, location, home,
+        lang->system_prompt, location, home, home_rules,
     };
     char *prompt = NULL;
     size_t size = 0;
@@ -1156,6 +1157,9 @@ void app_main()
     ESP_ERROR_CHECK(ret);
     ESP_ERROR_CHECK(settings_read_parameter_from_nvs());
     sys_param = settings_get_parameter();
+    // The time zone at once (the clock of the previous run goes on): the times of the traces are local from the start
+    setenv("TZ", CONFIG_ASSISTANT_TIMEZONE, 1);
+    tzset();
     // Debug traces: from now on, every log line kept (DEBUG.TXT)
     debug_trace_set(sys_param->debug);
 

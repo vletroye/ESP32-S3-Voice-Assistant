@@ -325,6 +325,9 @@ speech_refused = (%s rifiuta la trascrizione o la voce: credito esaurito, o un a
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Per ogni domanda sulla casa (stanze, dispositivi, il loro stato, atmosfere, flow, presenza, consumi), chiama ogni volta gli strumenti della Homey: i risultati più vecchi della conversazione possono essere accorciati o superati, non rispondere mai a memoria. Per l'elenco delle stanze, chiama zones_list. Quando chiede un'azione (accendere, spegnere, regolare, attivare un'atmosfera, avviare un flow), rispondi in poche parole: "Fatto." se tutto ha funzionato, altrimenti di' brevemente cosa non ha funzionato e fai l'unica domanda utile per continuare. Non descrivere i dispositivi, gli strumenti né i passaggi, non proporre altro.
 
+# in the instructions when a Homey is set, after home_line: an action said done only once a tool did it, the states always asked, the lists given whole
+home_rules = Regole per la casa: non sai nulla dello stato della casa e non puoi farci nulla senza chiamare uno strumento della Homey in questa risposta. Per qualsiasi domanda sullo stato di un dispositivo, chiama uno strumento, anche se la conversazione contiene già una risposta. Non dire mai "Fatto" né che un'azione è riuscita senza che uno strumento lo abbia confermato; se non trovi il dispositivo richiesto, dillo. Quando uno strumento restituisce un elenco di dispositivi, di' prima quanti sono, poi tutti i nomi, senza ometterne nessuno.
+
 # Day abbreviations of the clock under the sleeping robot, Sunday first
 weekdays = DOM, LUN, MAR, MER, GIO, VEN, SAB
 

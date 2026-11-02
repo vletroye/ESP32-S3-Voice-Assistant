@@ -23,6 +23,7 @@
 #include "app_sr.h"
 #include "app_presence.h"
 #include "app_audio.h"
+#include "debug_trace.h"
 #include "bsp_board.h"
 #include "bsp/esp-bsp.h"
 #include "app_ui_ctrl.h"
@@ -184,6 +185,9 @@ err:
  */
 #define SOUND_WAIT_SILENCE_MS   150
 #define SOUND_WAIT_MAX_MS       600
+/* A system sound written in pieces of this length; the I2S DMA holds about SOUND_DMA_MS of audio (6 x 240 frames) */
+#define SOUND_PIECE_MS          20
+#define SOUND_DMA_MS            80
 
 /* System sound loaded once in PSRAM as 16 kHz stereo samples: played in one write, without file reads */
 typedef struct {
@@ -284,8 +288,23 @@ esp_err_t audio_play_task(void *filepath)
     while (!tts_stream_is_silent(SOUND_WAIT_SILENCE_MS) && esp_timer_get_time() - t0 < SOUND_WAIT_MAX_MS * 1000LL) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+    int64_t waited_us = esp_timer_get_time() - t0;
+    // Written 20 ms at a time: a piece written long after the previous one means the speaker ran dry meanwhile (the
+    // I2S DMA holds SOUND_DMA_MS of audio), heard as a crackle
     size_t written = 0;
-    bsp_i2s_write(s_sound.stereo, s_sound.bytes, &written, portMAX_DELAY);
+    const size_t piece = 16 * SOUND_PIECE_MS * 2 * sizeof(int16_t);
+    int64_t start_us = esp_timer_get_time(), last_us = start_us, gap_us = 0;
+    for (size_t off = 0; off < s_sound.bytes; off += piece) {
+        size_t n = s_sound.bytes - off < piece ? s_sound.bytes - off : piece;
+        bsp_i2s_write(s_sound.stereo + off / sizeof(int16_t), n, &written, portMAX_DELAY);
+        int64_t now = esp_timer_get_time();
+        gap_us = now - last_us > gap_us ? now - last_us : gap_us;
+        last_us = now;
+    }
+    TRACE(TAG, "sound %s: %lld ms waited for silence, %u ms of sound written in %lld ms, longest wait between two "
+          "pieces %lld ms%s", (const char *)filepath, waited_us / 1000, (unsigned)(s_sound.bytes / 64),
+          (last_us - start_us) / 1000, gap_us / 1000,
+          gap_us > SOUND_DMA_MS * 1000LL ? ": the speaker ran dry (crackle)" : "");
     return ESP_OK;
 }
 

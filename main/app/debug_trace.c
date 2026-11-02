@@ -41,6 +41,7 @@ static volatile bool s_on = false;
 static volatile int s_turn = 0;
 static volatile int s_marks = 0;
 static char *s_line = NULL;                 /* the line being made, under s_lock */
+static size_t s_line_len = 0;               /* of a line printed in several calls (Wi-Fi: "I (12) wifi:", then the text) */
 
 static void ring_put(const char *text, size_t len)
 {
@@ -55,6 +56,29 @@ static void ring_put(const char *text, size_t len)
             s_wrapped = true;
         }
     }
+}
+
+/* The bytes of broken UTF-8 characters (a text cut by "%.40s" in the middle of an "é") left out; the new length */
+static size_t utf8_valid(char *s, size_t len)
+{
+    size_t w = 0;
+    for (size_t r = 0; r < len;) {
+        unsigned char c = (unsigned char)s[r];
+        size_t n = c < 0x80 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 0;
+        bool ok = n > 0 && r + n <= len;
+        for (size_t i = 1; ok && i < n; i++) {
+            ok = ((unsigned char)s[r + i] & 0xC0) == 0x80;
+        }
+        if (!ok) {
+            r++;
+            continue;
+        }
+        memmove(s + w, s + r, n);
+        w += n;
+        r += n;
+    }
+    s[w] = '\0';
+    return w;
 }
 
 /* "14:32:05.123", or the time since the start ("+12.345") before the clock is set */
@@ -83,9 +107,13 @@ static int trace_vprintf(const char *fmt, va_list args)
     int ret = s_prev ? s_prev(fmt, args) : vprintf(fmt, args);
     if (s_on && s_ring && !xPortInIsrContext() && xTaskGetSchedulerState() == taskSCHEDULER_RUNNING &&
             xSemaphoreTake(s_lock, pdMS_TO_TICKS(20)) == pdTRUE) {
-        int n = vsnprintf(s_line, TRACE_LINE_MAX, fmt, copy);
-        if (n > 0) {
-            size_t len = n < TRACE_LINE_MAX ? (size_t)n : TRACE_LINE_MAX - 1;
+        int n = vsnprintf(s_line + s_line_len, TRACE_LINE_MAX - s_line_len, fmt, copy);
+        size_t len = s_line_len + (n > 0 ? (size_t)n : 0);
+        len = len < TRACE_LINE_MAX ? len : TRACE_LINE_MAX - 1;
+        // A line without its end yet: kept until the next call ends it
+        bool whole = len == 0 || s_line[len - 1] == '\n' || len == TRACE_LINE_MAX - 1;
+        s_line_len = whole ? 0 : len;
+        if (n > 0 && whole) {
             // The colours ("\033[0;32m") out
             size_t w = 0;
             for (size_t r = 0; r < len; r++) {
@@ -98,6 +126,7 @@ static int trace_vprintf(const char *fmt, va_list args)
                 s_line[w++] = s_line[r];
             }
             s_line[w] = '\0';
+            w = utf8_valid(s_line, w);
             char *text = s_line;
             // "I (12345) " -> "I "
             if (text[0] && text[1] == ' ' && text[2] == '(') {

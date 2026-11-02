@@ -426,6 +426,8 @@ static void tts_task(void *arg)
  * waited for before resuming (100 ms, 200 ms ... 1.6 s): a few longer pauses instead of choppy speech
  */
 #define PREBUFFER_RESUME_MAX_SHIFT  4
+/* A piece written this long after the previous one while playing: the I2S DMA (about 90 ms) ran dry */
+#define PLAYBACK_DRY_US             (80 * 1000LL)
 
 static void playback_task(void *arg)
 {
@@ -436,6 +438,7 @@ static void playback_task(void *arg)
     bool playing = false;       /* feeding the I2S output (else filling the reserve) */
     bool done_sent = true;
     unsigned underruns = 0;
+    bool fed = false;           /* a piece written in this run of playing (not after a pause) */
 
     for (;;) {
         if (s_flush) {
@@ -497,12 +500,20 @@ static void playback_task(void *arg)
                 stereo[2 * i] = mono[i];
                 stereo[2 * i + 1] = mono[i];
             }
+            // Audio waiting but written long after the previous piece (the task kept from running): the speaker
+            // ran dry meanwhile (the I2S DMA holds about 90 ms), heard as a crackle or a gap
+            int64_t late_us = esp_timer_get_time() - s_last_play_us;
+            if (fed && late_us > PLAYBACK_DRY_US) {
+                TRACE(TAG, "speaker fed %lld ms after the previous piece: it ran dry (crackle)", late_us / 1000);
+            }
+            fed = true;
             size_t written = 0;
             bsp_i2s_write(stereo, frames * 2 * sizeof(int16_t), &written, portMAX_DELAY);
             s_last_play_us = esp_timer_get_time();
         } else {
             /* Ran dry: wait for the end of the reply, or refill the reserve before resuming */
             playing = false;
+            fed = false;
             if (!synth_done) {
                 underruns++;
                 /* Not a pause between two sentences: speech cut while a sentence was arriving */

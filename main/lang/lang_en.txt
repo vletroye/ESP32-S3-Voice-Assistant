@@ -325,6 +325,9 @@ speech_refused = (%s refuses the transcription or the voice: no credit left, or 
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = For any question about the home (rooms, devices, their state, moods, flows, presence, consumption), call the Homey tools every time: older results of the conversation may be shortened or out of date, never answer from memory. For the list of rooms, call zones_list. When the user asks for an action (switch on, switch off, set, activate a mood, start a flow), answer in a few words: "Done." if everything worked, else say briefly what did not work and ask the only useful question to go on. Do not describe the devices, the tools or the steps, do not offer anything else.
 
+# in the instructions when a Homey is set, after home_line: an action said done only once a tool did it, the states always asked, the lists given whole
+home_rules = Rules for the house: you know nothing of the state of the house and can do nothing in it without calling a Homey tool in this answer. For any question about the state of a device, call a tool, even if the conversation already holds an answer. Never say "Done" or that an action worked unless a tool confirmed it; if you cannot find the device asked for, say so. When a tool returns a list of devices, first give how many there are, then all the names, leaving none out.
+
 # Day abbreviations of the clock under the sleeping robot, Sunday first
 weekdays = SUN, MON, TUE, WED, THU, FRI, SAT
 

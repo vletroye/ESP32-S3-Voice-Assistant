@@ -149,6 +149,7 @@ typedef struct {
     const char *costs_total;
     const char *costs_cost;         /* row of the amounts (the tokens In / Out below) */        /* its last column */
     const char *clock_hidden;       /* "cache l'heure" */
+    const char *home_rules;         /* With a Homey: an action said done only after a tool, the states asked, lists whole */
     const char *mark_done;          /* "note ça" or a long press, %d: the number of the mark in the traces */
     const char *mark_off;           /* "note ça" with Debug = off */
     const char *version_reply;      /* "quelle est ta version", %s: the firmware version ("1.4.2") */

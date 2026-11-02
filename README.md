@@ -1337,7 +1337,7 @@ with the firmware (`main/lang/lang_<code>.txt`) are good models.
   - `decimal_mark` (`,` or `.`), `second_one` / `seconds`, and `second_one_below_ms` (below this time, "1,2
     seconds" takes the singular; `0` if the language always uses the plural).
   - `lang_already`, `lang_switched`: they name **this** language ("Já falo português.").
-  - `system_prompt`, `tts_instructions`, `location_line`, `home_line`, `memory_header`, `now_format`: given to the
+  - `system_prompt`, `tts_instructions`, `location_line`, `home_line`, `home_rules`, `memory_header`, `now_format`: given to the
     models; translate them faithfully, they rule how the device works (no Markdown, date in brackets…).
 - Lines that start with `[TODO:` are texts added in English after a firmware update: translate them and remove
   the `[TODO:` and `]`.
@@ -1481,6 +1481,11 @@ l'ambiance cinéma" / "Activate the cinema mood", "Qui est à la maison ?" / "Wh
 1. On the Homey, install the **MCP AI Bridge** app; its settings show the address of its MCP server and an API key.
 2. In `CONFIG.INI`, fill `Homey_url` (e.g. `http://192.168.1.20:52199/mcp`) and `Homey_key`, save, and restart.
 3. Ask in your own words: Claude chooses the tools. A short "Je regarde." / "Let me check." is said while it works.
+
+The instructions given to the model with a Homey (`home_line` and `home_rules` of `LANG_<XX>.TXT`) tell it to
+ask the Homey for every state instead of answering from the conversation, never to say an action is done unless a
+tool did it ("C'est fait." / "Done." only then; an unknown device is said), and to give a list of devices whole,
+its number first ("21 lampes éteintes : …" / "21 lights off: …").
 
 Turning off a **power plug** is confirmed first ("Tu veux vraiment éteindre la prise du frigo ?" / "Do you really
 want to switch off the fridge plug?"), so that an
@@ -1780,6 +1785,13 @@ and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only w
   transcript: "…"`;
 - `tts: [trace] speaker ran dry (underrun N): cut in the middle of a sentence / between two sentences`, `playing
   again after … ms of silence`: where the speech was cut;
+- `tts: [trace] speaker fed … ms after the previous piece: it ran dry (crackle)`: audio was waiting but the
+  playback task could not run in time (the I2S DMA holds about 90 ms);
+- `app_audio: [trace] sound /spiffs/echo_en_wake.wav: … ms waited for silence, … ms of sound written in … ms,
+  longest wait between two pieces … ms`, with `: the speaker ran dry (crackle)` above 80 ms: the wake sound, written
+  20 ms at a time;
+- `tts_http: No audio for "…": asked again`: a speech service answered a sentence without audio (Mistral, now and
+  then); asked once more on a fresh connection, then counted as lost (the reply is said to have been heard badly);
 - `trace: *************** MARK 3 (long press / said) ***************`.
 
 The traces are kept in a **1 MB ring buffer in PSRAM** (about 10,000 lines, hours of use; the oldest are

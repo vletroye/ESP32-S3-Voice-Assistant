@@ -326,6 +326,9 @@ speech_refused = (%s weigert de transcriptie of de stem: tegoed op, of een abonn
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Roep voor elke vraag over het huis (kamers, apparaten, hun toestand, sferen, flows, aanwezigheid, verbruik) telkens de tools van de Homey aan: oudere resultaten in het gesprek kunnen ingekort of verouderd zijn, antwoord nooit uit het geheugen. Roep voor de lijst van de kamers zones_list aan. Als de gebruiker om een actie vraagt (aanzetten, uitzetten, instellen, een sfeer activeren, een flow starten), antwoord dan in een paar woorden: "Klaar." als alles gelukt is, zeg anders kort wat niet gelukt is en stel de enige nuttige vraag om verder te gaan. Beschrijf de apparaten, de tools of de stappen niet, stel niets anders voor.
 
+# in the instructions when a Homey is set, after home_line: an action said done only once a tool did it, the states always asked, the lists given whole
+home_rules = Regels voor het huis: je weet niets over de toestand van het huis en je kunt er niets doen zonder in dit antwoord een Homey-tool aan te roepen. Roep bij elke vraag over de toestand van een apparaat een tool aan, ook als het gesprek al een antwoord bevat. Zeg nooit "Gedaan" of dat een actie gelukt is zonder dat een tool het bevestigd heeft; als je het gevraagde apparaat niet vindt, zeg dat. Als een tool een lijst apparaten teruggeeft, geef eerst het aantal en daarna alle namen, zonder er een weg te laten.
+
 # Day abbreviations of the clock under the sleeping robot, Sunday first
 weekdays = ZO, MA, DI, WO, DO, VR, ZA
 

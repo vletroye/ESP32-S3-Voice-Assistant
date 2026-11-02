@@ -73,16 +73,15 @@ static esp_http_client_handle_t get_client(tts_http_t *h)
     return h->client;
 }
 
-void tts_http_request(tts_http_t *h, const char *text, char *body, uint32_t generation, bool warm_up,
-                      const tts_http_reader_t *reader)
+/* One request: the bytes of audio received, how it ended ("completed", "failed", "cut"...) */
+static size_t request_once(tts_http_t *h, const char *text, const char *body, uint32_t generation, bool warm_up,
+                           const tts_http_reader_t *reader, const char **status_out, bool *failed_out)
 {
-    if (!warm_up) {
-        tts_backend_sentence_start(generation);
-    }
     int64_t start_us = esp_timer_get_time();
     const char *status_text = "completed";
     bool failed = false;
     int status = -1;
+    size_t received = 0;
     for (int attempt = 0; body && attempt < 2; attempt++) {
         esp_http_client_handle_t client = get_client(h);
         size_t len = strlen(body);
@@ -118,7 +117,6 @@ void tts_http_request(tts_http_t *h, const char *text, char *body, uint32_t gene
         failed = (status <= 0);
     } else {
         unsigned frame = h->frame_bytes > 1 && h->frame_bytes <= TTS_HTTP_FRAME_MAX ? h->frame_bytes : 1;
-        size_t received = 0;
         size_t carry = 0;
         int64_t first_us = 0;
         while (!(reader->done && *reader->done) &&
@@ -166,6 +164,31 @@ void tts_http_request(tts_http_t *h, const char *text, char *body, uint32_t gene
         // Billed by the character: a token a character
         costs_add_tokens(COST_TTS, tts_backend_settings()->model, (int)strlen(text), 0, 0, 0);
         h->last_used_us = esp_timer_get_time();
+    }
+    *status_out = status_text;
+    *failed_out = failed;
+    return received;
+}
+
+void tts_http_request(tts_http_t *h, const char *text, char *body, uint32_t generation, bool warm_up,
+                      const tts_http_reader_t *reader)
+{
+    if (!warm_up) {
+        tts_backend_sentence_start(generation);
+    }
+    const char *status_text = "completed";
+    bool failed = false;
+    size_t received = request_once(h, text, body, generation, warm_up, reader, &status_text, &failed);
+    if (!warm_up && received == 0 && strcmp(status_text, "completed") == 0 && generation == tts_backend_generation()) {
+        // Answered without any audio (Mistral, now and then): the sentence would not be said; asked again once, on a
+        // fresh connection
+        ESP_LOGW(h->tag, "No audio for \"%.40s\": asked again", text);
+        drop_client(h);
+        received = request_once(h, text, body, generation, warm_up, reader, &status_text, &failed);
+        if (received == 0 && strcmp(status_text, "completed") == 0) {
+            status_text = "no audio";
+            failed = true;      // a sentence lost: the reply is said to have been heard badly
+        }
     }
     if (!warm_up) {
         tts_backend_sentence_end(status_text, failed);

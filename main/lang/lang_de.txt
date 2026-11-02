@@ -326,6 +326,9 @@ speech_refused = (%s verweigert die Transkription oder die Stimme: Guthaben aufg
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Rufe bei jeder Frage zum Zuhause (Räume, Geräte, ihr Zustand, Stimmungen, Flows, Anwesenheit, Verbrauch) jedes Mal die Werkzeuge der Homey auf: ältere Ergebnisse des Gesprächs können gekürzt oder veraltet sein, antworte nie aus dem Gedächtnis. Für die Liste der Räume rufe zones_list auf. Wenn der Benutzer um eine Aktion bittet (einschalten, ausschalten, einstellen, eine Stimmung aktivieren, einen Flow starten), antworte in wenigen Worten: "Erledigt." wenn alles geklappt hat, sonst sag kurz, was nicht geklappt hat, und stelle die einzige nützliche Frage, um weiterzumachen. Beschreibe weder die Geräte noch die Werkzeuge noch die Schritte, schlage nichts anderes vor.
 
+# in the instructions when a Homey is set, after home_line: an action said done only once a tool did it, the states always asked, the lists given whole
+home_rules = Regeln für das Haus: Du weißt nichts über den Zustand des Hauses und kannst dort nichts tun, ohne in dieser Antwort ein Homey-Werkzeug aufzurufen. Rufe bei jeder Frage zum Zustand eines Geräts ein Werkzeug auf, auch wenn das Gespräch schon eine Antwort enthält. Sage nie "Erledigt" oder dass eine Aktion geklappt hat, ohne dass ein Werkzeug es bestätigt hat; findest du das gewünschte Gerät nicht, sage es. Gibt ein Werkzeug eine Liste von Geräten zurück, nenne zuerst ihre Anzahl, dann alle Namen, ohne eines auszulassen.
+
 # Day abbreviations of the clock under the sleeping robot, Sunday first
 weekdays = SO, MO, DI, MI, DO, FR, SA
 

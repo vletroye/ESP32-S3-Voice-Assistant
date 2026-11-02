@@ -2237,6 +2237,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         if (llm_history_unsaved() || costs_unsaved()) {
             busy_show(app_lang_get()->saving, false);
             s_busy_saving = true;
+            assistant_save_soon();
         }
         show_panel = ui_PanelSleep;
         hide_panel[0] = ui_PanelListen;

@@ -86,6 +86,9 @@ void assistant_request_config(void);
  */
 void assistant_request_dump(void);
 
+/** The assistant goes to sleep with something to save: the main task saves at once (not within the next second) */
+void assistant_save_soon(void);
+
 /** Double tap while "J'écoute" / "Je réfléchis": dropped, back to sleep (from the LVGL task) */
 void assistant_cancel(void);
 

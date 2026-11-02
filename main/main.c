@@ -82,7 +82,7 @@ static uint32_t reading_ms(size_t chars)
  * Flash writes pause the tasks running from flash (microphone feed included): the conversation is saved once
  * nothing has been heard or played for this long, i.e. after the follow-up listening, not during it
  */
-#define SAVE_AFTER_SILENCE_MS           1000
+#define SAVE_AFTER_SILENCE_MS           300
 /* The saving screen given this long to be drawn before the display is stopped for the saves */
 #define SAVE_SHOWN_MS                   150
 /* A language added to Languages: its message stays this long before the configuration mode */
@@ -110,6 +110,8 @@ static volatile bool s_reply_goodbye = false;
 static volatile bool s_reset_requested = false;
 /* Dump button of the Debug page: the traces written, then the configuration mode (with a PC) */
 static volatile bool s_dump_requested = false;
+/* The main task, woken up early to save as soon as the assistant sleeps */
+static TaskHandle_t s_main_task = NULL;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -726,6 +728,13 @@ void assistant_request_config(void)
     s_config_requested = true;      // the main task saves and restarts in configuration mode
 }
 
+void assistant_save_soon(void)
+{
+    if (s_main_task) {
+        xTaskNotifyGive(s_main_task);
+    }
+}
+
 void assistant_request_dump(void)
 {
     s_dump_requested = true;        // done by the main task
@@ -1255,8 +1264,10 @@ void app_main()
     // The screens were made before: the provider's icon on the robot's forehead, the Settings screen
     ui_ctrl_settings_sync();
 
+    s_main_task = xTaskGetCurrentTaskHandle();
     for (int seconds = 0; ; seconds++) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // A second, or less when the assistant goes to sleep with something to save (assistant_save_soon)
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
         // The test of the Debug page: the amplifier off in silence
         audio_amp_idle_check();
 

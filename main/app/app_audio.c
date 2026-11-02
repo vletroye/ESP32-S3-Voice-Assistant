@@ -439,8 +439,11 @@ void sr_handler_task(void *pvParam)
                 continue;
             }
             audio_record_start();
-            // Connect to the transcription service while the user speaks (the audio is buffered meanwhile)
-            assistant_listen_start();
+            // Connect to the transcription service while the user speaks (the audio is buffered meanwhile). Woken
+            // by the wake word: after the beep (a test: it crackled each time, while the connection was opened)
+            if (result.followup) {
+                assistant_listen_start();
+            }
 
             // UI show listen, or the reply kept shown (a list to read, a question asked: the user answers it) with
             // the moving bars beside the robot head
@@ -452,6 +455,9 @@ void sr_handler_task(void *pvParam)
             }
 
             audio_play_task("/spiffs/echo_en_wake.wav");
+            if (!result.followup) {
+                assistant_listen_start();
+            }
             // Open the Claude and speech connections while the user speaks
             assistant_prewarm();
             continue;

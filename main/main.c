@@ -83,6 +83,8 @@ static uint32_t reading_ms(size_t chars)
  * nothing has been heard or played for this long, i.e. after the follow-up listening, not during it
  */
 #define SAVE_AFTER_SILENCE_MS           1000
+/* The saving screen given this long to be drawn before the display is stopped for the saves */
+#define SAVE_SHOWN_MS                   150
 /* A language added to Languages: its message stays this long before the configuration mode */
 #define NEW_LANGUAGE_MESSAGE_MS         6000
 /* Homey's tools were added */
@@ -1359,6 +1361,10 @@ void app_main()
             bool long_saves = llm_history_unsaved() || costs_unsaved();
             if (long_saves) {
                 ui_ctrl_busy(app_lang_get()->saving);
+                // Drawn, then the display stopped (its lock held): the screen keeps that picture and the CPU goes
+                // to the saves (the sleep screen's animations, drawn beneath, made them 3 to 5 times longer)
+                vTaskDelay(pdMS_TO_TICKS(SAVE_SHOWN_MS));
+                bsp_display_lock(0);
             }
             llm_history_save();
             app_volume_save();
@@ -1366,6 +1372,7 @@ void app_main()
             // The costs counted, saved (the conversation's stays shown until the next wake-up)
             costs_save();
             if (long_saves) {
+                bsp_display_unlock();
                 ui_ctrl_busy(NULL);
             }
         }

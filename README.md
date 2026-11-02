@@ -1789,6 +1789,9 @@ and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only w
   transcript: "…"`;
 - `tts: [trace] speaker ran dry (underrun N): cut in the middle of a sentence / between two sentences`, `playing
   again after … ms of silence`: where the speech was cut;
+- When the speaker runs dry in the middle of a sentence (the speech arriving slower than it is played), the sound
+  is brought down to silence over 8 ms and brought up again over 8 ms when it goes on: stopping and starting at once
+  clicked.
 - `tts: [trace] speaker fed … ms after the previous piece: it ran dry (crackle)`: audio was waiting but the
   playback task could not run in time (the I2S DMA holds about 90 ms);
 - `app_audio: [trace] sound /spiffs/echo_en_wake.wav: … ms waited for silence, … ms of sound written in … ms,
@@ -1843,7 +1846,8 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
   once the assistant sleeps again. It takes a few seconds and everything stops meanwhile (a wake word, a touch or a
   question would be lost), so the robot's head in a ring covers the screen with
   "Sauvegarde en cours..." / "Saving..." (`saving` of `LANG_<XX>.TXT`) until it is done. It is drawn once and stays
-  still, on an opaque background: animated over the sleep screen, it took the CPU from the saves (28 s instead of 5).
+  still, on an opaque background, then the display is stopped until the saves are done (the screen keeps that
+  picture): the sleep screen's animations, drawn beneath, made the saves 3 to 5 times longer.
 - **Lists shown, not read** (`Read_lists = off`, the default): the replies offering languages, providers, models or
   voices say their question and show the list without reading it. The assistant listens at once, but the reply
   stays on screen for the time it takes to read the list (its characters at `Scroll_speed`, at most 20 s): the

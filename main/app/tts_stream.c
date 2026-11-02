@@ -427,6 +427,8 @@ static void tts_task(void *arg)
  * waited for before resuming (100 ms, 200 ms ... 1.6 s): a few longer pauses instead of choppy speech
  */
 #define PREBUFFER_RESUME_MAX_SHIFT  4
+/* Running dry in a sentence: the sound faded out, then in again, over this many samples (8 ms) */
+#define PLAYBACK_FADE_SAMPLES       128
 /* A piece written this long after the previous one while playing: the I2S DMA (about 90 ms) ran dry */
 #define PLAYBACK_DRY_US             (80 * 1000LL)
 
@@ -440,6 +442,8 @@ static void playback_task(void *arg)
     bool done_sent = true;
     unsigned underruns = 0;
     bool fed = false;           /* a piece written in this run of playing (not after a pause) */
+    int16_t last_sample = 0;    /* the last one written */
+    size_t fade_in = PLAYBACK_FADE_SAMPLES;    /* samples faded in after running dry (all: none to fade) */
 
     for (;;) {
         if (s_flush) {
@@ -498,9 +502,15 @@ static void playback_task(void *arg)
             }
             size_t frames = n / sizeof(int16_t);
             for (size_t i = 0; i < frames; i++) {
-                stereo[2 * i] = mono[i];
-                stereo[2 * i + 1] = mono[i];
+                // Back after running dry in a sentence: faded in (the sound starting again at once clicked)
+                int32_t sample = mono[i];
+                if (fade_in < PLAYBACK_FADE_SAMPLES) {
+                    sample = sample * fade_in++ / PLAYBACK_FADE_SAMPLES;
+                }
+                stereo[2 * i] = (int16_t)sample;
+                stereo[2 * i + 1] = (int16_t)sample;
             }
+            last_sample = stereo[2 * (frames - 1)];
             // Audio waiting but written long after the previous piece (the task kept from running): the speaker
             // ran dry meanwhile (the I2S DMA holds about 90 ms), heard as a crackle or a gap
             int64_t late_us = esp_timer_get_time() - s_last_play_us;
@@ -516,6 +526,19 @@ static void playback_task(void *arg)
             /* Ran dry: wait for the end of the reply, or refill the reserve before resuming */
             playing = false;
             fed = false;
+            if (!synth_done && last_sample) {
+                // Cut in a sentence: the sound brought down to silence (stopping at once clicked), faded in again
+                for (size_t i = 0; i < PLAYBACK_FADE_SAMPLES; i++) {
+                    int16_t sample = (int16_t)((int32_t)last_sample * (int32_t)(PLAYBACK_FADE_SAMPLES - 1 - i) /
+                                               PLAYBACK_FADE_SAMPLES);
+                    stereo[2 * i] = sample;
+                    stereo[2 * i + 1] = sample;
+                }
+                size_t written = 0;
+                bsp_i2s_write(stereo, PLAYBACK_FADE_SAMPLES * 2 * sizeof(int16_t), &written, portMAX_DELAY);
+                fade_in = 0;
+            }
+            last_sample = 0;
             if (!synth_done) {
                 underruns++;
                 /* Not a pause between two sentences: speech cut while a sentence was arriving */

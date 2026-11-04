@@ -903,11 +903,29 @@ bool llm_price_of(const char *id, double *price_in, double *price_out)
     return false;
 }
 
+/* A speech model without any voice in [voices] says nothing: not offered */
+static bool voice_owner_has_voices(const char *owner)
+{
+    for (int i = 0; i < s_voice_count; i++) {
+        if (strcasecmp(s_voices[i].provider, owner) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Offered: enabled, and for a speech (TTS) model, with voices */
+static bool speech_offered(int i, llm_speech_kind_t kind)
+{
+    return s_speech[i].kind == (int)kind && !s_speech[i].disabled &&
+           (kind != LLM_SPEECH_TTS || voice_owner_has_voices(llm_speech_voice_owner(&s_speech[i].model)));
+}
+
 size_t llm_speech_count(llm_speech_kind_t kind)
 {
     size_t n = 0;
     for (int i = 0; i < s_speech_count; i++) {
-        n += (s_speech[i].kind == (int)kind && !s_speech[i].disabled);
+        n += speech_offered(i, kind);
     }
     return n;
 }
@@ -915,7 +933,7 @@ size_t llm_speech_count(llm_speech_kind_t kind)
 const llm_speech_model_t *llm_speech_model(llm_speech_kind_t kind, size_t index)
 {
     for (int i = 0; i < s_speech_count; i++) {
-        if (s_speech[i].kind == (int)kind && !s_speech[i].disabled && index-- == 0) {
+        if (speech_offered(i, kind) && index-- == 0) {
             return &s_speech[i].model;
         }
     }
@@ -988,26 +1006,56 @@ bool llm_voice_offered(const llm_voice_t *voice, const char *provider, const cha
     return false;
 }
 
+/*
+ * The language whose voices a provider offers: the one asked if some of its voices speak it, else English, else
+ * NULL (none speaks either: its first voice alone is offered)
+ */
+static const char *voice_language(const char *provider, const char *lang)
+{
+    bool english = false;
+    for (int i = 0; i < s_voice_count; i++) {
+        if (llm_voice_offered(&s_voices[i], provider, lang)) {
+            return lang;
+        }
+        english |= llm_voice_offered(&s_voices[i], provider, "en");
+    }
+    return english ? "en" : NULL;
+}
+
+bool llm_voice_listed(const llm_voice_t *voice, const char *provider, const char *lang)
+{
+    if (!voice || strcasecmp(voice->provider, provider) != 0) {
+        return false;
+    }
+    const char *offered_lang = voice_language(provider, lang);
+    if (offered_lang) {
+        return llm_voice_offered(voice, provider, offered_lang);
+    }
+    for (int i = 0; i < s_voice_count; i++) {
+        if (strcasecmp(s_voices[i].provider, provider) == 0) {
+            return voice == &s_voices[i];      // its first voice
+        }
+    }
+    return false;
+}
+
 const llm_voice_t *llm_voice_for(const char *provider, const char *lang, const char *name)
 {
-    const llm_voice_t *first_of_lang = NULL, *first = NULL;
+    // The one named if listed (it speaks the language, else English...), else the first listed
+    const llm_voice_t *first = NULL;
     for (int i = 0; i < s_voice_count; i++) {
         const llm_voice_t *v = &s_voices[i];
-        if (strcasecmp(v->provider, provider) != 0) {
+        if (!llm_voice_listed(v, provider, lang)) {
             continue;
         }
-        bool offered = llm_voice_offered(v, provider, lang);
-        if (offered && name && strcasecmp(v->name, name) == 0) {
+        if (name && strcasecmp(v->name, name) == 0) {
             return v;
-        }
-        if (offered && !first_of_lang) {
-            first_of_lang = v;
         }
         if (!first) {
             first = v;
         }
     }
-    return first_of_lang ? first_of_lang : first;
+    return first;
 }
 
 bool llm_call_price_of(const char *id, double *price)

@@ -804,7 +804,8 @@ static const struct {
     { "verse", { "vers", "verce", NULL } },
 };
 
-/* The voices offered: those of [voices] (AGENTS.INI) of the speech provider in use that speak the language in use */
+/* The voices offered: those of [voices] (AGENTS.INI) of the speech provider in use that speak the language in use (else
+ * English, else its first one: llm_voice_listed) */
 #define VOICES_MAX  32
 static const llm_voice_t *s_voices[VOICES_MAX];
 static size_t s_voice_count = 0;
@@ -815,7 +816,7 @@ static void load_voices(void)
     const char *lang = app_lang_get()->code;
     s_voice_count = 0;
     for (size_t i = 0; i < llm_voice_count() && s_voice_count < VOICES_MAX; i++) {
-        if (llm_voice_offered(llm_voice(i), provider, lang)) {
+        if (llm_voice_listed(llm_voice(i), provider, lang)) {
             s_voices[s_voice_count++] = llm_voice(i);
         }
     }

@@ -447,7 +447,8 @@ static void settings_dropdown_setup(lv_obj_t *dropdown, const char *options, uin
     lv_obj_add_event_cb(dropdown, changed_cb, LV_EVENT_VALUE_CHANGED, user_data);
 }
 
-/* Voices offered: those of [voices] (AGENTS.INI) of the speech provider in use that speak the language in use */
+/* Voices offered: those of [voices] (AGENTS.INI) of the speech provider in use that speak the language in use (else
+ * English, else its first one: llm_voice_listed) */
 #define SETTINGS_VOICES_MAX     32
 static const llm_voice_t *s_settings_voices[SETTINGS_VOICES_MAX];
 static size_t s_settings_voice_count = 0;
@@ -467,7 +468,7 @@ static void voice_options_refresh(void)
     s_settings_voice_count = 0;
     for (size_t i = 0; i < llm_voice_count() && s_settings_voice_count < SETTINGS_VOICES_MAX; i++) {
         const llm_voice_t *v = llm_voice(i);
-        if (!llm_voice_offered(v, provider, code)) {
+        if (!llm_voice_listed(v, provider, code)) {
             continue;
         }
         // Inserted at its place by name (alphabetical order)

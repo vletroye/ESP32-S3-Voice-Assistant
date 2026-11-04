@@ -1149,8 +1149,12 @@ James    = mistral  | voice_3150 | en        | -       | -    | m
   the speech provider in use ("change de synthèse vocale" / "change the speech synthesis") that speak the language in use: with Voxtral in French, Lea, Marie, Manon and
   Camille; with Deepgram Aura-2 in French (direct or through OpenRouter), Agathe and Hector; with OpenAI, its 10 voices (they speak every language). The list follows a change of provider or of
   language.
-- **The voice used**: the one named in `Voice`. If it is of another provider, or does not speak the language in
-  use, the first voice of `[voices]` that fits is used, and `Voice` is kept (back to that provider or language, the
+- **A language without voice**: when no voice of the speech provider speaks the language in use (a language
+  added), its **English** voices are offered; if it has none either, its **first** voice of `[voices]`. A speech
+  model whose provider has no voice at all in `[voices]` is not offered (Settings screen, "change de synthèse
+  vocale" / "change the speech synthesis", model test).
+- **The voice used**: the one named in `Voice`. If it is of another provider, or is not among those offered, the
+  first voice offered is used, and `Voice` is kept (back to that provider or language, the
   chosen voice comes back).
 - **Gender**: the instructions given to the model get, right after the persona (`PERSO_<XX>.TXT`), "Ta voix est
   celle d'une femme : quand tu parles de toi, accorde au féminin (« je suis prête », « je suis contente »)." / "Your

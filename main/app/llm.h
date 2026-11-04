@@ -158,8 +158,14 @@ const llm_voice_t *llm_voice(size_t index);
 bool llm_voice_offered(const llm_voice_t *voice, const char *provider, const char *lang);
 
 /**
- * @brief The voice to speak with: the one named (case ignored) if it is of the provider and speaks the language,
- *        else the first one that is, else the first one of the provider; NULL if the provider has none
+ * @brief Listed to choose from (Settings screen, "change de voix"): the voices of the provider that speak the
+ *        language; when none does, those that speak English; when none does either, its first voice
+ */
+bool llm_voice_listed(const llm_voice_t *voice, const char *provider, const char *lang);
+
+/**
+ * @brief The voice to speak with: the one named (case ignored) if it is listed (llm_voice_listed), else the first
+ *        one listed; NULL if the provider has none
  */
 const llm_voice_t *llm_voice_for(const char *provider, const char *lang, const char *name);
 

@@ -764,6 +764,16 @@ static void settings_screen_unload_cb(lv_event_t *e)
     settings_unconfirmed_drop();
 }
 
+/*
+ * Back from the Settings screen (its arrow, after the generated handler showed the sleep panel): asleep for good,
+ * whatever was under way (a listening session ended as without speech), without "J'écoute" or "Entendu" left shown
+ */
+static void settings_back_cb(lv_event_t *e)
+{
+    app_sr_cancel();
+    ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
+}
+
 /* A button at the bottom of the Settings screen (arrows, Save) */
 static lv_obj_t *settings_button_create(lv_align_t align, lv_coord_t x)
 {
@@ -1346,6 +1356,7 @@ static void settings_screen_setup(void)
     settings_arrow_create(LV_ALIGN_BOTTOM_RIGHT, -10, LV_SYMBOL_RIGHT, 1);
     lv_obj_add_event_cb(ui_ScreenSettings, settings_screen_loaded_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
     lv_obj_add_event_cb(ui_ScreenSettings, settings_screen_unload_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
+    lv_obj_add_event_cb(ui_ImageSettingsBack, settings_back_cb, LV_EVENT_CLICKED, NULL);
 
     // Confirm button (bottom middle, first page only), shown once the language or the model differs from the
     // stored settings; not confirmed, they are dropped when the page or the screen is left

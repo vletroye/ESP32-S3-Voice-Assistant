@@ -415,7 +415,10 @@ esp_err_t app_sr_get_result(sr_result_t *result, TickType_t xTicksToWait)
 
 void app_sr_cancel(void)
 {
-    s_cancel_listen = true;
+    // Only a session going on: the flag left set would end the next one at once
+    if (s_listening) {
+        s_cancel_listen = true;
+    }
 }
 
 void app_sr_touch_hold(bool held)

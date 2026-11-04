@@ -340,6 +340,9 @@ the lines and KB kept so far, and **Dump vers USB** / **Dump to USB**: the trace
 in configuration mode, where they are `DEBUG.TXT` (with no PC connected: written anyway, and "Connecte-moi à ton
 PC." / "Connect me to your PC." is shown).
 
+The back arrow (top left) always brings the assistant back to sleep: a listening session going on is ended,
+and no "J'écoute" / "I'm listening" or "Entendu" / "Heard" is left on the sleep screen.
+
 For the language and the model, press **Confirmer** / **Confirm** (bottom middle, on their page only, shown once
 one of them changed): the choice is saved to the device's NVS and applied at once, without restarting (the speech
 session reconnects, ~2 s). Not confirmed, the choice is dropped when the page or the Settings screen is left.

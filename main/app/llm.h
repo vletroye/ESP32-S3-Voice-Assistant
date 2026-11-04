@@ -145,6 +145,7 @@ typedef struct llm_voice {
     const char *languages;  /* "fr,en", "*" for every one */
     const char *emotion;    /* "calm", NULL for none */
     const char *pace;       /* "slow", NULL for none */
+    char gender;            /* 'f' a woman's voice, 'm' a man's, 0 neither or not known */
 } llm_voice_t;
 
 /** How many voices in [voices] */

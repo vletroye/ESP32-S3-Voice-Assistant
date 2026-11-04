@@ -323,6 +323,10 @@ voice_choppy = (Verbinding te traag: de stem kon niet vloeiend worden voorgeleze
 # plan too small); %s: the service ("ElevenLabs")
 speech_refused = (%s weigert de transcriptie of de stem: tegoed op, of een abonnement dat het niet toelaat. Controleer je account bij deze aanbieder.)
 
+# in the instructions, after the persona: the voice (gender of [voices], AGENTS.INI) is a woman's / a man's
+voice_female = Je stem is die van een vrouw: spreek over jezelf als een vrouw.
+voice_male = Je stem is die van een man: spreek over jezelf als een man.
+
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Roep voor elke vraag over het huis (kamers, apparaten, hun toestand, sferen, flows, aanwezigheid, verbruik) telkens de tools van de Homey aan: oudere resultaten in het gesprek kunnen ingekort of verouderd zijn, antwoord nooit uit het geheugen. Roep voor de lijst van de kamers zones_list aan. Als de gebruiker om een actie vraagt (aanzetten, uitzetten, instellen, een sfeer activeren, een flow starten), antwoord dan in een paar woorden: "Klaar." als alles gelukt is, zeg anders kort wat niet gelukt is en stel de enige nuttige vraag om verder te gaan. Beschrijf de apparaten, de tools of de stappen niet, stel niets anders voor.
 

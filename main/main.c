@@ -112,6 +112,9 @@ static volatile bool s_reset_requested = false;
 static volatile bool s_dump_requested = false;
 /* The main task, woken up early to save as soon as the assistant sleeps */
 static TaskHandle_t s_main_task = NULL;
+/* The gender of the voice the instructions were made with; they are given to the chat client once it is set up */
+static char s_prompt_gender = 0;
+static bool s_prompt_ready = false;
 
 /* Answer text shown on screen while the model streams it */
 #define REPLY_UI_REFRESH_US     (200 * 1000)
@@ -551,8 +554,12 @@ static char *build_system_prompt(void)
     const char *home_rules = sys_param->homey_url[0] ? lang->home_rules : "";
     // Identity, personality and instructions of PERSO_<LANG>.TXT, then what the working requires (file_lang.c),
     // the location, the home and the notes to remember
+    // Speaking of itself as the voice it has: a woman's or a man's (French, Spanish... agree with it)
+    const llm_voice_t *voice = assistant_voice();
+    const char *gender = !voice ? "" : voice->gender == 'f' ? lang->voice_female :
+                         voice->gender == 'm' ? lang->voice_male : "";
     const char *parts[] = {
-        persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY), persona_get(PERSONA_INSTRUCTIONS),
+        persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY), persona_get(PERSONA_INSTRUCTIONS), gender,
         lang->system_prompt, location, home, home_rules,
     };
     char *prompt = NULL;
@@ -787,6 +794,7 @@ void assistant_set_model(const char *model)
     strlcpy(sys_param->chat_model, model, sizeof(sys_param->chat_model));
     char *prompt = build_system_prompt();
     llm_init(model, sys_param->url, prompt ? prompt : app_lang_get()->system_prompt);
+    s_prompt_ready = true;
     free(prompt);
     llm_set_location(sys_param->country, sys_param->city);
     ui_ctrl_settings_sync();
@@ -903,6 +911,18 @@ void assistant_set_tts(const char *model)
                          tts_instructions ? tts_instructions : app_lang_get()->tts_instructions,
                          style[0] ? style : NULL);
     free(tts_instructions);
+    // Another voice of the other gender: the instructions say it (once the chat client is set up)
+    char gender = v ? v->gender : 0;
+    if (s_prompt_ready && gender != s_prompt_gender) {
+        char *prompt = build_system_prompt();
+        if (prompt) {
+            llm_set_system_prompt(prompt);
+            free(prompt);
+            ESP_LOGI(TAG, "Voice %s: the instructions say it is %s", v ? v->name : "-",
+                     gender == 'f' ? "a woman's" : gender == 'm' ? "a man's" : "neither a woman's nor a man's");
+        }
+    }
+    s_prompt_gender = gender;
 }
 
 /* Start of a listening session (wake word, touch or follow-up). Called from app_audio.c */

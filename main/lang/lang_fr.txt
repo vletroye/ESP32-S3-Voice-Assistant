@@ -322,6 +322,10 @@ voice_choppy = (Connexion trop lente : la voix n'a pas pu être lue de façon fl
 # plan too small); %s: the service ("ElevenLabs")
 speech_refused = (%s refuse la transcription ou la voix : crédit épuisé, ou abonnement insuffisant. Vérifiez votre compte chez ce fournisseur.)
 
+# in the instructions, after the persona: the voice (gender of [voices], AGENTS.INI) is a woman's / a man's
+voice_female = Ta voix est celle d'une femme : quand tu parles de toi, accorde au féminin (« je suis prête », « je suis contente »).
+voice_male = Ta voix est celle d'un homme : quand tu parles de toi, accorde au masculin (« je suis prêt », « je suis content »).
+
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Pour toute question sur la maison (pièces, appareils, leur état, ambiances, flows, présence, consommation), appelle chaque fois les outils de la Homey : les résultats plus anciens de la conversation peuvent être raccourcis ou dépassés, ne réponds jamais de mémoire. Pour la liste des pièces, appelle zones_list. Quand il demande une action (allumer, éteindre, régler, activer une ambiance, lancer un flow), réponds en quelques mots : « C'est fait. » si tout a marché, sinon dis brièvement ce qui n'a pas marché et pose la seule question utile pour continuer. Ne décris pas les appareils, les outils ni les étapes, ne propose rien d'autre.
 

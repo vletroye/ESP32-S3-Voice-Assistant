@@ -200,6 +200,8 @@ static const lang_field_t s_fields[] = {
     { "version_reply", offsetof(app_lang_t, version_reply), FIELD_TEXT, 1 },
     { "mark_done", offsetof(app_lang_t, mark_done), FIELD_TEXT, 1 },
     { "home_rules", offsetof(app_lang_t, home_rules), FIELD_TEXT, 1 },
+    { "voice_female", offsetof(app_lang_t, voice_female), FIELD_TEXT, 1 },
+    { "voice_male", offsetof(app_lang_t, voice_male), FIELD_TEXT, 1 },
     { "mark_off", offsetof(app_lang_t, mark_off), FIELD_TEXT, 1 },
     { "new_conversation", offsetof(app_lang_t, new_conversation), FIELD_TEXT, 1 },
     { "reasoning_on", offsetof(app_lang_t, reasoning_on), FIELD_TEXT, 1 },

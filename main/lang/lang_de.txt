@@ -323,6 +323,10 @@ voice_choppy = (Verbindung zu langsam: die Stimme konnte nicht flüssig vorgeles
 # plan too small); %s: the service ("ElevenLabs")
 speech_refused = (%s verweigert die Transkription oder die Stimme: Guthaben aufgebraucht oder Abo nicht ausreichend. Prüfe dein Konto bei diesem Anbieter.)
 
+# in the instructions, after the persona: the voice (gender of [voices], AGENTS.INI) is a woman's / a man's
+voice_female = Deine Stimme ist die einer Frau: Sprich von dir in der weiblichen Form ("ich bin bereit", "ich bin eine gute Zuhörerin").
+voice_male = Deine Stimme ist die eines Mannes: Sprich von dir in der männlichen Form ("ich bin bereit", "ich bin ein guter Zuhörer").
+
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = Rufe bei jeder Frage zum Zuhause (Räume, Geräte, ihr Zustand, Stimmungen, Flows, Anwesenheit, Verbrauch) jedes Mal die Werkzeuge der Homey auf: ältere Ergebnisse des Gesprächs können gekürzt oder veraltet sein, antworte nie aus dem Gedächtnis. Für die Liste der Räume rufe zones_list auf. Wenn der Benutzer um eine Aktion bittet (einschalten, ausschalten, einstellen, eine Stimmung aktivieren, einen Flow starten), antworte in wenigen Worten: "Erledigt." wenn alles geklappt hat, sonst sag kurz, was nicht geklappt hat, und stelle die einzige nützliche Frage, um weiterzumachen. Beschreibe weder die Geräte noch die Werkzeuge noch die Schritte, schlage nichts anderes vor.
 

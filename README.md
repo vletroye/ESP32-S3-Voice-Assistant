@@ -952,10 +952,10 @@ perplexity/sonar           = Perplexity Sonar             | - | Sonar | 0.22 | 2
 anthropic/claude-haiku-5-5 = Claude Haiku 5.5 (Perplexity) | - | Haiku | 0.09 | 0.43
 
 [voices]
-# name  = provider | voice id  | languages | emotion | pace
-Marin   = openai   | marin     | *         | -       | -
-Lea     = mistral  | voice_589 | fr        | -       | -
-James   = mistral  | voice_3150| en        | calm    | slow
+# name  = provider | voice id  | languages | emotion | pace | gender
+Marin   = openai   | marin     | *         | -       | -    | f
+Lea     = mistral  | voice_589 | fr        | -       | -    | f
+James   = mistral  | voice_3150| en        | calm    | slow | m
 
 [per_call]
 claude:web_search = 0.0086
@@ -985,8 +985,10 @@ perplexity:web_search = 0.0022
   **Languages**: 2-letter codes separated by commas, `*` for every one. **Emotion** and **pace** (`-` for none):
   Voxtral 3 gets them as tags before each sentence (`[emotion=calm][pace=slow]`, not spoken; 34 emotions: `calm`,
   `happy`, `sad`, `sarcastic`…, paces `very-slow` to `very-fast`; Mistral tests them in English, "expected to work"
-  in French); OpenAI gets them in its reading instructions (`tts_emotion` and `tts_pace` of `LANG_<XX>.TXT`). The
-  file given with the firmware lists OpenAI's 10 voices and Mistral's 36 Voxtral 3 voices.
+  in French); OpenAI gets them in its reading instructions (`tts_emotion` and `tts_pace` of `LANG_<XX>.TXT`).
+  **Gender** (`f`, `m` or `-`): the assistant speaks of itself as a woman or as a man (see
+  [Voices](#34-voices-voices-of-agentsini)). The file given with the firmware lists OpenAI's 10 voices and
+  Mistral's 36 Voxtral 3 voices.
 - **`[per_call]`**: tools billed per call, `provider:tool = price` (`claude:web_search`); another provider's search
   would get its own line (`openai:web_search`…).
 - **Speed** (optional): `fast`, `average` or `slow`, written by the [model test](#334-model-test-teste-les-modèles).
@@ -1115,12 +1117,12 @@ one line per voice. You can remove, rename or add voices, and give each one an e
 
 ```ini
 [voices]
-# name   = provider | voice id   | languages | emotion | pace
-Marin    = openai   | marin      | *         | -       | -
-Cedar    = openai   | cedar      | *         | warm    | -
-Lea      = mistral  | voice_589  | fr        | -       | -
-Camille  = mistral  | voice_3141 | fr        | calm    | slow
-James    = mistral  | voice_3150 | en        | -       | -
+# name   = provider | voice id   | languages | emotion | pace | gender
+Marin    = openai   | marin      | *         | -       | -    | f
+Cedar    = openai   | cedar      | *         | warm    | -    | m
+Lea      = mistral  | voice_589  | fr        | -       | -    | f
+Camille  = mistral  | voice_3141 | fr        | calm    | slow | f
+James    = mistral  | voice_3150 | en        | -       | -    | m
 ```
 
 | Column | Meaning |
@@ -1130,6 +1132,7 @@ James    = mistral  | voice_3150 | en        | -       | -
 | voice id | The voice as the provider's API names it |
 | languages | 2-letter codes separated by commas (`fr`, `en, nl`), `*` for every language |
 | emotion, pace | `-` for none, else see below |
+| gender | `f` (a woman's voice), `m` (a man's) or `-`: the assistant is told to speak of itself as a woman or as a man (see below). A line of an older file without this column takes the gender of the same voice in the firmware's file |
 
 - **Which voices are offered**: "change de voix" / "change the voice" and the Settings screen list the voices of
   the speech provider in use ("change de synthèse vocale" / "change the speech synthesis") that speak the language in use: with Voxtral in French, Lea, Marie, Manon and
@@ -1138,6 +1141,13 @@ James    = mistral  | voice_3150 | en        | -       | -
 - **The voice used**: the one named in `Voice`. If it is of another provider, or does not speak the language in
   use, the first voice of `[voices]` that fits is used, and `Voice` is kept (back to that provider or language, the
   chosen voice comes back).
+- **Gender**: the instructions given to the model get, right after the persona (`PERSO_<XX>.TXT`), "Ta voix est
+  celle d'une femme : quand tu parles de toi, accorde au féminin (« je suis prête », « je suis contente »)." / "Your
+  voice is a woman's: when you speak of yourself, do it as a woman." (or as a man; `voice_female` and `voice_male`
+  of `LANG_<XX>.TXT`), so that the words match the voice heard in French, Spanish, Italian, German… Changing to a
+  voice of the other gender ("change de voix", Settings screen, another speech service or language) changes them at
+  once. Nothing is added for a voice with `-`. The genders of the voices given with the firmware come from their
+  names and the providers' descriptions: correct them in the file if one sounds otherwise.
 - **Emotion and pace**: Voxtral 3 gets them as tags before each sentence (`[emotion=calm][pace=slow]`, not spoken).
   Emotions: amused, angry, anxious, apologetic, appreciative, assertive, bored, calm, confident, confused, critical,
   curious, determined, disappointed, disgusted, excited, frustrated, grateful, happy, hopeful, playful, proud,
@@ -1346,7 +1356,7 @@ with the firmware (`main/lang/lang_<code>.txt`) are good models.
   - `decimal_mark` (`,` or `.`), `second_one` / `seconds`, and `second_one_below_ms` (below this time, "1,2
     seconds" takes the singular; `0` if the language always uses the plural).
   - `lang_already`, `lang_switched`: they name **this** language ("Já falo português.").
-  - `system_prompt`, `tts_instructions`, `location_line`, `home_line`, `home_rules`, `memory_header`, `now_format`: given to the
+  - `system_prompt`, `tts_instructions`, `location_line`, `home_line`, `home_rules`, `voice_female`, `voice_male`, `memory_header`, `now_format`: given to the
     models; translate them faithfully, they rule how the device works (no Markdown, date in brackets…).
 - Lines that start with `[TODO:` are texts added in English after a firmware update: translate them and remove
   the `[TODO:` and `]`.

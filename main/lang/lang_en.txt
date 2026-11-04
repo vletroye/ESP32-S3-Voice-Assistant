@@ -322,6 +322,10 @@ voice_choppy = (Connection too slow: the voice could not be read smoothly.)
 # plan too small); %s: the service ("ElevenLabs")
 speech_refused = (%s refuses the transcription or the voice: no credit left, or a plan that does not allow it. Check your account with this provider.)
 
+# in the instructions, after the persona: the voice (gender of [voices], AGENTS.INI) is a woman's / a man's
+voice_female = Your voice is a woman's: when you speak of yourself, do it as a woman.
+voice_male = Your voice is a man's: when you speak of yourself, do it as a man.
+
 # in the instructions when a Homey is set: ask it, do not answer from memory
 home_line = For any question about the home (rooms, devices, their state, moods, flows, presence, consumption), call the Homey tools every time: older results of the conversation may be shortened or out of date, never answer from memory. For the list of rooms, call zones_list. When the user asks for an action (switch on, switch off, set, activate a mood, start a flow), answer in a few words: "Done." if everything worked, else say briefly what did not work and ask the only useful question to go on. Do not describe the devices, the tools or the steps, do not offer anything else.
 

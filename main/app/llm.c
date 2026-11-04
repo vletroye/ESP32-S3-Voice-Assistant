@@ -214,12 +214,54 @@ static char *dup_value(const char *value)
     return (value[0] && strcmp(value, "-") != 0) ? strdup(value) : NULL;
 }
 
-/* "Lea = mistral | voice_589 | fr | calm | slow": a voice of [voices] (a name used twice: the first one kept) */
+/*
+ * The gender of a voice in the firmware's AGENTS.INI (by provider and voice id): for a line of an older file,
+ * without that column; 0 if not there
+ */
+static char default_gender(const char *provider, const char *id)
+{
+    const char *text = s_agents_default_start;
+    size_t len = s_agents_default_end - s_agents_default_start;
+    const char *section = strstr(text, "\n[" VOICES_SECTION "]");
+    if (!section) {
+        return 0;
+    }
+    char line[160];
+    for (const char *p = section + 1; p < text + len && *p;) {
+        const char *end = memchr(p, '\n', text + len - p);
+        size_t n = end ? (size_t)(end - p) : (size_t)(text + len - p);
+        if (p != section + 1 && *p == '[') {
+            break;      // the next section
+        }
+        snprintf(line, sizeof(line), "%.*s", (int)(n < sizeof(line) - 1 ? n : sizeof(line) - 1), p);
+        p += n + (end != NULL);
+        char *eq = strchr(line, '=');
+        if (line[0] == '#' || !eq) {
+            continue;
+        }
+        char *parts[6] = { "", "", "", "", "", "" };
+        int k = 0;
+        for (char *r = eq + 1; r && k < 6;) {
+            char *bar = strchr(r, '|');
+            if (bar) {
+                *bar = '\0';
+            }
+            parts[k++] = trim(r);
+            r = bar ? bar + 1 : NULL;
+        }
+        if (strcasecmp(parts[0], provider) == 0 && strcmp(parts[1], id) == 0) {
+            return (parts[5][0] == 'f' || parts[5][0] == 'm') ? parts[5][0] : 0;
+        }
+    }
+    return 0;
+}
+
+/* "Lea = mistral | voice_589 | fr | calm | slow | f": a voice of [voices] (a name used twice: the first one kept) */
 static void add_voice(const char *name, char *rest)
 {
-    char *parts[5] = { "", "", "", "", "" };
+    char *parts[6] = { "", "", "", "", "", "" };
     int n = 0;
-    for (char *r = rest; r && n < 5;) {
+    for (char *r = rest; r && n < 6;) {
         char *bar = strchr(r, '|');
         if (bar) {
             *bar = '\0';
@@ -265,6 +307,9 @@ static void add_voice(const char *name, char *rest)
         .languages = languages,
         .emotion = dup_value(parts[3]),
         .pace = dup_value(parts[4]),
+        // f / m; a line without the column (an older file): as the same voice of the firmware's file
+        .gender = n > 5 ? ((tolower((unsigned char)parts[5][0]) == 'f' || tolower((unsigned char)parts[5][0]) == 'm') ?
+                           (char)tolower((unsigned char)parts[5][0]) : 0) : default_gender(parts[0], parts[1]),
     };
 }
 

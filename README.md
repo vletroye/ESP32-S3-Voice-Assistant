@@ -326,7 +326,7 @@ LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scr
   "Test how fast Haiku is?", **Oui / Yes** or **Non / No**. Yes tests that model alone, even an unchecked one, as the
   [model test](#334-model-test-teste-les-modèles) does. Meanwhile a window covers the screen (nothing can be
   touched): the robot's head looking from side to side inside a turning ring, and "Test de Haiku en cours..." /
-  "Testing Haiku..." (`settings_testing` of `LANG_<XX>.TXT`; "Bonjour ESP" / "Hi ESP" stops the test). Its result is spoken ("Résultat
+  "Testing Haiku..." (`settings_testing` of `LANG_<XX>.TXT`; "Bonjour ESP" / "Hi ESP" stops the test). The window goes as soon as the model is measured, before its result is spoken ("Résultat
   de Haiku : 0,8 seconde." / "Result of Haiku: 0.8 seconds."), then the line shows its new time. The screen stays on
   the list; the time goes into `SPEED.TXT` as for the other tests. A transcription model is given the audio of the
   speech model in use.

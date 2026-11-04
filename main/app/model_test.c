@@ -75,6 +75,19 @@ static llm_speech_kind_t s_speech_kind = LLM_SPEECH_TTS;
 // A test asked by the Settings screen: nothing shown on the reply panel, done() called after
 static void (*s_next_done)(void) = NULL;
 static void (*s_done)(void) = NULL;
+static bool s_done_called = false;
+
+/*
+ * A model tested alone from the Settings screen: done as soon as it is measured, before its result is spoken (the
+ * screen waiting over the list goes then, not once the result is said and the files written)
+ */
+static void single_done(void)
+{
+    if (s_done && !s_done_called) {
+        s_done_called = true;
+        s_done();
+    }
+}
 
 void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider)
 {
@@ -465,6 +478,10 @@ static void test_speech(char *screen, size_t screen_size)
         }
         speech_line(screen, screen_size, name, ok ? result : r->reason);
         show(screen);
+        if (s_scope == MODEL_TEST_SPEECH) {
+            save_speech_results();      // its time on the list at once
+            single_done();
+        }
         if (!s_cancel) {
             // With the speech and voice of the settings (the test left its own)
             assistant_set_tts(NULL);
@@ -510,6 +527,10 @@ static void test_speech(char *screen, size_t screen_size)
         }
         speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : (r->reason ? r->reason : lang->test_why_no_text));
         show(screen);
+        if (s_scope == MODEL_TEST_SPEECH) {
+            save_speech_results();      // its time on the list at once
+            single_done();
+        }
         if (!s_cancel) {
             say_speech_result(s_speech_result_count - 1);
         }
@@ -856,6 +877,7 @@ static void test_run(void)
                  st.first_ms, st.total_ms, st.answer_tokens, st.reasoning_tokens);
         record(times, m, err, &st);
         save_times(times);
+        single_done();      // a model tested alone: before SPEED.TXT and its result said
         write_speed_file(times, lang->test_question);
         if (s_cancel) {
             break;
@@ -936,6 +958,7 @@ void model_test_start(void)
     strlcpy(s_model, s_next_model, sizeof(s_model));
     s_speech_kind = s_next_speech_kind;
     s_done = s_next_done;
+    s_done_called = false;
     s_next_done = NULL;
     s_next_scope = MODEL_TEST_ALL;      // the next test, unless asked otherwise
     s_running = true;
@@ -958,9 +981,7 @@ void model_test_poll(void)
     s_pending = false;
     test_run();
     s_running = false;
-    if (s_done) {
-        s_done();
-    }
+    single_done();      // (when it ended before a measure: stopped, no key...)
 }
 
 void model_test_free_reload(void)

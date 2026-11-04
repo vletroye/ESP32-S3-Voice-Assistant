@@ -438,6 +438,10 @@ status_steady = steady
 status_measuring = measuring (1 minute)...
 status_no_battery = No battery (no BOX-3-SENSOR dock, or its switch on OFF)
 
+# Paramètres page (before the Debug page): its title, the switch of the beep when listening again after a reply
+settings_params_title = Settings
+settings_followup_beep = Beep after a reply
+
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug
 settings_debug = Traces

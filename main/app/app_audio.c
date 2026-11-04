@@ -23,6 +23,7 @@
 #include "app_sr.h"
 #include "app_presence.h"
 #include "app_audio.h"
+#include "settings.h"
 #include "debug_trace.h"
 #include "bsp_board.h"
 #include "bsp/esp-bsp.h"
@@ -185,6 +186,8 @@ err:
  */
 #define SOUND_WAIT_SILENCE_MS   150
 #define SOUND_WAIT_MAX_MS       600
+/* With Followup_beep: the beep this long after the last word of the reply */
+#define FOLLOWUP_BEEP_PAUSE_MS  700
 /* A system sound written in pieces of this length; the I2S DMA holds about SOUND_DMA_MS of audio (6 x 240 frames) */
 #define SOUND_PIECE_MS          20
 #define SOUND_DMA_MS            80
@@ -282,10 +285,15 @@ esp_err_t audio_play_preload(const char *filepath)
 /* Play a short system sound from memory (loaded by audio_play_preload(), or here at the first call) */
 esp_err_t audio_play_task(void *filepath)
 {
-    ESP_RETURN_ON_ERROR(audio_play_preload((const char *)filepath), TAG, "Cannot play %s", (const char *)filepath);
+    return audio_play_after_silence((const char *)filepath, SOUND_WAIT_SILENCE_MS);
+}
+
+esp_err_t audio_play_after_silence(const char *filepath, uint32_t silence_ms)
+{
+    ESP_RETURN_ON_ERROR(audio_play_preload(filepath), TAG, "Cannot play %s", filepath);
     /* No codec register write here: done once at boot (writing while sound plays out makes crackles) */
     int64_t t0 = esp_timer_get_time();
-    while (!tts_stream_is_silent(SOUND_WAIT_SILENCE_MS) && esp_timer_get_time() - t0 < SOUND_WAIT_MAX_MS * 1000LL) {
+    while (!tts_stream_is_silent(silence_ms) && esp_timer_get_time() - t0 < (silence_ms + SOUND_WAIT_MAX_MS) * 1000LL) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     int64_t waited_us = esp_timer_get_time() - t0;
@@ -410,9 +418,13 @@ void sr_handler_task(void *pvParam)
                 ui_ctrl_show_panel(UI_CTRL_PANEL_LISTEN, 0);
             }
 
-            audio_play_task("/spiffs/echo_en_wake.wav");
+            // The beep: after the wake word (or a tap); listening again after a reply, only with Followup_beep, and
+            // after a pause (right after the last word it spoiled the end of the reply)
             if (!result.followup) {
+                audio_play_task("/spiffs/echo_en_wake.wav");
                 assistant_listen_start();
+            } else if (settings_get_parameter()->followup_beep) {
+                audio_play_after_silence("/spiffs/echo_en_wake.wav", FOLLOWUP_BEEP_PAUSE_MS);
             }
             // Open the Claude and speech connections while the user speaks
             assistant_prewarm();

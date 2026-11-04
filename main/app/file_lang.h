@@ -228,6 +228,8 @@ typedef struct {
     const char *status_steady;
     const char *status_measuring;
     const char *status_no_battery;
+    const char *settings_params_title;  /* Paramètres page: its title, the switch of the beep after a reply */
+    const char *settings_followup_beep;
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;
     const char *settings_debug_info;

@@ -698,12 +698,14 @@ static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width
  * pages are hidden
  * (the panel's flex layout skips them).
  */
-#define SETTINGS_PAGES          6
+#define SETTINGS_PAGES          7
 #define SETTINGS_PAGE_MODELS    2       /* the first page of the models (LLM, then STT, then TTS) */
-#define SETTINGS_PAGE_DEBUG     5
-#define SETTINGS_ROWS_MAX       12
+#define SETTINGS_PAGE_PARAMS    5       /* switches: the beep after a reply */
+#define SETTINGS_PAGE_DEBUG     6
+#define SETTINGS_ROWS_MAX       14
 static void model_list_show(int page);
 static void debug_page_refresh(void);
+static void params_page_refresh(void);
 static lv_obj_t *s_settings_rows[SETTINGS_ROWS_MAX];
 static uint8_t s_settings_row_page[SETTINGS_ROWS_MAX];
 static size_t s_settings_row_count = 0;
@@ -735,6 +737,7 @@ static void settings_page_show(int page)
     confirm_button_update(s_settings_changed);
     model_list_show(s_settings_page);
     debug_page_refresh();
+    params_page_refresh();
     for (size_t i = 0; i < s_settings_row_count; i++) {
         if (s_settings_row_page[i] == s_settings_page) {
             lv_obj_clear_flag(s_settings_rows[i], LV_OBJ_FLAG_HIDDEN);
@@ -1105,7 +1108,8 @@ static void model_list_show(int page)
     int list = page - SETTINGS_PAGE_MODELS;
     if (ui_LabelSettingsTile) {
         lv_label_set_text(ui_LabelSettingsTile, list >= 0 && list < 3 ? titles[list] :
-                          page == SETTINGS_PAGE_DEBUG ? lang->settings_debug_title : lang->settings_title);
+                          page == SETTINGS_PAGE_DEBUG ? lang->settings_debug_title :
+                          page == SETTINGS_PAGE_PARAMS ? lang->settings_params_title : lang->settings_title);
     }
     for (int i = 0; i < 3; i++) {
         if (s_model_lists[i]) {
@@ -1192,8 +1196,8 @@ static void dump_clicked_cb(lv_event_t *e)
     assistant_request_dump();
 }
 
-/* A row of the Debug page (no dropdown): the switch, the lines kept, or the button */
-static lv_obj_t *debug_row_create(lv_flex_align_t align)
+/* A row of the Debug or Paramètres page (no dropdown): a switch, the lines kept, or the button */
+static lv_obj_t *switch_row_create(lv_flex_align_t align, uint8_t page)
 {
     lv_obj_t *row = lv_obj_create(ui_PanelSettings);
     lv_obj_remove_style_all(row);
@@ -1203,8 +1207,52 @@ static lv_obj_t *debug_row_create(lv_flex_align_t align)
     lv_obj_set_style_pad_left(row, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(row, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-    settings_row_add(row, SETTINGS_PAGE_DEBUG);
+    settings_row_add(row, page);
     return row;
+}
+
+static lv_obj_t *debug_row_create(lv_flex_align_t align)
+{
+    return switch_row_create(align, SETTINGS_PAGE_DEBUG);
+}
+
+/* ---------- Paramètres page: the beep when listening again after a reply (Followup_beep) ---------- */
+
+static lv_obj_t *s_beep_switch = NULL;
+static lv_obj_t *s_beep_label = NULL;
+
+static void params_page_refresh(void)
+{
+    if (!s_beep_switch) {
+        return;
+    }
+    lv_label_set_text(s_beep_label, app_lang_get()->settings_followup_beep);
+    if (settings_get_parameter()->followup_beep) {
+        lv_obj_add_state(s_beep_switch, LV_STATE_CHECKED);
+    } else {
+        lv_obj_clear_state(s_beep_switch, LV_STATE_CHECKED);
+    }
+}
+
+static void beep_switch_cb(lv_event_t *e)
+{
+    bool on = lv_obj_has_state(s_beep_switch, LV_STATE_CHECKED);
+    settings_get_parameter()->followup_beep = on;
+    settings_save_str("Followup_beep", on ? "on" : "off");
+}
+
+static void params_page_create(void)
+{
+    lv_obj_t *row = switch_row_create(LV_FLEX_ALIGN_SPACE_BETWEEN, SETTINGS_PAGE_PARAMS);
+    s_beep_label = lv_label_create(row);
+    lv_obj_set_style_text_color(s_beep_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(s_beep_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_label_set_long_mode(s_beep_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_flex_grow(s_beep_label, 1);
+    s_beep_switch = lv_switch_create(row);
+    lv_obj_set_style_bg_color(s_beep_switch, lv_color_hex(0x6E47BD), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(s_beep_switch, beep_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    params_page_refresh();
 }
 
 static void debug_page_create(void)
@@ -1290,6 +1338,7 @@ static void settings_screen_setup(void)
         model_list_create(i);
     }
     // Page 6: the debug traces
+    params_page_create();
     debug_page_create();
 
     // Arrows to the previous / next page at the bottom left and right
@@ -1326,6 +1375,7 @@ static void ui_ctrl_apply_texts(void)
         lv_label_set_text(s_save_label, lang->settings_confirm);
         model_list_show(s_settings_page);   // the title of the page
         debug_page_refresh();
+        params_page_refresh();
     }
     label_localize(ui_LabelResetTitle, lang->reset_title, &ui_font_Latin20);
     label_localize(ui_LabelResetContent, lang->reset_content, &ui_font_Latin14);

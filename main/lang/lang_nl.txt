@@ -439,6 +439,10 @@ status_steady = stabiel
 status_measuring = meting bezig (1 minuut)...
 status_no_battery = Geen batterij (geen BOX-3-SENSOR-dock, of de schakelaar op OFF)
 
+# Paramètres page (before the Debug page): its title, the switch of the beep when listening again after a reply
+settings_params_title = Instellingen
+settings_followup_beep = Piep na een antwoord
+
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug
 settings_debug = Traces

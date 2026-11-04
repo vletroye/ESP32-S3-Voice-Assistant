@@ -438,6 +438,10 @@ status_steady = stable
 status_measuring = mesure en cours (1 minute)...
 status_no_battery = Pas de batterie (dock BOX-3-SENSOR absent, ou son interrupteur sur OFF)
 
+# Paramètres page (before the Debug page): its title, the switch of the beep when listening again after a reply
+settings_params_title = Paramètres
+settings_followup_beep = Bip après une réponse
+
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug
 settings_debug = Traces

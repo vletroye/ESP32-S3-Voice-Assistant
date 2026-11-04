@@ -171,7 +171,7 @@ Every file of the drive is explained in the [Advanced user guide](#3-advanced-us
 
 - Say "**Bonjour ESP**" or "**Hi ESP**" (or touch the screen): a beep, then "J'écoute…" / "I'm listening…". Ask
   your question and stop: the answer is shown and spoken.
-- After the answer it keeps listening for 8 seconds: go on without the wake word.
+- After the answer it keeps listening for 8 seconds, without a beep: go on without the wake word.
 - To interrupt it, say "Bonjour ESP" again or **double-tap** the screen.
 - Say "**Au revoir**" / "**Goodbye**" to send it back to sleep and start the next conversation afresh. Without
   it, the assistant remembers the conversation, even after sleeping or a restart: the next questions are answered
@@ -245,7 +245,8 @@ Every feature in detail: [Features in detail](#411-features-in-detail).
 2. After 0.9 s of silence (`End_speech_ms` in `CONFIG.INI`) the question is sent: "Entendu …" / "Heard …" is shown
    until its transcript arrives (0.7 to 1.2 s), then "Je réfléchis …" / "Thinking …" until the answer starts; the
    answer is shown and spoken.
-3. After the answer, the assistant keeps listening for 8 s: you can go on without saying "Bonjour ESP" / "Hi ESP"
+3. After the answer, the assistant keeps listening for 8 s, without a beep (it can have one, see the Paramètres page of the
+   [Settings screen](#24-on-the-device-settings-screen)): you can go on without saying "Bonjour ESP" / "Hi ESP"
    (not after a volume change, which sends it back to sleep).
 4. To interrupt an answer, say "Bonjour ESP" / "Hi ESP" again or **double-tap** the screen: it stops and listens. A
    double tap while "J'écoute …" / "I'm listening …" or "Je réfléchis …" / "Thinking …" is shown drops the question:
@@ -280,7 +281,7 @@ Every feature in detail: [Features in detail](#411-features-in-detail).
 
 ### 2.4 On the device: Settings screen
 
-Tap the gear icon on the home screen. Its lists (languages, models, STT, TTS, voices) are in alphabetical order. The settings are split over six pages, browsed with the arrows at the
+Tap the gear icon on the home screen. Its lists (languages, models, STT, TTS, voices) are in alphabetical order. The settings are split over seven pages, browsed with the arrows at the
 bottom left and right (from the last page, the right arrow goes back to the first, and the other way round); the
 screen opens on the first page.
 
@@ -329,7 +330,12 @@ LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scr
   the list; the time goes into `SPEED.TXT` as for the other tests. A transcription model is given the audio of the
   speech model in use.
 
-Sixth page: **Debug**, the [debug traces](#410-debug-traces-debugtxt): **Traces** on or off (saved as `Debug`, so that a start-up can be traced; the Dump sets it back to off),
+Sixth page: **Paramètres** / **Settings**: **Bip après une réponse** / **Beep after a reply** (off by default,
+saved as `Followup_beep`): the beep is heard only after the wake word (or a touch); after a reply, the assistant
+listens again in silence. On, the beep sounds then too, 0.7 s after the last word (right after it, it spoiled the
+end of the reply).
+
+Seventh page: **Debug**, the [debug traces](#410-debug-traces-debugtxt): **Traces** on or off (saved as `Debug`, so that a start-up can be traced; the Dump sets it back to off),
 the lines and KB kept so far, and **Dump vers USB** / **Dump to USB**: the traces are written, then the device restarts
 in configuration mode, where they are `DEBUG.TXT` (with no PC connected: written anyway, and "Connecte-moi à ton
 PC." / "Connect me to your PC." is shown).
@@ -748,6 +754,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Show_clock` | Time and date on the sleep screen: `on` or `off` (also changed by voice: "affiche l'heure", "cache l'heure"); the volume and the Wi-Fi stay shown | `on` |
 | `Currency` | Currency of the prices of `AGENTS.INI` and of the costs shown (`EUR` → "€", `USD` → "$", another code is written as is); no conversion: the prices must be given in it | `EUR` |
 | `Debug` | `on`: the [debug traces](#410-debug-traces-debugtxt) are kept in memory from the start-up, to be dumped as `DEBUG.TXT` (also switched on the Debug page of the Settings screen); the Dump sets it back to `off` | `off` |
+| `Followup_beep` | `on`: the beep also sounds when the assistant listens again after a reply (0.7 s after its last word); `off`: only after the wake word or a touch (also switched on the Paramètres page of the Settings screen) | `off` |
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
@@ -1743,6 +1750,7 @@ them from the assistant's `sdkconfig` (build the assistant, then `factory_nvs`, 
 | `CONFIG_ASSISTANT_CURRENCY` | `EUR` | Currency when `Currency` is not set |
 | `CONFIG_ASSISTANT_SLEEP_AFTER_CMD` | `off` | Sleep after a local voice command when `Sleep_after_cmd` is not set |
 | `CONFIG_ASSISTANT_READ_LISTS` | `off` | Lists of the voice commands read when `Read_lists` is not set |
+| `CONFIG_ASSISTANT_FOLLOWUP_BEEP` | `off` | Beep after a reply when `Followup_beep` is not set |
 | `CONFIG_ASSISTANT_DEBUG` | `off` | Debug traces when `Debug` is not set |
 | `CONFIG_ASSISTANT_RADIO_RESUME` | `on` | Radio resumed after a conversation when `Radio_resume` is not set |
 | `CONFIG_ASSISTANT_RADIO_LEVEL` | `-16` | Level of the radio stations when `Radio_level` is not set |
@@ -1793,7 +1801,7 @@ The serial monitor (`idf.py -p COMx monitor`) shows, among others:
 To find out afterwards what happened during a test session (a command not understood, a lag, the sound cut…),
 without a PC connected while testing:
 
-1. Turn the traces on: **Debug** page of the Settings screen (sixth page), or `Debug = on` in `CONFIG.INI`. They
+1. Turn the traces on: **Debug** page of the Settings screen (seventh page), or `Debug = on` in `CONFIG.INI`. They
    stay on after a restart (a start-up can be traced) until the **Dump**, which turns them off for the next start
    (forgotten on, they would take memory and time for nothing).
 2. Use the assistant. When something goes wrong, put a **mark** right after: a **long press** anywhere on the
@@ -1871,7 +1879,8 @@ A power cut clears them. Every start is also added to `BOOTS.TXT` (the last 50, 
   e.g. `PT:Português`, to `Languages` in `CONFIG.INI` creates its files from the English ones, ready to be
   translated. Country names per language in `COUNTRY.TXT`.
 - **Sentence-by-sentence speech synthesis**: the first sentence is spoken while the model writes the rest.
-- **Follow-up without the wake word**: after an answer, the assistant keeps listening for 8 s
+- **Follow-up without the wake word**: after an answer, the assistant keeps listening for 8 s, without a beep
+  (`Followup_beep = on`: with one, 0.7 s after the last word)
   (with the history of the last exchanges).
 - **Saved as it goes to sleep**: the conversation (restored after a restart) and the costs are written to the flash
   as soon as the assistant goes back to sleep, never during an exchange: on the LittleFS partition `state`, in a

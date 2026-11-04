@@ -303,6 +303,8 @@ esp_err_t settings_read_parameter_from_nvs(void)
     g_sys_param.sleep_after_cmd = read_bool("Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD);
     // Lists of the voice commands read aloud
     g_sys_param.read_lists = read_bool("Read_lists", CONFIG_ASSISTANT_READ_LISTS);
+    // The beep when listening again after a reply (Paramètres page of the Settings screen)
+    g_sys_param.followup_beep = read_bool("Followup_beep", CONFIG_ASSISTANT_FOLLOWUP_BEEP);
     // Debug traces (also switched on the Debug page of the Settings screen)
     g_sys_param.debug = read_bool("Debug", CONFIG_ASSISTANT_DEBUG);
 

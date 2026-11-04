@@ -317,6 +317,8 @@ static const lang_field_t s_fields[] = {
     { "status_steady", offsetof(app_lang_t, status_steady), FIELD_TEXT, 1 },
     { "status_measuring", offsetof(app_lang_t, status_measuring), FIELD_TEXT, 1 },
     { "status_no_battery", offsetof(app_lang_t, status_no_battery), FIELD_TEXT, 1 },
+    { "settings_params_title", offsetof(app_lang_t, settings_params_title), FIELD_TEXT, 1 },
+    { "settings_followup_beep", offsetof(app_lang_t, settings_followup_beep), FIELD_TEXT, 1 },
     { "settings_debug_title", offsetof(app_lang_t, settings_debug_title), FIELD_TEXT, 1 },
     { "settings_debug", offsetof(app_lang_t, settings_debug), FIELD_TEXT, 1 },
     { "settings_debug_info", offsetof(app_lang_t, settings_debug_info), FIELD_TEXT, 1 },

@@ -214,6 +214,8 @@ void app_main(void)
         nvs_init_str_if_missing("Sleep_after_cmd", CONFIG_ASSISTANT_SLEEP_AFTER_CMD);
         // Lists of the voice commands (languages, providers, models, voices) read aloud (on) or only shown (off)
         nvs_init_str_if_missing("Read_lists", CONFIG_ASSISTANT_READ_LISTS);
+        // The beep when listening again after a reply (on / off; after the wake word it always sounds)
+        nvs_init_str_if_missing("Followup_beep", CONFIG_ASSISTANT_FOLLOWUP_BEEP);
         // Debug traces kept in memory, dumped as DEBUG.TXT (on / off)
         nvs_init_str_if_missing("Debug", CONFIG_ASSISTANT_DEBUG);
         // Currency of the prices of AGENTS.INI and of the costs (COSTS.TXT)

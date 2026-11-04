@@ -101,6 +101,14 @@ menu "Example Configuration"
             of the LANG text (shown as ":"), the list is only shown; on: the list is read too. Default of
             Read_lists in CONFIG.INI, which takes precedence.
 
+    config ASSISTANT_FOLLOWUP_BEEP
+        string "Beep when listening again after a reply (on or off)"
+        default "off"
+        help
+            off: the beep is heard only after the wake word; after a reply the assistant listens again in silence.
+            on: the beep too, after a short pause following the last word. Default of Followup_beep in
+            CONFIG.INI, which takes precedence (also switched on the "Paramètres" page of the Settings screen).
+
     config ASSISTANT_DEBUG
         string "Debug traces (on or off)"
         default "off"

@@ -47,6 +47,9 @@ esp_err_t audio_play_preload(const char *filepath);
 /** Play a system sound, once the spoken reply (if any) has left the speaker */
 esp_err_t audio_play_task(void *filepath);
 
+/** The same once the speaker has been silent for silence_ms (a pause after the last word of a reply) */
+esp_err_t audio_play_after_silence(const char *filepath, uint32_t silence_ms);
+
 void audio_record_init();
 
 void audio_record_save(int16_t *audio_buffer, int audio_chunksize);

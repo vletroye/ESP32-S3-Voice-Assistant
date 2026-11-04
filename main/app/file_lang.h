@@ -205,6 +205,27 @@ typedef struct {
     const char *settings_test_title;    /* Popup of a long press on a model: its title, its text (%s: the model) */
     const char *settings_test_text;
     const char *settings_testing;       /* Over the list while it is tested, %s: the model */
+    const char *status_title;           /* Screen of the Wi-Fi and the battery (a tap on them, sleep screen) */
+    const char *status_wifi;
+    const char *status_ssid;
+    const char *status_signal;
+    const char *status_channel;
+    const char *status_ap;
+    const char *status_security;
+    const char *status_ip;
+    const char *status_gateway;
+    const char *status_mac;
+    const char *status_not_connected;
+    const char *status_battery;
+    const char *status_level;
+    const char *status_voltage;
+    const char *status_state;
+    const char *status_charging;
+    const char *status_discharging;
+    const char *status_full;
+    const char *status_steady;
+    const char *status_unknown;
+    const char *status_no_battery;
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;
     const char *settings_debug_info;

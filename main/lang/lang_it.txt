@@ -410,6 +410,30 @@ settings_test_title = Test prestazioni
 settings_test_text = Testare la velocità di %s?
 settings_testing = Test di %s in corso...
 
+# Screen of the Wi-Fi and the battery (a tap on them, sleep screen): its title, the names of its lines, the
+# states of the battery (guessed from how its voltage moves: the dock tells nothing), no battery
+status_title = Wi-Fi e batteria
+status_wifi = Wi-Fi
+status_ssid = Rete
+status_signal = Segnale
+status_channel = Canale
+status_ap = Punto di accesso
+status_security = Sicurezza
+status_ip = Indirizzo IP
+status_gateway = Gateway
+status_mac = Indirizzo MAC
+status_not_connected = non connesso
+status_battery = Batteria
+status_level = Livello
+status_voltage = Tensione
+status_state = Stato
+status_charging = in carica
+status_discharging = a batteria
+status_full = carica
+status_steady = stabile
+status_unknown = misura in corso...
+status_no_battery = Nessuna batteria (dock BOX-3-SENSOR assente, o interruttore su OFF)
+
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug
 settings_debug = Tracce

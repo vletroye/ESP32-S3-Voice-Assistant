@@ -5,7 +5,9 @@
  */
 
 #include <stdbool.h>
+#include <string.h>
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
@@ -71,6 +73,87 @@ static float read_volts(void)
     return n ? (float)sum / n / 1000.0f * BATTERY_DIVIDER : 0;
 }
 
+/* The voltages of the last minutes, one every BATTERY_TREND_STEP_S, for the trend (charging or not) */
+#define BATTERY_TREND_STEP_S    30
+#define BATTERY_TREND_COUNT     12      /* 6 minutes */
+#define BATTERY_TREND_MIN_S     180     /* compared with a reading at least this old */
+#define BATTERY_RISE_MV         15
+#define BATTERY_FALL_MV         10
+#define BATTERY_FULL_MV         4150
+static struct {
+    int64_t us;
+    int mv;
+} s_trend[BATTERY_TREND_COUNT];
+static int s_trend_next = 0;
+
+/* Charge of a Li-ion cell at rest by its voltage (mV, %): interpolated between these points */
+static const struct {
+    int mv;
+    int percent;
+} s_curve[] = {
+    { 3270, 0 }, { 3610, 5 }, { 3690, 10 }, { 3710, 15 }, { 3730, 20 }, { 3750, 25 }, { 3770, 30 }, { 3790, 35 },
+    { 3800, 40 }, { 3820, 45 }, { 3840, 50 }, { 3850, 55 }, { 3870, 60 }, { 3910, 65 }, { 3950, 70 }, { 3980, 75 },
+    { 4020, 80 }, { 4080, 85 }, { 4110, 90 }, { 4150, 95 }, { 4200, 100 },
+};
+
+static int percent_of(int mv)
+{
+    size_t n = sizeof(s_curve) / sizeof(s_curve[0]);
+    if (mv <= s_curve[0].mv) {
+        return 0;
+    }
+    for (size_t i = 1; i < n; i++) {
+        if (mv <= s_curve[i].mv) {
+            return s_curve[i - 1].percent + (mv - s_curve[i - 1].mv) * (s_curve[i].percent - s_curve[i - 1].percent) /
+                   (s_curve[i].mv - s_curve[i - 1].mv);
+        }
+    }
+    return 100;
+}
+
+/* A reading kept every BATTERY_TREND_STEP_S */
+static void trend_add(int mv)
+{
+    int64_t now = esp_timer_get_time();
+    int last = (s_trend_next + BATTERY_TREND_COUNT - 1) % BATTERY_TREND_COUNT;
+    if (s_trend[last].us && now - s_trend[last].us < BATTERY_TREND_STEP_S * 1000000LL) {
+        return;
+    }
+    s_trend[s_trend_next].us = now;
+    s_trend[s_trend_next].mv = mv;
+    s_trend_next = (s_trend_next + 1) % BATTERY_TREND_COUNT;
+}
+
+bool app_battery_info(int *millivolts, int *percent, app_battery_state_t *state)
+{
+    bool critical;
+    if (app_battery_sections(&critical) == 0) {
+        return false;
+    }
+    int mv = (int)(s_volts * 1000);
+    *millivolts = mv;
+    *percent = percent_of(mv);
+    // Compared with the oldest reading of at least BATTERY_TREND_MIN_S ago
+    int64_t now = esp_timer_get_time();
+    int old = -1;
+    for (int i = 0; i < BATTERY_TREND_COUNT; i++) {
+        if (s_trend[i].us && now - s_trend[i].us >= BATTERY_TREND_MIN_S * 1000000LL &&
+                (old < 0 || s_trend[i].us < s_trend[old].us)) {
+            old = i;
+        }
+    }
+    if (old < 0) {
+        *state = mv >= BATTERY_FULL_MV ? APP_BATTERY_FULL : APP_BATTERY_UNKNOWN;
+    } else if (mv - s_trend[old].mv >= BATTERY_RISE_MV) {
+        *state = APP_BATTERY_CHARGING;
+    } else if (s_trend[old].mv - mv >= BATTERY_FALL_MV) {
+        *state = APP_BATTERY_DISCHARGING;
+    } else {
+        *state = mv >= BATTERY_FULL_MV ? APP_BATTERY_FULL : APP_BATTERY_STEADY;
+    }
+    return true;
+}
+
 int app_battery_sections(bool *critical)
 {
     *critical = false;
@@ -85,9 +168,11 @@ int app_battery_sections(bool *critical)
         }
         s_band = -1;
         s_volts = 0;
+        memset(s_trend, 0, sizeof(s_trend));
         return 0;
     }
     s_volts = (s_band < 0) ? volts : s_volts + BATTERY_SMOOTH * (volts - s_volts);
+    trend_add((int)(s_volts * 1000));
     // The thresholds passed, with a little hysteresis around the current one
     int band = 0;
     while (band < APP_BATTERY_SECTIONS - 1 && s_volts >= s_thresholds[band]) {

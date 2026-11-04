@@ -25,6 +25,24 @@ extern "C" {
  */
 int app_battery_sections(bool *critical);
 
+/*
+ * The dock has no pin telling whether the cell charges: guessed from how its voltage moved over the last minutes
+ * (UNKNOWN until a few minutes of readings are kept)
+ */
+typedef enum {
+    APP_BATTERY_UNKNOWN,
+    APP_BATTERY_CHARGING,       /* the voltage goes up */
+    APP_BATTERY_DISCHARGING,    /* it goes down */
+    APP_BATTERY_FULL,           /* about 4.2 V and not going down */
+    APP_BATTERY_STEADY,         /* neither up nor down */
+} app_battery_state_t;
+
+/**
+ * @brief The battery's voltage (mV), its charge in % (estimated from the voltage of a Li-ion cell at rest: higher
+ *        while it charges) and whether it charges; false without battery. Reads the voltage again (LVGL task).
+ */
+bool app_battery_info(int *millivolts, int *percent, app_battery_state_t *state);
+
 #ifdef __cplusplus
 }
 #endif

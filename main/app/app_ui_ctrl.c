@@ -31,6 +31,7 @@
 #include "file_costs.h"
 #include "radio.h"
 #include "app_ui_radio.h"
+#include "app_ui_status.h"
 #include "bsp/esp-bsp.h"
 
 #include "ui_helpers.h"
@@ -1971,6 +1972,7 @@ void ui_ctrl_init(void)
     model_row_create();
     head_icons_create();
     ui_radio_init();
+    ui_status_init();
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
     // While listening or thinking: a double tap drops it, back to sleep
@@ -2174,6 +2176,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
         lv_scr_load(ui_ScreenListen);
     }
     ui_radio_close();
+    ui_status_close();
     lv_obj_t *show_panel = NULL;
     lv_obj_t *hide_panel[3] = { NULL };
 

@@ -270,6 +270,8 @@ Every feature in detail: [Features in detail](#411-features-in-detail).
 ### 2.3 Gestures
 
 - Touch the screen while asleep: wakes the assistant up, like "Bonjour ESP".
+- Tap the Wi-Fi icon or the battery at the bottom right of the sleep screen: the **Wi-Fi and battery** screen (see
+  [Features in detail](#411-features-in-detail)). Tap the volume at the bottom left: the radio screen.
 - Double-tap during an answer: interrupts it and listens.
 - Double-tap while listening ("J'écoute …" / "I'm listening …") or thinking ("Entendu …" / "Heard …", "Je
   réfléchis …" / "Thinking …"): the question is dropped
@@ -1629,6 +1631,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `radio_browser.c` | Radio-Browser: server chosen from its list, searches by name, tag and country, listens counted |
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
+| `app_ui_status.c` | The Wi-Fi and battery screen (a tap on them, sleep screen); `app_battery.c` gives the voltage, the level and the trend (charging or not) |
 | `file_state.c` | The LittleFS partition `state` of the files written often (conversation, costs, test results, places): mounted on `/state`, those of an older firmware moved there from SPIFFS, erased by the factory reset |
 | `debug_trace.c` | Debug traces: every log line caught (`esp_log_set_vprintf`), with the time of day and the number of the exchange, in a 1 MB ring buffer in PSRAM; marks; the dump to `/spiffs/debug.txt` |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |
@@ -1894,6 +1897,16 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
   outline of the full bar, filled from the bottom with the volume; speaker icon and percentage below it, all
   centred under the Settings icon) and the Wi-Fi signal at the bottom right (arcs lit with the strength, crossed out
   when disconnected), in the same style.
+- **Wi-Fi and battery screen** ("Wi-Fi et batterie" / "Wi-Fi and battery"), opened by a tap on the Wi-Fi icon or on
+  the battery of the sleep screen (scrolled to the battery when it was tapped), refreshed every 2 s, the back arrow
+  at the top left: the **network** (name, signal in dBm and as a quality from 0 to 100 %, channel, 802.11n and 40 MHz
+  if used, the access point's address, security, IP address, gateway, the BOX's MAC address), then the **battery** of
+  the dock: its **level** in %, estimated from the voltage of a Li-ion cell at rest (it reads higher while
+  charging), the **voltage**, and its **state**: "en charge" / "charging", "sur batterie" / "on battery", "pleine" /
+  "full", "stable" / "steady". The dock has no pin telling whether the cell charges: the state is guessed from how
+  the voltage moved over the last minutes ("mesure en cours..." / "measuring..." during the first 3 minutes).
+  Without battery: "Pas de batterie" / "No battery" (no dock, or its switch on OFF). Texts: `status_` keys of
+  `LANG_<XX>.TXT`.
 - **Battery level** (with the ESP32-S3-BOX-3-SENSOR dock and a cell in it): a battery under the Wi-Fi icon, with 5
   sections lit in green from the left: 2 from 3.50 V, 3 from 3.70 V, 4 from 3.80 V, 5 from 3.95 V; below 3.50 V
   (under ~5 %), only the first section, in red. Read 3 s after start-up, then every 30 s; hidden without the dock

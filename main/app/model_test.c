@@ -386,6 +386,8 @@ static void say_speech_result(int index)
     }
     assistant_announce_begin();
     assistant_announce(text);
+    // A model tested alone: the window over the list goes once this is heard (the end waits for the whole of it)
+    single_done_when_heard();
     assistant_announce_end();
 }
 
@@ -500,7 +502,6 @@ static void test_speech(char *screen, size_t screen_size)
             assistant_set_tts(NULL);
             say_speech_result(s_speech_result_count - 1);
         }
-        single_done_when_heard();
     }
     if ((s_scope == MODEL_TEST_STT || (s_scope == MODEL_TEST_SPEECH && s_speech_kind == LLM_SPEECH_STT)) &&
             !audio && !s_cancel) {
@@ -547,7 +548,6 @@ static void test_speech(char *screen, size_t screen_size)
         if (!s_cancel) {
             say_speech_result(s_speech_result_count - 1);
         }
-        single_done_when_heard();
     }
     free(audio);
     // The transcription of the settings again

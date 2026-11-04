@@ -412,7 +412,7 @@ settings_test_text = Testen hoe snel %s is?
 settings_testing = %s wordt getest...
 
 # Screen of the Wi-Fi and the battery (a tap on them, sleep screen): its title, the names of its lines, the
-# states of the battery (guessed from how its voltage moves: the dock tells nothing), no battery
+# states of the battery (a PC connected, else guessed from how its voltage moves: the dock tells nothing), no battery
 status_title = Wi-Fi en batterij
 status_wifi = Wi-Fi
 status_ssid = Netwerk
@@ -428,11 +428,11 @@ status_battery = Batterij
 status_level = Niveau
 status_voltage = Spanning
 status_state = Status
-status_charging = aan het laden
-status_discharging = op batterij
+status_charger = lader aangesloten
+status_on_battery = op batterij
 status_full = vol
 status_steady = stabiel
-status_unknown = meting bezig...
+status_measuring = meting bezig (1 minuut)...
 status_no_battery = Geen batterij (geen BOX-3-SENSOR-dock, of de schakelaar op OFF)
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button

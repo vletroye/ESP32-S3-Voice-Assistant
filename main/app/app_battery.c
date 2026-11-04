@@ -8,6 +8,7 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "driver/usb_serial_jtag.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
@@ -74,11 +75,12 @@ static float read_volts(void)
 }
 
 /* The voltages of the last minutes, one every BATTERY_TREND_STEP_S, for the trend (charging or not) */
-#define BATTERY_TREND_STEP_S    30
-#define BATTERY_TREND_COUNT     12      /* 6 minutes */
-#define BATTERY_TREND_MIN_S     180     /* compared with a reading at least this old */
-#define BATTERY_RISE_MV         15
-#define BATTERY_FALL_MV         10
+#define BATTERY_TREND_STEP_S    10
+#define BATTERY_TREND_COUNT     12      /* 2 minutes */
+#define BATTERY_TREND_MIN_S     60      /* compared with a reading at least this old: a charger plugged in or out
+                                           moves the voltage at once */
+#define BATTERY_RISE_MV         10
+#define BATTERY_FALL_MV         8
 #define BATTERY_FULL_MV         4150
 static struct {
     int64_t us;
@@ -135,6 +137,11 @@ bool app_battery_info(int *millivolts, int *percent, app_battery_state_t *state)
     *percent = percent_of(mv);
     // Compared with the oldest reading of at least BATTERY_TREND_MIN_S ago
     int64_t now = esp_timer_get_time();
+    // Connected to a PC (USB data): powered, so charging (the configuration mode needs that link too)
+    if (usb_serial_jtag_is_connected()) {
+        *state = mv >= BATTERY_FULL_MV ? APP_BATTERY_FULL : APP_BATTERY_CHARGING;
+        return true;
+    }
     int old = -1;
     for (int i = 0; i < BATTERY_TREND_COUNT; i++) {
         if (s_trend[i].us && now - s_trend[i].us >= BATTERY_TREND_MIN_S * 1000000LL &&

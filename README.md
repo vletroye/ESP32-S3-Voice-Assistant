@@ -1902,9 +1902,11 @@ restart that is not a dump. The dump keeps the newest lines when SPIFFS has not 
   at the top left: the **network** (name, signal in dBm and as a quality from 0 to 100 %, channel, 802.11n and 40 MHz
   if used, the access point's address, security, IP address, gateway, the BOX's MAC address), then the **battery** of
   the dock: its **level** in %, estimated from the voltage of a Li-ion cell at rest (it reads higher while
-  charging), the **voltage**, and its **state**: "en charge" / "charging", "sur batterie" / "on battery", "pleine" /
-  "full", "stable" / "steady". The dock has no pin telling whether the cell charges: the state is guessed from how
-  the voltage moved over the last minutes ("mesure en cours..." / "measuring..." during the first 3 minutes).
+  charging), the **voltage**, and its **state**: "chargeur connecté" / "charger connected", "sur batterie" / "on
+  battery", "pleine" / "full", "stable" / "steady". The dock has no pin telling whether the cell charges: a PC
+  connected (USB data) is a charger at once; else the state is guessed from how the voltage moved over the last
+  minute (a charger plugged in or out moves it at once; "mesure en cours (1 minute)..." / "measuring (1 minute)..."
+  after a start).
   Without battery: "Pas de batterie" / "No battery" (no dock, or its switch on OFF). Texts: `status_` keys of
   `LANG_<XX>.TXT`.
 - **Battery level** (with the ESP32-S3-BOX-3-SENSOR dock and a cell in it): a battery under the Wi-Fi icon, with 5

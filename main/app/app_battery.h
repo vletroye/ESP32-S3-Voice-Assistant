@@ -26,12 +26,12 @@ extern "C" {
 int app_battery_sections(bool *critical);
 
 /*
- * The dock has no pin telling whether the cell charges: guessed from how its voltage moved over the last minutes
- * (UNKNOWN until a few minutes of readings are kept)
+ * The dock has no pin telling whether the cell charges: charging when a PC is connected (USB data), else guessed from
+ * how its voltage moved over the last minute (UNKNOWN until a minute of readings is kept)
  */
 typedef enum {
     APP_BATTERY_UNKNOWN,
-    APP_BATTERY_CHARGING,       /* the voltage goes up */
+    APP_BATTERY_CHARGING,       /* a PC connected, or the voltage goes up: a charger */
     APP_BATTERY_DISCHARGING,    /* it goes down */
     APP_BATTERY_FULL,           /* about 4.2 V and not going down */
     APP_BATTERY_STEADY,         /* neither up nor down */

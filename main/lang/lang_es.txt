@@ -411,7 +411,7 @@ settings_test_text = ¿Probar la rapidez de %s?
 settings_testing = Probando %s...
 
 # Screen of the Wi-Fi and the battery (a tap on them, sleep screen): its title, the names of its lines, the
-# states of the battery (guessed from how its voltage moves: the dock tells nothing), no battery
+# states of the battery (a PC connected, else guessed from how its voltage moves: the dock tells nothing), no battery
 status_title = Wi-Fi y batería
 status_wifi = Wi-Fi
 status_ssid = Red
@@ -427,11 +427,11 @@ status_battery = Batería
 status_level = Nivel
 status_voltage = Tensión
 status_state = Estado
-status_charging = cargando
-status_discharging = con batería
+status_charger = cargador conectado
+status_on_battery = con batería
 status_full = llena
 status_steady = estable
-status_unknown = midiendo...
+status_measuring = midiendo (1 minuto)...
 status_no_battery = Sin batería (sin el dock BOX-3-SENSOR, o con su interruptor en OFF)
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button

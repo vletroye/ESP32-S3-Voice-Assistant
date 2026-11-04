@@ -105,8 +105,8 @@ static void fill(void)
         snprintf(text, sizeof(text), "%d,%02d V", mv / 1000, (mv % 1000) / 10);
         row(&r, lang->status_voltage, text);
         const char *states[] = {
-            [APP_BATTERY_UNKNOWN] = lang->status_unknown, [APP_BATTERY_CHARGING] = lang->status_charging,
-            [APP_BATTERY_DISCHARGING] = lang->status_discharging, [APP_BATTERY_FULL] = lang->status_full,
+            [APP_BATTERY_UNKNOWN] = lang->status_measuring, [APP_BATTERY_CHARGING] = lang->status_charger,
+            [APP_BATTERY_DISCHARGING] = lang->status_on_battery, [APP_BATTERY_FULL] = lang->status_full,
             [APP_BATTERY_STEADY] = lang->status_steady,
         };
         row(&r, lang->status_state, states[state]);

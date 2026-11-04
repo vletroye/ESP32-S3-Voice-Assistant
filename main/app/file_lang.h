@@ -220,11 +220,11 @@ typedef struct {
     const char *status_level;
     const char *status_voltage;
     const char *status_state;
-    const char *status_charging;
-    const char *status_discharging;
+    const char *status_charger;
+    const char *status_on_battery;
     const char *status_full;
     const char *status_steady;
-    const char *status_unknown;
+    const char *status_measuring;
     const char *status_no_battery;
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;

@@ -282,15 +282,35 @@ static void listen_label_set_text(const char *text)
 static lv_obj_t *s_model_dropdown = NULL;
 static void head_icons_refresh(void);
 
+/* The dropdowns in alphabetical order: the languages offered (their indexes), at each position of the dropdown */
+#define SETTINGS_LANGS_MAX      32
+static uint8_t s_lang_order[SETTINGS_LANGS_MAX];
+static size_t s_lang_order_count = 0;
+
+static void language_order_make(void)
+{
+    s_lang_order_count = 0;
+    for (size_t i = 0; i < app_lang_count() && i < SETTINGS_LANGS_MAX; i++) {
+        // Inserted at its place by name
+        size_t at = s_lang_order_count;
+        while (at > 0 && strcasecmp(app_lang_name(s_lang_order[at - 1]), app_lang_name(i)) > 0) {
+            s_lang_order[at] = s_lang_order[at - 1];
+            at--;
+        }
+        s_lang_order[at] = (uint8_t)i;
+        s_lang_order_count++;
+    }
+}
+
 /* Position of a language in the dropdown (Languages of CONFIG.INI); English, or the first, when not offered */
 static uint16_t settings_language_index(const char *code)
 {
     uint16_t found = 0;
-    for (size_t i = 0; i < app_lang_count(); i++) {
-        if (strcasecmp(code, app_lang_code(i)) == 0) {
-            return (uint16_t)i;
+    for (size_t p = 0; p < s_lang_order_count; p++) {
+        if (strcasecmp(code, app_lang_code(s_lang_order[p])) == 0) {
+            return (uint16_t)p;
         }
-        found = strcasecmp(app_lang_code(i), "en") == 0 ? (uint16_t)i : found;
+        found = strcasecmp(app_lang_code(s_lang_order[p]), "en") == 0 ? (uint16_t)p : found;
     }
     return found;
 }
@@ -314,6 +334,10 @@ static void confirm_button_update(bool changed)
 /* Selections matching the stored settings */
 static uint16_t s_lang_stored = 0;
 static uint16_t s_model_stored = 0;
+/* The models (their indexes in llm_models) at each position of the dropdown: in alphabetical order */
+#define SETTINGS_MODELS_MAX     96
+static uint8_t s_model_order[SETTINGS_MODELS_MAX];
+static size_t s_model_order_count = 0;
 /* Labels of the rows created here, translated when the language changes */
 static lv_obj_t *s_model_row_label = NULL;
 static lv_obj_t *s_voice_row_label = NULL;
@@ -388,8 +412,9 @@ static void settings_changed_cb(lv_event_t *e)
 static void settings_save_clicked_cb(lv_event_t *e)
 {
     esp_err_t ret = ESP_OK;
-    uint16_t lang = lv_dropdown_get_selected(ui_DropdownSettingsRegion);
-    if (lang != s_lang_stored && lang < app_lang_count()) {
+    uint16_t position = lv_dropdown_get_selected(ui_DropdownSettingsRegion);
+    if (position != s_lang_stored && position < s_lang_order_count) {
+        size_t lang = s_lang_order[position];
         ret = settings_save_str("Language", app_lang_code(lang));
         if (ret == ESP_OK) {
             assistant_request_language(app_lang_code(lang));
@@ -397,10 +422,11 @@ static void settings_save_clicked_cb(lv_event_t *e)
     }
     // The entry after the listed models is a model set in CONFIG.INI: already the stored one
     uint16_t model = lv_dropdown_get_selected(s_model_dropdown);
-    if (ret == ESP_OK && model != s_model_stored && model < llm_model_count) {
-        ret = settings_save_str("Chat_model", llm_models[model].id);
+    if (ret == ESP_OK && model != s_model_stored && model < s_model_order_count) {
+        const char *id = llm_models[s_model_order[model]].id;
+        ret = settings_save_str("Chat_model", id);
         if (ret == ESP_OK) {
-            assistant_request_model(llm_models[model].id);
+            assistant_request_model(id);
         }
     }
     // Applied by the main task within a second; meanwhile the button is hidden again
@@ -444,12 +470,20 @@ static void voice_options_refresh(void)
         if (!llm_voice_offered(v, provider, code)) {
             continue;
         }
-        if (v == current) {
-            selected = s_settings_voice_count;
+        // Inserted at its place by name (alphabetical order)
+        size_t at = s_settings_voice_count++;
+        while (at > 0 && strcasecmp(s_settings_voices[at - 1]->name, v->name) > 0) {
+            s_settings_voices[at] = s_settings_voices[at - 1];
+            at--;
         }
-        strlcat(options, s_settings_voice_count ? "\n" : "", sizeof(options));
-        strlcat(options, v->name, sizeof(options));
-        s_settings_voices[s_settings_voice_count++] = v;
+        s_settings_voices[at] = v;
+    }
+    for (size_t p = 0; p < s_settings_voice_count; p++) {
+        if (s_settings_voices[p] == current) {
+            selected = p;
+        }
+        strlcat(options, p ? "\n" : "", sizeof(options));
+        strlcat(options, s_settings_voices[p]->name, sizeof(options));
     }
     lv_dropdown_set_options(s_voice_dropdown, options[0] ? options : "-");
     lv_dropdown_set_selected(s_voice_dropdown, selected);
@@ -505,12 +539,20 @@ static void speech_options_refresh(settings_speech_t *row)
         if (!assistant_speech_key(m->provider)[0]) {
             continue;       // its provider has no key (Mistral_key, Deepgram_key)
         }
-        if (strcmp(m->id, current) == 0) {
-            selected = row->count;
+        // Inserted at its place by name (alphabetical order)
+        size_t at = row->count++;
+        while (at > 0 && strcasecmp(row->models[at - 1]->label, m->label) > 0) {
+            row->models[at] = row->models[at - 1];
+            at--;
         }
-        strlcat(options, row->count ? "\n" : "", sizeof(options));
-        strlcat(options, m->label, sizeof(options));
-        row->models[row->count++] = m;
+        row->models[at] = m;
+    }
+    for (size_t p = 0; p < row->count; p++) {
+        if (strcmp(row->models[p]->id, current) == 0) {
+            selected = p;
+        }
+        strlcat(options, p ? "\n" : "", sizeof(options));
+        strlcat(options, row->models[p]->label, sizeof(options));
     }
     if (selected == SETTINGS_SPEECH_MAX) {
         selected = row->count;
@@ -550,23 +592,37 @@ static void settings_speech_changed_cb(lv_event_t *e)
     }
 }
 
-/* The models, numbered as in the voice command "utilise le modèle 3"; returns the index of the current one */
+/*
+ * The models in alphabetical order, each with its number of the voice command "utilise le modèle 3" after it
+ * ("Claude Haiku 5.5 (1)"); returns the position of the current one
+ */
 static uint16_t model_options(char *options, size_t size)
 {
     const sys_param_t *param = settings_get_parameter();
     options[0] = '\0';
-    uint16_t model_selected = llm_model_count;
-    for (size_t i = 0; i < llm_model_count; i++) {
-        strlcat(options, i ? "\n" : "", size);
-        char numbered[72];
-        snprintf(numbered, sizeof(numbered), "%u. %s", (unsigned)(i + 1), llm_models[i].label);
+    s_model_order_count = 0;
+    for (size_t i = 0; i < llm_model_count && i < SETTINGS_MODELS_MAX; i++) {
+        size_t at = s_model_order_count;
+        while (at > 0 && strcasecmp(llm_models[s_model_order[at - 1]].label, llm_models[i].label) > 0) {
+            s_model_order[at] = s_model_order[at - 1];
+            at--;
+        }
+        s_model_order[at] = (uint8_t)i;
+        s_model_order_count++;
+    }
+    uint16_t model_selected = s_model_order_count;
+    for (size_t p = 0; p < s_model_order_count; p++) {
+        size_t i = s_model_order[p];
+        strlcat(options, p ? "\n" : "", size);
+        char numbered[80];
+        snprintf(numbered, sizeof(numbered), "%s (%u)", llm_models[i].label, (unsigned)(i + 1));
         strlcat(options, numbered, size);
         if (strcmp(param->chat_model, llm_models[i].id) == 0) {
-            model_selected = i;
+            model_selected = p;
         }
     }
     // The current model if it was set in CONFIG.INI and is not listed
-    if (model_selected == llm_model_count) {
+    if (model_selected == s_model_order_count) {
         strlcat(options, "\n", size);
         strlcat(options, param->chat_model, size);
     }
@@ -1191,13 +1247,14 @@ static void settings_screen_setup(void)
     lv_obj_set_style_pad_left(ui_PanelSettingsRegion, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_width(ui_DropdownSettingsRegion, lv_pct(40));
     lv_dropdown_set_symbol(ui_DropdownSettingsRegion, NULL);
+    language_order_make();
     uint16_t lang_selected = settings_language_index(param->lang);
     s_lang_stored = lang_selected;
-    // The languages offered (Languages of CONFIG.INI), by their names
+    // The languages offered (Languages of CONFIG.INI), by their names, in alphabetical order
     char *languages = dropdown_options();
-    for (size_t i = 0; i < app_lang_count(); i++) {
-        strlcat(languages, i ? "\n" : "", SETTINGS_OPTIONS_SIZE);
-        strlcat(languages, app_lang_name(i), SETTINGS_OPTIONS_SIZE);
+    for (size_t p = 0; p < s_lang_order_count; p++) {
+        strlcat(languages, p ? "\n" : "", SETTINGS_OPTIONS_SIZE);
+        strlcat(languages, app_lang_name(s_lang_order[p]), SETTINGS_OPTIONS_SIZE);
     }
     settings_dropdown_setup(ui_DropdownSettingsRegion, languages, lang_selected, settings_changed_cb, NULL);
 
@@ -1283,10 +1340,10 @@ void ui_ctrl_settings_sync(void)
     uint16_t lang_selected = settings_language_index(param->lang);
     s_lang_stored = lang_selected;
     lv_dropdown_set_selected(ui_DropdownSettingsRegion, lang_selected);
-    for (size_t i = 0; i < llm_model_count; i++) {
-        if (strcmp(param->chat_model, llm_models[i].id) == 0) {
-            s_model_stored = i;
-            lv_dropdown_set_selected(s_model_dropdown, i);
+    for (size_t p = 0; p < s_model_order_count; p++) {
+        if (strcmp(param->chat_model, llm_models[s_model_order[p]].id) == 0) {
+            s_model_stored = p;
+            lv_dropdown_set_selected(s_model_dropdown, p);
         }
     }
     // The provider's icon on the robot's forehead (model changed, or set at start-up after the screens were made)

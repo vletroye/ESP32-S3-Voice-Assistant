@@ -280,7 +280,7 @@ Every feature in detail: [Features in detail](#411-features-in-detail).
 
 ### 2.4 On the device: Settings screen
 
-Tap the gear icon on the home screen. The settings are split over six pages, browsed with the arrows at the
+Tap the gear icon on the home screen. Its lists (languages, models, STT, TTS, voices) are in alphabetical order. The settings are split over six pages, browsed with the arrows at the
 bottom left and right (from the last page, the right arrow goes back to the first, and the other way round); the
 screen opens on the first page.
 
@@ -288,8 +288,9 @@ First page:
 
 - **Langue / Language**: the languages of `Languages` in `CONFIG.INI`, the six given with the firmware by default
   (interface, transcription, answers and voice).
-- **Modèle / Model**: the model answering the questions (see the table above), numbered as in the voice
-  command: 1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra,
+- **Modèle / Model**: the model answering the questions (see the table above), in alphabetical order, each with
+  its number of the voice command "utilise le modèle 3" / "use model 3" after its name ("Claude Haiku 5.5 (1)"):
+  1 Claude Haiku 5.5, 2 Claude Sonnet 5.5, 3 Claude Opus 5.5, 4 GPT-6 Luna, 5 GPT-6.1 Sol, 6 GPT-6 Astra,
   7 Gemini 3.5 Flash-Lite, 8 Gemini 3.8 Flash, 9 Gemini 4 Argon, then the OpenRouter models from 10 (10 DeepSeek
   V4.1 Flash, 11 Kimi K3.1 Pro, 12 MiniMax M3.1 Flash by default), 13 Grok 4.7 and 14 Grok 4.20 rapide (xAI),
   15 to 17 Mistral Small 4, Medium 3.5, Large 4, 18 to 23 the Perplexity models, then the free ones (24 to 30 with

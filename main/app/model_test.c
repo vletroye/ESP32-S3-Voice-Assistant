@@ -75,6 +75,8 @@ static llm_speech_kind_t s_speech_kind = LLM_SPEECH_TTS;
 // A test asked by the Settings screen: nothing shown on the reply panel, done() called after
 static void (*s_next_done)(void) = NULL;
 static void (*s_done)(void) = NULL;
+/* A model tested alone: the window over the list waits this long at most for its result to be heard */
+#define RESULT_HEARD_WAIT_MS    8000
 static bool s_done_called = false;
 
 /*
@@ -87,6 +89,18 @@ static void single_done(void)
         s_done_called = true;
         s_done();
     }
+}
+
+/* Its result asked to the speech: the window goes once it is heard (the synthesis takes a moment), at most a while */
+static void single_done_when_heard(void)
+{
+    if (!s_done || s_done_called) {
+        return;
+    }
+    for (int t = 0; t < RESULT_HEARD_WAIT_MS / 20 && tts_stream_is_silent(100) && !s_cancel; t++) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    single_done();
 }
 
 void model_test_set_scope(model_test_scope_t scope, llm_provider_t provider)
@@ -479,14 +493,14 @@ static void test_speech(char *screen, size_t screen_size)
         speech_line(screen, screen_size, name, ok ? result : r->reason);
         show(screen);
         if (s_scope == MODEL_TEST_SPEECH) {
-            save_speech_results();      // its time on the list at once
-            single_done();
+            save_speech_results();      // its time on the list as the window goes
         }
         if (!s_cancel) {
             // With the speech and voice of the settings (the test left its own)
             assistant_set_tts(NULL);
             say_speech_result(s_speech_result_count - 1);
         }
+        single_done_when_heard();
     }
     if ((s_scope == MODEL_TEST_STT || (s_scope == MODEL_TEST_SPEECH && s_speech_kind == LLM_SPEECH_STT)) &&
             !audio && !s_cancel) {
@@ -528,12 +542,12 @@ static void test_speech(char *screen, size_t screen_size)
         speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : (r->reason ? r->reason : lang->test_why_no_text));
         show(screen);
         if (s_scope == MODEL_TEST_SPEECH) {
-            save_speech_results();      // its time on the list at once
-            single_done();
+            save_speech_results();      // its time on the list as the window goes
         }
         if (!s_cancel) {
             say_speech_result(s_speech_result_count - 1);
         }
+        single_done_when_heard();
     }
     free(audio);
     // The transcription of the settings again
@@ -877,8 +891,9 @@ static void test_run(void)
                  st.first_ms, st.total_ms, st.answer_tokens, st.reasoning_tokens);
         record(times, m, err, &st);
         save_times(times);
-        single_done();      // a model tested alone: before SPEED.TXT and its result said
-        write_speed_file(times, lang->test_question);
+        if (!s_done) {
+            write_speed_file(times, lang->test_question);   // a model tested alone: at the end (it is slow)
+        }
         if (s_cancel) {
             break;
         }
@@ -900,6 +915,7 @@ static void test_run(void)
         show(screen);
         // Queued: spoken while the next model is tested
         assistant_announce(text);
+        single_done_when_heard();
     }
 
     if (!s_cancel) {

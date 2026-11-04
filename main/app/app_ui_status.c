@@ -113,6 +113,11 @@ static void fill(void)
     } else {
         row(&r, lang->status_no_battery, "");
     }
+    // The rows left over emptied first: LVGL 8 frees the cells of the rows it drops, and crashes on one never set
+    for (uint16_t i = r; i < lv_table_get_row_cnt(s_table); i++) {
+        lv_table_set_cell_value(s_table, i, 0, "");
+        lv_table_set_cell_value(s_table, i, 1, "");
+    }
     lv_table_set_row_cnt(s_table, r);
 }
 

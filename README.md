@@ -988,7 +988,7 @@ perplexity:web_search = 0.0022
   in French); OpenAI gets them in its reading instructions (`tts_emotion` and `tts_pace` of `LANG_<XX>.TXT`).
   **Gender** (`f`, `m` or `-`): the assistant speaks of itself as a woman or as a man (see
   [Voices](#34-voices-voices-of-agentsini)). The file given with the firmware lists OpenAI's 10 voices and
-  Mistral's 36 Voxtral 3 voices.
+  Mistral's 19 Voxtral 3 voices of the six languages.
 - **`[per_call]`**: tools billed per call, `provider:tool = price` (`claude:web_search`); another provider's search
   would get its own line (`openai:web_search`…).
 - **Speed** (optional): `fast`, `average` or `slow`, written by the [model test](#334-model-test-teste-les-modèles).
@@ -1159,11 +1159,11 @@ James    = mistral  | voice_3150 | en        | -       | -    | m
   same ones for `deepgram/aura-2` through OpenRouter)
   (French: Agathe, Hector; English: Thalia, Asteria, Orion, Zeus; Dutch: Beatrix, Daphne, Sander; German: Viktoria,
   Julius, Elara; Spanish: Celeste, Javier, Estrella; Italian: Livia, Flavio, Cesare; others: `aura-2-<name>-<code>`,
-  see developers.deepgram.com/docs/tts-models), and the 36 Voxtral 3 voices of Mistral with their
-  language (French: Lea, Marie, Manon, Camille; English: James, Sheila, Margaret, Rob, Hugo, Howard, Fred, Harriet,
-  David, Mary, Sky; Dutch: Lotte; German: Heidi; Spanish: Elena; Italian: Lorenzo; Portuguese: Gabriela; and one
-  or two for Catalan, Arabic, Hindi, Hungarian, Japanese, Korean, Norwegian, Polish, Romanian, Russian, Turkish,
-  Ukrainian, Vietnamese, Chinese).
+  see developers.deepgram.com/docs/tts-models), and the 19 Voxtral 3 voices of Mistral for the six languages
+  (French: Lea, Marie, Manon, Camille; English: James, Sheila, Margaret, Rob, Hugo, Howard, Fred, Harriet, David,
+  Mary, Sky; Dutch: Lotte; German: Heidi; Spanish: Elena; Italian: Lorenzo). Mistral has voices for other
+  languages too (Portuguese, Catalan, Arabic, Japanese…): add them with the language you add (see
+  [Adding a new language](#38-adding-a-new-language-step-by-step)).
 - **Other Mistral voices**: their list, with their language and gender, is given by
   `curl -H "Authorization: Bearer $MISTRAL_KEY" "https://api.mistral.ai/v1/audio/voices?type=preset&limit=100"`.
   The `voice_…` ones are Voxtral 3's, one per person (the emotion is given by the tags). The older `fr_marie_sad`,

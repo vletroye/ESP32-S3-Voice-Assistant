@@ -13,6 +13,8 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 
 #include "app_ui_ctrl.h"
 #include "app_wifi.h"
@@ -803,6 +805,7 @@ static void settings_arrow_create(lv_align_t align, lv_coord_t x, const char *sy
  * the first words of its last test. The list scrolls; a long press asks whether to test that model alone.
  */
 #define MODEL_ROWS_MAX      80
+#define MODEL_TOGGLES_MAX   16
 #define MODEL_ROW_DIM       0x8A97BC
 #define MODEL_ROW_NO_KEY    0x5A6280
 
@@ -899,38 +902,68 @@ static void model_row_time(const cJSON *results, const char *key, char *buf, siz
 }
 
 /* The free OpenRouter models chosen again by the main task, the model row with them; the box left as it is */
+/*
+ * A box checked or unchecked: drawn at once, AGENTS.INI rewritten by the main task (it takes a moment in the flash,
+ * which held the box as it was meanwhile)
+ */
+typedef struct {
+    char id[80];
+    model_test_kind_t kind;
+    bool free;
+    bool on;
+} model_toggle_t;
+static QueueHandle_t s_model_toggles = NULL;
+
 static void model_check_cb(lv_event_t *e)
 {
     model_row_t *r = &s_model_rows[(intptr_t)lv_event_get_user_data(e)];
     bool on = lv_obj_has_state(r->check, LV_STATE_CHECKED);
-    bool done = false;
-    if (!model_test_running()) {
-        if (r->free) {
-            done = llm_set_free_enabled(r->id, on);
-            if (done) {
-                model_test_free_reload();
-            }
-        } else if (r->kind == MODEL_TEST_KIND_LLM) {
-            done = llm_set_model_enabled(r->id, on);
-            if (done) {
-                model_dropdown_refresh();
-            }
-        } else {
-            settings_speech_t *row = &s_settings_speech[r->kind == MODEL_TEST_KIND_STT ? 0 : 1];
-            done = llm_set_speech_enabled(row->kind, r->id, on);
-            if (done) {
-                speech_options_refresh(row);
-            }
-        }
+    model_toggle_t toggle = { .kind = r->kind, .free = r->free, .on = on };
+    strlcpy(toggle.id, r->id, sizeof(toggle.id));
+    if (!s_model_toggles) {
+        s_model_toggles = xQueueCreate(MODEL_TOGGLES_MAX, sizeof(model_toggle_t));
     }
-    ESP_LOGI(TAG, "%s %s%s", r->id, on ? "enabled" : "disabled", done ? "" : ": refused");
-    if (!done) {
-        // Not written (a test running, AGENTS.INI not rewritten): as it was
+    if (model_test_running() || !s_model_toggles || xQueueSend(s_model_toggles, &toggle, 0) != pdTRUE) {
+        // Not now (a test running): as it was
+        ESP_LOGI(TAG, "%s %s: refused", r->id, on ? "enabled" : "disabled");
         if (on) {
             lv_obj_clear_state(r->check, LV_STATE_CHECKED);
         } else {
             lv_obj_add_state(r->check, LV_STATE_CHECKED);
         }
+        return;
+    }
+    assistant_save_soon();      // the main task, at once
+}
+
+void ui_ctrl_models_apply(void)
+{
+    model_toggle_t t;
+    while (s_model_toggles && xQueueReceive(s_model_toggles, &t, 0) == pdTRUE) {
+        bool done;
+        if (t.free) {
+            done = llm_set_free_enabled(t.id, t.on);
+            if (done) {
+                model_test_free_reload();
+            }
+        } else if (t.kind == MODEL_TEST_KIND_LLM) {
+            done = llm_set_model_enabled(t.id, t.on);
+        } else {
+            done = llm_set_speech_enabled(t.kind == MODEL_TEST_KIND_STT ? LLM_SPEECH_STT : LLM_SPEECH_TTS, t.id, t.on);
+        }
+        ESP_LOGI(TAG, "%s %s%s", t.id, t.on ? "enabled" : "disabled", done ? "" : ": not written");
+        bsp_display_lock(0);
+        if (done) {
+            // The lists of the first pages with it, or without it
+            if (t.kind == MODEL_TEST_KIND_LLM) {
+                model_dropdown_refresh();
+            } else {
+                speech_options_refresh(&s_settings_speech[t.kind == MODEL_TEST_KIND_STT ? 0 : 1]);
+            }
+        } else if (s_settings_page >= SETTINGS_PAGE_MODELS && s_settings_page < SETTINGS_PAGE_MODELS + 3) {
+            model_list_show(s_settings_page);   // the box as it was (AGENTS.INI not rewritten)
+        }
+        bsp_display_unlock();
     }
 }
 

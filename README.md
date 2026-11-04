@@ -319,7 +319,8 @@ LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scr
   "unavailable"; nothing if never tested). A model whose provider has no key is shown greyed out.
 - **Unchecked**, a model is offered nowhere (Settings lists, "change de modèle" / "change the model", "change de
   transcription"…) and is not tested by "teste les modèles" / "test the models": a `-` is put before its id in
-  `AGENTS.INI` (see [AGENTS.INI](#332-agentsini-the-models-offered)), at once, without restart. Checked again, it comes back at its
+  `AGENTS.INI` (see [AGENTS.INI](#332-agentsini-the-models-offered)), at once, without restart (the box is drawn
+  at once, the file written just after by the main task). Checked again, it comes back at its
   place. The model in use cannot be unchecked (its box is locked).
 - **A long press** on a line opens **Test performance** / **Performance test**: "Tester la rapidité de Haiku ?" /
   "Test how fast Haiku is?", **Oui / Yes** or **Non / No**. Yes tests that model alone, even an unchecked one, as the

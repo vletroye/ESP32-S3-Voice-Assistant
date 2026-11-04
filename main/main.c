@@ -1378,6 +1378,8 @@ void app_main()
         }
         // "Teste les modèles": run here, on the main task's stack (several minutes, the loop waits meanwhile)
         model_test_poll();
+        // The models enabled or disabled on the Settings screen (their boxes drawn already)
+        ui_ctrl_models_apply();
         if (s_reset_requested) {
             s_reset_requested = false;
             llm_reset();

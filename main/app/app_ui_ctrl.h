@@ -58,6 +58,9 @@ void ui_ctrl_show_message(const char *text);
 /** A text shown over the screen for a moment ("Repère 3 noté.") */
 void ui_ctrl_toast(const char *text);
 
+/** The boxes of the pages of the models checked or unchecked meanwhile written to AGENTS.INI (main task) */
+void ui_ctrl_models_apply(void);
+
 /** Problems of a language file: a screen with the text (scrolled when long), "Skip" (back) and "Config"
  *  (configuration mode, to correct the file) */
 void ui_ctrl_show_problems(const char *title, const char *text);

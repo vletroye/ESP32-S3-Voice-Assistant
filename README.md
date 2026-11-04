@@ -1385,8 +1385,8 @@ Who the assistant is.
 - `[identity]` must say that the assistant **speaks Portuguese** ("És um assistente de voz chamado ESP que fala
   português."): it decides the language of the answers.
 - `[voice]`: accent, tone and pace of the speech synthesis ("Fala português com sotaque europeu…").
-- Add voices that speak the language to `[voices]` of `AGENTS.INI` (OpenAI's speak every language; Mistral has
-  `Gabriela` for Portuguese): see [Voices](#34-voices-voices-of-agentsini).
+- Add voices that speak the language to `[voices]` of `AGENTS.INI` (OpenAI's speak every language; for Mistral,
+  `Gabriela = mistral | voice_480 | pt | - | - | f` for Portuguese): see [Voices](#34-voices-voices-of-agentsini).
 
 #### 3.8.6 Complete the other files
 

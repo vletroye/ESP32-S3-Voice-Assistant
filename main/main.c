@@ -913,16 +913,18 @@ void assistant_set_tts(const char *model)
                          tts_instructions ? tts_instructions : app_lang_get()->tts_instructions,
                          style[0] ? style : NULL);
     free(tts_instructions);
-    // Another voice of the other gender: the instructions say it (once the chat client is set up)
+    // Another voice of the other gender: the instructions say it (once the chat client is set up), and the
+    // conversation starts afresh, as after "nouvelle discussion" (its answers in the other gender won over them)
     char gender = v ? v->gender : 0;
     if (s_prompt_ready && gender != s_prompt_gender) {
         char *prompt = build_system_prompt();
         if (prompt) {
             llm_set_system_prompt(prompt);
             free(prompt);
-            ESP_LOGI(TAG, "Voice %s: the instructions say it is %s", v ? v->name : "-",
+            ESP_LOGI(TAG, "Voice %s: the instructions say it is %s, new conversation", v ? v->name : "-",
                      gender == 'f' ? "a woman's" : gender == 'm' ? "a man's" : "neither a woman's nor a man's");
         }
+        s_reset_requested = true;       // the main task clears the conversation
     }
     s_prompt_gender = gender;
 }

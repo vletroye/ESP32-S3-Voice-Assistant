@@ -1147,7 +1147,8 @@ James    = mistral  | voice_3150 | en        | -       | -    | m
   voice is a woman's: when you speak of yourself, do it as a woman." (or as a man; `voice_female` and `voice_male`
   of `LANG_<XX>.TXT`), so that the words match the voice heard in French, Spanish, Italian, German… Changing to a
   voice of the other gender ("change de voix", Settings screen, another speech service or language) changes them at
-  once. Nothing is added for a voice with `-`. The genders of the voices given with the firmware come from their
+  once and **starts a new conversation**, as "Nouvelle discussion" / "New conversation" (its answers in the other
+  gender won over the instructions); between two voices of the same gender, the conversation goes on. Nothing is added for a voice with `-`. The genders of the voices given with the firmware come from their
   names and the providers' descriptions: correct them in the file if one sounds otherwise.
 - **Emotion and pace**: Voxtral 3 gets them as tags before each sentence (`[emotion=calm][pace=slow]`, not spoken).
   Emotions: amused, angry, anxious, apologetic, appreciative, assertive, bored, calm, confident, confused, critical,

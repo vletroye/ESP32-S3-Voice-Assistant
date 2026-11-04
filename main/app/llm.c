@@ -5,6 +5,7 @@
  */
 
 #include <ctype.h>
+#include <time.h>
 #include <strings.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -1410,6 +1411,8 @@ static const llm_model_t *model_of(const char *id)
 }
 
 /* Conversation history kept across sleep and restarts (SPIFFS "storage" partition) */
+/* A time after this (2024-01-01) is a clock set by the network */
+#define HISTORY_CLOCK_SET       1704067200
 #define LLM_HISTORY_FILE        STATE_DIR "/history.json"   /* written often: LittleFS (file_state.h) */
 #define LLM_HISTORY_TMP_FILE    STATE_DIR "/history.tmp"
 
@@ -1492,6 +1495,8 @@ static void history_set(cJSON *messages)
     backend()->set_history(backend()->state, messages);
 }
 
+static int64_t s_last_exchange_us;
+
 /* Reload the conversation saved for the same model (another model's history has another format) */
 static void history_restore(void)
 {
@@ -1517,7 +1522,16 @@ static void history_restore(void)
     if (cJSON_IsString(model) && strcmp(model->valuestring, s_model) == 0 && cJSON_IsArray(messages)) {
         int count = cJSON_GetArraySize(messages);
         history_set(messages);
-        ESP_LOGI(TAG, "Conversation restored: %d messages", count);
+        // How long ago its last exchange was (the clock of the run before, kept by a restart; else not known yet:
+        // long ago), so that waking up asks whether to go on with it (assistant_resume_ask)
+        const cJSON *saved_at = cJSON_GetObjectItem(saved, "time");
+        time_t now = time(NULL);
+        int64_t pause_s = (cJSON_IsNumber(saved_at) && now > HISTORY_CLOCK_SET && saved_at->valuedouble > HISTORY_CLOCK_SET) ?
+                          (int64_t)(now - (time_t)saved_at->valuedouble) : -1;
+        int64_t last = pause_s >= 0 ? esp_timer_get_time() - pause_s * 1000000LL : 1;
+        s_last_exchange_us = count > 0 ? (last > 0 ? last : 1) : 0;
+        ESP_LOGI(TAG, "Conversation restored: %d messages (last exchange %s)", count,
+                 pause_s >= 0 ? "dated" : "not dated: long ago");
     } else {
         ESP_LOGI(TAG, "Saved conversation ignored (other model or unreadable)");
         cJSON_Delete(messages);
@@ -1532,6 +1546,10 @@ void llm_history_save(void)
     }
     cJSON *saved = cJSON_CreateObject();
     cJSON_AddStringToObject(saved, "model", s_model);
+    // When it was saved (once the clock is set): how long the pause was, after a restart
+    if (time(NULL) > HISTORY_CLOCK_SET) {
+        cJSON_AddNumberToObject(saved, "time", (double)time(NULL));
+    }
     cJSON_AddItemReferenceToObject(saved, "messages", (cJSON *)history_get());
     char *text = cJSON_PrintUnformatted(saved);
     cJSON_Delete(saved);

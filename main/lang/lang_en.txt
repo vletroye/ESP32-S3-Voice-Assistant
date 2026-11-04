@@ -307,7 +307,8 @@ reasoning_not_on = Reasoning was not on.
 # %s: the label of the model in use
 reasoning_unsupported = The model %s cannot reason. Change the model to turn reasoning on.
 
-# reasoning mode, woken up after Resume_ask_min of pause: go on? ("oui" / "non": a new conversation)
+# woken up after Resume_ask_min of pause in a conversation (reasoning mode or not): go on? ("oui" / "non": a new
+# conversation)
 resume_ask = Hello! Do you want to go on with the previous conversation?
 resume_yes = All right, I am listening.
 resume_no = All right, let us start again. I am listening.

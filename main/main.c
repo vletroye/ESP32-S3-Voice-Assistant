@@ -343,19 +343,19 @@ static void on_reply_audio(tts_event_t event)
 }
 
 /*
- * Woken up in the reasoning mode after a pause of Resume_ask_min or more: "Veux-tu continuer la conversation
- * précédente ?" is asked instead of listening at once (its answer is listened to after it, voice_cmd.c). Called
- * from app_audio.c (SR handler task); false: listen as usual.
+ * Woken up after a pause of Resume_ask_min or more in a conversation (the reasoning mode or not; after a restart too,
+ * its time kept with it): "Veux-tu continuer la conversation précédente ?" is asked instead of listening at once (its
+ * answer is listened to after it, voice_cmd.c). Called from app_audio.c (SR handler task); false: listen as usual.
  */
 bool assistant_resume_ask(void)
 {
     int64_t last_us = llm_last_exchange_us();
     int64_t pause_us = esp_timer_get_time() - last_us;
-    if (!llm_reasoning() || sys_param->resume_ask_min <= 0 || !last_us ||
-            pause_us < sys_param->resume_ask_min * 60 * 1000000LL) {
+    if (sys_param->resume_ask_min <= 0 || !last_us || pause_us < sys_param->resume_ask_min * 60 * 1000000LL) {
         return false;
     }
-    ESP_LOGI(TAG, "Reasoning mode, %lld min since the last answer: going on?", pause_us / 60000000LL);
+    ESP_LOGI(TAG, "%s, %lld min since the last answer: going on?", llm_reasoning() ? "Reasoning mode" : "Conversation",
+             pause_us / 60000000LL);
     s_cancelled = false;
     llm_cancel_clear();
     voice_cmd_expect_resume();

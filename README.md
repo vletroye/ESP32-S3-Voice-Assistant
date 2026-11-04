@@ -430,10 +430,11 @@ next to the provider's icon on the robot's head shows the mode. A model that doe
 says so. The mode ends with the conversation ("au revoir", "nouvelle discussion"), another model, a restart, or
 "désactive le raisonnement" ("turn off reasoning"), which keeps the conversation.
 
-Woken up in this mode after `Resume_ask_min` minutes of pause (5 by default, `CONFIG.INI`), the assistant asks
-"Bonjour ! Veux-tu continuer la conversation précédente ?" ("Hello! Do you want to go on with the previous
-conversation?"): "oui" / "yes" listens at once, the conversation and the mode kept; "non" / "no" starts a new
-conversation (the mode off), then listens; a longer sentence is taken as a question of the conversation.
+Woken up after `Resume_ask_min` minutes of pause (5 by default, `CONFIG.INI`) in this mode **or in any
+conversation** (not ended by "au revoir"; after a restart too, the time of its last exchange being kept with it),
+the assistant asks "Bonjour ! Veux-tu continuer la conversation précédente ?" ("Hello! Do you want to go on with the
+previous conversation?"): "oui" / "yes" listens at once, the conversation (and the mode) kept; "non" / "no" starts
+a new conversation (the mode off), then listens; a longer sentence is taken as a question of the conversation.
 
 | French | English |
 | --- | --- |
@@ -761,7 +762,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
-| `Resume_ask_min` | Reasoning mode ("j'ai une question difficile"): woken up after this many minutes of pause, the assistant asks whether to go on with the conversation (`0` to `120`; `0`: never asked) | `5` |
+| `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (the reasoning mode or not, a restart included), the assistant asks whether to go on with it (`0` to `120`; `0`: never asked) | `5` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
 | `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
 | `Radio_treble` | Treble of the radio (above about 3 kHz), in dB, from `-12` to `6`: negative softens them on the small speaker, `0` leaves the sound as it is (also changed from the radio screen) | `-6` |

@@ -308,7 +308,8 @@ reasoning_not_on = Das Nachdenken war nicht aktiviert.
 # %s: the label of the model in use
 reasoning_unsupported = Das Modell %s kann nicht nachdenken. Wechsle das Modell, um das Nachdenken zu aktivieren.
 
-# reasoning mode, woken up after Resume_ask_min of pause: go on? ("oui" / "non": a new conversation)
+# woken up after Resume_ask_min of pause in a conversation (reasoning mode or not): go on? ("oui" / "non": a new
+# conversation)
 resume_ask = Hallo! Möchtest du das vorherige Gespräch fortsetzen?
 resume_yes = In Ordnung, ich höre zu.
 resume_no = In Ordnung, wir fangen neu an. Ich höre zu.

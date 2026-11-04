@@ -142,12 +142,12 @@ menu "Example Configuration"
             assistant sleeps (0: never). Default of Screen_off_s in CONFIG.INI, which takes precedence.
 
     config ASSISTANT_RESUME_ASK_MIN
-        int "Reasoning mode: ask whether to go on after this pause (min)"
+        int "Ask whether to go on with the conversation after this pause (min)"
         default 5
         range 0 120
         help
-            In the reasoning mode ("j'ai une question difficile"), a conversation taken up again after this many
-            minutes of pause: after the wake word, the assistant asks whether to go on with it ("non": a new
+            A conversation (the reasoning mode or not) taken up again after this many minutes of pause, a
+            restart included: after the wake word, the assistant asks whether to go on with it ("non": a new
             conversation, the reasoning mode off). 0: never asked. Default of Resume_ask_min in CONFIG.INI,
             which takes precedence.
 

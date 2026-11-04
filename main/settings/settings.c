@@ -14,6 +14,7 @@
 #include "esp_heap_caps.h"
 #include "debug_trace.h"
 #include "file_costs.h"
+#include "file_state.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -47,8 +48,9 @@ esp_err_t settings_factory_reset(void)
 {
     const esp_partition_t *update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
     ESP_LOGI(TAG, "Switch to partition UF2");
-    // The costs as read on the configuration drive (COSTS.TXT: not written while the assistant works)
+    // The costs as read on the configuration drive (COSTS.TXT: not written while the assistant works), the starts
     costs_write_text();
+    state_boots_export();
     // The traces, if on, to be read on the configuration drive (DEBUG.TXT)
     if (debug_trace_on()) {
         debug_trace_dump();

@@ -684,6 +684,7 @@ USB drive named "ESP-BOX" holding these files:
 | `SPEED.TXT` | Results of the model test (written by the device) | SPIFFS | factory reset (erased) |
 | `RADIO.TXT` | Favourite radios (see [Radio](#264-favourites-radiotxt)) | SPIFFS | kept by the soft reset, factory reset (erased) |
 | `DEBUG.TXT` | The last dump of the [debug traces](#410-debug-traces-debugtxt) (read-only: what is written there is ignored) | SPIFFS | replaced by the next dump |
+| `BOOTS.TXT` | The last 50 starts of the assistant: date and time, firmware, why it started (power on, Reset, restart by the firmware, **CRASH** with its kind, **POWER DROP**) | SPIFFS (copied there on the way to the configuration mode; kept in `/state/boots.txt`) | factory reset (erased) |
 
 - Edit a file, save it, then **wait before pressing Restart** (bottom right of the screen): saving on the PC is not
   enough, the PC copies the file into the BOX a little later. About 10 seconds for `CONFIG.INI`, up to tens of
@@ -1632,7 +1633,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
 | `app_ui_status.c` | The Wi-Fi and battery screen (a tap on them, sleep screen); `app_battery.c` gives the voltage, the level and the trend (charging or not) |
-| `file_state.c` | The LittleFS partition `state` of the files written often (conversation, costs, test results, places): mounted on `/state`, those of an older firmware moved there from SPIFFS, erased by the factory reset |
+| `file_state.c` | The LittleFS partition `state` of the files written often (conversation, costs, test results, places): mounted on `/state`, those of an older firmware moved there from SPIFFS, erased by the factory reset; also `boots.txt`, the history of the starts, shown as `BOOTS.TXT` |
 | `debug_trace.c` | Debug traces: every log line caught (`esp_log_set_vprintf`), with the time of day and the number of the exchange, in a 1 MB ring buffer in PSRAM; marks; the dump to `/spiffs/debug.txt` |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |
 | `tools.c` | Tools offered to the models (definitions, dispatch) |
@@ -1821,8 +1822,12 @@ and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only w
 - `trace: *************** MARK 3 (long press / said) ***************`.
 
 The traces are kept in a **1 MB ring buffer in PSRAM** (about 10,000 lines, hours of use; the oldest are
-dropped): nothing is written to the flash while testing, which would itself cause lags. They are lost at a
-restart that is not a dump. The dump keeps the newest lines when SPIFFS has not room for all (64 KB left free);
+dropped): nothing is written to the flash while testing, which would itself cause lags. That part of PSRAM is not
+cleared at start-up (`EXT_RAM_NOINIT_ATTR`, `CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY`): after a restart
+without a power cut (a **crash**, a watchdog, a restart by the firmware) the traces of the run before are still
+there and go on, so the next dump shows what led to the restart, followed by
+`========== START: CRASH (panic: exception or abort) (firmware …) ==========` (every start says why it happened).
+A power cut clears them. Every start is also added to `BOOTS.TXT` (the last 50, on the configuration drive). The dump keeps the newest lines when SPIFFS has not room for all (64 KB left free);
 `DEBUG.TXT` shows at most 1.25 MB. The serial port still gets every line, as without the traces.
 
 ### 4.11 Features in detail

@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "esp_heap_caps.h"
 #include "esp_littlefs.h"
 #include "esp_log.h"
@@ -89,6 +90,71 @@ esp_err_t state_mount(void)
     }
     free(piece);
     return ESP_OK;
+}
+
+#define BOOTS_FILE          STATE_DIR "/boots.txt"
+#define BOOTS_EXPORT_FILE   "/spiffs/boots.txt"
+#define BOOTS_LINE_MAX      96
+
+void state_boot_record(const char *version, const char *reason)
+{
+    // The time kept by a restart (without a power cut), else not known yet (set by the network later)
+    char when[24];
+    time_t now = time(NULL);
+    struct tm tm;
+    localtime_r(&now, &tm);
+    if (tm.tm_year + 1900 >= 2024) {
+        strftime(when, sizeof(when), "%Y-%m-%d %H:%M:%S", &tm);
+    } else {
+        strlcpy(when, "(time not known yet)", sizeof(when));
+    }
+    // The last lines kept, this one added
+    size_t size = STATE_BOOTS_MAX * BOOTS_LINE_MAX;
+    char *text = heap_caps_calloc(1, size + 1, MALLOC_CAP_SPIRAM);
+    if (!text) {
+        return;
+    }
+    FILE *f = fopen(BOOTS_FILE, "r");
+    size_t len = f ? fread(text, 1, size, f) : 0;
+    if (f) {
+        fclose(f);
+    }
+    text[len] = '\0';
+    int lines = 0;
+    for (size_t i = 0; i < len; i++) {
+        lines += text[i] == '\n';
+    }
+    const char *from = text;
+    while (lines >= STATE_BOOTS_MAX && (from = strchr(from, '\n')) != NULL) {
+        from++;
+        lines--;
+    }
+    f = fopen(BOOTS_FILE, "w");
+    if (f) {
+        fputs(from ? from : "", f);
+        fprintf(f, "%s  %s  %s\n", when, version, reason);
+        fclose(f);
+    }
+    free(text);
+    ESP_LOGI(TAG, "Start recorded: %s, %s", version, reason);
+}
+
+void state_boots_export(void)
+{
+    FILE *in = fopen(BOOTS_FILE, "r");
+    FILE *out = in ? fopen(BOOTS_EXPORT_FILE, "w") : NULL;
+    if (out) {
+        fputs("# BOOTS.TXT: the last starts of the assistant (date and time, firmware, why it started), the newest last\n",
+              out);
+        char line[BOOTS_LINE_MAX + 8];
+        while (fgets(line, sizeof(line), in)) {
+            fputs(line, out);
+        }
+        fclose(out);
+    }
+    if (in) {
+        fclose(in);
+    }
 }
 
 void state_erase(void)

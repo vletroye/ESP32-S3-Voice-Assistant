@@ -13,6 +13,7 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_system.h"
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_timer.h"
@@ -1151,6 +1152,26 @@ static void *psram_malloc(size_t size)
     return heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 }
 
+/* Why the device started, as said in the traces and BOOTS.TXT */
+static const char *reset_reason_text(esp_reset_reason_t reason)
+{
+    switch (reason) {
+    case ESP_RST_POWERON:   return "power on";
+    case ESP_RST_EXT:       return "external reset";
+    case ESP_RST_SW:        return "restart by the firmware (asked, update, configuration mode)";
+    case ESP_RST_PANIC:     return "CRASH (panic: exception or abort)";
+    case ESP_RST_INT_WDT:   return "CRASH (interrupt watchdog)";
+    case ESP_RST_TASK_WDT:  return "CRASH (task watchdog)";
+    case ESP_RST_WDT:       return "CRASH (other watchdog)";
+    case ESP_RST_DEEPSLEEP: return "wake from deep sleep";
+    case ESP_RST_BROWNOUT:  return "POWER DROP (brownout)";
+    case ESP_RST_SDIO:      return "reset by SDIO";
+    case ESP_RST_USB:       return "reset by USB (flash, Reset button)";
+    case ESP_RST_JTAG:      return "reset by JTAG";
+    default:                return "unknown";
+    }
+}
+
 void app_main()
 {
     // JSON trees (conversation history, API events) go to PSRAM: internal RAM is kept for stacks and DMA
@@ -1172,12 +1193,18 @@ void app_main()
     // The time zone at once (the clock of the previous run goes on): the times of the traces are local from the start
     setenv("TZ", CONFIG_ASSISTANT_TIMEZONE, 1);
     tzset();
-    // Debug traces: from now on, every log line kept (DEBUG.TXT)
+    // Debug traces: those of the run before kept unless the power was cut, then every log line kept (DEBUG.TXT)
+    esp_reset_reason_t reset = esp_reset_reason();
+    debug_trace_boot(reset != ESP_RST_POWERON && reset != ESP_RST_BROWNOUT);
     debug_trace_set(sys_param->debug);
+    ESP_LOGW(TAG, "========== START: %s (firmware %s) ==========", reset_reason_text(reset),
+             esp_app_get_description()->version);
 
     bsp_spiffs_mount();
     // The files written often (conversation, costs, test results, places): LittleFS, moved there from SPIFFS once
     state_mount();
+    // This start in the history (BOOTS.TXT of the configuration drive)
+    state_boot_record(esp_app_get_description()->version, reset_reason_text(reset));
     // The backup of CONFIG.INI made by the factory reset of an older firmware (keys included): no longer kept
     if (remove("/spiffs/config.bkp") == 0) {
         ESP_LOGI(TAG, "CONFIG.BKP removed");

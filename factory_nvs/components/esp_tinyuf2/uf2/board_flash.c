@@ -145,6 +145,15 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "COSTS   TXT", 12);
         PRINTF("%s shown as COSTS.TXT", t->path);
     }
+    // The last starts of the assistant and why (BOOTS.TXT), when there are some
+    FILE *boots = fopen(PHRASES_DIR "/boots.txt", "r");
+    if (boots) {
+        fclose(boots);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/boots.txt", sizeof(t->path));
+        memcpy(t->fat_name, "BOOTS   TXT", 12);
+        PRINTF("%s shown as BOOTS.TXT", t->path);
+    }
     // Results of the model test ("teste les modèles"), when there are some
     FILE *speed = fopen(PHRASES_DIR "/speed.txt", "r");
     if (speed) {

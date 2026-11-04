@@ -28,6 +28,13 @@ esp_err_t state_mount(void);
 /** The factory reset: every file of the partition removed */
 void state_erase(void);
 
+/** A start: a line "2026-11-04 20:37:17  2.24.2  crash (panic)" added to boots.txt, the last STATE_BOOTS_MAX kept */
+#define STATE_BOOTS_MAX     50
+void state_boot_record(const char *version, const char *reason);
+
+/** On the way to the configuration mode: boots.txt copied to SPIFFS, shown there as BOOTS.TXT */
+void state_boots_export(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -23,7 +23,13 @@ extern "C" {
 
 #define DEBUG_TRACE_FILE    "/spiffs/debug.txt"
 
-/** Start (the buffer allocated, the logs caught) or stop the traces; what was kept stays until the restart */
+/**
+ * @brief At start-up, first: kept (a restart without a power cut) takes back the traces of the run before, still in
+ *        PSRAM, so that the next dump shows what led to the restart; else they are dropped
+ */
+void debug_trace_boot(bool kept);
+
+/** Start (the logs caught) or stop the traces; what was kept stays (a restart included, debug_trace_boot) */
 void debug_trace_set(bool on);
 
 /** The traces are on */

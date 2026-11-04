@@ -13,6 +13,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <time.h>
+#include "esp_attr.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -31,7 +32,21 @@ static const char *TAG = "trace";
 #define TRACE_SPIFFS_SPARE  (64 * 1024)     /* left free on SPIFFS by the dump */
 #define TRACE_DUMP_PIECE    4096
 
-static char *s_ring = NULL;                 /* PSRAM */
+/*
+ * The buffer and where it stands, in PSRAM not cleared at start-up (EXT_RAM_NOINIT_ATTR): after a restart without a
+ * power cut (a crash, a watchdog, the firmware's), the traces of the run before are still there and go on
+ * (debug_trace_boot)
+ */
+#define TRACE_MAGIC         0x54524331u     /* "TRC1" */
+EXT_RAM_NOINIT_ATTR static char s_ring_mem[TRACE_RING_SIZE];
+EXT_RAM_NOINIT_ATTR static struct {
+    uint32_t magic;
+    uint32_t pos;
+    uint32_t wrapped;
+    uint32_t lines;
+    uint32_t check;     /* the others mixed: a header made of random bits is not taken */
+} s_kept;
+static char *s_ring = NULL;                 /* s_ring_mem once the traces are on */
 static size_t s_pos = 0;                    /* where the next byte goes */
 static bool s_wrapped = false;
 static size_t s_lines = 0;                  /* written since the start (the oldest may be dropped) */
@@ -42,6 +57,35 @@ static volatile int s_turn = 0;
 static volatile int s_marks = 0;
 static char *s_line = NULL;                 /* the line being made, under s_lock */
 static size_t s_line_len = 0;               /* of a line printed in several calls (Wi-Fi: "I (12) wifi:", then the text) */
+
+static uint32_t keep_check(void)
+{
+    return s_kept.magic ^ (s_kept.pos * 2654435761u) ^ (s_kept.wrapped + 0x9E37u) ^ (s_kept.lines * 40503u);
+}
+
+/* Where the buffer stands, kept for the next start */
+static void keep_save(void)
+{
+    s_kept.magic = TRACE_MAGIC;
+    s_kept.pos = s_pos;
+    s_kept.wrapped = s_wrapped;
+    s_kept.lines = s_lines;
+    s_kept.check = keep_check();
+}
+
+void debug_trace_boot(bool kept)
+{
+    if (kept && s_kept.magic == TRACE_MAGIC && s_kept.pos < TRACE_RING_SIZE && s_kept.check == keep_check()) {
+        // The traces of the run before: they go on (shown by the next dump with what led to the restart)
+        s_pos = s_kept.pos;
+        s_wrapped = s_kept.wrapped != 0;
+        s_lines = s_kept.lines;
+        s_ring = s_ring_mem;
+        return;
+    }
+    // A power cut (or never written): what PSRAM holds means nothing
+    s_kept.magic = 0;
+}
 
 static void ring_put(const char *text, size_t len)
 {
@@ -140,7 +184,7 @@ static int trace_vprintf(const char *fmt, va_list args)
                 text_len--;
             }
             if (text_len > 0) {
-                char prefix[32];
+                char prefix[40];
                 time_prefix(prefix, sizeof(prefix));
                 size_t p = strlen(prefix);
                 p += snprintf(prefix + p, sizeof(prefix) - p, " #%d ", s_turn);
@@ -148,6 +192,7 @@ static int trace_vprintf(const char *fmt, va_list args)
                 ring_put(text, text_len);
                 ring_put("\n", 1);
                 s_lines++;
+                keep_save();
             }
         }
         xSemaphoreGive(s_lock);
@@ -161,15 +206,14 @@ void debug_trace_set(bool on)
     if (on && !s_ring) {
         s_lock = xSemaphoreCreateMutex();
         s_line = heap_caps_malloc(TRACE_LINE_MAX, MALLOC_CAP_SPIRAM);
-        s_ring = heap_caps_malloc(TRACE_RING_SIZE, MALLOC_CAP_SPIRAM);
-        if (!s_lock || !s_line || !s_ring) {
+        if (!s_lock || !s_line) {
             ESP_LOGE(TAG, "No memory for the traces");
-            free(s_ring);
             free(s_line);
-            s_ring = NULL;
             s_line = NULL;
             return;
         }
+        s_ring = s_ring_mem;
+        keep_save();
         s_prev = esp_log_set_vprintf(trace_vprintf);
     }
     if (on == s_on) {
@@ -217,7 +261,7 @@ void debug_trace_stats(size_t *lines, size_t *bytes)
 
 bool debug_trace_dump(void)
 {
-    if (!s_ring) {
+    if (!s_ring || !s_lock) {
         return false;
     }
     ESP_LOGI(TAG, "Dump of the traces (%u lines written)", (unsigned)s_lines);

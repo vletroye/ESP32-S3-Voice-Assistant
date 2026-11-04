@@ -558,6 +558,8 @@ static char *build_system_prompt(void)
     const llm_voice_t *voice = assistant_voice();
     const char *gender = !voice ? "" : voice->gender == 'f' ? lang->voice_female :
                          voice->gender == 'm' ? lang->voice_male : "";
+    ESP_LOGI(TAG, "Instructions made: voice %s, %s", voice ? voice->name : "-",
+             !voice || !voice->gender ? "no gender said" : voice->gender == 'f' ? "a woman's" : "a man's");
     const char *parts[] = {
         persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY), persona_get(PERSONA_INSTRUCTIONS), gender,
         lang->system_prompt, location, home, home_rules,

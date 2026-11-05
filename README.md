@@ -1004,8 +1004,9 @@ each model of `AGENTS.INI`, then each free OpenRouter model, **the same question
 phrases comment se forme un arc-en-ciel.", `test_question` of `LANG_<XX>.TXT`), one after the other, **without the
 conversation nor tools** but with the same instructions. The model chosen and its conversation are not changed.
 
-- The screen lists the models one line each as they are tested, numbered: "02 Sonnet…" while it is tested, then
-  "02 Sonnet : 1,2 s", or why it is not available: "09 Argon : crédit épuisé ou modèle hors de ton offre" (the
+- The screen lists the models one line each as they are tested, numbered from the speech and transcription models
+  ("01 La synthèse Voxtral : 0,7 s") on to the chat models: "12 Sonnet…" while it is tested, then
+  "12 Sonnet : 1,2 s", or why it is not available: "19 Argon : crédit épuisé ou modèle hors de ton offre" (the
   `test_why_...` of `LANG_<XX>.TXT`: missing key, no answer, key refused, no credit or model not in the plan, service
   busy, request refused, reasoning effort refused, error; for the speech models too when their service says why:
   key refused, no credit, busy, else no audio or no text); the last line

@@ -311,10 +311,12 @@ static int words_found(const char *sentence, const char *transcript)
     return total ? found * 100 / total : -1;
 }
 
-static void speech_line(char *screen, size_t size, const char *name, const char *result)
+/* "01 La synthèse Voxtral : 0,7 s": numbered from 1, the chat models after them */
+static void speech_line(char *screen, size_t size, int number, const char *name, const char *result)
 {
     size_t from = strlen(screen);
-    snprintf(screen + from, size - from, "%s%s%s%s", from ? "\n" : "", name, result ? " : " : "…", result ? result : "");
+    snprintf(screen + from, size - from, "%s%02d %s%s%s", from ? "\n" : "", number, name, result ? " : " : "…",
+             result ? result : "");
 }
 
 /*
@@ -413,7 +415,7 @@ static void test_speech(char *screen, size_t screen_size)
         }
         snprintf(name, sizeof(name), lang->test_tts_name, m->spoken);
         size_t line_start = strlen(screen);
-        speech_line(screen, screen_size, name, NULL);
+        speech_line(screen, screen_size, s_speech_result_count + 1, name, NULL);
         assistant_show(screen);
         typeof(s_speech_results[0]) *r = &s_speech_results[s_speech_result_count++];
         *r = (typeof(*r)) { .stt = false, .first_ms = -1, .total_ms = -1, .words = -1 };
@@ -441,7 +443,7 @@ static void test_speech(char *screen, size_t screen_size)
         if (ok) {
             spoken_seconds(result, sizeof(result), r->first_ms, true);
         }
-        speech_line(screen, screen_size, name, ok ? result : r->reason);
+        speech_line(screen, screen_size, s_speech_result_count, name, ok ? result : r->reason);
         assistant_show(screen);
         if (!s_cancel) {
             // With the speech and voice of the settings (the test left its own)
@@ -463,7 +465,7 @@ static void test_speech(char *screen, size_t screen_size)
         }
         snprintf(name, sizeof(name), lang->test_stt_name, m->spoken);
         size_t line_start = strlen(screen);
-        speech_line(screen, screen_size, name, NULL);
+        speech_line(screen, screen_size, s_speech_result_count + 1, name, NULL);
         assistant_show(screen);
         typeof(s_speech_results[0]) *r = &s_speech_results[s_speech_result_count++];
         *r = (typeof(*r)) { .stt = true, .first_ms = -1, .total_ms = -1, .words = -1 };
@@ -488,7 +490,8 @@ static void test_speech(char *screen, size_t screen_size)
         if (r->first_ms >= 0) {
             spoken_seconds(result, sizeof(result), r->first_ms, true);
         }
-        speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : (r->reason ? r->reason : lang->test_why_no_text));
+        speech_line(screen, screen_size, s_speech_result_count, name,
+                    r->first_ms >= 0 ? result : (r->reason ? r->reason : lang->test_why_no_text));
         assistant_show(screen);
         if (!s_cancel) {
             say_speech_result(s_speech_result_count - 1);
@@ -818,7 +821,8 @@ static void test_run(void)
              s_scope == MODEL_TEST_PROVIDER ? ": " : "", s_scope == MODEL_TEST_PROVIDER ? llm_provider_name(s_provider) : "");
     assistant_announce_begin();
 
-    int number = 0;
+    // Numbered after the speech models tested
+    int number = s_speech_result_count;
     for (size_t i = 0; i < count && !s_cancel && screen; i++) {
         const llm_model_t *m = &llm_models[i];
         if (!chat_tested(m)) {
@@ -864,9 +868,10 @@ static void test_run(void)
         write_speed_file(times, lang->test_question);
         // The fastest named when there was a choice (a single chat model: its result was said)
         text[0] = '\0';
-        if (best && number > 1) {
+        int chat_count = number - s_speech_result_count;
+        if (best && chat_count > 1) {
             snprintf(text, sizeof(text), lang->test_done, best->spoken);
-        } else if (!best && number > 0) {
+        } else if (!best && chat_count > 0) {
             strlcpy(text, lang->test_none, sizeof(text));
         }
         if (text[0]) {

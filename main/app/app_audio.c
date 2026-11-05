@@ -367,8 +367,9 @@ void sr_handler_task(void *pvParam)
             app_presence_activity();
             // A new question interrupts the reply being spoken
             assistant_reply_stop();
-            // The reasoning mode after a pause: asked first whether to go on with the conversation
-            if (assistant_resume_ask()) {
+            // The reasoning mode after a pause: asked first whether to go on with the conversation, on waking up only
+            // (the listening after that question is a follow-up: asked again, it looped)
+            if (!result.followup && assistant_resume_ask()) {
                 continue;
             }
             // Woken up (not a follow-up) with a question unanswered: asked again first

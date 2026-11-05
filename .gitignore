@@ -15,3 +15,6 @@ chat_gpt_events.py
 
 # Local Claude Code settings (permissions of this machine)
 .claude/settings.local.json
+
+# The OAuth client of the Google Cloud project (Google Calendar): read at build time, never committed
+google_oauth_client.json

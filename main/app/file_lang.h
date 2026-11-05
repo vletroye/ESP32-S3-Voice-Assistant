@@ -230,6 +230,18 @@ typedef struct {
     const char *status_no_battery;
     const char *settings_params_title;  /* Paramètres page: its title, the switch of the beep after a reply */
     const char *settings_followup_beep;
+    const char *settings_gcal;    /* Google Calendar: Paramètres page, linking screen (gcal_scan: %s the address) */
+    const char *gcal_connect;
+    const char *gcal_disconnect;
+    const char *gcal_unlink_ask;
+    const char *gcal_title;
+    const char *gcal_scan;
+    const char *gcal_asking;
+    const char *gcal_waiting;
+    const char *gcal_done;
+    const char *gcal_denied;
+    const char *gcal_expired;
+    const char *gcal_failed;
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;
     const char *settings_debug_info;

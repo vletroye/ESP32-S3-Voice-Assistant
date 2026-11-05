@@ -27,6 +27,8 @@
 #include "assistant.h"
 #include "voice_cmd.h"
 #include "model_test.h"
+#include "google_calendar.h"
+#include "app_ui_gcal.h"
 #include "debug_trace.h"
 #include "app_audio.h"
 #include "ai_providers.h"
@@ -1265,12 +1267,22 @@ static lv_obj_t *debug_row_create(lv_flex_align_t align)
 static lv_obj_t *s_beep_switch = NULL;
 static lv_obj_t *s_beep_label = NULL;
 
+/* Google Calendar: linked or not, the button to link or unlink it (when the firmware has its OAuth client) */
+static lv_obj_t *s_gcal_label = NULL;
+static lv_obj_t *s_gcal_button = NULL;
+static lv_obj_t *s_gcal_button_label = NULL;
+
 static void params_page_refresh(void)
 {
     if (!s_beep_switch) {
         return;
     }
-    lv_label_set_text(s_beep_label, app_lang_get()->settings_followup_beep);
+    const app_lang_t *lang = app_lang_get();
+    if (s_gcal_label) {
+        lv_label_set_text(s_gcal_label, lang->settings_gcal);
+        lv_label_set_text(s_gcal_button_label, gcal_linked() ? lang->gcal_disconnect : lang->gcal_connect);
+    }
+    lv_label_set_text(s_beep_label, lang->settings_followup_beep);
     if (settings_get_parameter()->followup_beep) {
         lv_obj_add_state(s_beep_switch, LV_STATE_CHECKED);
     } else {
@@ -1285,8 +1297,58 @@ static void beep_switch_cb(lv_event_t *e)
     settings_save_str("Followup_beep", on ? "on" : "off");
 }
 
+/* Back from the linking screen: the button says where it stands */
+static void gcal_back_cb(void)
+{
+    params_page_refresh();
+}
+
+static void gcal_unlink_box_cb(lv_event_t *e)
+{
+    lv_obj_t *box = lv_event_get_current_target(e);
+    if (lv_msgbox_get_active_btn(box) == 0) {
+        gcal_unlink();
+        params_page_refresh();
+    }
+    lv_msgbox_close_async(box);
+}
+
+/* Not linked: the linking screen (QR code); linked: unlinked once confirmed */
+static void gcal_button_cb(lv_event_t *e)
+{
+    if (!gcal_linked()) {
+        ui_gcal_open(gcal_back_cb);
+        return;
+    }
+    const app_lang_t *lang = app_lang_get();
+    static const char *buttons[3];
+    buttons[0] = lang->settings_yes;
+    buttons[1] = lang->settings_no;
+    buttons[2] = "";
+    lv_obj_t *box = lv_msgbox_create(NULL, lang->settings_gcal, lang->gcal_unlink_ask, buttons, false);
+    lv_obj_set_width(box, 280);
+    lv_obj_set_style_text_font(lv_msgbox_get_title(box), &ui_font_Latin16, LV_PART_MAIN);
+    lv_obj_set_style_text_font(lv_msgbox_get_text(box), &ui_font_Latin16, LV_PART_MAIN);
+    lv_obj_set_style_text_font(lv_msgbox_get_btns(box), &ui_font_Latin16, LV_PART_ITEMS);
+    lv_obj_center(box);
+    lv_obj_add_event_cb(box, gcal_unlink_box_cb, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
 static void params_page_create(void)
 {
+    if (gcal_configured()) {
+        lv_obj_t *row = switch_row_create(LV_FLEX_ALIGN_SPACE_BETWEEN, SETTINGS_PAGE_PARAMS);
+        s_gcal_label = lv_label_create(row);
+        lv_obj_set_style_text_color(s_gcal_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_font(s_gcal_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+        s_gcal_button = lv_btn_create(row);
+        lv_obj_set_style_bg_color(s_gcal_button, lv_color_hex(0x6E47BD), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_add_event_cb(s_gcal_button, gcal_button_cb, LV_EVENT_CLICKED, NULL);
+        s_gcal_button_label = lv_label_create(s_gcal_button);
+        lv_obj_set_style_text_font(s_gcal_button_label, &ui_font_Latin16, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_center(s_gcal_button_label);
+    }
+
     lv_obj_t *row = switch_row_create(LV_FLEX_ALIGN_SPACE_BETWEEN, SETTINGS_PAGE_PARAMS);
     s_beep_label = lv_label_create(row);
     lv_obj_set_style_text_color(s_beep_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);

@@ -444,6 +444,21 @@ status_no_battery = Geen batterij (geen BOX-3-SENSOR-dock, of de schakelaar op O
 settings_params_title = Instellingen
 settings_followup_beep = Piep na een antwoord
 
+# Google Calendar (when the firmware has its OAuth client): the row of the Paramètres page, its buttons and
+# question, then the linking screen (gcal_scan: %s the address to open), where it stands
+settings_gcal = Google Agenda
+gcal_connect = Verbinden
+gcal_disconnect = Ontkoppelen
+gcal_unlink_ask = Google Agenda loskoppelen van de assistent?
+gcal_title = Google Agenda
+gcal_scan = Scan de QR-code met je telefoon (of open %s) en typ dan deze code:
+gcal_asking = Code aanvragen bij Google...
+gcal_waiting = Wachten op je akkoord op de telefoon...
+gcal_done = Agenda verbonden!
+gcal_denied = Toegang geweigerd.
+gcal_expired = Code verlopen: ga terug en probeer opnieuw.
+gcal_failed = Google antwoordt niet: probeer later opnieuw.
+
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug
 settings_debug = Traces

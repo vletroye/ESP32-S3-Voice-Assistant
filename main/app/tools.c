@@ -17,6 +17,7 @@
 #include "radio.h"
 #include "radio_browser.h"
 #include "ai_provider_perplexity.h"
+#include "google_calendar.h"
 
 static const char *TAG = "tools";
 
@@ -94,6 +95,13 @@ static const cJSON *own_definitions(void)
         s_definitions = cJSON_Parse(s_definitions_json);
         if (!s_definitions) {
             ESP_LOGE(TAG, "Invalid tool definitions");
+        }
+        // Google Calendar, when the firmware has its OAuth client (linked or not: not linked, it says how)
+        cJSON *calendar = gcal_tool_definition() ? cJSON_Parse(gcal_tool_definition()) : NULL;
+        if (calendar && s_definitions) {
+            cJSON_AddItemToArray(s_definitions, calendar);
+        } else {
+            cJSON_Delete(calendar);
         }
     }
     return s_definitions;
@@ -238,6 +246,9 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
         result = run_play_radio(input, is_error);
     } else if (strcmp(name, "web_search") == 0) {
         result = run_web_search(input, is_error);
+    } else if (strcmp(name, "calendar_events") == 0) {
+        const cJSON *days = cJSON_GetObjectItem(input, "days");
+        result = gcal_events(string_input(input, "date"), cJSON_IsNumber(days) ? days->valueint : 1, is_error);
     } else if (homey_mcp_has_tool(name)) {
         result = homey_mcp_call(name, input, is_error);
     } else {

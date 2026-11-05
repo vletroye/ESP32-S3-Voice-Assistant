@@ -33,6 +33,7 @@
 #include "voice_cmd.h"
 #include "debug_trace.h"
 #include "file_state.h"
+#include "google_calendar.h"
 #include "file_phrases.h"
 #include "ai_provider_openrouter_free.h"
 #include "ai_providers.h"
@@ -1229,6 +1230,8 @@ void app_main()
     state_mount();
     // This start in the history (BOOTS.TXT of the configuration drive)
     state_boot_record(esp_app_get_description()->version, reset_reason_text(reset));
+    // Google Calendar: the account linked (its token, on LittleFS)
+    gcal_init();
     // The backup of CONFIG.INI made by the factory reset of an older firmware (keys included): no longer kept
     if (remove("/spiffs/config.bkp") == 0) {
         ESP_LOGI(TAG, "CONFIG.BKP removed");
@@ -1380,6 +1383,8 @@ void app_main()
         model_test_poll();
         // The models enabled or disabled on the Settings screen (their boxes drawn already)
         ui_ctrl_models_apply();
+        // Google Calendar being linked (its code asked, then whether the user accepted), or unlinked
+        gcal_poll();
         if (s_reset_requested) {
             s_reset_requested = false;
             llm_reset();

@@ -444,6 +444,21 @@ status_no_battery = Kein Akku (kein BOX-3-SENSOR-Dock, oder sein Schalter auf OF
 settings_params_title = Einstellungen
 settings_followup_beep = Piepton nach einer Antwort
 
+# Google Calendar (when the firmware has its OAuth client): the row of the Paramètres page, its buttons and
+# question, then the linking screen (gcal_scan: %s the address to open), where it stands
+settings_gcal = Google Kalender
+gcal_connect = Verbinden
+gcal_disconnect = Trennen
+gcal_unlink_ask = Google Kalender vom Assistenten trennen?
+gcal_title = Google Kalender
+gcal_scan = Scanne den QR-Code mit deinem Handy (oder öffne %s) und gib dann diesen Code ein:
+gcal_asking = Code wird bei Google angefordert...
+gcal_waiting = Warte auf deine Zustimmung am Handy...
+gcal_done = Kalender verbunden!
+gcal_denied = Zugriff verweigert.
+gcal_expired = Code abgelaufen: geh zurück und versuch es erneut.
+gcal_failed = Google antwortet nicht: versuch es später erneut.
+
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug
 settings_debug = Traces

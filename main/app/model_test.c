@@ -364,10 +364,12 @@ static int words_found(const char *sentence, const char *transcript)
     return total ? found * 100 / total : -1;
 }
 
-static void speech_line(char *screen, size_t size, const char *name, const char *result)
+/* "01 La synthèse Voxtral : 0,7 s": numbered from 1, the chat models after them */
+static void speech_line(char *screen, size_t size, int number, const char *name, const char *result)
 {
     size_t from = strlen(screen);
-    snprintf(screen + from, size - from, "%s%s%s%s", from ? "\n" : "", name, result ? " : " : "…", result ? result : "");
+    snprintf(screen + from, size - from, "%s%02d %s%s%s", from ? "\n" : "", number, name, result ? " : " : "…",
+             result ? result : "");
 }
 
 /*
@@ -468,7 +470,7 @@ static void test_speech(char *screen, size_t screen_size)
         }
         snprintf(name, sizeof(name), lang->test_tts_name, m->spoken);
         size_t line_start = strlen(screen);
-        speech_line(screen, screen_size, name, NULL);
+        speech_line(screen, screen_size, s_speech_result_count + 1, name, NULL);
         show(screen);
         typeof(s_speech_results[0]) *r = &s_speech_results[s_speech_result_count++];
         *r = (typeof(*r)) { .stt = false, .first_ms = -1, .total_ms = -1, .words = -1 };
@@ -478,8 +480,12 @@ static void test_speech(char *screen, size_t screen_size)
         int16_t *got = NULL;
         size_t got_samples = 0;
         bool ok = synthesize(m, &got, &got_samples, &r->first_ms, &r->total_ms);
-        strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : "unavailable: no audio", sizeof(r->status));
-        r->reason = !key ? lang->test_why_no_key : ok ? NULL : lang->test_why_no_audio;
+        // Refused: why, when the service said it (credit, key, busy), as for the chat models
+        llm_error_t why = ok ? LLM_OK : tts_stream_refusal();
+        bool known = why != LLM_OK && why != LLM_ERR_OTHER;
+        strlcpy(r->status, !key ? "unavailable: no key" : ok ? "ok" : known ? status_of(why) : "unavailable: no audio",
+                sizeof(r->status));
+        r->reason = !key ? lang->test_why_no_key : ok ? NULL : known ? reason_of(why) : lang->test_why_no_audio;
         ESP_LOGI(TAG, "TTS %s: %s, first audio %d ms, total %d ms, %u samples", m->id, r->status, r->first_ms,
                  r->total_ms, (unsigned)got_samples);
         if (ok && !audio) {
@@ -492,7 +498,7 @@ static void test_speech(char *screen, size_t screen_size)
         if (ok) {
             spoken_seconds(result, sizeof(result), r->first_ms, true);
         }
-        speech_line(screen, screen_size, name, ok ? result : r->reason);
+        speech_line(screen, screen_size, s_speech_result_count, name, ok ? result : r->reason);
         show(screen);
         if (s_scope == MODEL_TEST_SPEECH) {
             save_speech_results();      // its time on the list as the window goes
@@ -518,7 +524,7 @@ static void test_speech(char *screen, size_t screen_size)
         }
         snprintf(name, sizeof(name), lang->test_stt_name, m->spoken);
         size_t line_start = strlen(screen);
-        speech_line(screen, screen_size, name, NULL);
+        speech_line(screen, screen_size, s_speech_result_count + 1, name, NULL);
         show(screen);
         typeof(s_speech_results[0]) *r = &s_speech_results[s_speech_result_count++];
         *r = (typeof(*r)) { .stt = true, .first_ms = -1, .total_ms = -1, .words = -1 };
@@ -531,8 +537,11 @@ static void test_speech(char *screen, size_t screen_size)
             text = stt_stream_test(audio, samples, &r->first_ms);
         }
         r->words = text ? words_found(lang->speech_test_phrase, text) : -1;
-        strlcpy(r->status, !key ? "unavailable: no key" : text ? "ok" : "unavailable: no text", sizeof(r->status));
-        r->reason = !key ? lang->test_why_no_key : text ? NULL : lang->test_why_no_text;
+        llm_error_t why = text || !key ? LLM_OK : stt_stream_refusal();
+        bool known = why != LLM_OK && why != LLM_ERR_OTHER;
+        strlcpy(r->status, !key ? "unavailable: no key" : text ? "ok" : known ? status_of(why) : "unavailable: no text",
+                sizeof(r->status));
+        r->reason = !key ? lang->test_why_no_key : text ? NULL : known ? reason_of(why) : lang->test_why_no_text;
         ESP_LOGI(TAG, "STT %s: %s, %d ms, %d %% of the words: \"%s\"", m->id, r->status, r->first_ms, r->words,
                  text ? text : "");
         free(text);
@@ -540,7 +549,8 @@ static void test_speech(char *screen, size_t screen_size)
         if (r->first_ms >= 0) {
             spoken_seconds(result, sizeof(result), r->first_ms, true);
         }
-        speech_line(screen, screen_size, name, r->first_ms >= 0 ? result : (r->reason ? r->reason : lang->test_why_no_text));
+        speech_line(screen, screen_size, s_speech_result_count, name,
+                    r->first_ms >= 0 ? result : (r->reason ? r->reason : lang->test_why_no_text));
         show(screen);
         if (s_scope == MODEL_TEST_SPEECH) {
             save_speech_results();      // its time on the list as the window goes
@@ -873,7 +883,8 @@ static void test_run(void)
              s_scope == MODEL_TEST_PROVIDER ? ": " : "", s_scope == MODEL_TEST_PROVIDER ? llm_provider_name(s_provider) : "");
     assistant_announce_begin();
 
-    int number = 0;
+    // Numbered after the speech models tested
+    int number = s_speech_result_count;
     // One chat model asked for by its id: it may be a disabled one
     size_t disabled = s_scope == MODEL_TEST_MODEL ? llm_disabled_count() : 0;
     for (size_t i = 0; i < count + disabled && !s_cancel && screen; i++) {
@@ -924,9 +935,10 @@ static void test_run(void)
         write_speed_file(times, lang->test_question);
         // The fastest named when there was a choice (a single chat model: its result was said)
         text[0] = '\0';
-        if (best && number > 1) {
+        int chat_count = number - s_speech_result_count;
+        if (best && chat_count > 1) {
             snprintf(text, sizeof(text), lang->test_done, best->spoken);
-        } else if (!best && number > 0) {
+        } else if (!best && chat_count > 0) {
             strlcpy(text, lang->test_none, sizeof(text));
         }
         if (text[0]) {

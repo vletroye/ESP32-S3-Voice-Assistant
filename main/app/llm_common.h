@@ -52,6 +52,13 @@ bool llm_bearer_set(char **dst, const char *api_key);
 #define LLM_HISTORY_MAX_MSGS    24
 #define LLM_HISTORY_TRIM_TO     12
 
+/**
+ * @brief Why a speech or transcription service refused (HTTP status, 0 if none; the error text it gave): no
+ *        credit (402, "quota", "billing", "credit"), key refused (401, 403, "unauthorized", "api key"...), busy
+ *        (429, 5xx, "rate limit"), else LLM_ERR_OTHER
+ */
+llm_error_t llm_speech_error(int status, const char *text);
+
 /** An empty history in place of *messages */
 void llm_history_reset(cJSON **messages);
 

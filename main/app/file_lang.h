@@ -119,15 +119,15 @@ typedef struct {
     int second_one_below_ms;
     const char *provider_ask;       /* "change de modèle": which provider first */
     const char *provider_unknown;
-    const char *model_ask_intro;    /* %s: provider ("Anthropic"), %s: its numbered models */
+    const char *model_ask;          /* %s: provider ("Anthropic"), %s: its numbered models */
     const char *model_current;      /* after the current model in the list */
     const char *model_already;      /* %s: model name */
     const char *model_unknown;      /* %d: number of models */
     const char *model_switched;     /* %s: model name */
-    const char *voice_ask_intro;    /* "change de voix": the numbered voices follow */
+    const char *voice_ask;          /* "change de voix", %s: the numbered voices */
     const char *voice_current;      /* after the current voice in the list */
-    const char *voice_ask_question;
     const char *voice_already;      /* %s: voice name */
+    const char *voice_kept;         /* "oui" to the sample of the voice just chosen: kept, listened to again */
     const char *voice_unknown;      /* %d: number of voices */
     /* Country and town changed by voice ("change mon pays", "change ma ville"), confirmed before saving */
     const char *country_ask;

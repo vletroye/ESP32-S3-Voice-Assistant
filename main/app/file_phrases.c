@@ -212,19 +212,19 @@ int phrases_expand(const char *pattern, char **out, int max)
 /* Patterns of one list, at most */
 #define PATTERNS_PER_LIST_MAX   64
 
-/* Files given with the firmware (main/phrases/, embedded NUL-terminated), installed when missing or emptied */
-extern const char s_default_fr_start[] asm("_binary_phrases_fr_txt_start");
-extern const char s_default_fr_end[] asm("_binary_phrases_fr_txt_end");
-extern const char s_default_en_start[] asm("_binary_phrases_en_txt_start");
-extern const char s_default_en_end[] asm("_binary_phrases_en_txt_end");
-extern const char s_default_nl_start[] asm("_binary_phrases_nl_txt_start");
-extern const char s_default_nl_end[] asm("_binary_phrases_nl_txt_end");
-extern const char s_default_de_start[] asm("_binary_phrases_de_txt_start");
-extern const char s_default_de_end[] asm("_binary_phrases_de_txt_end");
-extern const char s_default_es_start[] asm("_binary_phrases_es_txt_start");
-extern const char s_default_es_end[] asm("_binary_phrases_es_txt_end");
-extern const char s_default_it_start[] asm("_binary_phrases_it_txt_start");
-extern const char s_default_it_end[] asm("_binary_phrases_it_txt_end");
+/* Files given with the firmware (main/commands/commands_<code>.txt, embedded NUL-terminated), installed when missing or emptied */
+extern const char s_default_fr_start[] asm("_binary_commands_fr_txt_start");
+extern const char s_default_fr_end[] asm("_binary_commands_fr_txt_end");
+extern const char s_default_en_start[] asm("_binary_commands_en_txt_start");
+extern const char s_default_en_end[] asm("_binary_commands_en_txt_end");
+extern const char s_default_nl_start[] asm("_binary_commands_nl_txt_start");
+extern const char s_default_nl_end[] asm("_binary_commands_nl_txt_end");
+extern const char s_default_de_start[] asm("_binary_commands_de_txt_start");
+extern const char s_default_de_end[] asm("_binary_commands_de_txt_end");
+extern const char s_default_es_start[] asm("_binary_commands_es_txt_start");
+extern const char s_default_es_end[] asm("_binary_commands_es_txt_end");
+extern const char s_default_it_start[] asm("_binary_commands_it_txt_start");
+extern const char s_default_it_end[] asm("_binary_commands_it_txt_end");
 static const struct {
     const char *code;
     const char *start;

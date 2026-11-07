@@ -196,7 +196,7 @@ provider_ask = Quale fornitore vuoi:: %s
 provider_unknown = Non ho capito. Di' il numero o il nome del fornitore:: %s
 
 # %s: provider ("Anthropic"), %s: its numbered models ("1, Haiku, celui que j'utilise. 2, Sonnet.")
-model_ask_intro = Quale modello di %s vuoi usare:: %s
+model_ask = Quale modello di %s vuoi usare:: %s
 
 # after the current model in the list
 model_current = , quello che uso
@@ -210,15 +210,16 @@ model_unknown = Non ho capito. Di' un numero da 1 a %d, o il nome del modello.
 # %s: model name
 model_switched = Molto bene, ora uso %s.
 
-# "change de voix": the numbered voices follow
-voice_ask_intro = Ecco le voci disponibili::
+# "change de voix", %s: the numbered voices ("1, Marin, celle que j'utilise. 2, Cedar.")
+voice_ask = Quale voce vuoi:: %s
 
 # after the current voice in the list
 voice_current = , quella che uso
-voice_ask_question = Quale vuoi?
 
 # %s: voice name
 voice_already = Ho già la voce %s.
+# "oui" to the sample of the voice just chosen ("Ma voix vous plaît ?"): kept, listened to again
+voice_kept = Perfetto, tengo questa voce. Ti ascolto.
 
 # "change de transcription" / "change de synthèse vocale": %s, the models numbered ("1, OpenAI. 2, Voxtral.")
 stt_ask = Quale trascrizione vuoi:: %s

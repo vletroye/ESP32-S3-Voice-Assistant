@@ -491,7 +491,7 @@ voice?"); the Settings screen follows.
 | Change the model directly (numbered over all models, as on the Settings screen; 1 to 13 can be said, the others by name) | utilise le modèle 3 · prends le modèle 3 · passe au modèle 3 · modèle numéro 3 · modèle 3 | use model 3 · use the model 3 · switch to model 3 · model number 3 · model 3 |
 | Change the transcription (lists `[stt]` of `AGENTS.INI` numbered: "Quelle transcription voulez-vous : 1, OpenAI, celle que j'utilise. 2, Voxtral." / "Which transcription do you want: 1, OpenAI, the one I use. 2, Voxtral.", then asks which one; answered by its number or spoken name; a missing key is said: "Il manque la clé Mistral AI…" / "The Mistral AI key is missing…") | change(r) de / la / ta transcription · change(r) de / la / ta reconnaissance vocale · change(r) de / le STT | change (the) transcription · change (the) speech recognition · change (the) STT |
 | Change the speech synthesis (lists `[tts]` the same way; the next answer is spoken with the new one) | change(r) de / la / ta synthèse vocale · change(r) de / le TTS · change(r) de / le / ton moteur de voix | change (the) speech synthesis · change (the) TTS · change (the) voice engine |
-| Change the voice: the voices of `[voices]` (`AGENTS.INI`) of the speech provider in use that speak the language in use, saved in `Voice` (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …" / "1, Marin, the one I use. 2, Cedar. …", then asks which one) | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
+| Change the voice: the voices of `[voices]` (`AGENTS.INI`) of the speech provider in use that speak the language in use, saved in `Voice` (reads the numbered list "1, Marin, celle que j'utilise. 2, Cedar. …" / "1, Marin, the one I use. 2, Cedar. …", then asks which one). The new voice introduces itself and asks "Ma voix vous plaît ?" / "Do you like my voice?": "oui" / "yes" keeps it and listens again ("Parfait, je garde cette voix. Je t'écoute." / "Great, I keep this voice. I am listening."); "non" / "no" gives the voice before back and lists them again | change de voix · change la voix · change ta voix · changer de voix · changer la voix · une autre voix · autre voix | change the voice · change voice · change your voice · switch voice · another voice |
 | Answer to that question (within 60 s after the list) | its number (1 to 10: "deux", "2", "dixième"…) or its name ("Cedar", also heard as "Cèdre"; "Corail", "Écho", "Ballade", "Marine"…) | its number ("two", "2", "tenth"…) or its name ("Cedar", "Coral"…) |
 | Change the voice directly | prends la voix Cedar · utilise la voix 3 · passe à la voix Coral · mets la voix Sage · choisis la voix 2 · voix numéro 2 · la voix Cedar · change de voix pour Coral | use the voice Cedar · use voice 3 · switch to voice 2 · voice number 2 · voice Cedar |
 
@@ -1136,10 +1136,12 @@ each model of `AGENTS.INI`, then each free OpenRouter model, **the same question
 phrases comment se forme un arc-en-ciel.", `test_question` of `LANG_<XX>.TXT`), one after the other, **without the
 conversation nor tools** but with the same instructions. The model chosen and its conversation are not changed.
 
-- The screen lists the models one line each as they are tested, numbered: "02 Sonnet…" while it is tested, then
-  "02 Sonnet : 1,2 s", or why it is not available: "09 Argon : crédit épuisé ou modèle hors de ton offre" (the
+- The screen lists the models one line each as they are tested, numbered from the speech and transcription models
+  ("01 La synthèse Voxtral : 0,7 s") on to the chat models: "12 Sonnet…" while it is tested, then
+  "12 Sonnet : 1,2 s", or why it is not available: "19 Argon : crédit épuisé ou modèle hors de ton offre" (the
   `test_why_...` of `LANG_<XX>.TXT`: missing key, no answer, key refused, no credit or model not in the plan, service
-  busy, request refused, reasoning effort refused, error; no audio or no text for the speech models); the last line
+  busy, request refused, reasoning effort refused, error; for the speech models too when their service says why:
+  key refused, no credit, busy, else no audio or no text); the last line
   stays visible. The answers are not spoken, only each result: "Résultat de Sonnet : 1,2 seconde." / "Result of
   Sonnet: 1.2 seconds.", or "Argon : non disponible, clé refusée." / "Argon: not available, key refused."
   (queued: the next model is
@@ -1328,9 +1330,9 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
   between quotes; lists are separated by commas; `#` lines are comments.
 - Keep the `%s`, `%d`, `%02d`… of each text in the same order.
 - **`::` and `..` stop the reading**: shown as a single `:` or `.`; with `Read_lists = off`, what follows (the list)
-  is shown but not read (`provider_ask = Quel fournisseur voulez-vous :: %s`). For the voices, the reading starts
-  again for the question after the list. `...` stays an ellipsis. `model_ask_intro` takes the provider and the
-  numbered list: `Quel modèle de %s voulez-vous utiliser :: %s`.
+  is shown but not read (`provider_ask = Quel fournisseur voulez-vous :: %s`, `voice_ask = Quelle voix voulez-vous
+  :: %s`). `...` stays an ellipsis. `model_ask` takes the provider and the numbered list: `Quel modèle de %s
+  voulez-vous utiliser :: %s`. `\n` is a line break on the screen.
 - **Checked at start-up and after each change of language** (about 0.1 s), against the firmware's English file,
   the reference:
   - a key the firmware **no longer knows** (a feature of an older firmware, removed or renamed: `settings_robot`,
@@ -1352,7 +1354,7 @@ language_names = fr: français/francais, en: anglais/l anglais, de: allemand, nl
   ejected) before pressing **Restart**, or the file may be cut, and its texts lost.
 
 **Languages given with the firmware**: French, English, Dutch, German, Spanish and Italian (`main/lang/`,
-`main/phrases/`, `main/persona/`), all made from the French files, the reference. Their files are installed at the
+`main/commands/`, `main/persona/`), all made from the French files, the reference. Their files are installed at the
 first start, after a factory reset and when emptied, for the languages of `Languages` (all six by default).
 
 **Adding a language**: add `XX:name` to `Languages` in `CONFIG.INI` (up to 12 languages, 2-letter codes); at
@@ -1516,7 +1518,7 @@ the factory reset erases them.
 ### 3.9 Writing voice phrases (patterns)
 
 The phrases of the voice commands of `voice_cmd.c` and `file_memory.c` are in **one file per language**:
-`main/phrases/phrases_<code>.txt` (`fr`, `en`, `nl`, `de`, `es`, `it`). Each list of the code is a **section named after
+`main/commands/commands_<code>.txt` (`fr`, `en`, `nl`, `de`, `es`, `it`). Each list of the code is a **section named after
 its variable**, one pattern per line, `#` for comments:
 
 ```text
@@ -1556,7 +1558,7 @@ writes either (`(é|e)diter` works too).
 
 #### 3.9.2 Where the files are
 
-- The files of `main/phrases/` are built into the firmware. At start-up, each one missing on SPIFFS (first start)
+- The files of `main/commands/` are built into the firmware. At start-up, each one missing on SPIFFS (first start)
   or emptied is installed as `/spiffs/phrases_<code>.txt`; the files of SPIFFS are then read (a few KB, kept in
   RAM).
 - In configuration mode they appear on the drive as **`VOICE_FR.TXT`** and **`VOICE_EN.TXT`** (one per
@@ -1961,7 +1963,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `alarm_ring.c` | Ringing them in its own task: a chime made on the device (two bell notes), from silence to 80 % in 30 s (software gain, the codec set once while silent), or the alarm's radio fading in as long; the label said once loud; stopped by a touch or the wake word, or after `Alarm_stop_min`; a reminder: a short chime, then its text said as a reply |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/state/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
-| `file_phrases.c` | Phrase files of the voice commands (`main/phrases/phrases_<lang>.txt`, installed on SPIFFS): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |
+| `file_phrases.c` | Phrase files of the voice commands (`main/commands/commands_<lang>.txt`, installed on SPIFFS as `phrases_<lang>.txt`): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |
 | `voice_cmd.c` | Settings by voice: language, model (provider, then model), transcription and speech synthesis models, voice of the speech service in use, country and town, configuration mode ("change la langue", "change de modèle", "change de transcription", "change de synthèse vocale", "prends la voix Cedar", "change ma ville", "édite la config") |
 | `mcp_client.c` | MCP client (streamable HTTP, JSON or event-stream answers): the servers of `CONFIG.INI` (`McpN_*`, the Homey among them), their tools read once the Wi-Fi is up (tried again every minute), chosen (`McpN_tools`), renamed when the name is taken, offered to the models; switched on or off from the Settings screen |
 | `homey_mcp.c` | What is particular to a Homey Pro: its 16 everyday tools, the confirmation before turning off some devices (`Confirm_off`), the fields of no use by voice removed from its results |
@@ -2268,7 +2270,8 @@ A power cut clears them. Every start is also added to `BOOTS.TXT` (the last 50, 
   behind your back. The speech and the transcription (OpenAI) without credit cannot speak: their message is
   **shown**, and stays on screen while the device listens.
 - **Answer text** scrolling with the speech, one line at a time (or smoothly), at a configurable reading speed.
-  A text shown but not read (a list of models, of radios...) stays on screen while the device listens for the
+  A text shown but not read (a list of models, of radios...), or a question of a voice command ("Ma voix vous
+  plaît ?" / "Do you like my voice?", a confirmation), stays on screen while the device listens for the
   answer, until it is given or the usual delay ends (its reading time added): bars moving beside the robot head
   at the top right show that the device listens, instead of the listening robot. Such a list is not scrolled with
   the speech: it stays at its top, to be scrolled with the finger, and a blinking arrow down at the bottom left

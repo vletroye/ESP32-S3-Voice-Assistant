@@ -332,12 +332,13 @@ static void on_reply_audio(tts_event_t event)
 #if CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS > 0
     if (!tools_sleep_after_reply()) {
         // Keep listening so that the conversation can continue without the wake word
-        // A list shown but not read (a question asked about it): the reply stays shown while listening, the time to
-        // read it added to the window
-        if (s_unread_ms > 0) {
+        // A list shown but not read, or a question of a voice command ("Ma voix vous plaît ?"): the reply stays shown
+        // while listening (the moving bars at its top right), the time to read the list added to the window
+        bool keep_reply = s_unread_ms > 0 || voice_cmd_waiting_answer();
+        if (keep_reply) {
             ESP_LOGI(TAG, "Listening, the reply stays shown (%u ms to read it)", (unsigned)s_unread_ms);
         }
-        app_sr_start_followup(CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS + s_unread_ms, s_unread_ms > 0);
+        app_sr_start_followup(CONFIG_ASSISTANT_FOLLOWUP_WINDOW_MS + s_unread_ms, keep_reply);
         return;
     }
 #endif

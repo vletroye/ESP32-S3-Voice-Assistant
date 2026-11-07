@@ -399,7 +399,8 @@ void sr_handler_task(void *pvParam)
             }
             // A new question interrupts the reply being spoken
             assistant_reply_stop();
-            // Woken up (not a follow-up) after a pause in a conversation: asked first whether to go on with it
+            // Woken up (not a follow-up) after a pause in a conversation: asked first whether to go on with it (the
+            // listening after that question is a follow-up: asked again, it looped)
             if (!result.followup && assistant_resume_ask()) {
                 continue;
             }

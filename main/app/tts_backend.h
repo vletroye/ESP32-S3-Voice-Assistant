@@ -69,6 +69,9 @@ void tts_backend_sentence_end(const char *status, bool failed);
 /** The speech was refused for lack of credit (said on screen after the reply) */
 void tts_backend_no_credit(void);
 
+/** The speech was refused: why, from the HTTP status (0 if none) and the error text (llm_speech_error) */
+void tts_backend_refused(int status, const char *text);
+
 /** An error text saying the credit is exhausted ("insufficient_quota", "quota", "billing", "credit") */
 bool tts_backend_is_no_credit(const char *text);
 

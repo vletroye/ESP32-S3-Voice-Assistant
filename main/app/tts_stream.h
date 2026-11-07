@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
+#include "llm.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -104,6 +105,9 @@ bool tts_stream_test(const tts_backend_t *backend, const char *base_url, const c
 
 /** The speech of the last reply refused for lack of credit (insufficient_quota, 402...) */
 bool tts_stream_no_credit(void);
+
+/** Why the last speech (or speech test) was refused: LLM_ERR_CREDIT, _AUTH, _BUSY, _OTHER; LLM_OK if it was not */
+llm_error_t tts_stream_refusal(void);
 
 #ifdef __cplusplus
 }

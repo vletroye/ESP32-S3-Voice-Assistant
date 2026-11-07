@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: CC0-1.0
  *
  * A timer running (alarms.c): its countdown (m:ss, the nearest timer) at the top middle of the screen, as the costs
- * are at the top right, with the robot (asleep, listening, thinking), not over a reply; asleep, the robot's eyes become two stopwatches whose hands turn (an animation, not the
- * countdown). The closed eyes and the Z come back once no timer runs.
+ * are at the top right, with the robot (asleep, listening, thinking), not over a reply; asleep, the robot's eyes
+ * become two stopwatches whose hands turn (an animation, not the countdown). The closed eyes and the Z come back once
+ * no timer runs.
  */
 
 #pragma once

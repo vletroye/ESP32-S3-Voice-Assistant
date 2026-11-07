@@ -835,7 +835,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
 | `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (the reasoning mode or not, a restart included), the assistant asks whether to go on with it (`0` to `120`; `0`: never asked) | `5` |
 | `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar); empty: not offered | *(its client ID, ending in `.apps.googleusercontent.com`)* |
-| `Google_code` | Once, to link the account: the address `http://127.0.0.1/?code=...` the phone reached after accepting (within 10 minutes); erased once used | |
+| `Google_code` | Once, to link the account: the address `http://127.0.0.1/?code=...` the browser reached after accepting (within 10 minutes); emptied once used (the line stays) | |
 | `Alarm_stop_min` | A [timer or an alarm](#28-timers-alarms-and-reminders) not stopped (a touch, the wake word) stops ringing by itself after this many minutes (`1` to `60`) | `3` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
 | `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
@@ -1734,7 +1734,8 @@ On the **Paramètres** / **Settings** page of the Settings screen, the **Google 
    http://127.0.0.1/?iss=https://accounts.google.com&code=4/0AUn6Hd8w…&scope=https://www.googleapis.com/auth/tasks
    ```
 
-5. Still in configuration mode, add it to `CONFIG.INI`, as is:
+5. Still in configuration mode, paste it after `Google_code =` in `CONFIG.INI` (the line is there, empty, once a
+   link was started), as is:
 
    ```ini
    Google_code = http://127.0.0.1/?iss=https://accounts.google.com&code=4/0AUn6Hd8w…&scope=https://www.googleapis.com/auth/tasks
@@ -1743,7 +1744,8 @@ On the **Paramètres** / **Settings** page of the Settings screen, the **Google 
    Save, wait a few seconds (Windows may write the file a little later), restart. Within **10 minutes** of step 3:
    the code expires.
 6. At the start, the device exchanges the code for its access (the log says `google: Linked to a Google account`),
-   erases `Google_code` and no longer puts GOOGLE.HTM on the drive. The row now shows **Déconnecter** /
+   empties `Google_code` (its line stays in `CONFIG.INI`, ready for the next time) and no longer puts GOOGLE.HTM on
+   the drive. The row now shows **Déconnecter** /
    **Disconnect**: ask away.
 
 **Linked before 2.38** (Google Tasks only): link again once, the same way (**Google → Déconnecter** /

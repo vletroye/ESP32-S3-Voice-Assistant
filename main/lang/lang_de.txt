@@ -490,20 +490,20 @@ mcp_off = aus
 settings_params_title = Einstellungen
 settings_followup_beep = Piepton nach einer Antwort
 
-# Google Tasks (when Google_client and Google_secret are in CONFIG.INI): the row of the Paramètres page,
-# its buttons and question, how to link the account (from a PC: GOOGLE.HTM in configuration mode) and
-# its button, where the linking stands after the row's name
-settings_google = Google
+# Google (Tasks, Gmail, Calendar; when Google_client and Google_secret are in CONFIG.INI): the row of the
+# Paramètres page, its buttons and question, how to link the account (from a PC: GOOGLE.HTM in
+# configuration mode; \n for a new line) and its button, where the linking stands after the row's name
+google_row = Google
 google_connect = Verbinden
 google_disconnect = Trennen
 google_unlink_ask = Das Google-Konto vom Assistenten trennen?
-google_to_config = Konfiguration
+google_config_button = Konfiguration
 config_wait = Wechsel in den Konfigurationsmodus...
-google_steps = Google erlaubt diese Anmeldung nur von einem Computer. Öffne im Konfigurationsmodus GOOGLE.HTM auf dem PC und stimme zu. Die nächste Seite öffnet sich nicht: kopiere ihre Adresse in CONFIG.INI (Google_code = ...), speichere und starte neu.
+google_link_steps = Einmalig, für Tasks, Gmail und Kalender:\n1. Tippe auf Konfiguration.\n2. Öffne am PC GOOGLE.HTM und stimme zu.\n3. Die nächste Seite öffnet sich nicht: kopiere ihre Adresse in CONFIG.INI, nach Google_code =\n4. Speichern, neu starten (binnen 10 Min.).
 google_linking =  (läuft)
 google_failed =  (Code abgelehnt)
 google_not_configured =  (einzurichten)
-google_howto = Füge Google_client und Google_secret in CONFIG.INI hinzu (siehe README, Google) und starte neu.
+google_setup_howto = Füge Google_client und Google_secret in CONFIG.INI hinzu (siehe README, Google) und starte neu.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

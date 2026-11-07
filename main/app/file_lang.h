@@ -264,17 +264,17 @@ typedef struct {
     const char *mcp_off;
     const char *settings_params_title;  /* Paramètres page: its title, the switch of the beep after a reply */
     const char *settings_followup_beep;
-    const char *settings_google;  /* Paramètres page: Google, how to link it from a PC */
+    const char *google_row;  /* Paramètres page: Google, how to link it from a PC */
     const char *google_connect;
     const char *google_disconnect;
     const char *google_unlink_ask;
-    const char *google_to_config;
+    const char *google_config_button;
     const char *config_wait;            /* shown at once when a button asks for the configuration mode */
-    const char *google_steps;
+    const char *google_link_steps;
     const char *google_linking;
     const char *google_failed;
     const char *google_not_configured;
-    const char *google_howto;
+    const char *google_setup_howto;
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;
     const char *settings_debug_info;

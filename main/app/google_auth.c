@@ -274,6 +274,12 @@ void google_auth_export_link(void)
         remove(GOOGLE_LINK_FILE);
         return;
     }
+    // Google_code ready to fill in CONFIG.INI (empty)
+    char *code = settings_read_value("Google_code");
+    if (!code) {
+        settings_save_str("Google_code", "");
+    }
+    free(code);
     // A new verifier for each new page (the code of an older one is refused)
     static char verifier[PKCE_VERIFIER_SIZE], url[1000], html_url[1200];
     pkce_new(verifier, sizeof(verifier));
@@ -357,7 +363,8 @@ static void code_exchange(void)
     free(response);
     free(s_code);
     s_code = NULL;
-    settings_erase_key("Google_code");      // used once, whatever the result
+    // Used once, whatever the result: emptied, its line kept in CONFIG.INI for the next time
+    settings_save_str("Google_code", "");
     if (ok) {
         remove(GOOGLE_PKCE_FILE);
     }

@@ -1420,7 +1420,7 @@ static void params_page_refresh(void)
     const app_lang_t *lang = app_lang_get();
     if (s_gcal_label) {
         google_state_t state = google_auth_state();
-        lv_label_set_text_fmt(s_gcal_label, "%s%s", lang->settings_google,
+        lv_label_set_text_fmt(s_gcal_label, "%s%s", lang->google_row,
                               state == GOOGLE_NOT_CONFIGURED ? lang->google_not_configured :
                               state == GOOGLE_FAILED ? lang->google_failed :
                               state == GOOGLE_LINKING ? lang->google_linking : "");
@@ -1465,16 +1465,21 @@ static void gcal_button_cb(lv_event_t *e)
     const app_lang_t *lang = app_lang_get();
     static const char *buttons[3];
     static const char *ok_button[2] = { "OK", "" };
-    buttons[0] = state == GOOGLE_LINKED ? lang->settings_yes : lang->google_to_config;
+    buttons[0] = state == GOOGLE_LINKED ? lang->settings_yes : lang->google_config_button;
     buttons[1] = lang->settings_no;
     buttons[2] = "";
     bool howto = state == GOOGLE_NOT_CONFIGURED;
-    lv_obj_t *box = lv_msgbox_create(NULL, lang->settings_google,
-                                     howto ? lang->google_howto : state == GOOGLE_LINKED ? lang->google_unlink_ask :
-                                     lang->google_steps, howto ? ok_button : buttons, false);
+    lv_obj_t *box = lv_msgbox_create(NULL, lang->google_row,
+                                     howto ? lang->google_setup_howto : state == GOOGLE_LINKED ? lang->google_unlink_ask :
+                                     lang->google_link_steps, howto ? ok_button : buttons, false);
     lv_obj_set_width(box, 280);
     lv_obj_set_style_text_font(lv_msgbox_get_title(box), &ui_font_Latin16, LV_PART_MAIN);
-    lv_obj_set_style_text_font(lv_msgbox_get_text(box), &ui_font_Latin16, LV_PART_MAIN);
+    // The steps are long: a smaller font, the window as wide as the screen allows
+    bool steps = !howto && state != GOOGLE_LINKED;
+    lv_obj_set_style_text_font(lv_msgbox_get_text(box), steps ? &ui_font_Latin14 : &ui_font_Latin16, LV_PART_MAIN);
+    if (steps) {
+        lv_obj_set_width(box, 310);
+    }
     lv_obj_set_style_text_font(lv_msgbox_get_btns(box), &ui_font_Latin16, LV_PART_ITEMS);
     lv_obj_center(box);
     lv_obj_add_event_cb(box, gcal_unlink_box_cb, LV_EVENT_VALUE_CHANGED, NULL);

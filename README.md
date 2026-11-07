@@ -229,6 +229,13 @@ settings of the [Quick start](#1-quick-start).
   screen. The radio pauses while you talk to the assistant.
 - **Home automation** with a Homey Pro: "Allume la lumière du salon" / "Turn on the living room light", "Qui est
   à la maison ?" / "Who is home?".
+- **Timers, alarms and reminders**: "Minuteur de 10 minutes pour les pâtes" / "10-minute timer for the pasta",
+  "Réveille-moi à 7 h en semaine avec Classic 21" / "Wake me at 7 on weekdays with Classic 21", "Rappelle-moi jeudi
+  à 15 h d'appeler Paul" / "Remind me Thursday at 3 pm to call Paul" (see
+  [Timers, alarms and reminders](#28-timers-alarms-and-reminders)).
+- **Shopping list and tasks** in your Google Tasks: "Ajoute du lait à la liste de courses" / "Add milk to the
+  shopping list", "J'ai acheté le lait" / "I bought the milk" (see [Google Tasks](#311-google-tasks)).
+- **Any MCP server** whose tools the model can use, besides the Homey (see [MCP servers](#312-mcp-servers)).
 - **Clear errors**: a missing credit, a refused key or a network problem is said and shown, for each provider.
 - **Costs on screen**: what the conversation and the day cost, and a detailed page (tap the cost).
 - **Sleep screen** with the time and date, the volume and the Wi-Fi signal; with the BOX-3-SENSOR dock, the
@@ -822,7 +829,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
 | `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (the reasoning mode or not, a restart included), the assistant asks whether to go on with it (`0` to `120`; `0`: never asked) | `5` |
-| `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks](#311-google-tasks); empty: not offered | `1234-abc.apps.googleusercontent.com` |
+| `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks](#311-google-tasks); empty: not offered | *(its client ID, ending in `.apps.googleusercontent.com`)* |
 | `Google_code` | Once, to link the account: the address `http://127.0.0.1/?code=...` the phone reached after accepting (within 10 minutes); erased once used | |
 | `Alarm_stop_min` | A [timer or an alarm](#28-timers-alarms-and-reminders) not stopped (a touch, the wake word) stops ringing by itself after this many minutes (`1` to `60`) | `3` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
@@ -1610,63 +1617,135 @@ works: see the Homey items of the [Design notes](#412-design-notes).
 
 ### 3.11 Google Tasks
 
-The assistant can read and change your **Google Tasks** lists, the shopping list first: "Ajoute du lait et des
-œufs à la liste de courses" / "Add milk and eggs to the shopping list", "Qu'est-ce qu'il y a sur ma liste de
-courses ?" / "What is on my shopping list?", "J'ai acheté le lait" / "I bought the milk" (ticked), "Supprime le pain
-de la liste" / "Remove the bread from the list", "Crée une liste Bricolage" / "Create a DIY list". What it changes
-shows at once in the Google Tasks app of your phone, to use in the shop.
+The assistant reads and changes your **Google Tasks** lists, the shopping list first. What it changes shows at once
+in the Google Tasks app of your phone, to use in the shop.
 
-The device reaches Google alone, with the OAuth client of **your own** Google Cloud project: no server, no third
-party. Setting it up takes about 15 minutes, once.
+| You say | It does |
+| --- | --- |
+| "Quelles listes de tâches ai-je ?" / "Which task lists do I have?" | Names your lists |
+| "Ajoute du lait, des œufs et du pain à la liste de courses" / "Add milk, eggs and bread to the shopping list" | Adds three tasks to the list "Courses" (it offers to create the list if there is none) |
+| "Qu'est-ce qu'il y a sur ma liste de courses ?" / "What is on my shopping list?" | Reads its open tasks, their number first |
+| "J'ai acheté le lait" / "I bought the milk" | Ticks "lait" |
+| "Remets le lait sur la liste" / "Put the milk back on the list" | Unticks it |
+| "Supprime le pain de la liste de courses" / "Remove the bread from the shopping list" | Deletes it |
+| "Crée une liste Bricolage" / "Create a DIY list" | Creates the list |
+| "Ajoute 'appeler le plombier' à mes tâches pour vendredi" / "Add 'call the plumber' to my tasks for Friday" | Adds it to the default list, due on Friday |
 
-**1. Your Google Cloud project** (in a browser, the phone's will do):
+The device reaches Google **alone**, with the OAuth client of **your own** Google Cloud project: no server, no
+third-party service, no subscription. Setting it up takes about 20 minutes, once, with a PC (for `CONFIG.INI` and
+Google's consent page).
 
-1. [console.cloud.google.com](https://console.cloud.google.com): a new project ("ESP32 Assistant").
-2. **APIs & Services → Library**: search **Google Tasks API**, **Enable**.
-3. **APIs & Services → OAuth consent screen** (Google Auth Platform), **Get started**: app name, your e-mail,
-   audience **External**, your e-mail again, accept, **Create**.
-4. **Data access → Add or remove scopes**: tick `.../auth/tasks`, **Update**, **Save**.
-5. **Branding**: a home page and a privacy policy are required to publish: this repository's page
-   (`https://github.com/vletroye/ESP32-S3-Voice-Assistant`) and its [PRIVACY.md](PRIVACY.md)
-   (`https://github.com/vletroye/ESP32-S3-Voice-Assistant/blob/main/PRIVACY.md`) will do; then **Audience → Publish
-   app** (status **In production**; in testing, Google refuses the accounts not listed as test users, and the
-   access would end after 7 days).
-6. **Clients → Create client**, type **Desktop app** (not "TVs and Limited Input devices": Google then refuses the
-   sign-in, "Localhost URI is not allowed for 'NATIVE_DEVICE' client type"; both downloaded files start with
-   `{"installed":`), any name, **Create**: note its **client ID** and **client secret** (shown in the window, or
-   on the client's page).
+#### 3.11.1 Your Google Cloud project
 
-**2. In `CONFIG.INI`** (configuration mode): `Google_client = <client ID>` and `Google_secret = <client secret>`,
-save, restart. On the **Paramètres** / **Settings** page of the Settings screen, the **Google Tasks** row then offers **Connecter** / **Connect** (before, it says "(à configurer)" / "(to set up)", and its **?** button what `CONFIG.INI` needs). These keys must be saved with a configuration mode of version 2.36 or later: an older one drops them as unknown.
+In [console.cloud.google.com](https://console.cloud.google.com), signed in with the Google account whose tasks the
+assistant will use:
 
-**3. Link your account**, once, **from a computer**: Google blocks this sign-in in a phone's browser ("The
-loopback flow has been blocked in order to keep users secure").
+1. **A project**: the project selector at the top left → **New project** ("ESP32 Assistant"), **Create**, then select
+   it. (The project made by Google AI Studio for a Gemini key, "gen-lang-client-…", does too.)
+2. **The API**: ☰ → **APIs & Services → Library**, search **Google Tasks API**, **Enable**.
+3. **The consent screen**: ☰ → **APIs & Services → OAuth consent screen** (it opens **Google Auth Platform**),
+   **Get started**: app name ("AI Voice Assistant ESP32"), support e-mail (yours), audience **External**, contact
+   e-mail (yours), accept the policy, **Create**.
+4. **The access asked**: **Data access → Add or remove scopes**, filter `tasks`, tick `.../auth/tasks` ("See, edit,
+   create and delete all your tasks"), **Update**, then **Save**.
+5. **Branding** (needed to publish): **Application home page**
+   `https://github.com/vletroye/ESP32-S3-Voice-Assistant` and **Application privacy policy link**
+   `https://github.com/vletroye/ESP32-S3-Voice-Assistant/blob/main/PRIVACY.md` (this repository's
+   [PRIVACY.md](PRIVACY.md)); `github.com` as authorized domain if asked. No logo: a logo makes Google ask for a
+   verification. **Save**.
+6. **Publish**: **Audience → Publish app → Confirm**: the status becomes **In production**. Google may say the app
+   needs a verification: not for your own use (at most 100 users), nothing to do. Left **in testing**, Google refuses
+   the accounts not listed as test users, and the access would end after 7 days.
+7. **The client**: **Clients → + Create client**, application type **Desktop app**, any name ("ESP32 BOX"),
+   **Create**. Note its **Client ID** (`…apps.googleusercontent.com`) and **Client secret** (`GOCSPX-…`), shown in
+   the window, or on the client's page (**Download JSON** gives both).
+   - **Not "TVs and Limited Input devices"**: Google refuses its sign-in here (see the table below). A downloaded
+     JSON does not tell them apart by its first word (both start with `{"installed":`), but a **Desktop app** has
+     `"redirect_uris":["http://localhost"]` at its end.
 
-1. **Google Tasks → Connecter** / **Connect**: the steps are shown; **Mode configuration** / **Configuration mode**
-   switches to it (or "édite la config" / "edit the config").
-2. On the configuration drive, open **GOOGLE.HTM** (a double click): the PC's browser goes to Google's consent page.
-   Choose your account. Google warns that the app is not verified (it is yours): **Advanced → Go to … (unsafe)**,
-   then allow "See, edit, create and delete all your tasks".
-3. The browser then opens an address starting with `http://127.0.0.1/?code=...` that **does not open** ("site can't
-   be reached"): that is expected. **Copy this whole address** from the address bar.
-4. Still in configuration mode, within **10 minutes** (the code expires): `Google_code = <the address>` in
-   `CONFIG.INI`, save, restart. The device exchanges it for its access, keeps the access in `/state/google.json`
-   (never shown nor logged) and erases `Google_code`; GOOGLE.HTM is no longer put on the drive. The row then shows
-   **Déconnecter** / **Disconnect**; "(code refusé)" / "(code refused)" after its name if the code was too old,
-   already used or of another client: link again.
+#### 3.11.2 In `CONFIG.INI`
 
-**Disconnect** (same row, confirmed) forgets the account and withdraws the access at Google; it can also be withdrawn
-from your Google account (Security, third-party connections). The factory reset forgets it too; the soft reset keeps
-`Google_client` and `Google_secret`.
+In configuration mode, add (or change) these two lines, save, restart:
 
-How it works: OAuth 2.0 for installed apps, with PKCE (S256; its verifier kept in `/state/google_pkce.txt` from
-GOOGLE.HTM to the exchange) and the loopback address `http://127.0.0.1` (Google's flow for devices without a
-keyboard does not allow the tasks).
-The model gets four tools: `tasks_lists`, `tasks_get` (the open tasks of a list), `tasks_add` (several items at once,
-the list created when asked) and `tasks_update` (complete, reopen, delete, rename). Lists and tasks are named as you
-say them, case and accents ignored ("courses" finds "Courses"); a name matching nothing gives the model the names
-there are. Without a list named, the default list (the first one). The same access will serve Google Calendar later
-(another scope, linked again).
+```ini
+Google_client = <the client ID, ending in .apps.googleusercontent.com>
+Google_secret = <the client secret, starting with GOCSPX->
+```
+
+They stay in the device's NVS, as the other keys (only their length is ever logged), and the soft reset keeps them.
+A configuration mode older than 2.36 drops them as unknown keys: flash both binaries of this version first.
+
+On the **Paramètres** / **Settings** page of the Settings screen, the **Google Tasks** row then shows **Connecter** /
+**Connect** (without the two keys: "Google Tasks (à configurer)" / "(to set up)", and a **?** button saying what
+`CONFIG.INI` needs).
+
+#### 3.11.3 Link your account (once)
+
+1. Settings screen, **Paramètres** / **Settings** page: **Google Tasks → Connecter** / **Connect**. The steps are
+   shown; **Mode configuration** / **Configuration mode** switches to it at once.
+2. On the PC, open **GOOGLE.HTM** of the configuration drive (a double click): the browser goes straight to
+   Google's consent page. Choose your account.
+3. Google warns "Google hasn't verified this app" ("Google n'a pas validé cette application"): it is yours.
+   **Advanced → Go to AI Voice Assistant ESP32 (unsafe)** ("Paramètres avancés → Accéder à … (non sécurisé)"), then
+   **Continue** / **Allow** for "See, edit, create and delete all your tasks".
+4. The browser then shows an address starting with `http://127.0.0.1/?` and a page that **does not open** ("This
+   site can't be reached"): **that is expected**, the code is in the address. Copy the **whole address** from the
+   address bar, for example:
+
+   ```text
+   http://127.0.0.1/?iss=https://accounts.google.com&code=4/0AUn6Hd8w…&scope=https://www.googleapis.com/auth/tasks
+   ```
+
+5. Still in configuration mode, add it to `CONFIG.INI`, as is:
+
+   ```ini
+   Google_code = http://127.0.0.1/?iss=https://accounts.google.com&code=4/0AUn6Hd8w…&scope=https://www.googleapis.com/auth/tasks
+   ```
+
+   Save, wait a few seconds (Windows may write the file a little later), restart. Within **10 minutes** of step 3:
+   the code expires.
+6. At the start, the device exchanges the code for its access (the log says `google: Linked to a Google account`),
+   erases `Google_code` and no longer puts GOOGLE.HTM on the drive. The row now shows **Déconnecter** /
+   **Disconnect**: ask away.
+
+Each GOOGLE.HTM carries a one-time secret (PKCE): a code obtained with an older GOOGLE.HTM is refused once a new
+one was made. To link again, start again from step 1.
+
+**Disconnect** (same row, confirmed) forgets the account and withdraws the access at Google. The access can also be
+withdrawn from your Google account (**Security → Your connections to third-party apps & services**). The factory
+reset forgets it too.
+
+#### 3.11.4 If it does not work
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| "Google Tasks (à configurer)" / "(to set up)" on the row | `Google_client` or `Google_secret` missing in `CONFIG.INI` (or dropped by a configuration mode older than 2.36) | Add them again (3.11.2) |
+| "Accès bloqué : la demande de … n'est pas valide", **Erreur 400 : invalid_request**; in the error's details: "The loopback flow has been blocked…" ("Localhost URI is not allowed for 'NATIVE_DEVICE' client type") | The client is of type **TVs and Limited Input devices** | Create a **Desktop app** client (3.11.1, step 7) and put its ID and secret in `CONFIG.INI` |
+| "Accès bloqué : … n'a pas terminé la procédure de validation de Google", **Erreur 403 : access_denied** ("The app is being tested…") | The app is still **in testing** | Publish it (3.11.1, steps 5 and 6) |
+| **Publish app** refused: "a valid app name, support e-mail, home page and privacy policy are needed" | The **Branding** page is not complete | Fill it in (3.11.1, step 5) |
+| "Google hasn't verified this app" | Expected: your own, unverified app | **Advanced → Go to … (unsafe)** |
+| `http://127.0.0.1/…` "This site can't be reached" | Expected: nothing answers there, the code is in the address | Copy the address (3.11.3, step 4) |
+| "Google Tasks (code refusé)" / "(code refused)" on the row | The code was older than 10 minutes, already used, of another client, or of an older GOOGLE.HTM | Link again from step 1 |
+| The assistant says the Google account is not linked | Not linked yet, or the access was withdrawn (Disconnect, or in the Google account) | Link again |
+
+#### 3.11.5 How it works
+
+- **Sign-in**: OAuth 2.0 for installed apps ([Google's guide](https://developers.google.com/identity/protocols/oauth2/native-app)),
+  with PKCE (S256: its verifier made with GOOGLE.HTM and kept in `/state/google_pkce.txt` until the exchange) and the
+  loopback address `http://127.0.0.1`, which nothing serves: the user carries the code to the device in
+  `CONFIG.INI`. Google's flow for devices without a keyboard (a QR code and a code to type, with a "TVs and Limited
+  Input devices" client) would be simpler, but Google allows it only for a few scopes (profile, some Drive files,
+  YouTube): not for the tasks nor the calendar.
+- **Access**: the refresh token is kept in `/state/google.json` (LittleFS), never shown nor logged; an access token
+  of an hour is asked with it whenever needed. Each call to Google is logged with its time (`google: GET
+  tasks.googleapis.com/…: HTTP 200 in 380 ms`).
+- **Tools**: the models that take tools get `tasks_lists`, `tasks_get` (the open tasks of a list, or all with
+  `completed`), `tasks_add` (several items at once; a note and a due date for a single one; the list created when
+  asked) and `tasks_update` (complete, reopen, delete, rename). Lists and tasks are named as you say them, case and
+  accents ignored, a part of the name being enough when only one matches ("courses" finds "Courses", "le lait" finds
+  "Lait"); a name matching nothing (or several) gives the model the names there are. Without a list named, the default
+  list (the first one, "Mes tâches" / "My Tasks").
+- The same access will serve **Google Calendar** later: another scope added to the consent screen, then linked again.
 
 ### 3.12 MCP servers
 

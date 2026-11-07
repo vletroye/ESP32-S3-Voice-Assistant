@@ -164,8 +164,10 @@ static size_t upsample(upsampler_t *u, const int16_t *in, size_t n, int16_t *out
 
 /* The last transcription refused for lack of credit */
 static volatile bool s_no_credit = false;
-/* When the last piece of text came (esp_timer) */
+/* When the last piece of text came, and when the turn started (esp_timer): the text of the turn before, cleared
+   by the stt task a little later, is not this one's */
 static volatile int64_t s_last_delta_us = 0;
+static volatile int64_t s_turn_start_us = 0;
 
 void stt_backend_delta(const char *text)
 {
@@ -718,6 +720,7 @@ void stt_stream_start(stt_partial_cb_t on_partial)
     s_on_partial = on_partial;
     free(s_transcript);
     s_transcript = NULL;
+    s_turn_start_us = esp_timer_get_time();
     s_turn_active = true;
     s_capturing = true;
     xEventGroupSetBits(s_events, EV_TURN_START);
@@ -795,7 +798,7 @@ bool stt_backend_awaiting(void)
 
 uint32_t stt_stream_text_quiet_ms(void)
 {
-    if (!stt_stream_has_text()) {
+    if (!s_turn_active || s_last_delta_us <= s_turn_start_us || !stt_stream_has_text()) {
         return 0;
     }
     return (uint32_t)((esp_timer_get_time() - s_last_delta_us) / 1000);

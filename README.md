@@ -1784,6 +1784,40 @@ When a tool has the name of one of the device's own tools or of another server's
 Only a fixed key (`McpN_key`, sent as `Authorization: Bearer …`) is supported: a server that needs a sign-in in a
 browser (OAuth, such as Google's MCP servers) cannot be used yet.
 
+**Which servers fit**: those reached at an **address** (`http://…/mcp`, `https://…/mcp`) with the **streamable
+HTTP** transport (the current one of MCP; its answers in JSON or as an event stream are both read), without a key or
+with a fixed one. For example:
+
+- a **Homey Pro** with the "MCP AI Bridge" app (see [Home automation: Homey](#310-home-automation-homey));
+- an online service giving a personal access token, such as [Taskade](https://www.taskade.com/mcp) (paid plans):
+  `Mcp2_url = https://www.taskade.com/mcp`, `Mcp2_key = <the token of Settings → API>`;
+- a server of your own on the local network.
+
+Many MCP servers are instead programs started on a computer (`npx …`, `uvx …`: the "stdio" transport): the device
+cannot start them. They can still be reached through a bridge turning them into an HTTP server (such as
+`supergateway` or `mcp-proxy`) on a computer or a NAS that stays on; give its address as `McpN_url`.
+
+**Check that it works**:
+
+1. The **Serveurs MCP** / **MCP servers** page of the Settings screen: "16 outils" / "16 tools" (read), "connexion..."
+   / "connecting..." (being read), "injoignable" / "unreachable" (tried again every minute), "désactivé" / "off".
+2. The log at start-up (serial port, or `DEBUG.TXT` with the [debug traces](#410-debug-traces-debugtxt)):
+   `mcp: taches: connected to <the server's name> (session yes)`, then `mcp: taches: 12 of 40 tools offered`, and
+   `tools: … tools offered` (the device's own included).
+3. Ask something the server answers; with the debug traces on, each call is kept whole: the request, the server's
+   raw answer and what the model got (`mcp: [trace] …`).
+
+**If it does not work**:
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| "injoignable" / "unreachable" | The address is wrong, the server is off or not on this network, or it refuses the key (`HTTP 401` in the log) | Check `McpN_url` (with its path, often `/mcp`) and `McpN_key`; open the address from a PC of the same network |
+| "injoignable" with an address ending in `/sse` | An old server with the former "HTTP+SSE" transport only | Use its streamable HTTP address, or a bridge (`mcp-proxy`) |
+| "0 outils" / "0 tools" | `McpN_tools` matches none of its tools | Correct the names (they are in the server's documentation), or leave `McpN_tools` empty |
+| A tool is missing | Left out: its name holds `delete` or `remove`, or more than 20 tools without `McpN_tools` (the log says how many were left out) | Name it in `McpN_tools` |
+| The model asks for a tool, but nothing happens or the answer is wrong | See what was sent and received with the debug traces (`mcp: [trace]`) | Often a model giving a wrong argument: try another model, or ask more precisely |
+| The answers became slow or costly | Too many tools: their descriptions go with every question (the log warns above 30 KB) | Fewer tools in `McpN_tools`, or switch the server off on the MCP page |
+
 ## 4. Design and architecture
 
 For developers: how the assistant works inside, how to build it from source, and the choices made along

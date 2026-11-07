@@ -488,20 +488,17 @@ mcp_off = disattivato
 settings_params_title = Parametri
 settings_followup_beep = Bip dopo una risposta
 
-# Google Calendar (when the firmware has its OAuth client): the row of the Paramètres page, its buttons and
-# question, then the linking screen (gcal_scan: %s the address to open), where it stands
-settings_gcal = Google Calendar
-gcal_connect = Collega
-gcal_disconnect = Scollega
-gcal_unlink_ask = Scollegare Google Calendar dall'assistente?
-gcal_title = Google Calendar
-gcal_scan = Inquadra il codice QR con il telefono (o apri %s), poi digita questo codice:
-gcal_asking = Richiesta di un codice a Google...
-gcal_waiting = In attesa del tuo consenso sul telefono...
-gcal_done = Calendario collegato!
-gcal_denied = Accesso negato.
-gcal_expired = Codice scaduto: torna indietro e riprova.
-gcal_failed = Google non risponde: riprova più tardi.
+# Google Tasks (when Google_client and Google_secret are in CONFIG.INI): the row of the Paramètres page,
+# its buttons and question, the screen linking the account (its steps: \n for a new line), where the
+# linking stands after the row's name
+settings_google = Google Tasks
+google_connect = Collega
+google_disconnect = Scollega
+google_unlink_ask = Scollegare l'account Google dall'assistente?
+google_title = Collega Google
+google_steps = 1. Inquadra e accetta.\n2. La pagina successiva non si apre: copiane l'indirizzo.\n3. Incollalo in CONFIG.INI:\nGoogle_code = ...\n4. Riavvia entro 10 minuti.
+google_linking =  (in corso)
+google_failed =  (codice rifiutato)
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

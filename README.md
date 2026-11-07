@@ -49,7 +49,7 @@ been largely rewritten.
   - [3.8 Adding a new language, step by step](#38-adding-a-new-language-step-by-step)
   - [3.9 Writing voice phrases (patterns)](#39-writing-voice-phrases-patterns)
   - [3.10 Home automation: Homey](#310-home-automation-homey)
-  - [3.11 Google Calendar](#311-google-calendar)
+  - [3.11 Google Tasks](#311-google-tasks)
   - [3.12 MCP servers](#312-mcp-servers)
 - [4. Design and architecture](#4-design-and-architecture)
   - [4.1 Architecture](#41-architecture)
@@ -822,6 +822,8 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
 | `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (the reasoning mode or not, a restart included), the assistant asks whether to go on with it (`0` to `120`; `0`: never asked) | `5` |
+| `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks](#311-google-tasks); empty: not offered | `1234-abc.apps.googleusercontent.com` |
+| `Google_code` | Once, to link the account: the address `http://localhost/?code=...` the phone reached after accepting (within 10 minutes); erased once used | |
 | `Alarm_stop_min` | A [timer or an alarm](#28-timers-alarms-and-reminders) not stopped (a touch, the wake word) stops ringing by itself after this many minutes (`1` to `60`) | `3` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
 | `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
@@ -1606,43 +1608,53 @@ appliance is not switched off by mistake: `Confirm_off` lists the device classes
 `off` for none). Only 16 tools of the app are offered, none that deletes, installs or reconfigures anything. How it
 works: see the Homey items of the [Design notes](#412-design-notes).
 
-### 3.11 Google Calendar
+### 3.11 Google Tasks
 
-The assistant can read your **Google Calendar** (your main calendar, read only): "Qu'est-ce que j'ai aujourd'hui ?"
-/ "What do I have today?", "Suis-je libre demain après-midi ?" / "Am I free tomorrow afternoon?", "Quand est mon
-prochain rendez-vous ?" / "When is my next appointment?".
+The assistant can read and change your **Google Tasks** lists, the shopping list first: "Ajoute du lait et des
+œufs à la liste de courses" / "Add milk and eggs to the shopping list", "Qu'est-ce qu'il y a sur ma liste de
+courses ?" / "What is on my shopping list?", "J'ai acheté le lait" / "I bought the milk" (ticked), "Supprime le pain
+de la liste" / "Remove the bread from the list", "Crée une liste Bricolage" / "Create a DIY list". What it changes
+shows at once in the Google Tasks app of your phone, to use in the shop.
 
-**Link it once**, with your phone, without typing any password on the BOX:
+The device reaches Google alone, with the OAuth client of **your own** Google Cloud project: no server, no third
+party. Setting it up takes about 15 minutes, once.
 
-1. Settings screen, **Paramètres** / **Settings** page, **Agenda Google** / **Google Calendar**: **Connecter** /
-   **Connect**.
-2. The BOX shows a **QR code** and a short **code** ("WDJB-MJHT"). Scan the QR code with your phone (or open
-   `google.com/device`), type the code, choose your Google account and accept "See your calendars".
-3. Google may warn that "Google hasn't verified this app": tap **Advanced**, then **Go to … (unsafe)**: the app only
-   reads your calendars.
-4. The BOX notices it by itself within a few seconds: "Agenda connecté !" / "Calendar connected!".
+**1. Your Google Cloud project** (in a browser, the phone's will do):
 
-**Disconnect** (same row) forgets the account and withdraws the access at Google; the access can also be withdrawn
-from your Google account (Security, third-party connections). The factory reset forgets it too.
+1. [console.cloud.google.com](https://console.cloud.google.com): a new project ("ESP32 Assistant").
+2. **APIs & Services → Library**: search **Google Tasks API**, **Enable**.
+3. **APIs & Services → OAuth consent screen** (Google Auth Platform), **Get started**: app name, your e-mail,
+   audience **External**, your e-mail again, accept, **Create**.
+4. **Data access → Add or remove scopes**: tick `.../auth/tasks`, **Update**, **Save**.
+5. **Audience → Publish app** (status **In production**; in testing, the access would end after 7 days).
+6. **Clients → Create client**, type **Desktop app**, any name, **Create**: note its **client ID** and **client
+   secret** (shown in the window, or on the client's page).
 
-How it works: Google's sign-in for devices without a keyboard (OAuth 2.0 for TVs and limited-input devices, scope
-`calendar.readonly`). The BOX keeps a refresh token in `/state/gcal.json` (never shown nor logged) and gets an
-access of one hour from it when needed. The model gets a tool, `calendar_events` (a date and a number of days, 7 at
-most), answered with the events of that period (start and end in local time, or all day, title, place), Google
-expanding the recurring ones. Without a linked account, the tool tells the model how to link it.
+**2. In `CONFIG.INI`** (configuration mode): `Google_client = <client ID>` and `Google_secret = <client secret>`,
+save, restart. The **Paramètres** / **Settings** page of the Settings screen now has a **Google Tasks** row.
 
-**For the developer** (once for every user of the firmware): the firmware needs the OAuth client of a Google Cloud
-project, read at build time from **`google_oauth_client.json`** at the root of the project (never committed:
-`.gitignore`). Without that file, the calendar is not offered at all. To make it:
+**3. Link your account**, once:
 
-1. [console.cloud.google.com](https://console.cloud.google.com): a new project; **APIs & Services → Library**: enable
-   the **Google Calendar API**.
-2. **OAuth consent screen** (Google Auth Platform): app name, support e-mail, audience **External**; **Data access**:
-   add the scope `.../auth/calendar.readonly`; **Audience**: **Publish app** (in production: in testing, the access
-   expires after 7 days). Until Google verifies the app, users see the warning above, and at most 100 users can
-   link it.
-3. **Clients → Create client**, type **TVs and Limited Input devices**; **Download JSON**, saved as
-   `google_oauth_client.json` next to `CMakeLists.txt`, then `idf.py reconfigure` and build.
+1. **Google Tasks → Connecter** / **Connect**: the device shows a QR code.
+2. Scan it with the phone, choose your account. Google warns that the app is not verified (it is yours): **Advanced
+   → Go to … (unsafe)**, then allow "See, edit, create and delete all your tasks".
+3. The phone then opens an address starting with `http://localhost/?code=...` that **does not open** ("site can't
+   be reached"): that is expected. **Copy this whole address** from the address bar.
+4. Within **10 minutes** (the code expires): configuration mode, `Google_code = <the address>` in `CONFIG.INI`,
+   save, restart. The device exchanges it for its access, keeps the access in `/state/google.json` (never shown nor
+   logged) and erases `Google_code`. The row then shows **Déconnecter** / **Disconnect**; "(code refusé)" / "(code
+   refused)" after its name if the code was too old, already used or of another client: link again.
+
+**Disconnect** (same row, confirmed) forgets the account and withdraws the access at Google; it can also be withdrawn
+from your Google account (Security, third-party connections). The factory reset forgets it too; the soft reset keeps
+`Google_client` and `Google_secret`.
+
+How it works: OAuth 2.0 for installed apps (Google's flow for devices without a keyboard does not allow the tasks).
+The model gets four tools: `tasks_lists`, `tasks_get` (the open tasks of a list), `tasks_add` (several items at once,
+the list created when asked) and `tasks_update` (complete, reopen, delete, rename). Lists and tasks are named as you
+say them, case and accents ignored ("courses" finds "Courses"); a name matching nothing gives the model the names
+there are. Without a list named, the default list (the first one). The same access will serve Google Calendar later
+(another scope, linked again).
 
 ### 3.12 MCP servers
 
@@ -1812,8 +1824,9 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
 | `app_ui_status.c` | The Wi-Fi and battery screen (a tap on them, sleep screen); `app_battery.c` gives the voltage, the level and the trend (charging or not) |
-| `google_calendar.c` | Google Calendar: linking with Google's flow for devices without a keyboard (code, polling, refresh token in `/state/gcal.json`), the access token renewed, the events of a day for the model's tool `calendar_events`; the OAuth client from `google_oauth_client.json` at build time (`gcal_client.h`, generated by `main/CMakeLists.txt`) |
-| `app_ui_gcal.c` | The screen linking Google Calendar: QR code to google.com/device, the code to type, where it stands |
+| `google_auth.c` | The Google account: OAuth 2.0 for installed apps with the client of `CONFIG.INI` (`Google_client`, `Google_secret`), the consent page's address (QR code), `Google_code` exchanged at start-up then erased, the refresh token in `/state/google.json`, the access token renewed, the revocation; `google_api()` for the API calls |
+| `google_tasks.c` | Google Tasks for the model: the tools `tasks_lists`, `tasks_get`, `tasks_add`, `tasks_update`, lists and tasks found by their titles (case and accents ignored) |
+| `app_ui_google.c` | The screen linking the Google account: a QR code to Google's consent page, and the steps |
 | `file_state.c` | The LittleFS partition `state` of the files written often (conversation, costs, test results, places): mounted on `/state`, those of an older firmware moved there from SPIFFS, erased by the factory reset; also `boots.txt`, the history of the starts, shown as `BOOTS.TXT` |
 | `debug_trace.c` | Debug traces: every log line caught (`esp_log_set_vprintf`), with the time of day and the number of the exchange, in a 1 MB ring buffer in PSRAM; marks; the dump to `/spiffs/debug.txt` |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |

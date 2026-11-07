@@ -489,20 +489,17 @@ mcp_off = aus
 settings_params_title = Einstellungen
 settings_followup_beep = Piepton nach einer Antwort
 
-# Google Calendar (when the firmware has its OAuth client): the row of the Paramètres page, its buttons and
-# question, then the linking screen (gcal_scan: %s the address to open), where it stands
-settings_gcal = Google Kalender
-gcal_connect = Verbinden
-gcal_disconnect = Trennen
-gcal_unlink_ask = Google Kalender vom Assistenten trennen?
-gcal_title = Google Kalender
-gcal_scan = Scanne den QR-Code mit deinem Handy (oder öffne %s) und gib dann diesen Code ein:
-gcal_asking = Code wird bei Google angefordert...
-gcal_waiting = Warte auf deine Zustimmung am Handy...
-gcal_done = Kalender verbunden!
-gcal_denied = Zugriff verweigert.
-gcal_expired = Code abgelaufen: geh zurück und versuch es erneut.
-gcal_failed = Google antwortet nicht: versuch es später erneut.
+# Google Tasks (when Google_client and Google_secret are in CONFIG.INI): the row of the Paramètres page,
+# its buttons and question, the screen linking the account (its steps: \n for a new line), where the
+# linking stands after the row's name
+settings_google = Google Tasks
+google_connect = Verbinden
+google_disconnect = Trennen
+google_unlink_ask = Das Google-Konto vom Assistenten trennen?
+google_title = Google verbinden
+google_steps = 1. Scannen und zustimmen.\n2. Die nächste Seite öffnet sich nicht: ihre Adresse kopieren.\n3. In CONFIG.INI einfügen:\nGoogle_code = ...\n4. Innerhalb von 10 Minuten neu starten.
+google_linking =  (läuft)
+google_failed =  (Code abgelehnt)
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

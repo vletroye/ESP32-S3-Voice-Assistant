@@ -33,7 +33,7 @@
 #include "voice_cmd.h"
 #include "debug_trace.h"
 #include "file_state.h"
-#include "google_calendar.h"
+#include "google_auth.h"
 #include "file_phrases.h"
 #include "ai_provider_openrouter_free.h"
 #include "ai_providers.h"
@@ -1235,8 +1235,8 @@ void app_main()
     state_mount();
     // This start in the history (BOOTS.TXT of the configuration drive)
     state_boot_record(esp_app_get_description()->version, reset_reason_text(reset));
-    // Google Calendar: the account linked (its token, on LittleFS)
-    gcal_init();
+    // The Google account (Google Tasks): its client in CONFIG.INI, its token on LittleFS, a Google_code to exchange
+    google_auth_init();
     // The MCP servers of CONFIG.INI (Homey...): their tools read once the Wi-Fi is up
     mcp_init();
     // Timers, alarms and reminders kept (LittleFS)
@@ -1402,8 +1402,8 @@ void app_main()
         model_test_poll();
         // The models enabled or disabled on the Settings screen (their boxes drawn already)
         ui_ctrl_models_apply();
-        // Google Calendar being linked (its code asked, then whether the user accepted), or unlinked
-        gcal_poll();
+        // The Google account: a Google_code exchanged once the Wi-Fi is up, or the account unlinked
+        google_auth_poll(wifi_connected_already() == WIFI_STATUS_CONNECTED_OK);
         if (s_reset_requested) {
             s_reset_requested = false;
             llm_reset();

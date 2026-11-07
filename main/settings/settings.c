@@ -462,7 +462,7 @@ sys_param_t *settings_get_parameter(void)
 static const char *const s_kept_keys[] = {
     "ssid", "password", "ChatGPT_key", "Claude_key", "Gemini_key", "OpenRouter_key", "XAI_key",
     "Mistral_key", "Perplexity_key", "Deepgram_key", "Groq_key", "ElevenLabs_key",
-    "Memory", "Config_layout",
+    "Google_client", "Google_secret", "Memory", "Config_layout",
 };
 
 static bool is_kept_key(const char *key)

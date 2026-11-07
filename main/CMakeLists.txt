@@ -77,27 +77,3 @@ endif()
 
 spiffs_create_partition_image(storage ../spiffs FLASH_IN_PROJECT)
 
-# Google Calendar (main/app/google_calendar.c): the OAuth client of the project's Google Cloud project, read from
-# google_oauth_client.json at the root (downloaded from the Cloud console; never committed, see .gitignore). Without
-# it, the calendar is not offered.
-set(GCAL_JSON "${CMAKE_CURRENT_LIST_DIR}/../google_oauth_client.json")
-set(GCAL_CLIENT_ID "")
-set(GCAL_CLIENT_SECRET "")
-if(EXISTS "${GCAL_JSON}")
-    file(READ "${GCAL_JSON}" gcal_json)
-    string(JSON gcal_kind MEMBER "${gcal_json}" 0)
-    string(JSON GCAL_CLIENT_ID GET "${gcal_json}" ${gcal_kind} client_id)
-    string(JSON GCAL_CLIENT_SECRET GET "${gcal_json}" ${gcal_kind} client_secret)
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GCAL_JSON}")
-    message(STATUS "Google Calendar: OAuth client found")
-else()
-    message(STATUS "Google Calendar: no google_oauth_client.json, the calendar is not offered")
-endif()
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gcal_client.h"
-    "/* Generated from google_oauth_client.json by main/CMakeLists.txt: do not edit, never commit */
-"
-    "#define GCAL_CLIENT_ID \"${GCAL_CLIENT_ID}\"
-"
-    "#define GCAL_CLIENT_SECRET \"${GCAL_CLIENT_SECRET}\"
-")
-target_include_directories(${COMPONENT_LIB} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")

@@ -17,7 +17,7 @@
 #include "radio.h"
 #include "radio_browser.h"
 #include "ai_provider_perplexity.h"
-#include "google_calendar.h"
+#include "google_tasks.h"
 #include "alarms.h"
 #include "alarm_ring.h"
 
@@ -135,13 +135,13 @@ static const cJSON *own_definitions(void)
         if (!s_definitions) {
             ESP_LOGE(TAG, "Invalid tool definitions");
         }
-        // Google Calendar, when the firmware has its OAuth client (linked or not: not linked, it says how)
-        cJSON *calendar = gcal_tool_definition() ? cJSON_Parse(gcal_tool_definition()) : NULL;
-        if (calendar && s_definitions) {
-            cJSON_AddItemToArray(s_definitions, calendar);
-        } else {
-            cJSON_Delete(calendar);
+        // Google Tasks, when Google is configured in CONFIG.INI (linked or not: not linked, they say how)
+        cJSON *tasks = google_tasks_definitions() ? cJSON_Parse(google_tasks_definitions()) : NULL;
+        cJSON *tool;
+        while (s_definitions && tasks && (tool = cJSON_DetachItemFromArray(tasks, 0)) != NULL) {
+            cJSON_AddItemToArray(s_definitions, tool);
         }
+        cJSON_Delete(tasks);
     }
     return s_definitions;
 }
@@ -456,9 +456,8 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
         result = alarm_delete_run(input, is_error);
     } else if (strcmp(name, "alarm_snooze") == 0) {
         result = alarm_snooze_run(input, is_error);
-    } else if (strcmp(name, "calendar_events") == 0) {
-        const cJSON *days = cJSON_GetObjectItem(input, "days");
-        result = gcal_events(string_input(input, "date"), cJSON_IsNumber(days) ? days->valueint : 1, is_error);
+    } else if (google_tasks_has(name)) {
+        result = google_tasks_run(name, input, is_error);
     } else if (mcp_has_tool(name)) {
         result = mcp_call(name, input, is_error);
     } else {

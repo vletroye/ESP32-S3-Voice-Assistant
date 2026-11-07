@@ -27,9 +27,9 @@
 #include "assistant.h"
 #include "voice_cmd.h"
 #include "model_test.h"
-#include "google_calendar.h"
+#include "google_auth.h"
 #include "mcp_client.h"
-#include "app_ui_gcal.h"
+#include "app_ui_google.h"
 #include "debug_trace.h"
 #include "app_audio.h"
 #include "ai_providers.h"
@@ -1381,7 +1381,7 @@ static lv_obj_t *debug_row_create(lv_flex_align_t align)
 static lv_obj_t *s_beep_switch = NULL;
 static lv_obj_t *s_beep_label = NULL;
 
-/* Google Calendar: linked or not, the button to link or unlink it (when the firmware has its OAuth client) */
+/* Google (Tasks): linked or not, the button to link or unlink it (when Google is configured in CONFIG.INI) */
 static lv_obj_t *s_gcal_label = NULL;
 static lv_obj_t *s_gcal_button = NULL;
 static lv_obj_t *s_gcal_button_label = NULL;
@@ -1393,8 +1393,11 @@ static void params_page_refresh(void)
     }
     const app_lang_t *lang = app_lang_get();
     if (s_gcal_label) {
-        lv_label_set_text(s_gcal_label, lang->settings_gcal);
-        lv_label_set_text(s_gcal_button_label, gcal_linked() ? lang->gcal_disconnect : lang->gcal_connect);
+        google_state_t state = google_auth_state();
+        lv_label_set_text_fmt(s_gcal_label, "%s%s", lang->settings_google,
+                              state == GOOGLE_FAILED ? lang->google_failed :
+                              state == GOOGLE_LINKING ? lang->google_linking : "");
+        lv_label_set_text(s_gcal_button_label, state == GOOGLE_LINKED ? lang->google_disconnect : lang->google_connect);
     }
     lv_label_set_text(s_beep_label, lang->settings_followup_beep);
     if (settings_get_parameter()->followup_beep) {
@@ -1421,7 +1424,7 @@ static void gcal_unlink_box_cb(lv_event_t *e)
 {
     lv_obj_t *box = lv_event_get_current_target(e);
     if (lv_msgbox_get_active_btn(box) == 0) {
-        gcal_unlink();
+        google_auth_unlink();
         params_page_refresh();
     }
     lv_msgbox_close_async(box);
@@ -1430,8 +1433,8 @@ static void gcal_unlink_box_cb(lv_event_t *e)
 /* Not linked: the linking screen (QR code); linked: unlinked once confirmed */
 static void gcal_button_cb(lv_event_t *e)
 {
-    if (!gcal_linked()) {
-        ui_gcal_open(gcal_back_cb);
+    if (google_auth_state() != GOOGLE_LINKED) {
+        ui_google_open(gcal_back_cb);
         return;
     }
     const app_lang_t *lang = app_lang_get();
@@ -1439,7 +1442,7 @@ static void gcal_button_cb(lv_event_t *e)
     buttons[0] = lang->settings_yes;
     buttons[1] = lang->settings_no;
     buttons[2] = "";
-    lv_obj_t *box = lv_msgbox_create(NULL, lang->settings_gcal, lang->gcal_unlink_ask, buttons, false);
+    lv_obj_t *box = lv_msgbox_create(NULL, lang->settings_google, lang->google_unlink_ask, buttons, false);
     lv_obj_set_width(box, 280);
     lv_obj_set_style_text_font(lv_msgbox_get_title(box), &ui_font_Latin16, LV_PART_MAIN);
     lv_obj_set_style_text_font(lv_msgbox_get_text(box), &ui_font_Latin16, LV_PART_MAIN);
@@ -1450,7 +1453,7 @@ static void gcal_button_cb(lv_event_t *e)
 
 static void params_page_create(void)
 {
-    if (gcal_configured()) {
+    if (google_auth_state() != GOOGLE_NOT_CONFIGURED) {
         lv_obj_t *row = switch_row_create(LV_FLEX_ALIGN_SPACE_BETWEEN, SETTINGS_PAGE_PARAMS);
         s_gcal_label = lv_label_create(row);
         lv_obj_set_style_text_color(s_gcal_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);

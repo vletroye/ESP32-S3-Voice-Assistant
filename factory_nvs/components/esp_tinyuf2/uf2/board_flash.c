@@ -486,7 +486,7 @@ static const char *const s_ini_key_order[] = {
     "OpenRouter_free", "XAI_key", "Mistral_key", "Perplexity_key", "Deepgram_key", "Groq_key",
     "ElevenLabs_key",
     "Screen_off_s", "Resume_ask_min", "Alarm_stop_min", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Read_lists", "Currency", "Radio_resume",
-    "Radio_level", "Radio_treble", "Followup_beep", "Debug",
+    "Radio_level", "Radio_treble", "Followup_beep", "Debug", "Google_client", "Google_secret", "Google_code",
 };
 
 /* [Voice assistant] The keys of an MCP server of the [MCP] section, after "Mcp<n>_" (n: 1 to 99) */

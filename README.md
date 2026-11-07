@@ -610,6 +610,8 @@ community (no key, no account), played through the speaker. Asked by voice, or f
 - **The sleeping robot listens too**: while a radio plays (or is only suspended by a conversation), the robot of the
   sleep screen wears headphones (a headband and two ear cups that bounce with its head), its eyes smile ("^ ^") and
   notes (♫ ♪) take the place of its "z z", with the same fading. Drawn with LVGL objects (no image added).
+  **A double tap on its head stops the radio** (a single tap still wakes the assistant up, 0.4 s later, the time to
+  see whether a second one comes).
 - **Sound**: the I2S bus, shared with the microphones, stays at 16 kHz: the music is mixed to mono and filtered
   below 7 kHz (the speaker is mono and small anyway).
 

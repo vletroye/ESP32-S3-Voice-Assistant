@@ -173,6 +173,39 @@ static void music_robot_show(bool music)
     ESP_LOGI(TAG, "Sleeping robot %s", music ? "listening to the radio" : "asleep");
 }
 
+/*
+ * A double tap on the head of the robot listening to the radio (asleep): the radio stops. A tap waits for a second
+ * one this long while the radio plays; alone, it wakes the assistant up as usual (the sleep panel's tap).
+ */
+#define HEAD_DOUBLE_TAP_MS      400
+
+static lv_timer_t *s_head_tap = NULL;
+
+/* No second tap: the tap of the sleep panel (the assistant listens) */
+static void head_single_tap_cb(lv_timer_t *t)
+{
+    s_head_tap = NULL;
+    lv_event_send(ui_PanelSleep, LV_EVENT_SHORT_CLICKED, NULL);
+}
+
+static void head_tap_cb(lv_event_t *e)
+{
+    if (!s_music) {
+        return;     // asleep without music: the tap goes on to the panel
+    }
+    lv_event_stop_bubbling(e);
+    if (s_head_tap) {
+        lv_timer_del(s_head_tap);
+        s_head_tap = NULL;
+        ESP_LOGI(TAG, "Double tap on the robot: radio stopped");
+        radio_pause();
+        music_robot_show(false);
+        return;
+    }
+    s_head_tap = lv_timer_create(head_single_tap_cb, HEAD_DOUBLE_TAP_MS, NULL);
+    lv_timer_set_repeat_count(s_head_tap, 1);
+}
+
 /* ---------- actions ---------- */
 
 static void back_cb(lv_event_t *e)
@@ -462,6 +495,7 @@ void ui_radio_init(void)
     lv_obj_add_flag(zone, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(zone, open_cb, LV_EVENT_CLICKED, NULL);
     music_robot_create();
+    lv_obj_add_event_cb(ui_ImageSleepBody, head_tap_cb, LV_EVENT_SHORT_CLICKED, NULL);
     lv_timer_create(refresh_cb, RADIO_UI_REFRESH_MS, NULL);
 }
 

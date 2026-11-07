@@ -63,6 +63,11 @@ static const char *TAG = "app_sr";
  * room silence about -68 dBFS.
  */
 #define SR_SPEECH_MIN_VOLUME_DBFS   (-58.0f)
+/*
+ * A voice quieter than that (-60 dBFS: far away, low) is still transcribed: the listening ends once its text has not
+ * grown for End_speech_ms and this more (the transcription gives its words a little after they are said)
+ */
+#define SR_TEXT_QUIET_EXTRA_MS      600
 
 static const esp_afe_sr_iface_t *afe_handle = NULL;
 static srmodel_list_t *models = NULL;
@@ -248,6 +253,15 @@ static void audio_detect_task(void *arg)
                 continue;
             }
             bool no_speech = (!speech_seen && elapsed_ms >= no_speech_timeout_ms + paused_ms) || s_cancel_listen;
+            // A voice too quiet for the local detection (far away, low), but transcribed: once its text stops
+            // growing for the silence that ends a question, the listening ends (answered from the transcription)
+            // instead of waiting for the whole delay without speech
+            uint32_t text_quiet_ms = speech_seen ? 0 : stt_stream_text_quiet_ms();
+            if (!no_speech && text_quiet_ms >= settings_get_parameter()->end_speech_ms + SR_TEXT_QUIET_EXTRA_MS) {
+                ESP_LOGI(TAG, "voice not detected here, but transcribed: its text unchanged for %" PRIu32 " ms",
+                         text_quiet_ms);
+                no_speech = true;
+            }
             if (s_cancel_listen) {
                 s_cancel_listen = false;
                 speech_seen = false;

@@ -246,7 +246,9 @@ Every feature in detail: [Features in detail](#411-features-in-detail).
    while you speak).
 2. After 0.9 s of silence (`End_speech_ms` in `CONFIG.INI`) the question is sent: "Entendu …" / "Heard …" is shown
    until its transcript arrives (0.7 to 1.2 s), then "Je réfléchis …" / "Thinking …" until the answer starts; the
-   answer is shown and spoken.
+   answer is shown and spoken. A voice too quiet for the device to notice (far away, low: below about -58 dBFS) is
+   still heard by the transcription: the question is then sent once its transcript has not grown for
+   `End_speech_ms` + 0.6 s, instead of after the whole listening delay.
 3. After the answer, the assistant keeps listening for 8 s, without a beep (it can have one, see the Paramètres page of the
    [Settings screen](#24-on-the-device-settings-screen)): you can go on without saying "Bonjour ESP" / "Hi ESP"
    (not after a volume change, which sends it back to sleep).

@@ -73,6 +73,12 @@ char *stt_stream_finish(uint32_t timeout_ms);
 bool stt_stream_has_text(void);
 
 /**
+ * @brief How long the transcription of the current session has had text without anything new (ms), 0 while it has
+ *        none: the user stopped speaking, even when the voice was too quiet for the local voice detection.
+ */
+uint32_t stt_stream_text_quiet_ms(void);
+
+/**
  * @brief Model test: transcribe this audio (16 kHz mono, at most 10 s) with the service configured.
  *
  * @param ms Time from the commit (all the audio sent) to the transcript (-1 if none)

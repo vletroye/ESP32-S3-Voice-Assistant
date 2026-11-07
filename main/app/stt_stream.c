@@ -164,12 +164,17 @@ static size_t upsample(upsampler_t *u, const int16_t *in, size_t n, int16_t *out
 
 /* The last transcription refused for lack of credit */
 static volatile bool s_no_credit = false;
+/* When the last piece of text came (esp_timer) */
+static volatile int64_t s_last_delta_us = 0;
 
 void stt_backend_delta(const char *text)
 {
     /* Deltas of a turn that is over (late events) are ignored */
-    if (s_turn_active && append(&s_partial, &s_partial_len, &s_partial_cap, text, strlen(text)) && s_on_partial) {
-        s_on_partial(s_partial);
+    if (s_turn_active && append(&s_partial, &s_partial_len, &s_partial_cap, text, strlen(text))) {
+        s_last_delta_us = esp_timer_get_time();
+        if (s_on_partial) {
+            s_on_partial(s_partial);
+        }
     }
 }
 
@@ -786,6 +791,14 @@ bool stt_stream_no_credit(void)
 bool stt_backend_awaiting(void)
 {
     return s_awaiting;
+}
+
+uint32_t stt_stream_text_quiet_ms(void)
+{
+    if (!stt_stream_has_text()) {
+        return 0;
+    }
+    return (uint32_t)((esp_timer_get_time() - s_last_delta_us) / 1000);
 }
 
 bool stt_stream_has_text(void)

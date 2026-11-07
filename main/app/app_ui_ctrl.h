@@ -46,6 +46,9 @@ void ui_ctrl_apply_language(void);
 /** The list of models changed (free OpenRouter models read): the Settings screen shows the new one */
 void ui_ctrl_models_changed(void);
 
+/** The MCP servers changed (tools read, switched on or off): their page shown again (display lock taken here) */
+void ui_ctrl_mcp_changed(void);
+
 /** The assistant sleeps on its clock (not the Settings or welcome screen): the screen may go off */
 bool ui_ctrl_screen_can_sleep(void);
 

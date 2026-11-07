@@ -321,12 +321,13 @@ static void ini_insert_section(const char *section)
 }
 
 /*
- * [Voice assistant] CONFIG.INI as last written by the PC (comments, blank lines, order), kept in this NVS key:
- * the file is rebuilt from it with the current values, so that comments survive. Not shown in the file.
+ * [Voice assistant] CONFIG.INI as last written by the PC (comments, blank lines, order), kept in this NVS key
+ * without the values ("Claude_key =", they are in their own keys): the file is rebuilt from it with the current
+ * values, so that comments survive. Not shown in the file.
  */
 #define INI_LAYOUT_KEY          "Config_layout"
 #define INI_LAYOUT_MAX_LEN      3999    /* NVS string limit */
-#define INI_LAYOUT_MAX_KEYS     64
+#define INI_LAYOUT_MAX_KEYS     200
 
 /* A line as is (comment, section, blank) */
 static void ini_insert_line(const char *line, size_t len)
@@ -488,6 +489,35 @@ static const char *const s_ini_key_order[] = {
     "Radio_level", "Radio_treble", "Followup_beep", "Debug",
 };
 
+/* [Voice assistant] The keys of an MCP server of the [MCP] section, after "Mcp<n>_" (n: 1 to 99) */
+static const char *const s_mcp_fields[] = { "name", "url", "key", "tools", "on" };
+#define MCP_SERVERS_MAX     99
+
+/* Homey_on, Homey_tools; Mcp1_url, Mcp12_key... */
+static bool is_mcp_key(const char *key)
+{
+    if (strcmp(key, "Homey_on") == 0 || strcmp(key, "Homey_tools") == 0) {
+        return true;
+    }
+    if (strncmp(key, "Mcp", 3) != 0 || !isdigit((unsigned char)key[3]) || key[3] == '0') {
+        return false;
+    }
+    const char *p = key + 3;
+    int n = 0;
+    while (isdigit((unsigned char)*p)) {
+        n = n * 10 + (*p++ - '0');
+    }
+    if (n > MCP_SERVERS_MAX || *p++ != '_') {
+        return false;
+    }
+    for (size_t f = 0; f < sizeof(s_mcp_fields) / sizeof(s_mcp_fields[0]); f++) {
+        if (strcmp(p, s_mcp_fields[f]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* A key of CONFIG.INI (anything else read from the file is a fragment of a line, not saved) */
 static bool is_config_key(const char *key)
 {
@@ -496,7 +526,7 @@ static bool is_config_key(const char *key)
             return true;
         }
     }
-    return false;
+    return is_mcp_key(key);
 }
 
 /*
@@ -532,6 +562,59 @@ static void erase_stray_keys(const char *part, const char *name)
         nvs_commit(nvs);
     }
     nvs_close(nvs);
+}
+
+/* A key not written yet (from the layout), when it is stored */
+static void ini_gen_key(nvs_handle_t nvs, const char *key, char used[][NVS_KEY_NAME_MAX_SIZE], int *used_count)
+{
+    bool done = false;
+    for (int i = 0; i < *used_count && !done; i++) {
+        done = (strcmp(key, used[i]) == 0);
+    }
+    size_t len = 0;
+    if (done || *used_count >= INI_LAYOUT_MAX_KEYS || nvs_get_str(nvs, key, NULL, &len) != ESP_OK) {
+        return;
+    }
+    char *value = (char *)malloc(len);
+    if (value && nvs_get_str(nvs, key, value, &len) == ESP_OK) {
+#ifdef CONFIG_UF2_INI_NVS_VALUE_HIDDEN
+        ini_insert_pair(key, check_value_if_hidden(key) ? "****" : value);
+#else
+        ini_insert_pair(key, value);
+#endif
+        strlcpy(used[(*used_count)++], key, NVS_KEY_NAME_MAX_SIZE);
+    }
+    free(value);
+}
+
+/*
+ * [Voice assistant] The keys of the MCP servers not written yet (a server switched on or off on the device, the
+ * file written without them): Homey's, then each server's in order, under an [MCP] section when the file has none
+ */
+static void ini_gen_mcp(nvs_handle_t nvs, const char *layout, char used[][NVS_KEY_NAME_MAX_SIZE], int *used_count)
+{
+    ini_gen_key(nvs, "Homey_tools", used, used_count);
+    ini_gen_key(nvs, "Homey_on", used, used_count);
+    bool section = layout && strstr(layout, "[MCP]");
+    for (int n = 1; n <= MCP_SERVERS_MAX; n++) {
+        for (size_t f = 0; f < sizeof(s_mcp_fields) / sizeof(s_mcp_fields[0]); f++) {
+            char key[NVS_KEY_NAME_MAX_SIZE];
+            snprintf(key, sizeof(key), "Mcp%d_%s", n, s_mcp_fields[f]);
+            size_t len = 0;
+            if (!section && nvs_get_str(nvs, key, NULL, &len) == ESP_OK) {
+                bool done = false;
+                for (int i = 0; i < *used_count && !done; i++) {
+                    done = (strcmp(key, used[i]) == 0);
+                }
+                if (!done) {
+                    ini_insert_line("", 0);
+                    ini_insert_section("MCP");
+                    section = true;
+                }
+            }
+            ini_gen_key(nvs, key, used, used_count);
+        }
+    }
 }
 
 /* The keys of s_ini_key_order not written yet (from the layout), in that order */
@@ -608,8 +691,9 @@ static void ini_gen_from_nvs(const char *part, const char *name)
     } else {
         ini_insert_section(name);
     }
-    free(layout);
     ini_gen_ordered(nvs, used, &used_count);
+    ini_gen_mcp(nvs, layout, used, &used_count);
+    free(layout);
 
     do {
         nvs_entry_info_t info;
@@ -747,9 +831,69 @@ static int nvs_write_back(void* user, const char* section, const char* name,
     }
     PRINTFD("... [%s]", section);
     PRINTFD("... (%s=%s)", name, value);
-    ESP_ERROR_CHECK(nvs_set_str(nvs, name, value));
-    ESP_ERROR_CHECK(nvs_commit(nvs));
+    // [Voice assistant] The NVS full (many MCP servers...): said, without stopping (the keys before are saved)
+    esp_err_t err = nvs_set_str(nvs, name, value);
+    if (err == ESP_OK) {
+        err = nvs_commit(nvs);
+    }
+    if (err != ESP_OK) {
+        PRINTFE("CONFIG.INI: %s not saved (%s)", name, esp_err_to_name(err));
+    }
     return 1;
+}
+
+/*
+ * [Voice assistant] The file without its values, as its layout: "key =" and the comment after the value, if any
+ * (the values are in their own keys; keys not saved twice). Allocated.
+ */
+static char *ini_layout_of(const char *ini_str)
+{
+    char *out = (char *)malloc(strlen(ini_str) + 1);
+    if (!out) {
+        return NULL;
+    }
+    char *o = out;
+    for (const char *line = ini_str; *line;) {
+        const char *end = strchr(line, '\n');
+        size_t len = end ? (size_t)(end - line) : strlen(line);
+        const char *next = line + len + (end ? 1 : 0);
+        bool cr = len > 0 && line[len - 1] == '\r';
+        const char *stop = line + len - (cr ? 1 : 0);
+        const char *p = line;
+        while (p < stop && is_blank(*p)) {
+            p++;
+        }
+        const char *eq = memchr(p, '=', stop - p);
+        if (p == stop || *p == '#' || *p == ';' || *p == '[' || !eq) {
+            memcpy(o, line, next - line);       // blank line, comment, section, fragment: as written
+            o += next - line;
+            line = next;
+            continue;
+        }
+        // "key =", then the comment after the value (from the blank before a ';', as the INI parser reads it)
+        memcpy(o, line, eq + 1 - line);
+        o += eq + 1 - line;
+        for (const char *c = eq + 1; c < stop; c++) {
+            if (*c == ';' && is_blank(c[-1])) {
+                const char *comment = c - 1;
+                while (comment > eq + 1 && is_blank(comment[-1])) {
+                    comment--;
+                }
+                memcpy(o, comment, stop - comment);
+                o += stop - comment;
+                break;
+            }
+        }
+        if (cr) {
+            *o++ = '\r';
+        }
+        if (end) {
+            *o++ = '\n';
+        }
+        line = next;
+    }
+    *o = '\0';
+    return out;
 }
 
 static void ini_parse_to_nvs(const char *ini_str)
@@ -763,20 +907,24 @@ static void ini_parse_to_nvs(const char *ini_str)
         assert(0); //should not happen
     }
     ini_parse_string(ini_str, nvs_write_back, (void*)nvs);
-    // [Voice assistant] The file itself, comments included, to rebuild it the same way next time
-    size_t len = strlen(ini_str);
-    if (len <= INI_LAYOUT_MAX_LEN) {
+    // [Voice assistant] The file itself without its values, comments included, to rebuild it the same way next time
+    char *layout = ini_layout_of(ini_str);
+    size_t len = layout ? strlen(layout) : 0;
+    if (layout && len <= INI_LAYOUT_MAX_LEN) {
         char *old = (char *)calloc(1, INI_LAYOUT_MAX_LEN + 1);
         size_t old_len = INI_LAYOUT_MAX_LEN + 1;
-        if (!old || nvs_get_str(nvs, INI_LAYOUT_KEY, old, &old_len) != ESP_OK || strcmp(old, ini_str) != 0) {
-            if (nvs_set_str(nvs, INI_LAYOUT_KEY, ini_str) == ESP_OK && nvs_commit(nvs) == ESP_OK) {
+        if (!old || nvs_get_str(nvs, INI_LAYOUT_KEY, old, &old_len) != ESP_OK || strcmp(old, layout) != 0) {
+            if (nvs_set_str(nvs, INI_LAYOUT_KEY, layout) == ESP_OK && nvs_commit(nvs) == ESP_OK) {
                 PRINTF("CONFIG.INI layout saved (%u bytes)", (unsigned)len);
+            } else {
+                PRINTFE("CONFIG.INI layout not saved (NVS full?): its comments will be lost");
             }
         }
         free(old);
-    } else {
-        PRINTFE("CONFIG.INI too long (%u bytes) to keep its comments", (unsigned)len);
+    } else if (layout) {
+        PRINTFE("CONFIG.INI layout too long (%u bytes) to keep its comments", (unsigned)len);
     }
+    free(layout);
     nvs_close(nvs);
 }
 

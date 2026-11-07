@@ -369,6 +369,12 @@ esp_err_t settings_read_parameter_from_nvs(void)
 
     nvs_close(my_handle);
 
+    // The room left for the settings (the MCP servers of CONFIG.INI take some)
+    nvs_stats_t stats;
+    if (nvs_get_stats(uf2_nvs_partition, &stats) == ESP_OK) {
+        ESP_LOGI(TAG, "NVS: %u of %u entries used, %u free", (unsigned)stats.used_entries,
+                 (unsigned)stats.total_entries, (unsigned)stats.free_entries);
+    }
     ESP_LOGI(TAG, "stored ssid:%s", g_sys_param.ssid);
     ESP_LOGI(TAG, "stored password: (%d chars)", (int)strlen(g_sys_param.password));
     ESP_LOGI(TAG, "stored OpenAI key: (%d chars)", (int)strlen(g_sys_param.key));
@@ -397,15 +403,20 @@ sys_param_t *settings_get_parameter(void)
     return &g_sys_param;
 }
 
-/* Kept by the soft reset: Wi-Fi, API keys, Homey, MEMORY.TXT, comments of CONFIG.INI */
+/* Kept by the soft reset: Wi-Fi, API keys, Homey, MEMORY.TXT, comments of CONFIG.INI; the MCP servers too */
 static const char *const s_kept_keys[] = {
     "ssid", "password", "ChatGPT_key", "Claude_key", "Gemini_key", "OpenRouter_key", "XAI_key",
     "Mistral_key", "Perplexity_key", "Deepgram_key", "Groq_key", "ElevenLabs_key",
-    "Homey_url", "Homey_key", "Memory", "Config_layout",
+    "Homey_url", "Homey_key", "Homey_tools", "Memory", "Config_layout",
 };
 
 static bool is_kept_key(const char *key)
 {
+    // Mcp3_url, Mcp3_key, Mcp3_name, Mcp3_tools (Mcp3_on, switched on or off on the MCP page, goes back to on)
+    size_t len = strlen(key);
+    if (strncmp(key, "Mcp", 3) == 0 && isdigit((unsigned char)key[3]) && !(len > 3 && strcmp(key + len - 3, "_on") == 0)) {
+        return true;
+    }
     for (size_t i = 0; i < sizeof(s_kept_keys) / sizeof(s_kept_keys[0]); i++) {
         if (strcmp(key, s_kept_keys[i]) == 0) {
             return true;
@@ -468,6 +479,17 @@ esp_err_t settings_erase_key(const char *key)
     nvs_close(handle);
     ESP_LOGI(TAG, "erased %s (%s)", key, esp_err_to_name(ret));
     return ret;
+}
+
+char *settings_read_value(const char *key)
+{
+    nvs_handle_t handle;
+    if (nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READONLY, &handle) != ESP_OK) {
+        return NULL;
+    }
+    char *value = read_text(handle, key);
+    nvs_close(handle);
+    return value;
 }
 
 esp_err_t settings_save_str(const char *key, const char *value)

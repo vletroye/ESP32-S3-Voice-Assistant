@@ -440,6 +440,15 @@ status_steady = stabiel
 status_measuring = meting bezig (1 minuut)...
 status_no_battery = Geen batterij (geen BOX-3-SENSOR-dock, of de schakelaar op OFF)
 
+# MCP page (before the Paramètres page): its title, the text when no server is configured, then where a
+# server stands: its tools (%d their number), being read, not reachable, switched off
+settings_mcp_list = MCP-servers
+mcp_none = Geen MCP-server: voeg ze toe in de sectie [MCP] van CONFIG.INI (zie de README).
+mcp_tools = %d tools
+mcp_waiting = verbinden...
+mcp_unreachable = onbereikbaar
+mcp_off = uit
+
 # Paramètres page (before the Debug page): its title, the switch of the beep when listening again after a reply
 settings_params_title = Instellingen
 settings_followup_beep = Piep na een antwoord

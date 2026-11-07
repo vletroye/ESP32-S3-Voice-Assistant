@@ -22,11 +22,15 @@ const cJSON *tools_definitions(void);
 const cJSON *tools_definitions_with_search(void);
 
 /**
- * @brief Add tools of another source (Homey) to the device's own ones; the model gets the new list.
+ * @brief The tools of the MCP servers, after the device's own ones (those given before replaced); the model gets the
+ *        new list.
  *
  * @param extra Definitions (JSON array), taken over
  */
-void tools_add(cJSON *extra);
+void tools_set_added(cJSON *extra);
+
+/** The name is one of the device's own tools (web_search included) */
+bool tools_is_own(const char *name);
 
 /**
  * @brief Run a tool call.

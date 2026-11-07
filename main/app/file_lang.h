@@ -228,6 +228,12 @@ typedef struct {
     const char *status_steady;
     const char *status_measuring;
     const char *status_no_battery;
+    const char *settings_mcp_list;    /* MCP page: its title, no server, a server's tools (%d), being read, not reachable, off */
+    const char *mcp_none;
+    const char *mcp_tools;
+    const char *mcp_waiting;
+    const char *mcp_unreachable;
+    const char *mcp_off;
     const char *settings_params_title;  /* Paramètres page: its title, the switch of the beep after a reply */
     const char *settings_followup_beep;
     const char *settings_gcal;    /* Google Calendar: Paramètres page, linking screen (gcal_scan: %s the address) */

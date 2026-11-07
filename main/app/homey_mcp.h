@@ -3,9 +3,10 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Home automation through the MCP server of a Homey Pro on the local network (e.g. the "MCP AI Bridge" app),
- * MCP over streamable HTTP with JSON answers. A selection of its tools is offered to Claude: devices, zones,
- * moods, flows, presence, energy (nothing that deletes, installs or reconfigures).
+ * What is particular to the MCP server of a Homey Pro (e.g. the "MCP AI Bridge" app), reached by mcp_client.c: the
+ * tools offered when none are chosen (everyday home control: devices, zones, moods, flows, presence, energy, nothing
+ * that deletes, installs or reconfigures), the confirmation before turning off some devices (Confirm_off), and the
+ * fields of no use by voice removed from its results.
  */
 
 #pragma once
@@ -17,13 +18,11 @@
 extern "C" {
 #endif
 
-/**
- * @brief Connect to the server and read its tools (call once the Wi-Fi is up, from a task with an internal
- *        RAM stack). Does nothing if no URL is configured.
- *
- * @return Definitions of the selected tools in Claude's format (JSON array, owned by the caller), NULL if none
- */
-cJSON *homey_mcp_load_tools(const char *url, const char *key);
+/** A tool call on the same server (for the devices that are on, before asking a confirmation) */
+typedef char *(*homey_mcp_call_t)(void *server, const char *tool, const cJSON *input, bool *is_error);
+
+/** The tool is one of Homey's everyday ones (offered when its tools are not chosen in CONFIG.INI) */
+bool homey_mcp_default_tool(const char *tool);
 
 /**
  * @brief Homey device classes (comma-separated, "socket" for power plugs) that are not turned off without a
@@ -32,15 +31,17 @@ cJSON *homey_mcp_load_tools(const char *url, const char *key);
  */
 void homey_mcp_set_confirm_off(const char *classes);
 
-/** The tool is one of Homey's */
-bool homey_mcp_has_tool(const char *name);
+/** A tool's definition (Claude's format) adapted: the "confirmed" argument added to those turning devices off */
+void homey_mcp_adapt_definition(const char *tool, cJSON *definition);
 
 /**
- * @brief Call a Homey tool.
- *
- * @return Text result for the model (allocated, to be freed)
+ * @brief Before a call: a request turning off devices to confirm, not confirmed yet, gets the answer for the model
+ *        instead (allocated); NULL to go on. The arguments are then cleaned (without "confirmed", unknown to Homey).
  */
-char *homey_mcp_call(const char *name, const cJSON *input, bool *is_error);
+char *homey_mcp_before_call(const char *tool, cJSON *arguments, homey_mcp_call_t call, void *server);
+
+/** A result without the fields of no use by voice (text taken over, the new one returned) */
+char *homey_mcp_compact(char *text);
 
 #ifdef __cplusplus
 }

@@ -11,7 +11,7 @@
 #include "file_lang.h"
 #include "app_volume.h"
 #include "weather.h"
-#include "homey_mcp.h"
+#include "mcp_client.h"
 #include "llm.h"
 #include "tools.h"
 #include "radio.h"
@@ -72,7 +72,7 @@ static const char s_web_search_json[] =
 static cJSON *s_definitions = NULL;
 /* The same tools, followed by web_search */
 static cJSON *s_with_search = NULL;
-/* The device's tools followed by the added ones (Homey), once there are some */
+/* The device's tools followed by the added ones (MCP servers), once there are some */
 static cJSON *s_all = NULL;
 /* Set by a tool whose answer ends the exchange (no follow-up listening) */
 static volatile bool s_sleep_after_reply = false;
@@ -134,7 +134,19 @@ const cJSON *tools_definitions_with_search(void)
     return s_with_search;
 }
 
-void tools_add(cJSON *extra)
+bool tools_is_own(const char *name)
+{
+    const cJSON *def;
+    cJSON_ArrayForEach(def, own_definitions()) {
+        const cJSON *n = cJSON_GetObjectItem(def, "name");
+        if (cJSON_IsString(n) && strcmp(n->valuestring, name) == 0) {
+            return true;
+        }
+    }
+    return strcmp(name, "web_search") == 0;
+}
+
+void tools_set_added(cJSON *extra)
 {
     cJSON *all = cJSON_Duplicate(own_definitions(), true);
     cJSON *item;
@@ -249,8 +261,8 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
     } else if (strcmp(name, "calendar_events") == 0) {
         const cJSON *days = cJSON_GetObjectItem(input, "days");
         result = gcal_events(string_input(input, "date"), cJSON_IsNumber(days) ? days->valueint : 1, is_error);
-    } else if (homey_mcp_has_tool(name)) {
-        result = homey_mcp_call(name, input, is_error);
+    } else if (mcp_has_tool(name)) {
+        result = mcp_call(name, input, is_error);
     } else {
         ESP_LOGW(TAG, "Unknown tool %s", name);
         return NULL;

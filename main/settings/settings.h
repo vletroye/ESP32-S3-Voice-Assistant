@@ -93,6 +93,9 @@ sys_param_t *settings_get_parameter(void);
  */
 esp_err_t settings_save_str(const char *key, const char *value);
 
+/** A value of CONFIG.INI (spaces and line endings around it removed), NULL if absent or empty; to be freed */
+char *settings_read_value(const char *key);
+
 /** Erase a configuration value of NVS */
 esp_err_t settings_erase_key(const char *key);
 

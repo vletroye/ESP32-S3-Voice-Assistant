@@ -440,6 +440,15 @@ status_steady = stabil
 status_measuring = wird gemessen (1 Minute)...
 status_no_battery = Kein Akku (kein BOX-3-SENSOR-Dock, oder sein Schalter auf OFF)
 
+# MCP page (before the Paramètres page): its title, the text when no server is configured, then where a
+# server stands: its tools (%d their number), being read, not reachable, switched off
+settings_mcp_list = MCP-Server
+mcp_none = Kein MCP-Server: füge sie im Abschnitt [MCP] von CONFIG.INI hinzu (siehe README).
+mcp_tools = %d Tools
+mcp_waiting = verbinde...
+mcp_unreachable = nicht erreichbar
+mcp_off = aus
+
 # Paramètres page (before the Debug page): its title, the switch of the beep when listening again after a reply
 settings_params_title = Einstellungen
 settings_followup_beep = Piepton nach einer Antwort

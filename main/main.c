@@ -42,7 +42,7 @@
 #include "app_volume.h"
 #include "tools.h"
 #include "weather.h"
-#include "homey_mcp.h"
+#include "mcp_client.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -88,8 +88,8 @@ static uint32_t reading_ms(size_t chars)
 #define SAVE_AFTER_SILENCE_MS           300
 /* A language added to Languages: its message stays this long before the configuration mode */
 #define NEW_LANGUAGE_MESSAGE_MS         6000
-/* Homey's tools were added */
-static bool homey_loaded = false;
+/* The instructions given have the home rules (a Homey switched on) */
+static bool s_prompt_homey = false;
 /* From the start of an answer until it has been spoken or interrupted (no flash write meanwhile) */
 static volatile bool s_reply_active = false;
 /* "Édite la config": configuration mode once the reply has been spoken (set by the reply, done by the main task) */
@@ -551,8 +551,9 @@ static char *build_system_prompt(void)
     if (where[0]) {
         snprintf(location, sizeof(location), lang->location_line, where);
     }
-    const char *home = sys_param->homey_url[0] ? lang->home_line : "";
-    const char *home_rules = sys_param->homey_url[0] ? lang->home_rules : "";
+    s_prompt_homey = mcp_homey_on();
+    const char *home = s_prompt_homey ? lang->home_line : "";
+    const char *home_rules = s_prompt_homey ? lang->home_rules : "";
     // Identity, personality and instructions of PERSO_<LANG>.TXT, then what the working requires (file_lang.c),
     // the location, the home and the notes to remember
     // Speaking of itself as the voice it has: a woman's or a man's (French, Spanish... agree with it)
@@ -1232,6 +1233,8 @@ void app_main()
     state_boot_record(esp_app_get_description()->version, reset_reason_text(reset));
     // Google Calendar: the account linked (its token, on LittleFS)
     gcal_init();
+    // The MCP servers of CONFIG.INI (Homey...): their tools read once the Wi-Fi is up
+    mcp_init();
     // The backup of CONFIG.INI made by the factory reset of an older firmware (keys included): no longer kept
     if (remove("/spiffs/config.bkp") == 0) {
         ESP_LOGI(TAG, "CONFIG.BKP removed");
@@ -1326,18 +1329,17 @@ void app_main()
         // A second, or less when the assistant goes to sleep with something to save (assistant_save_soon)
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
 
-        // Homey's tools, read once the Wi-Fi is up (again every minute while the server cannot be reached)
-        static int homey_retry_s = 0;
-        if (sys_param->homey_url[0] && !homey_loaded && --homey_retry_s <= 0 &&
-                wifi_connected_already() == WIFI_STATUS_CONNECTED_OK) {
-            homey_mcp_set_confirm_off(sys_param->confirm_off);
-            cJSON *homey_tools = homey_mcp_load_tools(sys_param->homey_url, sys_param->homey_key);
-            if (homey_tools) {
-                tools_add(homey_tools);
-                homey_loaded = true;
-            } else {
-                homey_retry_s = 60;
+        // The tools of the MCP servers (Homey...), read once the Wi-Fi is up (again every minute while one cannot be
+        // reached), or switched on or off on the MCP page: the model's tools, the home rules, the page
+        if (mcp_poll(wifi_connected_already() == WIFI_STATUS_CONNECTED_OK)) {
+            if (mcp_homey_on() != s_prompt_homey) {
+                char *prompt = build_system_prompt();
+                if (prompt) {
+                    llm_set_system_prompt(prompt);
+                    free(prompt);
+                }
             }
+            ui_ctrl_mcp_changed();
         }
         // "Édite la config": the conversation and the volume are saved, then configuration mode (USB drive)
         if (s_restart_requested) {

@@ -28,6 +28,7 @@
 #include "voice_cmd.h"
 #include "model_test.h"
 #include "google_calendar.h"
+#include "mcp_client.h"
 #include "app_ui_gcal.h"
 #include "debug_trace.h"
 #include "app_audio.h"
@@ -699,18 +700,19 @@ static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width
 
 /*
  * Pages of the Settings screen, browsed with the arrows at the bottom (looping): 1. language and model,
- * 2. speech, transcription and voice, 3. to 5. the LLM, STT and TTS models, 6. the debug traces. The rows of the other
- * pages are hidden
- * (the panel's flex layout skips them).
+ * 2. speech, transcription and voice, 3. to 5. the LLM, STT and TTS models, 6. the MCP servers, 7. the Paramètres
+ * (switches), 8. the debug traces. The rows of the other pages are hidden (the panel's flex layout skips them).
  */
-#define SETTINGS_PAGES          7
+#define SETTINGS_PAGES          8
 #define SETTINGS_PAGE_MODELS    2       /* the first page of the models (LLM, then STT, then TTS) */
-#define SETTINGS_PAGE_PARAMS    5       /* switches: the beep after a reply */
-#define SETTINGS_PAGE_DEBUG     6
-#define SETTINGS_ROWS_MAX       14
+#define SETTINGS_PAGE_MCP       5       /* the MCP servers, switched on or off */
+#define SETTINGS_PAGE_PARAMS    6       /* switches: the beep after a reply */
+#define SETTINGS_PAGE_DEBUG     7
+#define SETTINGS_ROWS_MAX       16
 static void model_list_show(int page);
 static void debug_page_refresh(void);
 static void params_page_refresh(void);
+static void mcp_page_refresh(void);
 static lv_obj_t *s_settings_rows[SETTINGS_ROWS_MAX];
 static uint8_t s_settings_row_page[SETTINGS_ROWS_MAX];
 static size_t s_settings_row_count = 0;
@@ -741,6 +743,7 @@ static void settings_page_show(int page)
     s_settings_page = (page + SETTINGS_PAGES) % SETTINGS_PAGES;
     confirm_button_update(s_settings_changed);
     model_list_show(s_settings_page);
+    mcp_page_refresh();
     debug_page_refresh();
     params_page_refresh();
     for (size_t i = 0; i < s_settings_row_count; i++) {
@@ -1155,6 +1158,7 @@ static void model_list_show(int page)
     if (ui_LabelSettingsTile) {
         lv_label_set_text(ui_LabelSettingsTile, list >= 0 && list < 3 ? titles[list] :
                           page == SETTINGS_PAGE_DEBUG ? lang->settings_debug_title :
+                          page == SETTINGS_PAGE_MCP ? lang->settings_mcp_list :
                           page == SETTINGS_PAGE_PARAMS ? lang->settings_params_title : lang->settings_title);
     }
     for (int i = 0; i < 3; i++) {
@@ -1194,6 +1198,114 @@ static void model_list_create(int index)
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
     s_model_lists[index] = list;
     settings_row_add(list, SETTINGS_PAGE_MODELS + index);
+}
+
+/*
+ * ---------- MCP page: the servers of CONFIG.INI (Homey, [MCP] section), each with a check box ----------
+ * Checked: its tools are offered to the model (read once the Wi-Fi is up); unchecked: not offered, not contacted
+ * (McpN_on, Homey_on). Then its name, and where it stands: its tools, being read, not reachable, off.
+ */
+static lv_obj_t *s_mcp_list = NULL;
+
+static void mcp_check_cb(lv_event_t *e)
+{
+    lv_obj_t *check = lv_event_get_target(e);
+    // Saved here; its tools given to the model (or taken away) by the main task, at once
+    mcp_set_enabled((int)(intptr_t)lv_event_get_user_data(e), lv_obj_has_state(check, LV_STATE_CHECKED));
+    assistant_save_soon();
+}
+
+static void mcp_page_refresh(void)
+{
+    if (!s_mcp_list) {
+        return;
+    }
+    lv_obj_clean(s_mcp_list);
+    if (s_settings_page != SETTINGS_PAGE_MCP) {
+        return;
+    }
+    const app_lang_t *lang = app_lang_get();
+    if (mcp_count() == 0) {
+        lv_obj_t *label = lv_label_create(s_mcp_list);
+        lv_obj_set_width(label, lv_pct(100));
+        lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+        lv_label_set_text(label, lang->mcp_none);
+        lv_obj_set_style_text_font(label, &ui_font_Latin14, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(label, lv_color_hex(MODEL_ROW_DIM), LV_PART_MAIN | LV_STATE_DEFAULT);
+        return;
+    }
+    for (int i = 0; i < mcp_count(); i++) {
+        lv_obj_t *row = lv_obj_create(s_mcp_list);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_size(row, lv_pct(100), 30);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(row, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+        int tools = 0;
+        mcp_state_t state = mcp_state(i, &tools);
+        lv_obj_t *check = lv_checkbox_create(row);
+        lv_checkbox_set_text(check, "");
+        // The check mark is a symbol: of the default font (the Latin ones have none)
+        lv_obj_set_style_text_font(check, &lv_font_montserrat_14, LV_PART_INDICATOR | LV_STATE_CHECKED);
+        if (state != MCP_STATE_OFF) {
+            lv_obj_add_state(check, LV_STATE_CHECKED);
+        }
+        lv_obj_add_event_cb(check, mcp_check_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)i);
+
+        lv_obj_t *name = lv_label_create(row);
+        lv_label_set_text(name, mcp_name(i));
+        lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+        lv_obj_set_flex_grow(name, 1);
+        lv_obj_set_style_text_font(name, &ui_font_Latin14, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(name, lv_color_hex(state == MCP_STATE_OFF ? MODEL_ROW_NO_KEY : 0xFFFFFF),
+                                    LV_PART_MAIN | LV_STATE_DEFAULT);
+
+        lv_obj_t *where = lv_label_create(row);
+        char text[48];
+        switch (state) {
+        case MCP_STATE_READY:
+            snprintf(text, sizeof(text), lang->mcp_tools, tools);
+            break;
+        case MCP_STATE_WAITING:
+            strlcpy(text, lang->mcp_waiting, sizeof(text));
+            break;
+        case MCP_STATE_UNREACHABLE:
+            strlcpy(text, lang->mcp_unreachable, sizeof(text));
+            break;
+        default:
+            strlcpy(text, lang->mcp_off, sizeof(text));
+            break;
+        }
+        lv_label_set_text(where, text);
+        lv_obj_set_style_text_font(where, &ui_font_Latin14, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(where, lv_color_hex(state == MCP_STATE_UNREACHABLE ? 0xFF8A65 : MODEL_ROW_DIM),
+                                    LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+}
+
+void ui_ctrl_mcp_changed(void)
+{
+    bsp_display_lock(0);
+    mcp_page_refresh();
+    bsp_display_unlock();
+}
+
+/* The scrollable list of the MCP page, like those of the models */
+static void mcp_list_create(void)
+{
+    lv_obj_t *list = lv_obj_create(ui_PanelSettings);
+    lv_obj_remove_style_all(list);
+    lv_obj_set_size(list, lv_pct(100), 124);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_left(list, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_right(list, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_row(list, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+    s_mcp_list = list;
+    settings_row_add(list, SETTINGS_PAGE_MCP);
 }
 
 /* ---------- Debug page: the traces on or off (Debug), what they keep, and the Dump button ---------- */
@@ -1443,7 +1555,8 @@ static void settings_screen_setup(void)
     for (int i = 0; i < 3; i++) {
         model_list_create(i);
     }
-    // Page 6: the debug traces
+    // Page 6: the MCP servers; 7: the Paramètres; 8: the debug traces
+    mcp_list_create();
     params_page_create();
     debug_page_create();
 

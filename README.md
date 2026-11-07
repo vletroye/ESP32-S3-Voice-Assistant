@@ -335,10 +335,10 @@ LLM page: then the free OpenRouter models of `[openrouter_free]`), in a list scr
   speech model in use.
 
 Sixth page: **Serveurs MCP** / **MCP servers**, the [MCP servers](#312-mcp-servers) of `CONFIG.INI` (the Homey
-of `Homey_url` first), in a list scrolled with the finger: a **check box** (checked: its tools are offered to the
+among them), in a list scrolled with the finger: a **check box** (checked: its tools are offered to the
 model; unchecked: they are not, and the server is not contacted), its **name**, and where it stands: "16 outils" /
 "16 tools", "connexion..." / "connecting...", "injoignable" / "unreachable" (tried again every minute), "désactivé"
-/ "off". A box changed is applied at once, without restart, and saved (`Mcp3_on`, `Homey_on`). Without any server,
+/ "off". A box changed is applied at once, without restart, and saved (`Mcp3_on = off`). Without any server,
 the page says how to add one.
 
 Seventh page: **Paramètres** / **Settings**: **Bip après une réponse** / **Beep after a reply** (off by default,
@@ -366,7 +366,7 @@ Tapping one stops the countdown and asks for a confirmation:
 
 - **Soft reset** (circular arrows): the settings of `CONFIG.INI` go back to their defaults (language, model,
   voice, volume, scrolling, delays, town…), **except** the Wi-Fi, the API keys (`ChatGPT_key`,
-  `Claude_key`, `Gemini_key`, `OpenRouter_key`, `XAI_key`, `Mistral_key`, `Perplexity_key`, `Deepgram_key`, `Groq_key`, `ElevenLabs_key`), Homey (`Homey_url`, `Homey_key`, `Homey_tools`) and the MCP servers (`McpN_url`, `McpN_key`, `McpN_name`, `McpN_tools`; switched on again); the
+  `Claude_key`, `Gemini_key`, `OpenRouter_key`, `XAI_key`, `Mistral_key`, `Perplexity_key`, `Deepgram_key`, `Groq_key`, `ElevenLabs_key`) and the MCP servers, the Homey included (`McpN_url`, `McpN_key`, `McpN_name`, `McpN_tools`; switched on again); the
   `PERSO_<XX>.TXT` files, `MEMORY.TXT` and the comments of `CONFIG.INI` are kept. The `VOICE_<XX>.TXT` and
   `LANG_<XX>.TXT` of the six languages given with the firmware (FR, EN, NL, DE, ES, IT), `COUNTRY.TXT` and
   `AGENTS.INI` are replaced by the versions of the firmware (your changes to them are lost); the files of a
@@ -755,15 +755,11 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `ChatGPT_key` | OpenAI key (transcription, voice, GPT answers) | `sk-proj-…` |
 | `Claude_key` | Anthropic key (Claude answers) | `sk-ant-…` |
 | `Gemini_key` | Gemini key from Google AI Studio (Gemini answers), empty for none | `AIza…` |
-| `Homey_url` | MCP server of a Homey Pro on the local network ("MCP AI Bridge" app), empty for none | `http://192.168.x.y:52199/mcp` |
-| `Homey_key` | Its API key (shown in the app's settings) | |
 | `Confirm_off` | Homey device classes the assistant asks to confirm before turning them off (comma-separated; `socket`: power plugs, so that an appliance is not switched off by mistake; lights are not asked about), `off` for none | `socket` |
-| `Homey_tools` | The Homey tools offered, as `McpN_tools` below; empty: its 16 everyday tools | `devices_*, zones_list` |
-| `Homey_on` | `off`: the Homey's tools are not offered (also switched on the MCP page of the Settings screen) | `on` |
 | `Mcp1_url`, `Mcp2_url`… | An [MCP server](#312-mcp-servers) (streamable HTTP), numbered from 1 to 99, gaps allowed; usually under an `[MCP]` section | `http://192.168.1.50:8080/mcp` |
 | `Mcp1_key` | Its key, sent as `Authorization: Bearer …`, empty for none | |
-| `Mcp1_name` | Its name on the MCP page (and before its tools' names when another server has the same ones), empty: the host of its address | `maison` |
-| `Mcp1_tools` | The tools offered: names separated by commas, `*` for any text, `-` before a name to leave it out; empty: every tool but those deleting or removing, 20 at most | `list_*, -list_secrets` |
+| `Mcp1_name` | Its name on the MCP page (and before its tools' names when another server has the same ones), empty: the host of its address. `Homey`: a [Homey Pro](#310-home-automation-homey) | `Homey` |
+| `Mcp1_tools` | The tools offered: names separated by commas, `*` for any text, `-` before a name to leave it out; empty: every tool but those deleting or removing, 20 at most (a Homey: its 16 everyday tools) | `list_*, -list_secrets` |
 | `Mcp1_on` | `off`: the server is not contacted and its tools are not offered (also switched on the MCP page) | `on` |
 | `OpenRouter_key` | OpenRouter key (answers of the OpenRouter models, and the speech models of `[tts]` reached through it: `deepgram/aura-2`), empty for none | `sk-or-…` |
 | `XAI_key` | xAI key (answers of the Grok models, section `[xai]` of `AGENTS.INI`), empty for none | `xai-…` |
@@ -1538,13 +1534,20 @@ start flows and tell who is home ("Allume la lumière du salon" / "Turn on the l
 l'ambiance cinéma" / "Activate the cinema mood", "Qui est à la maison ?" / "Who is home?"). It works with the **Claude models** only (they are the ones given tools).
 
 1. On the Homey, install the **MCP AI Bridge** app; its settings show the address of its MCP server and an API key.
-2. In `CONFIG.INI`, fill `Homey_url` (e.g. `http://192.168.1.20:52199/mcp`) and `Homey_key`, save, and restart.
+2. In `CONFIG.INI`, add it as an [MCP server](#312-mcp-servers) named `Homey`, save, and restart:
+
+   ```ini
+   [MCP]
+   Mcp1_name = Homey
+   Mcp1_url  = http://192.168.1.20:52199/mcp
+   Mcp1_key  = ...
+   ```
 3. Ask in your own words: Claude chooses the tools. A short "Je regarde." / "Let me check." is said while it works.
 
-The Homey is an [MCP server](#312-mcp-servers) like the others: it is shown on the MCP page of the Settings
-screen, where it can be switched off (`Homey_on`), and `Homey_tools` chooses its tools. It can also be given as
-`McpN_url` / `McpN_key` with `McpN_name = homey`: the assistant recognises a Homey by that name or by the name its
-server gives.
+The Homey is an MCP server like the others: it is shown on the MCP page of the Settings screen, where it can be
+switched off, and `McpN_tools` can choose its tools (empty: its 16 everyday ones). The assistant recognises a Homey
+by the name `Homey`, or by the name its server gives. The `Homey_url` and `Homey_key` of older versions are moved
+there by themselves at start-up (to the first free number, `McpN_name = Homey`), and no longer exist.
 
 The instructions given to the model with a Homey (`home_line` and `home_rules` of `LANG_<XX>.TXT`) tell it to
 ask the Homey for every state instead of answering from the conversation, never to say an action is done unless a
@@ -1773,7 +1776,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
 | `file_phrases.c` | Phrase files of the voice commands (`main/phrases/phrases_<lang>.txt`, installed on SPIFFS): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |
 | `voice_cmd.c` | Settings by voice: language, model (provider, then model), transcription and speech synthesis models, voice of the speech service in use, country and town, configuration mode ("change la langue", "change de modèle", "change de transcription", "change de synthèse vocale", "prends la voix Cedar", "change ma ville", "édite la config") |
-| `mcp_client.c` | MCP client (streamable HTTP, JSON or event-stream answers): the servers of `CONFIG.INI` (`McpN_*`, the Homey of `Homey_url`), their tools read once the Wi-Fi is up (tried again every minute), chosen (`McpN_tools`), renamed when the name is taken, offered to the models; switched on or off from the Settings screen |
+| `mcp_client.c` | MCP client (streamable HTTP, JSON or event-stream answers): the servers of `CONFIG.INI` (`McpN_*`, the Homey among them), their tools read once the Wi-Fi is up (tried again every minute), chosen (`McpN_tools`), renamed when the name is taken, offered to the models; switched on or off from the Settings screen |
 | `homey_mcp.c` | What is particular to a Homey Pro: its 16 everyday tools, the confirmation before turning off some devices (`Confirm_off`), the fields of no use by voice removed from its results |
 | `file_memory.c` | Long-term memory: "souviens-toi que", "oublie que", "oublie tout", "dis-moi ce que tu as mémorisé" |
 | `app_clock.c` | Sleep screen: clock (SNTP time, seven-segment digits drawn by a single LVGL object), volume and Wi-Fi indicators |
@@ -2160,7 +2163,7 @@ A power cut clears them. Every start is also added to `BOOTS.TXT` (the last 50, 
   Its searches are then counted from its `toolCall` parts (`toolType` `GOOGLE_SEARCH_WEB`, one per query of
   `args.queries`), else from `groundingMetadata.webSearchQueries`: the larger of the two, billed per query.
   A Gemini model refusing Google Search with the functions keeps the functions.
-- **Homey**: with `Homey_url` set, the main task opens an MCP session (`initialize`, then
+- **Homey**: with a server named `Homey` (`McpN_name`), the main task opens an MCP session (`initialize`, then
   `notifications/initialized`) once the Wi-Fi is up, reads `tools/list` (~190 tools, ~180 KB, parsed in
   PSRAM) and keeps 16 of them (`s_selected` in `homey_mcp.c`, ~2,900 tokens of definitions instead of ~50,000).
   Calls go through `tools/call` on the local network. JSON results lose their useless fields (icons, update

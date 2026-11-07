@@ -45,7 +45,7 @@ static const char *TAG = "mcp";
 
 typedef struct {
     char name[32];
-    char on_key[16];            /* "Mcp3_on", "Homey_on" */
+    char on_key[16];            /* "Mcp3_on" */
     char *url;
     char *auth;                 /* "Bearer <key>", NULL without a key */
     char *filter;               /* McpN_tools, NULL when not chosen */
@@ -77,7 +77,7 @@ static void host_of(const char *url, char *out, size_t size)
     snprintf(out, size, "%.*s", (int)n, p);
 }
 
-static void server_add(const char *name, const char *on_key, char *url, char *key, char *filter, bool homey)
+static void server_add(const char *name, const char *on_key, char *url, char *key, char *filter)
 {
     mcp_server_t *s = &s_servers[s_count++];
     if (name && name[0]) {
@@ -92,7 +92,7 @@ static void server_add(const char *name, const char *on_key, char *url, char *ke
     }
     free(key);
     s->filter = filter;
-    s->homey = homey || strcasecmp(s->name, "homey") == 0;
+    s->homey = strcasecmp(s->name, "homey") == 0;
     char *on = settings_read_value(on_key);
     s->enabled = !on || !(strcasecmp(on, "off") == 0 || strcmp(on, "0") == 0 || strcasecmp(on, "no") == 0 ||
                           strcasecmp(on, "false") == 0);
@@ -111,21 +111,11 @@ void mcp_init(void)
         return;
     }
     homey_mcp_set_confirm_off(param->confirm_off);
-    // The Homey of Homey_url / Homey_key first (as before the [MCP] section)
-    if (param->homey_url[0]) {
-        server_add("Homey", "Homey_on", strdup(param->homey_url), strdup(param->homey_key),
-                   settings_read_value("Homey_tools"), true);
-    }
     for (int n = 1; n <= MCP_MAX_SERVERS; n++) {
         char key[16];
         snprintf(key, sizeof(key), "Mcp%d_url", n);
         char *url = settings_read_value(key);
         if (!url) {
-            continue;
-        }
-        if (param->homey_url[0] && strcmp(url, param->homey_url) == 0) {
-            ESP_LOGW(TAG, "%s: the Homey of Homey_url already, left out", key);
-            free(url);
             continue;
         }
         char name_key[16], key_key[16], tools_key[16], on_key[16];
@@ -134,7 +124,7 @@ void mcp_init(void)
         snprintf(tools_key, sizeof(tools_key), "Mcp%d_tools", n);
         snprintf(on_key, sizeof(on_key), "Mcp%d_on", n);
         char *name = settings_read_value(name_key);
-        server_add(name, on_key, url, settings_read_value(key_key), settings_read_value(tools_key), false);
+        server_add(name, on_key, url, settings_read_value(key_key), settings_read_value(tools_key));
         free(name);
     }
     ESP_LOGI(TAG, "%d MCP server(s)", s_count);

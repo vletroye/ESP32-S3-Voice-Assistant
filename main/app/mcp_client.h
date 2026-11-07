@@ -5,8 +5,9 @@
  *
  * MCP servers (streamable HTTP, JSON or event-stream answers) whose tools are offered to the model: those of the
  * [MCP] section of CONFIG.INI (Mcp1_url, Mcp1_key, Mcp1_name, Mcp1_tools, Mcp1_on, then Mcp2_..., up to Mcp99_),
- * and the Homey Pro of Homey_url / Homey_key. Each one can be switched off on the MCP page of the Settings screen
- * (McpN_on, Homey_on): its tools are then no longer offered and it is not contacted.
+ * a Homey Pro among them (McpN_name = Homey; Homey_url / Homey_key of older versions are moved there at start-up,
+ * settings.c). Each one can be switched off on the MCP page of the Settings screen (McpN_on): its tools are then no
+ * longer offered and it is not contacted.
  *
  * McpN_tools chooses the tools offered (they cost tokens at each question): names separated by commas, '*' for
  * any text, '-' before a name to leave it out ("list_*, -list_secrets"). Empty: Homey's everyday tools for a
@@ -36,7 +37,7 @@ void mcp_init(void);
 /** Number of servers configured */
 int mcp_count(void);
 
-/** Its name (McpN_name, else the host of its address; "Homey") */
+/** Its name (McpN_name, else the host of its address) */
 const char *mcp_name(int index);
 
 /** Where it stands, and the number of tools it offers */

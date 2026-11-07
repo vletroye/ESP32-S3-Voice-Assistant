@@ -240,8 +240,64 @@ static const struct {
     { "ElevenLabs_key", FIELD(elevenlabs_key) },
 };
 
+/*
+ * Homey_url / Homey_key of older versions (and Homey_tools / Homey_on of 2.31.0): an MCP server like the others,
+ * McpN_url, McpN_key, McpN_tools, McpN_on with McpN_name = Homey, under the first free number; the old keys erased
+ * (the empty ones the configuration mode made too)
+ */
+static void homey_migrate(void)
+{
+    static const char *const old_keys[] = { "Homey_url", "Homey_key", "Homey_tools", "Homey_on" };
+    static const char *const fields[] = { "url", "key", "tools", "on" };
+    nvs_handle_t handle;
+    if (nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READWRITE, &handle) != ESP_OK) {
+        return;
+    }
+    char *url = read_text(handle, "Homey_url");
+    if (url) {
+        int free_n = 0;
+        bool already = false;
+        for (int n = 1; n <= 99; n++) {
+            char key[16];
+            snprintf(key, sizeof(key), "Mcp%d_url", n);
+            char *other = read_text(handle, key);
+            if (!other && !free_n) {
+                free_n = n;
+            }
+            already |= other && strcmp(other, url) == 0;
+            free(other);
+        }
+        if (!already && free_n) {
+            char key[16];
+            snprintf(key, sizeof(key), "Mcp%d_name", free_n);
+            nvs_set_str(handle, key, "Homey");
+            for (size_t i = 0; i < sizeof(old_keys) / sizeof(old_keys[0]); i++) {
+                char *value = read_text(handle, old_keys[i]);
+                if (value) {
+                    snprintf(key, sizeof(key), "Mcp%d_%s", free_n, fields[i]);
+                    nvs_set_str(handle, key, value);
+                    free(value);
+                }
+            }
+            ESP_LOGI(TAG, "Homey moved to the MCP servers: Mcp%d", free_n);
+        } else {
+            ESP_LOGW(TAG, "Homey_url %s: dropped", already ? "already an MCP server" : "not moved (no number free)");
+        }
+        free(url);
+    }
+    bool erased = false;
+    for (size_t i = 0; i < sizeof(old_keys) / sizeof(old_keys[0]); i++) {
+        erased |= (nvs_erase_key(handle, old_keys[i]) == ESP_OK);
+    }
+    if (url || erased) {
+        nvs_commit(handle);
+    }
+    nvs_close(handle);
+}
+
 esp_err_t settings_read_parameter_from_nvs(void)
 {
+    homey_migrate();
     esp_err_t ret = nvs_open_from_partition(uf2_nvs_partition, uf2_nvs_namespace, NVS_READONLY, &my_handle);
     if (ESP_ERR_NVS_NOT_FOUND == ret) {
         ESP_LOGI(TAG, "Credentials not found");
@@ -351,17 +407,13 @@ esp_err_t settings_read_parameter_from_nvs(void)
     }
     read_str("City", g_sys_param.city, sizeof(g_sys_param.city), false);
 
-    // Home automation: MCP server of a Homey Pro and its API key; the device classes to confirm before turning
+    // Home automation (a Homey among the MCP servers, mcp_client.c): the device classes to confirm before turning
     // them off ("socket, heater"), "off" for none
-    read_str("Homey_url", g_sys_param.homey_url, sizeof(g_sys_param.homey_url), true);
-    read_str("Homey_key", g_sys_param.homey_key, sizeof(g_sys_param.homey_key), true);
     read_str_or("Confirm_off", g_sys_param.confirm_off, sizeof(g_sys_param.confirm_off), CONFIG_ASSISTANT_CONFIRM_OFF,
                 true);
     if (is_on(g_sys_param.confirm_off, &on) && !on) {
         g_sys_param.confirm_off[0] = '\0';
     }
-    ESP_LOGI(TAG, "Homey: %s, key: (%d chars)", g_sys_param.homey_url[0] ? g_sys_param.homey_url : "-",
-             (int)strlen(g_sys_param.homey_key));
 
     // Memory: free text, edited in MEMORY.TXT
     free(g_sys_param.memory);
@@ -403,11 +455,11 @@ sys_param_t *settings_get_parameter(void)
     return &g_sys_param;
 }
 
-/* Kept by the soft reset: Wi-Fi, API keys, Homey, MEMORY.TXT, comments of CONFIG.INI; the MCP servers too */
+/* Kept by the soft reset: Wi-Fi, API keys, MEMORY.TXT, comments of CONFIG.INI; the MCP servers (Homey) too */
 static const char *const s_kept_keys[] = {
     "ssid", "password", "ChatGPT_key", "Claude_key", "Gemini_key", "OpenRouter_key", "XAI_key",
     "Mistral_key", "Perplexity_key", "Deepgram_key", "Groq_key", "ElevenLabs_key",
-    "Homey_url", "Homey_key", "Homey_tools", "Memory", "Config_layout",
+    "Memory", "Config_layout",
 };
 
 static bool is_kept_key(const char *key)

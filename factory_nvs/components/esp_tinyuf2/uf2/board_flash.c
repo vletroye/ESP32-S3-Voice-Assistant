@@ -493,12 +493,9 @@ static const char *const s_ini_key_order[] = {
 static const char *const s_mcp_fields[] = { "name", "url", "key", "tools", "on" };
 #define MCP_SERVERS_MAX     99
 
-/* Homey_on, Homey_tools; Mcp1_url, Mcp12_key... */
+/* Mcp1_url, Mcp12_key... */
 static bool is_mcp_key(const char *key)
 {
-    if (strcmp(key, "Homey_on") == 0 || strcmp(key, "Homey_tools") == 0) {
-        return true;
-    }
     if (strncmp(key, "Mcp", 3) != 0 || !isdigit((unsigned char)key[3]) || key[3] == '0') {
         return false;
     }
@@ -588,13 +585,11 @@ static void ini_gen_key(nvs_handle_t nvs, const char *key, char used[][NVS_KEY_N
 }
 
 /*
- * [Voice assistant] The keys of the MCP servers not written yet (a server switched on or off on the device, the
- * file written without them): Homey's, then each server's in order, under an [MCP] section when the file has none
+ * [Voice assistant] The keys of the MCP servers not written yet (a server switched on or off on the device, the Homey
+ * of Homey_url moved there by the assistant): each server's in order, under an [MCP] section when the file has none
  */
 static void ini_gen_mcp(nvs_handle_t nvs, const char *layout, char used[][NVS_KEY_NAME_MAX_SIZE], int *used_count)
 {
-    ini_gen_key(nvs, "Homey_tools", used, used_count);
-    ini_gen_key(nvs, "Homey_on", used, used_count);
     bool section = layout && strstr(layout, "[MCP]");
     for (int n = 1; n <= MCP_SERVERS_MAX; n++) {
         for (size_t f = 0; f < sizeof(s_mcp_fields) / sizeof(s_mcp_fields[0]); f++) {

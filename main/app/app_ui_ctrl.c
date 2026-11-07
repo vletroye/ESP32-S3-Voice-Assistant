@@ -1201,9 +1201,9 @@ static void model_list_create(int index)
 }
 
 /*
- * ---------- MCP page: the servers of CONFIG.INI (Homey, [MCP] section), each with a check box ----------
+ * ---------- MCP page: the servers of the [MCP] section of CONFIG.INI (Homey...), each with a check box ----------
  * Checked: its tools are offered to the model (read once the Wi-Fi is up); unchecked: not offered, not contacted
- * (McpN_on, Homey_on). Then its name, and where it stands: its tools, being read, not reachable, off.
+ * (McpN_on). Then its name, and where it stands: its tools, being read, not reachable, off.
  */
 static lv_obj_t *s_mcp_list = NULL;
 

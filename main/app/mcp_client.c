@@ -17,6 +17,7 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "llm_sse.h"
+#include "debug_trace.h"
 #include "settings.h"
 #include "tools.h"
 #include "homey_mcp.h"
@@ -40,6 +41,10 @@
 #define MCP_TOOLS_WARN_BYTES    (30 * 1024)
 /* Pages of tools/list read at most (a server may give its tools in several) */
 #define MCP_LIST_PAGES_MAX      10
+/* Debug traces: a call, the server's answer and the result given to the model, in pieces of this size (a trace line
+   holds 400 characters), at most MCP_TRACE_MAX of each */
+#define MCP_TRACE_PIECE         300
+#define MCP_TRACE_MAX           (64 * 1024)
 
 static const char *TAG = "mcp";
 
@@ -179,6 +184,23 @@ bool mcp_homey_on(void)
 
 /* ---------- JSON-RPC over HTTP ---------- */
 
+/* A long text in the debug traces (when they are on), cut into pieces that fit their lines */
+static void trace_text(const mcp_server_t *s, const char *what, const char *text, size_t len)
+{
+    if (!debug_trace_on()) {
+        return;
+    }
+    ESP_LOGI(TAG, "[trace] %s %s: %u characters%s", s->name, what, (unsigned)len,
+             len > MCP_TRACE_MAX ? " (the beginning only)" : "");
+    if (len > MCP_TRACE_MAX) {
+        len = MCP_TRACE_MAX;
+    }
+    for (size_t at = 0; at < len; at += MCP_TRACE_PIECE) {
+        size_t n = len - at < MCP_TRACE_PIECE ? len - at : MCP_TRACE_PIECE;
+        ESP_LOGI(TAG, "[trace] %s %u| %.*s", what, (unsigned)at, (int)n, text + at);
+    }
+}
+
 static esp_err_t on_http_event(esp_http_client_event_t *evt)
 {
     mcp_server_t *s = evt->user_data;
@@ -190,9 +212,10 @@ static esp_err_t on_http_event(esp_http_client_event_t *evt)
 
 /*
  * POST a JSON-RPC message; the answer (JSON, or an event stream whose data is JSON) is parsed into *out
- * (NULL for a notification). Returns the HTTP status, or -1 on a network error.
+ * (NULL for a notification). Returns the HTTP status, or -1 on a network error. traced: the message and the
+ * answer go into the debug traces (when they are on).
  */
-static int post(mcp_server_t *s, const char *body, cJSON **out)
+static int post(mcp_server_t *s, const char *body, cJSON **out, bool traced)
 {
     if (out) {
         *out = NULL;
@@ -221,6 +244,9 @@ static int post(mcp_server_t *s, const char *body, cJSON **out)
     int status = -1;
     size_t len = strlen(body);
     llm_buf_t answer = {0};
+    if (traced) {
+        trace_text(s, "call", body, len);
+    }
     if (esp_http_client_open(client, len) == ESP_OK && esp_http_client_write(client, body, len) == (int)len &&
             esp_http_client_fetch_headers(client) >= 0) {
         status = esp_http_client_get_status_code(client);
@@ -233,6 +259,10 @@ static int post(mcp_server_t *s, const char *body, cJSON **out)
         }
     }
     esp_http_client_cleanup(client);
+    if (traced && debug_trace_on()) {
+        ESP_LOGI(TAG, "[trace] %s answer: HTTP %d", s->name, status);
+        trace_text(s, "answer", answer.p ? answer.p : "", answer.len);
+    }
     if (out && answer.len) {
         // An event stream carries the JSON in a "data:" line
         const char *json = answer.p;
@@ -275,7 +305,7 @@ static bool session_open(mcp_server_t *s)
     cJSON_AddStringToObject(info, "version", "1.0");
     char *body = request(s, "initialize", params);
     cJSON *answer = NULL;
-    int status = body ? post(s, body, &answer) : -1;
+    int status = body ? post(s, body, &answer, false) : -1;
     free(body);
     const cJSON *server = cJSON_GetObjectItem(cJSON_GetObjectItem(answer, "result"), "serverInfo");
     const cJSON *name = cJSON_GetObjectItem(server, "name");
@@ -286,7 +316,7 @@ static bool session_open(mcp_server_t *s)
         if (strcasestr(name->valuestring, "homey")) {
             s->homey = true;
         }
-        post(s, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", NULL);
+        post(s, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", NULL, false);
     }
     cJSON_Delete(answer);
     return ok;
@@ -403,7 +433,7 @@ static bool server_load(mcp_server_t *s)
         }
         char *body = request(s, "tools/list", params);
         cJSON *answer = NULL;
-        int status = body ? post(s, body, &answer) : -1;
+        int status = body ? post(s, body, &answer, false) : -1;
         free(body);
         const cJSON *result = cJSON_GetObjectItem(answer, "result");
         if (status != 200 || !result) {
@@ -615,7 +645,7 @@ static char *server_call(void *server, const char *tool, const cJSON *input, boo
         cJSON_AddItemToObject(params, "arguments", input ? cJSON_Duplicate(input, true) : cJSON_CreateObject());
         char *body = request(s, "tools/call", params);
         cJSON *answer = NULL;
-        int status = body ? post(s, body, &answer) : -1;
+        int status = body ? post(s, body, &answer, true) : -1;
         free(body);
         const cJSON *result = cJSON_GetObjectItem(answer, "result");
         if (status == 200 && result) {
@@ -635,6 +665,7 @@ static char *server_call(void *server, const char *tool, const cJSON *input, boo
     if (!out) {
         asprintf(&out, "{\"error\":\"%s not reachable\"}", s->name);
     }
+    trace_text(s, "to the model", out, strlen(out));
     return out;
 }
 
@@ -652,6 +683,7 @@ char *mcp_call(const char *name, const cJSON *input, bool *is_error)
         out = homey_mcp_before_call(tool, arguments, server_call, s);
         if (out) {
             *is_error = false;
+            trace_text(s, "to the model (confirmation)", out, strlen(out));
         }
     }
     if (!out) {

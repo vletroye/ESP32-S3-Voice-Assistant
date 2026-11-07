@@ -1950,6 +1950,11 @@ and the number of the exchange, `14:32:05.123 #12 I tts: …`, plus lines only w
   longest wait between two pieces … ms`, with `: the speaker ran dry (crackle)` above 80 ms: the wake sound, written
   20 ms at a time. Woken by the wake word, the beep is played before the transcription connection is opened: opening
   it while the beep played made it crackle each time;
+- `mcp: [trace] Homey call: … characters`, then `call 0| {…}`, `answer: HTTP 200`, `answer 0| …`, `to the model
+  0| …`: each call of an [MCP server](#312-mcp-servers)'s tool in full, cut into pieces of 300 characters (64 KB
+  at most of each): the request sent, the server's raw answer, and the text given to the model (a Homey's without
+  its useless fields, cut at 12,000 characters). Shows whether a wrong answer comes from the server or from what
+  the assistant made of it;
 - `tts_http: No audio for … ms (… KB received): the sentence is given up`: a speech stream that stopped (4 s
   without audio, 6 s for its first bytes); then lost, or asked again when nothing came;
 - `costs: Costs saved (… bytes, in … ms)`, `COSTS.TXT written in … ms`, `llm: Conversation saved (… bytes, in … ms)`,

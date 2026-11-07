@@ -49,7 +49,7 @@ been largely rewritten.
   - [3.8 Adding a new language, step by step](#38-adding-a-new-language-step-by-step)
   - [3.9 Writing voice phrases (patterns)](#39-writing-voice-phrases-patterns)
   - [3.10 Home automation: Homey](#310-home-automation-homey)
-  - [3.11 Google Tasks](#311-google-tasks)
+  - [3.11 Google: Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar)
   - [3.12 MCP servers](#312-mcp-servers)
 - [4. Design and architecture](#4-design-and-architecture)
   - [4.1 Architecture](#41-architecture)
@@ -233,8 +233,10 @@ settings of the [Quick start](#1-quick-start).
   "Réveille-moi à 7 h en semaine avec Classic 21" / "Wake me at 7 on weekdays with Classic 21", "Rappelle-moi jeudi
   à 15 h d'appeler Paul" / "Remind me Thursday at 3 pm to call Paul" (see
   [Timers, alarms and reminders](#28-timers-alarms-and-reminders)).
-- **Shopping list and tasks** in your Google Tasks: "Ajoute du lait à la liste de courses" / "Add milk to the
-  shopping list", "J'ai acheté le lait" / "I bought the milk" (see [Google Tasks](#311-google-tasks)).
+- **Your Google account**: the shopping list and tasks (Google Tasks: "Ajoute du lait à la liste de courses" / "Add
+  milk to the shopping list"), your mails (Gmail: "Ai-je des nouveaux mails ?" / "Do I have new emails?") and your
+  agenda (Google Calendar: "Qu'est-ce que j'ai demain ?" / "What do I have tomorrow?") (see
+  [Google: Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar)).
 - **Any MCP server** whose tools the model can use, besides the Homey (see [MCP servers](#312-mcp-servers)).
 - **Clear errors**: a missing credit, a refused key or a network problem is said and shown, for each provider.
 - **Costs on screen**: what the conversation and the day cost, and a detailed page (tap the cost).
@@ -829,7 +831,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
 | `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (the reasoning mode or not, a restart included), the assistant asks whether to go on with it (`0` to `120`; `0`: never asked) | `5` |
-| `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks](#311-google-tasks); empty: not offered | *(its client ID, ending in `.apps.googleusercontent.com`)* |
+| `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar); empty: not offered | *(its client ID, ending in `.apps.googleusercontent.com`)* |
 | `Google_code` | Once, to link the account: the address `http://127.0.0.1/?code=...` the phone reached after accepting (within 10 minutes); erased once used | |
 | `Alarm_stop_min` | A [timer or an alarm](#28-timers-alarms-and-reminders) not stopped (a touch, the wake word) stops ringing by itself after this many minutes (`1` to `60`) | `3` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
@@ -1617,10 +1619,13 @@ appliance is not switched off by mistake: `Confirm_off` lists the device classes
 `off` for none). Only 16 tools of the app are offered, none that deletes, installs or reconfigures anything. How it
 works: see the Homey items of the [Design notes](#412-design-notes).
 
-### 3.11 Google Tasks
+### 3.11 Google: Tasks, Gmail and Calendar
 
-The assistant reads and changes your **Google Tasks** lists, the shopping list first. What it changes shows at once
-in the Google Tasks app of your phone, to use in the shop.
+With your Google account linked once, the assistant reads and changes your **Google Tasks** lists (the shopping
+list first), your **Gmail** mails and your **Google Calendar**. What it changes shows at once in the apps of your
+phone.
+
+**Google Tasks**
 
 | You say | It does |
 | --- | --- |
@@ -1633,23 +1638,51 @@ in the Google Tasks app of your phone, to use in the shop.
 | "Crée une liste Bricolage" / "Create a DIY list" | Creates the list |
 | "Ajoute 'appeler le plombier' à mes tâches pour vendredi" / "Add 'call the plumber' to my tasks for Friday" | Adds it to the default list, due on Friday |
 
+**Gmail**
+
+| You say | It does |
+| --- | --- |
+| "Ai-je des nouveaux mails ?" / "Do I have new emails?" | Says the unread ones of the inbox: who, about what |
+| "Lis-moi le mail de Paul" / "Read me Paul's email" | Finds it and summarises it (all of it if you ask) |
+| "Cherche le mail de la banque de la semaine dernière" / "Find last week's email from the bank" | Searches with Gmail's search words (`from:`, `newer_than:`…) |
+| "Réponds-lui que je serai là à 18 h" / "Reply that I'll be there at 6 pm" | Writes the reply, **reads it to you, and sends it only once you confirm** |
+| "Envoie un mail à paul.dupont@… pour …" / "Email paul.dupont@… that …" | The same; a name alone is looked up in your mails, the address said to you: never guessed |
+| "Marque-les comme lus" / "Mark them as read", "Archive les pubs" / "Archive the ads", "Mets-le à la corbeille" / "Put it in the bin" | Marks read or unread, archives, puts in the bin (recoverable for 30 days; never deleted for good) |
+
+**Google Calendar**
+
+| You say | It does |
+| --- | --- |
+| "Qu'est-ce que j'ai demain ?" / "What do I have tomorrow?" | Says the events of the day, in time order |
+| "Suis-je libre jeudi après-midi ?" / "Am I free on Thursday afternoon?" | Looks at that afternoon |
+| "Quand est mon prochain rendez-vous chez le dentiste ?" / "When is my next dentist appointment?" | Searches the coming weeks |
+| "Ajoute dentiste lundi à 14 h" / "Add the dentist on Monday at 2 pm" | Creates it (one hour when no end is said) |
+| "Déplace le dentiste à mardi même heure" / "Move the dentist to Tuesday, same time" | Says what will change, **changes it once you confirm** (its length kept) |
+| "Supprime la réunion de vendredi" / "Delete Friday's meeting" | Says which one, **deletes it once you confirm** |
+
 The device reaches Google **alone**, with the OAuth client of **your own** Google Cloud project: no server, no
 third-party service, no subscription. Setting it up takes about 20 minutes, once, with a PC (for `CONFIG.INI` and
 Google's consent page).
 
 #### 3.11.1 Your Google Cloud project
 
-In [console.cloud.google.com](https://console.cloud.google.com), signed in with the Google account whose tasks the
-assistant will use:
+In [console.cloud.google.com](https://console.cloud.google.com), signed in with the Google account the assistant will
+use:
 
 1. **A project**: the project selector at the top left → **New project** ("ESP32 Assistant"), **Create**, then select
    it. (The project made by Google AI Studio for a Gemini key, "gen-lang-client-…", does too.)
-2. **The API**: ☰ → **APIs & Services → Library**, search **Google Tasks API**, **Enable**.
+2. **The APIs**: ☰ → **APIs & Services → Library**: search and **Enable** each of **Google Tasks API**, **Gmail
+   API** and **Google Calendar API** (only those you want: one not enabled answers "the … API is not enabled", the
+   others work). **This is the step that matters**: without it, Google refuses every call to that service.
 3. **The consent screen**: ☰ → **APIs & Services → OAuth consent screen** (it opens **Google Auth Platform**),
    **Get started**: app name ("AI Voice Assistant ESP32"), support e-mail (yours), audience **External**, contact
    e-mail (yours), accept the policy, **Create**.
-4. **The access asked**: **Data access → Add or remove scopes**, filter `tasks`, tick `.../auth/tasks` ("See, edit,
-   create and delete all your tasks"), **Update**, then **Save**.
+4. **The access asked** (optional): **Data access → Add or remove scopes**, tick `.../auth/tasks`,
+   `.../auth/gmail.modify` and `.../auth/calendar.events`, **Update**, **Save**. This list is **not** a filter:
+   the device asks for these three accesses itself, in GOOGLE.HTM, and they are granted when you accept them on
+   Google's consent page, as long as their APIs are enabled (step 2). The list is only needed to have the app
+   verified by Google, which your own use does not need: it may stay empty. (`gmail.modify` is a "restricted" access
+   for Google: it reads, sends, labels and puts in the bin, but never deletes a mail for good.)
 5. **Branding** (needed to publish): **Application home page**
    `https://github.com/vletroye/ESP32-S3-Voice-Assistant` and **Application privacy policy link**
    `https://github.com/vletroye/ESP32-S3-Voice-Assistant/blob/main/PRIVACY.md` (this repository's
@@ -1710,6 +1743,10 @@ On the **Paramètres** / **Settings** page of the Settings screen, the **Google 
    erases `Google_code` and no longer puts GOOGLE.HTM on the drive. The row now shows **Déconnecter** /
    **Disconnect**: ask away.
 
+**Linked before 2.38** (Google Tasks only): link again once, the same way (**Google → Déconnecter** /
+**Disconnect**, then **Connecter** / **Connect**), to accept Gmail and Calendar too; until then, the assistant says
+that the account was linked without them.
+
 Each GOOGLE.HTM carries a one-time secret (PKCE): a code obtained with an older GOOGLE.HTM is refused once a new
 one was made. To link again, start again from step 1.
 
@@ -1721,14 +1758,16 @@ reset forgets it too.
 
 | What you see | Why | What to do |
 | --- | --- | --- |
-| "Google Tasks (à configurer)" / "(to set up)" on the row | `Google_client` or `Google_secret` missing in `CONFIG.INI` (or dropped by a configuration mode older than 2.36) | Add them again (3.11.2) |
+| "Google (à configurer)" / "(to set up)" on the row | `Google_client` or `Google_secret` missing in `CONFIG.INI` (or dropped by a configuration mode older than 2.36) | Add them again (3.11.2) |
 | "Accès bloqué : la demande de … n'est pas valide", **Erreur 400 : invalid_request**; in the error's details: "The loopback flow has been blocked…" ("Localhost URI is not allowed for 'NATIVE_DEVICE' client type") | The client is of type **TVs and Limited Input devices** | Create a **Desktop app** client (3.11.1, step 7) and put its ID and secret in `CONFIG.INI` |
 | "Accès bloqué : … n'a pas terminé la procédure de validation de Google", **Erreur 403 : access_denied** ("The app is being tested…") | The app is still **in testing** | Publish it (3.11.1, steps 5 and 6) |
 | **Publish app** refused: "a valid app name, support e-mail, home page and privacy policy are needed" | The **Branding** page is not complete | Fill it in (3.11.1, step 5) |
 | "Google hasn't verified this app" | Expected: your own, unverified app | **Advanced → Go to … (unsafe)** |
 | `http://127.0.0.1/…` "This site can't be reached" | Expected: nothing answers there, the code is in the address | Copy the address (3.11.3, step 4) |
-| "Google Tasks (code refusé)" / "(code refused)" on the row | The code was older than 10 minutes, already used, of another client, or of an older GOOGLE.HTM | Link again from step 1 |
+| "Google (code refusé)" / "(code refused)" on the row | The code was older than 10 minutes, already used, of another client, or of an older GOOGLE.HTM | Link again from step 1 |
 | The assistant says the Google account is not linked | Not linked yet, or the access was withdrawn (Disconnect, or in the Google account) | Link again |
+| The assistant says the account was linked **without access to Gmail** (or Calendar) | Linked before 2.38, or that access not ticked on the consent page | Link again (Disconnect, Connect), accepting all the accesses |
+| The assistant says the **… API is not enabled** in the project | Its API is not enabled (3.11.1, step 2) | Enable it; nothing else to do (no new link) |
 
 #### 3.11.5 How it works
 
@@ -1741,13 +1780,24 @@ reset forgets it too.
 - **Access**: the refresh token is kept in `/state/google.json` (LittleFS), never shown nor logged; an access token
   of an hour is asked with it whenever needed. Each call to Google is logged with its time (`google: GET
   tasks.googleapis.com/…: HTTP 200 in 380 ms`).
-- **Tools**: the models that take tools get `tasks_lists`, `tasks_get` (the open tasks of a list, or all with
+- **Accesses asked**: `tasks`, `gmail.modify` and `calendar.events`, all three at once. A call refused for lack
+  of one ("insufficient scopes") or because its API is not enabled ("SERVICE_DISABLED") is told to the model in
+  those words, so that it says what to do.
+- **Google Tasks tools**: the models that take tools get `tasks_lists`, `tasks_get` (the open tasks of a list, or all with
   `completed`), `tasks_add` (several items at once; a note and a due date for a single one; the list created when
   asked) and `tasks_update` (complete, reopen, delete, rename). Lists and tasks are named as you say them, case and
   accents ignored, a part of the name being enough when only one matches ("courses" finds "Courses", "le lait" finds
   "Lait"); a name matching nothing (or several) gives the model the names there are. Without a list named, the default
   list (the first one, "Mes tâches" / "My Tasks").
-- The same access will serve **Google Calendar** later: another scope added to the consent screen, then linked again.
+- **Gmail tools**: `gmail_list` (inbox by default, Gmail's search words, 10 mails at most: from, subject, local date,
+  unread, an extract), `gmail_read` (the text/plain part, else the HTML made plain; cut at 4,000 characters),
+  `gmail_send` (a mail, or a reply in its thread with `In-Reply-To`; sent only with `confirmed=true`, else given back
+  for the model to read it to you; a whole address required) and `gmail_modify` (read, unread, archive, bin; 20 mails
+  at once at most). Responses up to 256 KB are read (a mail in HTML can be large).
+- **Calendar tools**: `calendar_events` (the main calendar, 1 to 31 days, words looked for), `calendar_create` (local
+  times; one hour, or the whole day, when no end is given), `calendar_update` and `calendar_delete` (only with
+  `confirmed=true`: else the event is given back for the model to ask you). Times are converted from and to the
+  device's local time.
 
 ### 3.12 MCP servers
 
@@ -1951,8 +2001,10 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
 | `app_ui_status.c` | The Wi-Fi and battery screen (a tap on them, sleep screen); `app_battery.c` gives the voltage, the level and the trend (charging or not) |
-| `google_auth.c` | The Google account: OAuth 2.0 for installed apps with the client of `CONFIG.INI` (`Google_client`, `Google_secret`), GOOGLE.HTM on the configuration drive (opening the consent page) while not linked, `Google_code` exchanged at start-up then erased, the refresh token in `/state/google.json`, the access token renewed, the revocation; `google_api()` for the API calls |
+| `google_auth.c` | The Google account (Tasks, Gmail, Calendar): OAuth 2.0 for installed apps with the client of `CONFIG.INI` (`Google_client`, `Google_secret`), GOOGLE.HTM on the configuration drive (opening the consent page) while not linked, `Google_code` exchanged at start-up then erased, the refresh token in `/state/google.json`, the access token renewed, the revocation; `google_api()` for the API calls |
 | `google_tasks.c` | Google Tasks for the model: the tools `tasks_lists`, `tasks_get`, `tasks_add`, `tasks_update`, lists and tasks found by their titles (case and accents ignored) |
+| `google_calendar.c` | Google Calendar for the model: `calendar_events`, `calendar_create`, `calendar_update`, `calendar_delete` (the last two only with `confirmed=true`); local times to and from RFC 3339 |
+| `gmail.c` | Gmail for the model: `gmail_list`, `gmail_read` (text/plain, else HTML made plain), `gmail_send` (only with `confirmed=true`; a reply kept in its thread), `gmail_modify` (read, unread, archive, bin) |
 | `file_state.c` | The LittleFS partition `state` of the files written often (conversation, costs, test results, places): mounted on `/state`, those of an older firmware moved there from SPIFFS, erased by the factory reset; also `boots.txt`, the history of the starts, shown as `BOOTS.TXT` |
 | `debug_trace.c` | Debug traces: every log line caught (`esp_log_set_vprintf`), with the time of day and the number of the exchange, in a 1 MB ring buffer in PSRAM; marks; the dump to `/spiffs/debug.txt` |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |

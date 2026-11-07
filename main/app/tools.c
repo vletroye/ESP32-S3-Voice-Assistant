@@ -18,6 +18,8 @@
 #include "radio_browser.h"
 #include "ai_provider_perplexity.h"
 #include "google_tasks.h"
+#include "google_calendar.h"
+#include "gmail.h"
 #include "alarms.h"
 #include "alarm_ring.h"
 
@@ -135,13 +137,20 @@ static const cJSON *own_definitions(void)
         if (!s_definitions) {
             ESP_LOGE(TAG, "Invalid tool definitions");
         }
-        // Google Tasks, when Google is configured in CONFIG.INI (linked or not: not linked, they say how)
-        cJSON *tasks = google_tasks_definitions() ? cJSON_Parse(google_tasks_definitions()) : NULL;
-        cJSON *tool;
-        while (s_definitions && tasks && (tool = cJSON_DetachItemFromArray(tasks, 0)) != NULL) {
-            cJSON_AddItemToArray(s_definitions, tool);
+        // Google Tasks, Calendar and Gmail, when Google is configured in CONFIG.INI (linked or not: not linked, or
+        // linked without one of them, their answer says how)
+        const char *google[] = { google_tasks_definitions(), google_calendar_definitions(), gmail_definitions() };
+        for (size_t g = 0; g < sizeof(google) / sizeof(google[0]); g++) {
+            cJSON *list = google[g] ? cJSON_Parse(google[g]) : NULL;
+            if (google[g] && !list) {
+                ESP_LOGE(TAG, "Invalid Google tool definitions (%u)", (unsigned)g);
+            }
+            cJSON *tool;
+            while (s_definitions && list && (tool = cJSON_DetachItemFromArray(list, 0)) != NULL) {
+                cJSON_AddItemToArray(s_definitions, tool);
+            }
+            cJSON_Delete(list);
         }
-        cJSON_Delete(tasks);
     }
     return s_definitions;
 }
@@ -458,6 +467,10 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
         result = alarm_snooze_run(input, is_error);
     } else if (google_tasks_has(name)) {
         result = google_tasks_run(name, input, is_error);
+    } else if (google_calendar_has(name)) {
+        result = google_calendar_run(name, input, is_error);
+    } else if (gmail_has(name)) {
+        result = gmail_run(name, input, is_error);
     } else if (mcp_has_tool(name)) {
         result = mcp_call(name, input, is_error);
     } else {

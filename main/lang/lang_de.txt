@@ -493,7 +493,7 @@ settings_followup_beep = Piepton nach einer Antwort
 # Google Tasks (when Google_client and Google_secret are in CONFIG.INI): the row of the Paramètres page,
 # its buttons and question, how to link the account (from a PC: GOOGLE.HTM in configuration mode) and
 # its button, where the linking stands after the row's name
-settings_google = Google Tasks
+settings_google = Google
 google_connect = Verbinden
 google_disconnect = Trennen
 google_unlink_ask = Das Google-Konto vom Assistenten trennen?
@@ -502,7 +502,7 @@ google_steps = Google erlaubt diese Anmeldung nur von einem Computer. Öffne im 
 google_linking =  (läuft)
 google_failed =  (Code abgelehnt)
 google_not_configured =  (einzurichten)
-google_howto = Füge Google_client und Google_secret in CONFIG.INI hinzu (siehe README, Google Tasks) und starte neu.
+google_howto = Füge Google_client und Google_secret in CONFIG.INI hinzu (siehe README, Google) und starte neu.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

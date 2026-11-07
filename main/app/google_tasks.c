@@ -152,17 +152,7 @@ static char *error_json(const char *message)
 /* The answer of a call that failed, for the model */
 static char *api_error(int status, const char *response)
 {
-    if (status == 401) {
-        return error_json("the Google account is not linked (or the access was withdrawn): the user links it on the "
-                          "Settings screen, Paramètres page, Google, Connect");
-    }
-    if (status < 0) {
-        return error_json("Google cannot be reached");
-    }
-    char message[160];
-    snprintf(message, sizeof(message), "Google answered HTTP %d", status);
-    ESP_LOGW(TAG, "HTTP %d: %.200s", status, response ? response : "");
-    return error_json(message);
+    return google_api_error(status, response, "Google Tasks");
 }
 
 /* The lists ({"items":[{"id","title"}]}), NULL on error (*error then the answer for the model) */

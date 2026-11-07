@@ -39,10 +39,12 @@ static const char *TAG = "google";
    restart between the two: the consent is done in configuration mode) */
 #define GOOGLE_PKCE_FILE    STATE_DIR "/google_pkce.txt"
 #define PKCE_VERIFIER_SIZE  64
-/* The access asked: the tasks (Google Tasks) */
-#define GOOGLE_SCOPES       "https://www.googleapis.com/auth/tasks"
+/* The access asked: the tasks (Google Tasks), the mails (read, send, mark, archive, to the bin: Gmail), the events
+   (Google Calendar). An account linked before one was added gets "insufficient scopes" from it: to link again */
+#define GOOGLE_SCOPES       "https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/gmail.modify " \
+                            "https://www.googleapis.com/auth/calendar.events"
 #define GOOGLE_HTTP_TIMEOUT 10000
-#define GOOGLE_RESPONSE_MAX (64 * 1024)
+#define GOOGLE_RESPONSE_MAX (256 * 1024)     /* a mail in HTML can be large (PSRAM, freed after) */
 
 static char *s_client = NULL;               /* Google_client */
 static char *s_secret = NULL;               /* Google_secret */
@@ -245,7 +247,7 @@ static void consent_url(const char *verifier, char *out, size_t size)
     char challenge[48];
     base64url(hash, sizeof(hash), challenge, sizeof(challenge));
     // Static, as the other large buffers here: the main task's stack is small (6.5 KB), and these run deep in it
-    static char client[160], scopes[160], redirect[64];
+    static char client[160], scopes[400], redirect[64];
     url_encode(client, sizeof(client), s_client);
     url_encode(scopes, sizeof(scopes), GOOGLE_SCOPES);
     url_encode(redirect, sizeof(redirect), GOOGLE_REDIRECT);
@@ -273,7 +275,7 @@ void google_auth_export_link(void)
         return;
     }
     // A new verifier for each new page (the code of an older one is refused)
-    static char verifier[PKCE_VERIFIER_SIZE], url[700], html_url[800];
+    static char verifier[PKCE_VERIFIER_SIZE], url[1000], html_url[1200];
     pkce_new(verifier, sizeof(verifier));
     consent_url(verifier, url, sizeof(url));
     // "&" written "&amp;" in the attribute
@@ -423,6 +425,35 @@ static const char *access_token(void)
     }
     free(response);
     return ok ? s_access : NULL;
+}
+
+char *google_api_error(int status, const char *response, const char *service)
+{
+    char message[300];
+    if (status == 401) {
+        snprintf(message, sizeof(message), "the Google account is not linked (or the access was withdrawn): the user "
+                 "links it on the Settings screen, Paramètres page, Google, Connect");
+    } else if (status == 403 && response && (strstr(response, "SCOPE_INSUFFICIENT") ||
+               strstr(response, "insufficientPermissions") || strstr(response, "insufficient authentication scopes"))) {
+        snprintf(message, sizeof(message), "the Google account was linked without access to %s: the user links it "
+                 "again (Settings screen, Paramètres page, Google: Disconnect, then Connect)", service);
+    } else if (status == 403 && response && (strstr(response, "SERVICE_DISABLED") ||
+               strstr(response, "accessNotConfigured") || strstr(response, "has not been used"))) {
+        snprintf(message, sizeof(message), "the %s API is not enabled in the user's Google Cloud project: the user "
+                 "enables it (console.cloud.google.com, APIs & Services, Library)", service);
+    } else if (status < 0) {
+        snprintf(message, sizeof(message), "Google cannot be reached");
+    } else {
+        snprintf(message, sizeof(message), "Google answered HTTP %d", status);
+    }
+    if (status != 401 && status >= 0) {
+        ESP_LOGW(TAG, "%s: HTTP %d: %.200s", service, status, response ? response : "");
+    }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "error", message);
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    return text;
 }
 
 char *google_api(const char *method, const char *url, const char *json_body, int *status)

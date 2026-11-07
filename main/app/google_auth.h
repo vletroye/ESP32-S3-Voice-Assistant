@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * The user's Google account, for Google Tasks (and later Calendar): OAuth 2.0 for an installed app, with the
+ * The user's Google account, for Google Tasks, Gmail and Google Calendar: OAuth 2.0 for an installed app, with the
  * client of the user's own Google Cloud project (Google_client and Google_secret of CONFIG.INI, type "Desktop app").
  * Linked once, from a computer (Google blocks this flow in a phone's browser): on the way to the configuration mode,
  * GOOGLE.HTM is put on its drive, opening Google's consent page; once accepted, Google sends the browser to
@@ -59,6 +59,14 @@ void google_auth_unlink(void);
  * @return The response (allocated, to be freed), NULL if none
  */
 char *google_api(const char *method, const char *url, const char *json_body, int *status);
+
+/**
+ * @brief The answer for the model to a call that failed (allocated JSON): not linked, linked without this service
+ *        (to link again), its API not enabled in the Cloud project, not reached, else the HTTP status
+ *
+ * @param service  Its name for the model: "Gmail", "Google Calendar", "Google Tasks"
+ */
+char *google_api_error(int status, const char *response, const char *service);
 
 #ifdef __cplusplus
 }

@@ -1662,6 +1662,13 @@ int64_t llm_last_exchange_us(void)
     return s_last_exchange_us;
 }
 
+void llm_exchange_touch(void)
+{
+    if (s_last_exchange_us) {
+        s_last_exchange_us = esp_timer_get_time();
+    }
+}
+
 int llm_max_output_tokens(void)
 {
     // Counts the reasoning tokens too: room for a short spoken answer after a little reasoning, or a long one

@@ -357,6 +357,8 @@ bool assistant_resume_ask(void)
     }
     ESP_LOGI(TAG, "%s, %lld min since the last answer: going on?", llm_reasoning() ? "Reasoning mode" : "Conversation",
              pause_us / 60000000LL);
+    // Asked once for this pause: the answer (or a follow-up) does not ask it again
+    llm_exchange_touch();
     s_cancelled = false;
     llm_cancel_clear();
     voice_cmd_expect_resume();

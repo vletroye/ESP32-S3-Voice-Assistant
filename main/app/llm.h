@@ -301,6 +301,9 @@ bool llm_set_reasoning(bool on);
 /** esp_timer time of the last question answered (0 after a new conversation) */
 int64_t llm_last_exchange_us(void);
 
+/** The pause in the conversation dealt with (asked whether to go on): as if its last exchange were now */
+void llm_exchange_touch(void);
+
 /* Tokens an answer may take, its reasoning included: a short spoken answer, or a long reasoning */
 #define LLM_MAX_OUTPUT_TOKENS           2048
 #define LLM_MAX_OUTPUT_TOKENS_REASONING 8192

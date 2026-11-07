@@ -701,7 +701,8 @@ Ask in your own words; the model sets them (with the models that take tools):
   alarms and the reminders (the next day and time, the label, how it repeats: "en semaine" / "weekdays", "chaque
   lundi, jeudi" / "every monday, thursday", "le 2e mardi du mois" / "the 2nd tuesday of the month"…, the radio).
 - **A timer running**: its countdown (m:ss, the nearest timer) at the top middle of the screen, as the costs are at
-  the top right; asleep, the robot's closed eyes become two **stopwatches** whose hands turn (an animation, not the
+  the top right, while the robot sleeps, listens ("J'écoute" / "I'm listening"), has heard or thinks ("Entendu" /
+  "Heard", "Je réfléchis" / "Thinking"), not over a reply; asleep, the robot's closed eyes become two **stopwatches** whose hands turn (an animation, not the
   countdown); the closed eyes and the Z come back once no timer runs.
 - **Radio**: the station is looked for when the alarm is set and its stream kept (of the stations found, the one
   named as asked, else the one whose name adds the least to it: "RTBF Classic 21" rather than "Classic 21 Blues"), so that it plays even if the radio

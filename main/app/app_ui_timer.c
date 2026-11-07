@@ -150,7 +150,11 @@ static void refresh_cb(lv_timer_t *t)
     if (strcmp(lv_label_get_text(s_count), text) != 0) {
         lv_label_set_text(s_count, text);
     }
-    if (text[0]) {
+    // Shown asleep, listening ("J'écoute"), heard and thinking ("Entendu", "Je réfléchis"), not over a reply
+    bool robot_shown = !lv_obj_has_flag(ui_PanelSleep, LV_OBJ_FLAG_HIDDEN) ||
+                       !lv_obj_has_flag(ui_PanelListen, LV_OBJ_FLAG_HIDDEN) ||
+                       !lv_obj_has_flag(ui_PanelGet, LV_OBJ_FLAG_HIDDEN);
+    if (text[0] && robot_shown && lv_obj_has_flag(ui_PanelReply, LV_OBJ_FLAG_HIDDEN)) {
         lv_obj_clear_flag(s_count, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(s_count, LV_OBJ_FLAG_HIDDEN);

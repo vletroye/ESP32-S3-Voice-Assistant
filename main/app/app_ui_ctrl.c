@@ -2724,6 +2724,18 @@ void ui_ctrl_reply_show_end(const char *text)
     bsp_display_unlock();
 }
 
+void ui_ctrl_reply_show_scrolled(const char *text)
+{
+    bsp_display_lock(0);
+    reply_audio_start = false;
+    reply_audio_end = false;
+    reply_scroll_stop();
+    lv_obj_scroll_to_y(ui_ContainerReplyContent, 0, LV_ANIM_OFF);
+    reply_content_show_text(text);
+    bsp_display_unlock();
+    ui_ctrl_show_panel(UI_CTRL_PANEL_REPLY, 0);
+}
+
 /*
  * The question above the answer always scrolls horizontally: a short one gets spaces after it until it is wider
  * than the label (the circular scroll only runs for a text wider than its label)

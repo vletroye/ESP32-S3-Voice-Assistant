@@ -106,6 +106,12 @@ void ui_ctrl_reply_append_notice(const char *notice);
 /** Show a text as the answer, scrolled to its end (its last line visible), without following the speech */
 void ui_ctrl_reply_show_end(const char *text);
 
+/**
+ * Show a whole text as a new answer, from its top, on the reply panel: it scrolls at the reading speed
+ * (Scroll_speed) from ui_ctrl_reply_set_audio_start_flag(true), as an answer follows its speech (the games' lines)
+ */
+void ui_ctrl_reply_show_scrolled(const char *text);
+
 void ui_ctrl_guide_jump(void);
 
 /** Listening while the reply stays shown: bars moving beside the robot head at its top right (hidden by any panel change) */

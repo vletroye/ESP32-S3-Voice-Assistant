@@ -751,8 +751,8 @@ joins in), then a game's phrase:
 | "Disputez-vous" / "Argue with each other" | A debate: one states a bold opinion, the other contradicts it, and so on |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers; "c'est correct" / "that's right": the other asks the next one; wrong: the first gives the answer and asks another |
 
-- The two BOX take turns **out loud**, each with **its own voice** and **its own model**; each line is shown on its
-  screen. They talk to each other over the local network (UDP, port 47110): no microphone needed between them, no
+- The two BOX take turns **out loud**, each with **its own voice** and **its own model**; each line is shown on both
+  screens, scrolling as it is spoken. They talk to each other over the local network (UDP, port 47110): no microphone needed between them, no
   server.
 - **The wake word** (or a touch) on either of them **stops the game on both**. Otherwise it ends after
   `Game_turns_max` lines (20 by default, `CONFIG.INI`), the last one concluding it. Each line is a question to the

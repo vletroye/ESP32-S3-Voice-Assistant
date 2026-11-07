@@ -588,7 +588,9 @@ static volatile bool s_spoken = false;
 
 static void on_speech(tts_event_t event)
 {
-    if (event == TTS_EVENT_DONE) {
+    if (event == TTS_EVENT_FIRST_AUDIO) {
+        ui_ctrl_reply_set_audio_start_flag(true);   // the line scrolls with its speech
+    } else if (event == TTS_EVENT_DONE) {
         s_spoken = true;
     }
 }
@@ -598,7 +600,7 @@ static void line_say(char *text)
 {
     int turn = s_turns + 1;
     send_peer("line", turn, text);
-    assistant_show(text);
+    ui_ctrl_reply_show_scrolled(text);
     s_spoken = false;
     tts_stream_begin(on_speech);
     tts_stream_say(text);
@@ -653,7 +655,10 @@ static void message(game_msg_t *m)
             cJSON_AddStringToObject(item, "text", m->text);
             cJSON_AddItemToArray(s_history, item);
             s_turns = m->turn;
-            assistant_show(m->text);
+            // The other speaks it now: it scrolls at the reading speed (the end flag never set: the panel stays
+            // until the next line)
+            ui_ctrl_reply_show_scrolled(m->text);
+            ui_ctrl_reply_set_audio_start_flag(true);
         } else if (strcmp(m->type, "done") == 0) {
             s_peer_done = m->turn > s_peer_done ? m->turn : s_peer_done;
         } else if (strcmp(m->type, "stop") == 0) {

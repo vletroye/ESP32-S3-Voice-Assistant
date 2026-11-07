@@ -46,6 +46,12 @@ void ui_ctrl_apply_language(void);
 /** The list of models changed (free OpenRouter models read): the Settings screen shows the new one */
 void ui_ctrl_models_changed(void);
 
+/**
+ * @brief The configuration mode asked by a button (display locked, LVGL task): a waiting window at once, then the
+ *        switch (saves, restart) a moment later
+ */
+void ui_ctrl_config_mode(void);
+
 /** The MCP servers changed (tools read, switched on or off): their page shown again (display lock taken here) */
 void ui_ctrl_mcp_changed(void);
 

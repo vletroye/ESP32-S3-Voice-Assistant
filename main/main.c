@@ -746,6 +746,11 @@ void assistant_request_config(void)
     s_config_requested = true;      // the main task saves and restarts in configuration mode
 }
 
+bool assistant_main_running(void)
+{
+    return s_main_task != NULL;
+}
+
 void assistant_save_soon(void)
 {
     if (s_main_task) {

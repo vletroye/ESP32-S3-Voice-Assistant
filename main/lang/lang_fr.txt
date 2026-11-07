@@ -496,7 +496,8 @@ settings_google = Google
 google_connect = Connecter
 google_disconnect = Déconnecter
 google_unlink_ask = Déconnecter le compte Google de l'assistant ?
-google_to_config = Mode configuration
+google_to_config = Configuration
+config_wait = Passage en mode configuration...
 google_steps = Google n'autorise cette connexion que depuis un ordinateur. En mode configuration, ouvre GOOGLE.HTM sur le PC et accepte. La page suivante ne s'ouvre pas : copie son adresse dans CONFIG.INI (Google_code = ...), enregistre, puis redémarre.
 google_linking =  (en cours)
 google_failed =  (code refusé)

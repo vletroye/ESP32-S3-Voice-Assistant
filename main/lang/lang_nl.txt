@@ -497,7 +497,8 @@ settings_google = Google
 google_connect = Verbinden
 google_disconnect = Ontkoppelen
 google_unlink_ask = Het Google-account loskoppelen van de assistent?
-google_to_config = Configuratiemodus
+google_to_config = Configuratie
+config_wait = Naar de configuratiemodus...
 google_steps = Google staat deze aanmelding alleen toe vanaf een computer. Open in configuratiemodus GOOGLE.HTM op de pc en accepteer. De volgende pagina opent niet: kopieer het adres naar CONFIG.INI (Google_code = ...), sla op en herstart.
 google_linking =  (bezig)
 google_failed =  (code geweigerd)

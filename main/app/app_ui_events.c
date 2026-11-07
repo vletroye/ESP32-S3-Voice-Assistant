@@ -29,8 +29,8 @@ void EventPanelSleepClickCb(lv_event_t *e)
 
 static void RestartToFactoryPartition(void)
 {
-    // Configuration mode (speaker amplifier switched off first)
-    settings_factory_reset();
+    // Configuration mode: the waiting window at once, then the switch (speaker amplifier switched off first)
+    ui_ctrl_config_mode();
 }
 
 void EventWifiResetConfirmClick(lv_event_t *e)

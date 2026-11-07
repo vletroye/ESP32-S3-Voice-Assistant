@@ -496,7 +496,8 @@ settings_google = Google
 google_connect = Collega
 google_disconnect = Scollega
 google_unlink_ask = Scollegare l'account Google dall'assistente?
-google_to_config = Modalità configurazione
+google_to_config = Configurazione
+config_wait = Passaggio alla modalità configurazione...
 google_steps = Google consente questo accesso solo da un computer. In modalità configurazione, apri GOOGLE.HTM sul PC e accetta. La pagina successiva non si apre: copiane l'indirizzo in CONFIG.INI (Google_code = ...), salva e riavvia.
 google_linking =  (in corso)
 google_failed =  (codice rifiutato)

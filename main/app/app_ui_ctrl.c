@@ -973,6 +973,33 @@ void ui_ctrl_models_apply(void)
     }
 }
 
+/*
+ * ---------- The configuration mode asked by a button ----------
+ * Switching takes a few seconds (the conversation, the costs and the traces saved, then the restart): the waiting
+ * window is shown at once, so that the tap is seen to be taken, then the switch is done by the main task (or here,
+ * a moment later, before the main task runs: the Wi-Fi screen at the first start)
+ */
+extern bool assistant_main_running(void);
+extern void assistant_request_config(void);
+
+static void config_mode_go_cb(lv_timer_t *t)
+{
+    if (assistant_main_running()) {
+        assistant_request_config();
+        assistant_save_soon();      // the main task, at once
+    } else {
+        settings_factory_reset();
+    }
+}
+
+void ui_ctrl_config_mode(void)
+{
+    ESP_LOGI(TAG, "Configuration mode asked: waiting window shown");
+    busy_show(app_lang_get()->config_wait);
+    lv_timer_t *t = lv_timer_create(config_mode_go_cb, 150, NULL);     // the window drawn first
+    lv_timer_set_repeat_count(t, 1);
+}
+
 static void busy_hide(void)
 {
     if (s_model_test_wait) {
@@ -1415,8 +1442,6 @@ static void beep_switch_cb(lv_event_t *e)
     settings_save_str("Followup_beep", on ? "on" : "off");
 }
 
-extern void assistant_request_config(void);
-
 static void gcal_unlink_box_cb(lv_event_t *e)
 {
     lv_obj_t *box = lv_event_get_current_target(e);
@@ -1425,7 +1450,7 @@ static void gcal_unlink_box_cb(lv_event_t *e)
         google_auth_unlink();
         params_page_refresh();
     } else if (lv_msgbox_get_active_btn(box) == 0 && state != GOOGLE_NOT_CONFIGURED) {
-        assistant_request_config();     // to link: GOOGLE.HTM on the configuration drive
+        ui_ctrl_config_mode();      // to link: GOOGLE.HTM on the configuration drive
     }
     lv_msgbox_close_async(box);
 }
@@ -1668,7 +1693,7 @@ static void problems_skip_cb(lv_event_t *e)
 
 static void problems_config_cb(lv_event_t *e)
 {
-    assistant_request_config();     // the main task saves, then restarts in configuration mode
+    ui_ctrl_config_mode();
 }
 
 static void problems_button(const char *text, lv_align_t align, lv_coord_t x, lv_event_cb_t cb)

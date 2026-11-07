@@ -371,7 +371,9 @@ one of them changed): the choice is saved to the device's NVS and applied at onc
 session reconnects, ~2 s). Not confirmed, the choice is dropped when the page or the Settings screen is left.
 The folder-and-gear icon (top right) opens the **Configuration** screen: its button at the bottom right
 ("OK (30)") counts down from 30 and switches to the configuration mode described below at 0 (tap it to switch
-at once, or the back arrow to stay).
+at once, or the back arrow to stay). As soon as it is tapped (or the countdown ends), a waiting window says "Passage en mode configuration..." /
+"Switching to configuration mode..." while the conversation and the costs are saved and the device restarts (a
+few seconds); the **Configuration** button of the Google row (Paramètres page) does the same.
 
 At the bottom left of this Configuration screen (the one opened from Settings), two icons reset the device.
 Tapping one stops the countdown and asks for a confirmation:

@@ -269,6 +269,7 @@ typedef struct {
     const char *google_disconnect;
     const char *google_unlink_ask;
     const char *google_to_config;
+    const char *config_wait;            /* shown at once when a button asks for the configuration mode */
     const char *google_steps;
     const char *google_linking;
     const char *google_failed;

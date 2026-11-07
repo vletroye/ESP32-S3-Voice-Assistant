@@ -497,7 +497,8 @@ settings_google = Google
 google_connect = Verbinden
 google_disconnect = Trennen
 google_unlink_ask = Das Google-Konto vom Assistenten trennen?
-google_to_config = Konfigurationsmodus
+google_to_config = Konfiguration
+config_wait = Wechsel in den Konfigurationsmodus...
 google_steps = Google erlaubt diese Anmeldung nur von einem Computer. Öffne im Konfigurationsmodus GOOGLE.HTM auf dem PC und stimme zu. Die nächste Seite öffnet sich nicht: kopiere ihre Adresse in CONFIG.INI (Google_code = ...), speichere und starte neu.
 google_linking =  (läuft)
 google_failed =  (Code abgelehnt)

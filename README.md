@@ -1626,7 +1626,11 @@ party. Setting it up takes about 15 minutes, once.
 3. **APIs & Services → OAuth consent screen** (Google Auth Platform), **Get started**: app name, your e-mail,
    audience **External**, your e-mail again, accept, **Create**.
 4. **Data access → Add or remove scopes**: tick `.../auth/tasks`, **Update**, **Save**.
-5. **Audience → Publish app** (status **In production**; in testing, the access would end after 7 days).
+5. **Branding**: a home page and a privacy policy are required to publish: this repository's page
+   (`https://github.com/vletroye/ESP32-S3-Voice-Assistant`) and its [PRIVACY.md](PRIVACY.md)
+   (`https://github.com/vletroye/ESP32-S3-Voice-Assistant/blob/main/PRIVACY.md`) will do; then **Audience → Publish
+   app** (status **In production**; in testing, Google refuses the accounts not listed as test users, and the
+   access would end after 7 days).
 6. **Clients → Create client**, type **Desktop app** (not "TVs and Limited Input devices": Google then refuses the
    sign-in, "Localhost URI is not allowed for 'NATIVE_DEVICE' client type"; both downloaded files start with
    `{"installed":`), any name, **Create**: note its **client ID** and **client secret** (shown in the window, or

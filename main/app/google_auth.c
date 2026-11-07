@@ -17,6 +17,9 @@
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_random.h"
+#include "mbedtls/sha256.h"
+#include "mbedtls/base64.h"
 #include "cJSON.h"
 #include "settings.h"
 #include "file_state.h"
@@ -31,7 +34,11 @@ static const char *TAG = "google";
 #define GOOGLE_REVOKE_URL   "https://oauth2.googleapis.com/revoke"
 /* Where Google sends the browser once accepted: a "Desktop app" client may use the loopback address; the page does
    not open (nothing listens on the phone), the code is in the address */
-#define GOOGLE_REDIRECT     "http://localhost"
+#define GOOGLE_REDIRECT     "http://127.0.0.1"
+/* PKCE: the secret whose hash goes with the consent page's address, given back with the code (kept across the
+   restart between the two: the consent is done in configuration mode) */
+#define GOOGLE_PKCE_FILE    STATE_DIR "/google_pkce.txt"
+#define PKCE_VERIFIER_SIZE  64
 /* The access asked: the tasks (Google Tasks) */
 #define GOOGLE_SCOPES       "https://www.googleapis.com/auth/tasks"
 #define GOOGLE_HTTP_TIMEOUT 10000
@@ -186,19 +193,75 @@ google_state_t google_auth_state(void)
     return s_code ? GOOGLE_LINKING : s_failed ? GOOGLE_FAILED : GOOGLE_NOT_LINKED;
 }
 
-void google_auth_consent_url(char *out, size_t size)
+/* Bytes in base64url, without padding (PKCE) */
+static void base64url(const unsigned char *in, size_t len, char *out, size_t size)
+{
+    size_t n = 0;
+    mbedtls_base64_encode((unsigned char *)out, size, &n, in, len);
+    out[n] = '\0';
+    for (char *c = out; *c; c++) {
+        *c = *c == '+' ? '-' : *c == '/' ? '_' : *c;
+    }
+    while (n > 0 && out[n - 1] == '=') {
+        out[--n] = '\0';
+    }
+}
+
+/* A new PKCE verifier (43 characters from 32 random bytes), kept for the exchange */
+static void pkce_new(char *verifier, size_t size)
+{
+    unsigned char random[32];
+    esp_fill_random(random, sizeof(random));
+    base64url(random, sizeof(random), verifier, size);
+    FILE *f = fopen(GOOGLE_PKCE_FILE, "w");
+    if (f) {
+        fputs(verifier, f);
+        fclose(f);
+    }
+}
+
+/* The verifier kept, "" if none */
+static void pkce_read(char *verifier, size_t size)
+{
+    verifier[0] = '\0';
+    FILE *f = fopen(GOOGLE_PKCE_FILE, "r");
+    if (f) {
+        if (fgets(verifier, size, f)) {
+            verifier[strcspn(verifier, "\r\n")] = '\0';
+        }
+        fclose(f);
+    }
+}
+
+/* The consent page's address, its PKCE challenge made from verifier */
+static void consent_url(const char *verifier, char *out, size_t size)
 {
     if (!s_client) {
         out[0] = '\0';
         return;
     }
+    unsigned char hash[32];
+    mbedtls_sha256((const unsigned char *)verifier, strlen(verifier), hash, 0);
+    char challenge[48];
+    base64url(hash, sizeof(hash), challenge, sizeof(challenge));
     char client[160], scopes[160], redirect[64];
     url_encode(client, sizeof(client), s_client);
     url_encode(scopes, sizeof(scopes), GOOGLE_SCOPES);
     url_encode(redirect, sizeof(redirect), GOOGLE_REDIRECT);
     // offline + consent: a refresh token is given (again, after an unlink)
     snprintf(out, size, GOOGLE_AUTH_URL "?client_id=%s&redirect_uri=%s&response_type=code&scope=%s"
-             "&access_type=offline&prompt=consent", client, redirect, scopes);
+             "&access_type=offline&prompt=consent&code_challenge=%s&code_challenge_method=S256", client, redirect,
+             scopes, challenge);
+}
+
+void google_auth_consent_url(char *out, size_t size)
+{
+    char verifier[PKCE_VERIFIER_SIZE];
+    pkce_read(verifier, sizeof(verifier));
+    if (!verifier[0]) {
+        pkce_new(verifier, sizeof(verifier));
+    }
+    consent_url(verifier, out, size);
 }
 
 void google_auth_export_link(void)
@@ -208,8 +271,10 @@ void google_auth_export_link(void)
         remove(GOOGLE_LINK_FILE);
         return;
     }
-    char url[600], html_url[700];
-    google_auth_consent_url(url, sizeof(url));
+    // A new verifier for each new page (the code of an older one is refused)
+    char verifier[PKCE_VERIFIER_SIZE], url[700], html_url[800];
+    pkce_new(verifier, sizeof(verifier));
+    consent_url(verifier, url, sizeof(url));
     // "&" written "&amp;" in the attribute
     size_t n = 0;
     for (const char *c = url; *c && n + 6 < sizeof(html_url); c++) {
@@ -223,7 +288,7 @@ void google_auth_export_link(void)
     // Opened by a double click on the PC: straight to Google's consent page
     fprintf(f, "<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0; "
             "url=%s\"><title>Google</title></head><body><p><a href=\"%s\">Google</a></p><p>Google_code = "
-            "http://localhost/?code=... (CONFIG.INI)</p></body></html>\n", html_url, html_url);
+            "http://127.0.0.1/?code=... (CONFIG.INI)</p></body></html>\n", html_url, html_url);
     fclose(f);
     ESP_LOGI(TAG, "GOOGLE.HTM written (the account to link)");
 }
@@ -250,7 +315,7 @@ static bool tokens_take(const char *response)
     return access != NULL;
 }
 
-/* Google_code exchanged for the tokens: the code taken from the address pasted ("http://localhost/?code=4%2F0A..&scope=..") */
+/* Google_code exchanged for the tokens: the code taken from the address pasted ("http://127.0.0.1/?code=4%2F0A..&scope=..") */
 static void code_exchange(void)
 {
     char *code = s_code;
@@ -263,9 +328,11 @@ static void code_exchange(void)
     url_encode(client, sizeof(client), s_client);
     url_encode(secret, sizeof(secret), s_secret);
     url_encode(redirect, sizeof(redirect), GOOGLE_REDIRECT);
+    char verifier[PKCE_VERIFIER_SIZE];
+    pkce_read(verifier, sizeof(verifier));
     char *body = NULL;
-    asprintf(&body, "code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&grant_type=authorization_code",
-             code_enc, client, secret, redirect);
+    asprintf(&body, "code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&grant_type=authorization_code"
+             "&code_verifier=%s", code_enc, client, secret, redirect, verifier);
     int status = -1;
     char *response = body ? form_post(GOOGLE_TOKEN_URL, body, &status) : NULL;
     free(body);
@@ -288,6 +355,9 @@ static void code_exchange(void)
     free(s_code);
     s_code = NULL;
     settings_erase_key("Google_code");      // used once, whatever the result
+    if (ok) {
+        remove(GOOGLE_PKCE_FILE);
+    }
 }
 
 static void unlink_now(void)

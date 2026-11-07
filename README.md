@@ -823,7 +823,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
 | `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (the reasoning mode or not, a restart included), the assistant asks whether to go on with it (`0` to `120`; `0`: never asked) | `5` |
 | `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks](#311-google-tasks); empty: not offered | `1234-abc.apps.googleusercontent.com` |
-| `Google_code` | Once, to link the account: the address `http://localhost/?code=...` the phone reached after accepting (within 10 minutes); erased once used | |
+| `Google_code` | Once, to link the account: the address `http://127.0.0.1/?code=...` the phone reached after accepting (within 10 minutes); erased once used | |
 | `Alarm_stop_min` | A [timer or an alarm](#28-timers-alarms-and-reminders) not stopped (a touch, the wake word) stops ringing by itself after this many minutes (`1` to `60`) | `3` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
 | `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
@@ -1627,8 +1627,10 @@ party. Setting it up takes about 15 minutes, once.
    audience **External**, your e-mail again, accept, **Create**.
 4. **Data access → Add or remove scopes**: tick `.../auth/tasks`, **Update**, **Save**.
 5. **Audience → Publish app** (status **In production**; in testing, the access would end after 7 days).
-6. **Clients → Create client**, type **Desktop app**, any name, **Create**: note its **client ID** and **client
-   secret** (shown in the window, or on the client's page).
+6. **Clients → Create client**, type **Desktop app** (not "TVs and Limited Input devices": Google then refuses the
+   sign-in, "Localhost URI is not allowed for 'NATIVE_DEVICE' client type"; both downloaded files start with
+   `{"installed":`), any name, **Create**: note its **client ID** and **client secret** (shown in the window, or
+   on the client's page).
 
 **2. In `CONFIG.INI`** (configuration mode): `Google_client = <client ID>` and `Google_secret = <client secret>`,
 save, restart. On the **Paramètres** / **Settings** page of the Settings screen, the **Google Tasks** row then offers **Connecter** / **Connect** (before, it says "(à configurer)" / "(to set up)", and its **?** button what `CONFIG.INI` needs). These keys must be saved with a configuration mode of version 2.36 or later: an older one drops them as unknown.
@@ -1641,7 +1643,7 @@ loopback flow has been blocked in order to keep users secure").
 2. On the configuration drive, open **GOOGLE.HTM** (a double click): the PC's browser goes to Google's consent page.
    Choose your account. Google warns that the app is not verified (it is yours): **Advanced → Go to … (unsafe)**,
    then allow "See, edit, create and delete all your tasks".
-3. The browser then opens an address starting with `http://localhost/?code=...` that **does not open** ("site can't
+3. The browser then opens an address starting with `http://127.0.0.1/?code=...` that **does not open** ("site can't
    be reached"): that is expected. **Copy this whole address** from the address bar.
 4. Still in configuration mode, within **10 minutes** (the code expires): `Google_code = <the address>` in
    `CONFIG.INI`, save, restart. The device exchanges it for its access, keeps the access in `/state/google.json`
@@ -1653,7 +1655,9 @@ loopback flow has been blocked in order to keep users secure").
 from your Google account (Security, third-party connections). The factory reset forgets it too; the soft reset keeps
 `Google_client` and `Google_secret`.
 
-How it works: OAuth 2.0 for installed apps (Google's flow for devices without a keyboard does not allow the tasks).
+How it works: OAuth 2.0 for installed apps, with PKCE (S256; its verifier kept in `/state/google_pkce.txt` from
+GOOGLE.HTM to the exchange) and the loopback address `http://127.0.0.1` (Google's flow for devices without a
+keyboard does not allow the tasks).
 The model gets four tools: `tasks_lists`, `tasks_get` (the open tasks of a list), `tasks_add` (several items at once,
 the list created when asked) and `tasks_update` (complete, reopen, delete, rename). Lists and tasks are named as you
 say them, case and accents ignored ("courses" finds "Courses"); a name matching nothing gives the model the names

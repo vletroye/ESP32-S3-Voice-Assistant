@@ -7,7 +7,7 @@
  * client of the user's own Google Cloud project (Google_client and Google_secret of CONFIG.INI, type "Desktop app").
  * Linked once, from a computer (Google blocks this flow in a phone's browser): on the way to the configuration mode,
  * GOOGLE.HTM is put on its drive, opening Google's consent page; once accepted, Google sends the browser to
- * http://localhost/?code=... (a page that does not open); that address, pasted as Google_code in CONFIG.INI, is
+ * http://127.0.0.1/?code=... (a page that does not open); that address, pasted as Google_code in CONFIG.INI, is
  * exchanged at the next start for a refresh token, kept in /state/google.json (never shown nor logged), and
  * Google_code is erased. Then the device reaches Google alone: an access token of an hour is asked with
  * the refresh token whenever needed.

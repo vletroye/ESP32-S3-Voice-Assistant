@@ -402,7 +402,8 @@ void game_init(void)
         s_my_id = (s_my_id << 8) | mac[i];
     }
     games_install();
-    s_queue = xQueueCreate(16, sizeof(game_msg_t));
+    // In PSRAM, as its task's stack: the internal RAM is short, TLS needs it for the calls to the services
+    s_queue = xQueueCreateWithCaps(16, sizeof(game_msg_t), MALLOC_CAP_SPIRAM);
     s_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     int yes = 1;
     setsockopt(s_sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
@@ -416,7 +417,7 @@ void game_init(void)
         return;
     }
     // Small: it only reads the messages and gives them to the main task
-    if (xTaskCreatePinnedToCore(net_task, "game_net", 3072, NULL, 4, NULL, 0) != pdPASS) {
+    if (xTaskCreatePinnedToCoreWithCaps(net_task, "game_net", 3072, NULL, 4, NULL, 0, MALLOC_CAP_SPIRAM) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create task");
     }
 }

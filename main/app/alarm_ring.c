@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "bsp_board.h"
 #include "settings.h"
@@ -101,7 +102,7 @@ static void chime_make(void)
  */
 static bool chime_piece(size_t *pos, float gain)
 {
-    static int16_t piece[PIECE_FRAMES * 2];
+    EXT_RAM_BSS_ATTR static int16_t piece[PIECE_FRAMES * 2];
     if (s_stop || !s_chime) {
         return false;
     }
@@ -267,9 +268,10 @@ static void ring_task(void *arg)
 void alarm_ring_init(void)
 {
     chime_make();
-    s_requests = xQueueCreate(4, sizeof(ring_request_t));
-    // Internal RAM stack: it writes to the I2S and the codec
-    if (xTaskCreatePinnedToCore(ring_task, "alarm_ring", 6 * 1024, NULL, 5, NULL, 1) != pdPASS) {
+    s_requests = xQueueCreateWithCaps(4, sizeof(ring_request_t), MALLOC_CAP_SPIRAM);
+    // PSRAM stack, as the speech's playback task that also writes to the I2S and the codec: the internal RAM is
+    // short, TLS needs it for the calls to the services
+    if (xTaskCreatePinnedToCoreWithCaps(ring_task, "alarm_ring", 6 * 1024, NULL, 5, NULL, 1, MALLOC_CAP_SPIRAM) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create task");
     }
 }

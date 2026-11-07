@@ -12,6 +12,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "esp_attr.h"
 #include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
@@ -247,7 +248,7 @@ static void consent_url(const char *verifier, char *out, size_t size)
     char challenge[48];
     base64url(hash, sizeof(hash), challenge, sizeof(challenge));
     // Static, as the other large buffers here: the main task's stack is small (6.5 KB), and these run deep in it
-    static char client[160], scopes[400], redirect[64];
+    EXT_RAM_BSS_ATTR static char client[160], scopes[400], redirect[64];
     url_encode(client, sizeof(client), s_client);
     url_encode(scopes, sizeof(scopes), GOOGLE_SCOPES);
     url_encode(redirect, sizeof(redirect), GOOGLE_REDIRECT);
@@ -281,7 +282,7 @@ void google_auth_export_link(void)
     }
     free(code);
     // A new verifier for each new page (the code of an older one is refused)
-    static char verifier[PKCE_VERIFIER_SIZE], url[1000], html_url[1200];
+    EXT_RAM_BSS_ATTR static char verifier[PKCE_VERIFIER_SIZE], url[1000], html_url[1200];
     pkce_new(verifier, sizeof(verifier));
     consent_url(verifier, url, sizeof(url));
     // "&" written "&amp;" in the attribute
@@ -332,7 +333,7 @@ static void code_exchange(void)
     start = start ? start + 5 : code;
     start[strcspn(start, "& \t\r\n")] = '\0';
     url_decode(start);
-    static char code_enc[512], client[160], secret[160], redirect[64];
+    EXT_RAM_BSS_ATTR static char code_enc[512], client[160], secret[160], redirect[64];
     url_encode(code_enc, sizeof(code_enc), start);
     url_encode(client, sizeof(client), s_client);
     url_encode(secret, sizeof(secret), s_secret);
@@ -375,7 +376,7 @@ static void unlink_now(void)
     xSemaphoreTake(s_lock, portMAX_DELAY);
     if (s_refresh) {
         // Revoked at Google too (the device no longer appears among the account's connected apps)
-        static char token[600], body[700];
+        EXT_RAM_BSS_ATTR static char token[600], body[700];
         url_encode(token, sizeof(token), s_refresh);
         snprintf(body, sizeof(body), "token=%s", token);
         int status;
@@ -417,7 +418,7 @@ static const char *access_token(void)
     if (s_access && esp_timer_get_time() < s_access_until) {
         return s_access;
     }
-    static char refresh[600], client[160], secret[160];      // (under s_lock)
+    EXT_RAM_BSS_ATTR static char refresh[600], client[160], secret[160];      // (under s_lock)
     url_encode(refresh, sizeof(refresh), s_refresh);
     url_encode(client, sizeof(client), s_client);
     url_encode(secret, sizeof(secret), s_secret);

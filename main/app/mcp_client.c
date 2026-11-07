@@ -27,8 +27,8 @@
 /* A full tool list can be large (Homey: ~190 tools, ~180 KB): read into PSRAM, then only the selection is kept */
 #define MCP_MAX_BODY            (512 * 1024)
 /*
- * Results given to the model (Homey's room list is ~3,600 characters, its home briefing ~6,600); the conversation
- * keeps a shortened copy once answered (ai_provider_anthropic.c)
+ * Results given to the model (Homey's room list is ~3,600 characters, its home briefing ~6,600), kept whole in the
+ * conversation (shortened, the model believed it had made up the rest of a list)
  */
 #define MCP_MAX_RESULT          12000
 #define MCP_PROTOCOL            "2025-06-18"

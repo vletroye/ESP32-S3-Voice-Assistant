@@ -2178,8 +2178,9 @@ A power cut clears them. Every start is also added to `BOOTS.TXT` (the last 50, 
   the only room whose name holds it); a name matching no room, or several, answers the model with the rooms' names
   and ids so that it tries again. JSON results lose their useless fields (icons, update
   dates, parent zone, flow folder, empty sub-zone lists: the room list goes from ~7,300 to ~3,600 characters)
-  and are cut at 12,000 characters (logged when it happens). Once answered, the history keeps only their first
-  600 characters, so a long list is not sent again in full with every question. The instructions then tell
+  and are cut at 12,000 characters (logged when it happens). They stay whole in the conversation (once shortened
+  to their first 600 characters there, a list read again looked cut and the model believed it had made up the
+  rest; sent again with each question, they mostly come from the prompt cache). The instructions then tell
   the model to call the Homey tools again for every question about the home instead of answering from the
   conversation, and to answer an action in a few words ("C'est fait." / "Done.", or what failed and the one question
   needed to go on). An expired session is reopened; retried every minute while the Homey cannot be reached.

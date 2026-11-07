@@ -296,6 +296,11 @@ typedef struct {
     const char *system_kb_used;
     const char *system_entries;
     const char *system_uptime_fmt;
+    const char *game_title;         /* Games between two BOX (game.c): %s the game's name */
+    const char *game_searching;
+    const char *game_no_peer;
+    const char *game_peer_left;
+    const char *game_over;
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;
     const char *settings_debug_info;

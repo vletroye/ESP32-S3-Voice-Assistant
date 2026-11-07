@@ -28,6 +28,8 @@ idf_component_register(
         "commands/commands_it.txt"
         # Models offered (AGENTS.INI), installed on SPIFFS when missing (main/app/llm.c)
         "agents/agents.ini"
+        # Games between two BOX (GAMES.INI), installed on SPIFFS when missing (main/app/game.c)
+        "games/games.ini"
         # Who the assistant is, per language (PERSO_FR.TXT...), installed on SPIFFS when missing (main/app/file_persona.c)
         "persona/persona_fr.txt"
         "persona/persona_en.txt"

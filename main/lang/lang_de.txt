@@ -530,6 +530,14 @@ system_kb_used = %u KB von %u KB belegt
 system_entries = %u Einträge von %u belegt
 system_uptime_fmt = %u T %u h %02u min
 
+# Games between two BOX (GAMES.INI): the screen of a game (%s its name), looking for the other BOX, none
+# found, the other silent, the end
+game_title = Spiel: %s
+game_searching = Ich suche die andere BOX...
+game_no_peer = Ich finde keine andere BOX im Netzwerk.
+game_peer_left = Die andere BOX antwortet nicht mehr: Spielende.
+game_over = Spielende!
+
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug
 settings_debug = Traces

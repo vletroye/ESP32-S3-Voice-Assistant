@@ -35,6 +35,7 @@
 #include "radio.h"
 #include "llm.h"
 #include "alarm_ring.h"
+#include "game.h"
 
 static const char *TAG = "app_audio";
 
@@ -394,6 +395,10 @@ void sr_handler_task(void *pvParam)
             // Someone speaks to the assistant: the screen goes on if it was off
             app_presence_activity();
             // A timer or an alarm ringing stops (the user may then say "encore 5 minutes")
+            // A game between two BOX stops, on both
+            if (game_stop()) {
+                ESP_LOGI(TAG, "Game stopped by the wake word or a touch");
+            }
             if (alarm_ring_stop()) {
                 ESP_LOGI(TAG, "Ringing stopped by the wake word or a touch");
             }

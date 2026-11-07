@@ -1717,6 +1717,32 @@ void llm_set_system_prompt(const char *system_prompt)
     xSemaphoreGive(s_lock);
 }
 
+static llm_error_t client_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text);
+
+llm_error_t llm_ask_apart(const char *system_prompt, const char *question, char **answer)
+{
+    *answer = NULL;
+    if (!s_ready || !s_lock) {
+        return LLM_ERR_NO_KEY;
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    // The conversation, the instructions and the tools of the assistant set aside, then given back
+    cJSON *saved = cJSON_Duplicate(history_get(), true);
+    history_set(cJSON_CreateArray());
+    backend()->set_instructions(backend()->state, system_prompt);
+    if (backend()->set_tools) {
+        backend()->set_tools(backend()->state, NULL, NULL);
+    }
+    llm_error_t err = client_stream(question, NULL, NULL, answer);
+    history_set(saved);
+    backend()->set_instructions(backend()->state, s_system ? s_system : "");
+    if (backend()->set_tools) {
+        backend()->set_tools(backend()->state, provider_tools(), tools_run);
+    }
+    xSemaphoreGive(s_lock);
+    return err;
+}
+
 void llm_set_tools(const cJSON *definitions)
 {
     if (s_lock) {

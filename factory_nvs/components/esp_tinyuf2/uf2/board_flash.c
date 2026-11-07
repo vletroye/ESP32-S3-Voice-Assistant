@@ -164,6 +164,15 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "GOOGLE  HTM", 12);
         PRINTF("%s shown as GOOGLE.HTM", t->path);
     }
+    // Games between two BOX (GAMES.INI)
+    FILE *games = fopen(PHRASES_DIR "/games.ini", "r");
+    if (games) {
+        fclose(games);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/games.ini", sizeof(t->path));
+        memcpy(t->fat_name, "GAMES   INI", 12);
+        PRINTF("%s shown as GAMES.INI", t->path);
+    }
     // Results of the model test ("teste les modèles"), when there are some
     FILE *speed = fopen(PHRASES_DIR "/speed.txt", "r");
     if (speed) {
@@ -503,7 +512,7 @@ static const char *const s_ini_key_order[] = {
     "OpenRouter_free", "XAI_key", "Mistral_key", "Perplexity_key", "Deepgram_key", "Groq_key",
     "ElevenLabs_key",
     "Screen_off_s", "Resume_ask_min", "Alarm_stop_min", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Read_lists", "Currency", "Radio_resume",
-    "Radio_level", "Radio_treble", "Followup_beep", "Debug", "Google_client", "Google_secret", "Google_code",
+    "Radio_level", "Radio_treble", "Followup_beep", "Debug", "Google_client", "Google_secret", "Google_code", "Game_tone", "Game_turns_max",
 };
 
 /* [Voice assistant] The keys of an MCP server of the [MCP] section, after "Mcp<n>_" (n: 1 to 99) */

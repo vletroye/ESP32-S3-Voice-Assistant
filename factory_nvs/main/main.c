@@ -203,6 +203,9 @@ void app_main(void)
         nvs_init_int_if_missing("Screen_off_s", CONFIG_ASSISTANT_SCREEN_OFF_S);
         // Reasoning mode: asked whether to go on with the conversation after this pause (minutes), 0: never
         nvs_init_int_if_missing("Resume_ask_min", CONFIG_ASSISTANT_RESUME_ASK_MIN);
+        // Games between two BOX: the personality (persona: PERSO_<XX>.TXT, random: drawn), lines at most
+        nvs_init_str_if_missing("Game_tone", "random");
+        nvs_init_int_if_missing("Game_turns_max", 20);
         // A timer or an alarm stops ringing by itself after this (minutes)
         nvs_init_int_if_missing("Alarm_stop_min", CONFIG_ASSISTANT_ALARM_STOP_MIN);
         // Treble of the radio, in dB (negative: softer)

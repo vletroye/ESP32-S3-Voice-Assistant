@@ -45,6 +45,7 @@
 #include "mcp_client.h"
 #include "alarms.h"
 #include "alarm_ring.h"
+#include "game.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -1028,6 +1029,11 @@ void assistant_listen_end(void)
     // UI listen success
     ui_ctrl_label_show_text(UI_CTRL_LABEL_REPLY_QUESTION, text);
 
+    // "Disputez-vous", "concours de devinettes": a game with the other BOX of the network (played by the main task)
+    if (game_try_start(text)) {
+        goto err;
+    }
+
     // "Change la langue" / "change de modèle" (then the answer), "parle anglais", "utilise le modèle 3":
     // answered and applied here, without restarting
     char *cmd_reply = NULL;
@@ -1347,14 +1353,18 @@ void app_main()
 
     // Ringing the timers, alarms and reminders due (its chime made once)
     alarm_ring_init();
+    // Games between two BOX: GAMES.INI, the UDP port where they find each other
+    game_init();
 
     s_main_task = xTaskGetCurrentTaskHandle();
     for (int seconds = 0; ; seconds++) {
         // A second, or less when the assistant goes to sleep with something to save (assistant_save_soon)
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
 
+        // A game between two BOX: its next step (a line made, said, the other's awaited)
+        game_poll();
         // A timer, an alarm or a reminder due: rung once the assistant sleeps (after a reply, a conversation)
-        if (!alarm_ring_active() && !s_reply_active && ui_ctrl_is_asleep()) {
+        if (!alarm_ring_active() && !game_active() && !s_reply_active && ui_ctrl_is_asleep()) {
             alarm_t due;
             bool missed = false;
             if (alarms_due(&due, &missed)) {

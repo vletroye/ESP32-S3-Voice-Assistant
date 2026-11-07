@@ -35,7 +35,8 @@ void homey_mcp_set_confirm_off(const char *classes);
 void homey_mcp_adapt_definition(const char *tool, cJSON *definition);
 
 /**
- * @brief Before a call: a request turning off devices to confirm, not confirmed yet, gets the answer for the model
+ * @brief Before a call: a zone_id given as a name ("bureau") is replaced by the zone's id (zones_list); a request
+ *        turning off devices to confirm, not confirmed yet, or a zone not found, gets the answer for the model
  *        instead (allocated); NULL to go on. The arguments are then cleaned (without "confirmed", unknown to Homey).
  */
 char *homey_mcp_before_call(const char *tool, cJSON *arguments, homey_mcp_call_t call, void *server);

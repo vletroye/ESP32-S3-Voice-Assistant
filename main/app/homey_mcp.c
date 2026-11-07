@@ -10,6 +10,7 @@
 #include <string.h>
 #include <strings.h>
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "homey_mcp.h"
 
 static const char *TAG = "homey";
@@ -240,8 +241,172 @@ static char *confirmation_needed(const char *name, const cJSON *input, homey_mcp
     return answer;
 }
 
+/* ---------- A zone given by its name ("bureau") instead of its id ---------- */
+
+/* The zones of zones_list (id, name) kept this long: asked again after that, or when a name is not found */
+#define ZONES_KEEP_US       (10LL * 60 * 1000000)
+
+static cJSON *s_zones = NULL;           /* [{"id","name"}] */
+static int64_t s_zones_time = 0;
+
+/* An id of Homey ("9eb2975d-49fd-4b6a-8f1c-2a3b4c5d6e7f"): 36 characters, hexadecimal digits and 4 dashes */
+static bool looks_like_id(const char *s)
+{
+    if (strlen(s) != 36) {
+        return false;
+    }
+    for (int i = 0; i < 36; i++) {
+        bool dash = (i == 8 || i == 13 || i == 18 || i == 23);
+        if (dash ? s[i] != '-' : !isxdigit((unsigned char)s[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* A name to compare: lower case, without accents (the UTF-8 Latin letters), without blanks around */
+static void fold(const char *in, char *out, size_t size)
+{
+    static const char from[] = "àáâãäåçèéêëìíîïñòóôõöùúûüýÿ";
+    static const char to[] = "aaaaaaceeeeiiiinooooouuuuyy";
+    size_t n = 0;
+    while (*in == ' ') {
+        in++;
+    }
+    for (const unsigned char *p = (const unsigned char *)in; *p && n + 1 < size; p++) {
+        unsigned char c = *p;
+        if (c == 0xC3 && p[1]) {
+            // "é" is 0xC3 0xA9: looked for in from[] (two bytes per letter), lower case first
+            unsigned char second = p[1] | 0x20;
+            char letter = 0;
+            for (size_t i = 0; i + 1 < sizeof(from) - 1; i += 2) {
+                if ((unsigned char)from[i + 1] == second) {
+                    letter = to[i / 2];
+                    break;
+                }
+            }
+            if (letter) {
+                out[n++] = letter;
+                p++;
+                continue;
+            }
+        }
+        out[n++] = (char)tolower(c);
+    }
+    while (n > 0 && out[n - 1] == ' ') {
+        n--;
+    }
+    out[n] = '\0';
+}
+
+/* The objects with an id and a name, wherever they are in the result of zones_list */
+static void collect_zones(const cJSON *node, cJSON *out)
+{
+    const cJSON *id = cJSON_GetObjectItem(node, "id");
+    const cJSON *name = cJSON_GetObjectItem(node, "name");
+    if (cJSON_IsObject(node) && cJSON_IsString(id) && cJSON_IsString(name)) {
+        cJSON *zone = cJSON_CreateObject();
+        cJSON_AddStringToObject(zone, "id", id->valuestring);
+        cJSON_AddStringToObject(zone, "name", name->valuestring);
+        cJSON_AddItemToArray(out, zone);
+    }
+    const cJSON *child;
+    cJSON_ArrayForEach(child, node) {
+        if (cJSON_IsObject(child) || cJSON_IsArray(child)) {
+            collect_zones(child, out);
+        }
+    }
+}
+
+static void zones_read(homey_mcp_call_t call, void *server)
+{
+    cJSON *input = cJSON_CreateObject();
+    bool error = false;
+    char *text = call(server, "zones_list", input, &error);
+    cJSON_Delete(input);
+    cJSON *result = text && !error ? cJSON_Parse(text) : NULL;
+    free(text);
+    if (!result) {
+        return;
+    }
+    cJSON_Delete(s_zones);
+    s_zones = cJSON_CreateArray();
+    collect_zones(result, s_zones);
+    cJSON_Delete(result);
+    s_zones_time = esp_timer_get_time();
+    ESP_LOGI(TAG, "%d zones read", cJSON_GetArraySize(s_zones));
+}
+
+/* The id of the zone named so: the same name, else the only one whose name holds it (or is held by it) */
+static const char *zone_find(const char *wanted, int *candidates)
+{
+    char want[64], have[64];
+    fold(wanted, want, sizeof(want));
+    const char *partial = NULL;
+    *candidates = 0;
+    const cJSON *zone;
+    cJSON_ArrayForEach(zone, s_zones) {
+        fold(cJSON_GetObjectItem(zone, "name")->valuestring, have, sizeof(have));
+        if (strcmp(want, have) == 0) {
+            *candidates = 1;
+            return cJSON_GetObjectItem(zone, "id")->valuestring;
+        }
+        if (want[0] && have[0] && (strstr(have, want) || strstr(want, have))) {
+            partial = cJSON_GetObjectItem(zone, "id")->valuestring;
+            (*candidates)++;
+        }
+    }
+    return *candidates == 1 ? partial : NULL;
+}
+
+/*
+ * A zone_id that is a name ("bureau", as a model may give it): replaced by the id of the zone of that name; not
+ * found, or several, the answer for the model (allocated, with the zones' names), NULL to go on
+ */
+static char *zone_resolve(cJSON *arguments, homey_mcp_call_t call, void *server)
+{
+    const cJSON *zone_id = cJSON_GetObjectItem(arguments, "zone_id");
+    if (!cJSON_IsString(zone_id) || looks_like_id(zone_id->valuestring)) {
+        return NULL;
+    }
+    char wanted[64];
+    strlcpy(wanted, zone_id->valuestring, sizeof(wanted));
+    int candidates = 0;
+    const char *id = NULL;
+    if (s_zones && esp_timer_get_time() - s_zones_time < ZONES_KEEP_US) {
+        id = zone_find(wanted, &candidates);
+    }
+    if (!id) {
+        zones_read(call, server);      // not read yet, old, or a zone added since
+        id = s_zones ? zone_find(wanted, &candidates) : NULL;
+    }
+    if (id) {
+        ESP_LOGI(TAG, "zone \"%s\" is %s", wanted, id);
+        cJSON_ReplaceItemInObject(arguments, "zone_id", cJSON_CreateString(id));
+        return NULL;
+    }
+    ESP_LOGW(TAG, "zone \"%s\": %s", wanted, candidates ? "several match" : "not found");
+    cJSON *reply = cJSON_CreateObject();
+    char error[128];
+    snprintf(error, sizeof(error), "zone_id must be the id of a zone: \"%s\" %s", wanted,
+             candidates ? "matches several zones" : "is not the name of any zone");
+    cJSON_AddStringToObject(reply, "error", error);
+    cJSON *zones = cJSON_AddArrayToObject(reply, "zones");
+    const cJSON *zone;
+    cJSON_ArrayForEach(zone, s_zones) {
+        cJSON_AddItemToArray(zones, cJSON_Duplicate(zone, true));
+    }
+    char *answer = cJSON_PrintUnformatted(reply);
+    cJSON_Delete(reply);
+    return answer;
+}
+
 char *homey_mcp_before_call(const char *tool, cJSON *arguments, homey_mcp_call_t call, void *server)
 {
+    char *zone_error = zone_resolve(arguments, call, server);
+    if (zone_error) {
+        return zone_error;
+    }
     char *confirm = confirmation_needed(tool, arguments, call, server);
     cJSON_DeleteItemFromObject(arguments, CONFIRMED_ARG);     // ours, unknown to Homey
     return confirm;

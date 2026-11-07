@@ -683,7 +683,7 @@ char *mcp_call(const char *name, const cJSON *input, bool *is_error)
         out = homey_mcp_before_call(tool, arguments, server_call, s);
         if (out) {
             *is_error = false;
-            trace_text(s, "to the model (confirmation)", out, strlen(out));
+            trace_text(s, "to the model (by the device)", out, strlen(out));
         }
     }
     if (!out) {

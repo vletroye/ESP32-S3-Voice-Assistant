@@ -29,6 +29,7 @@
 #include "model_path.h"
 #include "bsp_board.h"
 #include "app_audio.h"
+#include "app_ui_ctrl.h"
 #include "app_wifi.h"
 #include "stt_stream.h"
 #include "settings.h"
@@ -72,6 +73,8 @@ static const char *TAG = "app_sr";
 static const esp_afe_sr_iface_t *afe_handle = NULL;
 static srmodel_list_t *models = NULL;
 static volatile bool manul_detect_flag = false;
+/* The wake word heard while the Settings screen is shown: ignored, and the channel verification that follows too */
+static bool s_wake_ignored = false;
 /* Double tap while listening: the session ends as if nobody had spoken */
 static volatile bool s_cancel_listen = false;
 /* A finger on the screen (a list scrolled): the delay without speech is paused */
@@ -162,7 +165,15 @@ static void audio_detect_task(void *arg)
         if (!res || res->ret_value == ESP_FAIL) {
             continue;
         }
-        if (res->wakeup_state == WAKENET_DETECTED) {
+        if (res->wakeup_state == WAKENET_DETECTED && !ui_ctrl_wake_allowed()) {
+            // A Settings screen shown: the wake word does nothing there (no listening started by a word heard
+            // while touching the settings)
+            ESP_LOGI(TAG, "wakeword ignored: a Settings screen is shown");
+            s_wake_ignored = true;
+        } else if (res->wakeup_state == WAKENET_CHANNEL_VERIFIED && s_wake_ignored && !manul_detect_flag) {
+            s_wake_ignored = false;     // the end of the ignored wake word: the word engine still listens
+        } else if (res->wakeup_state == WAKENET_DETECTED) {
+            s_wake_ignored = false;
             debug_trace_turn("wake word");
             ESP_LOGI(TAG,  "wakeword detected (model %d)", res->wakenet_model_index);
             sr_result_t result = {

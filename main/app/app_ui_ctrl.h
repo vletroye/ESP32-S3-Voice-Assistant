@@ -52,6 +52,9 @@ void ui_ctrl_models_changed(void);
  */
 void ui_ctrl_config_mode(void);
 
+/** The wake word may start a listening: not while the Settings screen (or the Configuration or System one) is shown */
+bool ui_ctrl_wake_allowed(void);
+
 /** The MCP servers changed (tools read, switched on or off): their page shown again (display lock taken here) */
 void ui_ctrl_mcp_changed(void);
 

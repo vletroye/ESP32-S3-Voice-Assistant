@@ -703,20 +703,18 @@ static lv_obj_t *settings_row_create(const char *text, lv_coord_t dropdown_width
 /*
  * Pages of the Settings screen, browsed with the arrows at the bottom (looping): 1. language and model,
  * 2. speech, transcription and voice, 3. to 5. the LLM, STT and TTS models, 6. the MCP servers, 7. the Paramètres
- * (switches), 8. the debug traces, 9. the system (firmware, hardware, memory). The rows of the other pages are hidden (the panel's flex layout skips them).
+ * (switches), 8. the debug traces (the system: a long press on the Settings icon, app_ui_system.c). The rows of the other pages are hidden (the panel's flex layout skips them).
  */
-#define SETTINGS_PAGES          9
+#define SETTINGS_PAGES          8
 #define SETTINGS_PAGE_MODELS    2       /* the first page of the models (LLM, then STT, then TTS) */
 #define SETTINGS_PAGE_MCP       5       /* the MCP servers, switched on or off */
 #define SETTINGS_PAGE_PARAMS    6       /* switches: the beep after a reply */
 #define SETTINGS_PAGE_DEBUG     7
-#define SETTINGS_PAGE_SYSTEM    8       /* the device: firmware, hardware, memory (the last page: left of the first) */
 #define SETTINGS_ROWS_MAX       16
 static void model_list_show(int page);
 static void debug_page_refresh(void);
 static void params_page_refresh(void);
 static void mcp_page_refresh(void);
-static lv_obj_t *s_system_table = NULL;       /* the Système page */
 static lv_obj_t *s_settings_rows[SETTINGS_ROWS_MAX];
 static uint8_t s_settings_row_page[SETTINGS_ROWS_MAX];
 static size_t s_settings_row_count = 0;
@@ -748,10 +746,6 @@ static void settings_page_show(int page)
     confirm_button_update(s_settings_changed);
     model_list_show(s_settings_page);
     mcp_page_refresh();
-    if (s_settings_page == SETTINGS_PAGE_SYSTEM && s_system_table) {
-        ui_system_fill(s_system_table);
-        lv_obj_scroll_to_y(s_system_table, 0, LV_ANIM_OFF);
-    }
     debug_page_refresh();
     params_page_refresh();
     for (size_t i = 0; i < s_settings_row_count; i++) {
@@ -999,6 +993,13 @@ static void config_mode_go_cb(lv_timer_t *t)
     }
 }
 
+bool ui_ctrl_wake_allowed(void)
+{
+    // The screen shown, read without the display lock: a pointer, read whole
+    lv_obj_t *screen = lv_disp_get_scr_act(NULL);
+    return screen != ui_ScreenSettings && screen != ui_ScreenReset && !ui_system_shown();
+}
+
 void ui_ctrl_config_mode(void)
 {
     ESP_LOGI(TAG, "Configuration mode asked: waiting window shown");
@@ -1194,7 +1195,6 @@ static void model_list_show(int page)
         lv_label_set_text(ui_LabelSettingsTile, list >= 0 && list < 3 ? titles[list] :
                           page == SETTINGS_PAGE_DEBUG ? lang->settings_debug_title :
                           page == SETTINGS_PAGE_MCP ? lang->settings_mcp_list :
-                          page == SETTINGS_PAGE_SYSTEM ? lang->system_title :
                           page == SETTINGS_PAGE_PARAMS ? lang->settings_params_title : lang->settings_title);
     }
     for (int i = 0; i < 3; i++) {
@@ -1603,12 +1603,10 @@ static void settings_screen_setup(void)
     for (int i = 0; i < 3; i++) {
         model_list_create(i);
     }
-    // Page 6: the MCP servers; 7: the Paramètres; 8: the debug traces; 9: the system
+    // Page 6: the MCP servers; 7: the Paramètres; 8: the debug traces
     mcp_list_create();
     params_page_create();
     debug_page_create();
-    s_system_table = ui_system_create(ui_PanelSettings);
-    settings_row_add(s_system_table, SETTINGS_PAGE_SYSTEM);
 
     // Arrows to the previous / next page at the bottom left and right
     settings_arrow_create(LV_ALIGN_BOTTOM_LEFT, 10, LV_SYMBOL_LEFT, -1);
@@ -2353,6 +2351,7 @@ void ui_ctrl_init(void)
     ui_radio_init();
     ui_status_init();
     ui_alarms_init();
+    ui_system_init();
     // Taps on the answer land on the panel or on the scrolling text container (both clickable)
     lv_obj_add_event_cb(ui_PanelReply, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
     // While listening or thinking: a double tap drops it, back to sleep
@@ -2558,6 +2557,7 @@ static void show_panel_timer_handler(struct _lv_timer_t *t)
     ui_radio_close();
     ui_status_close();
     ui_alarms_close();
+    ui_system_close();
     lv_obj_t *show_panel = NULL;
     lv_obj_t *hide_panel[3] = { NULL };
 

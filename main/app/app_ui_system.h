@@ -3,9 +3,10 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * The "Système" page of the Settings screen: what the device is and how it stands (firmware version and date, board
- * and dock, processor, flash, PSRAM and internal RAM with what is free, the files' partitions, the NVS, ESP-IDF, the
- * MAC address, the time since the start and why it started), refreshed each time the page is shown.
+ * The "Système" screen, opened by a long press on the Settings icon of the home screen: what the device is and how it
+ * stands (firmware version and date, board and dock, processor, flash, PSRAM and internal RAM with what is free, the
+ * files' partitions, the NVS, ESP-IDF, the MAC address, the time since the start and why it started), refreshed every
+ * 2 seconds.
  */
 
 #pragma once
@@ -16,11 +17,14 @@
 extern "C" {
 #endif
 
-/** Its table, in the panel of the Settings screen (display locked) */
-lv_obj_t *ui_system_create(lv_obj_t *parent);
+/** Called once the screens exist (display locked): the long press on the Settings icon opens it */
+void ui_system_init(void);
 
-/** Filled again (display locked) */
-void ui_system_fill(lv_obj_t *table);
+/** This screen is the one shown (read without the display lock) */
+bool ui_system_shown(void);
+
+/** The assistant listens or answers: back from this screen (display locked) */
+void ui_system_close(void);
 
 #ifdef __cplusplus
 }

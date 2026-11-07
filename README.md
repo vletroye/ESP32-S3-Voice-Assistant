@@ -298,9 +298,10 @@ Every feature in detail: [Features in detail](#411-features-in-detail).
 
 ### 2.4 On the device: Settings screen
 
-Tap the gear icon on the home screen. Its lists (languages, models, STT, TTS, voices) are in alphabetical order. The settings are split over nine pages, browsed with the arrows at the
+Tap the gear icon on the home screen. Its lists (languages, models, STT, TTS, voices) are in alphabetical order. The settings are split over eight pages, browsed with the arrows at the
 bottom left and right (from the last page, the right arrow goes back to the first, and the other way round); the
-screen opens on the first page.
+screen opens on the first page. While it is shown (or the System screen, or the Configuration one), the wake word is ignored:
+no listening starts while you touch the settings.
 
 First page:
 
@@ -366,8 +367,9 @@ the lines and KB kept so far, and **Dump vers USB** / **Dump to USB**: the trace
 in configuration mode, where they are `DEBUG.TXT` (with no PC connected: written anyway, and "Connecte-moi à ton
 PC." / "Connect me to your PC." is shown).
 
-Ninth page (the left arrow from the first page goes straight to it): **Système** / **System**, what the device is
-and how it stands, refreshed each time the page is shown: the firmware's version and build date, the board (and the
+A **long press on the Settings icon** (the gear of the home screen) opens the **Système** / **System** screen
+instead (its arrow brings the home screen back): what the device is and how it stands, refreshed every 2 seconds:
+the firmware's version and build date, the board (and the
 BOX-3-SENSOR dock when it is there), the processor (revision, cores, MHz), the flash, the PSRAM and the internal RAM
 (with what is free, and the lowest the internal RAM went), the use of the files' partition (SPIFFS), of the state
 partition (LittleFS) and of the settings (NVS entries), ESP-IDF's version and the partition running, the MAC
@@ -2048,7 +2050,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
 | `game.c` | Games between two BOX: GAMES.INI (installed when missing), the phrases starting them, the other BOX found by UDP broadcast (port 47110), who starts, the lines in turn (made by `llm_ask_apart`: the model in use, apart from the conversation; sent before being spoken, "done" once spoken), the characters (`Game_tone`), the stop on both |
-| `app_ui_system.c` | The Système page of the Settings screen: firmware, board and dock, processor, memories (free, lowest), partitions, NVS, MAC, uptime, reset reason |
+| `app_ui_system.c` | The Système screen (a long press on the Settings icon): firmware, board and dock, processor, memories (free, lowest), partitions, NVS, MAC, uptime, reset reason |
 | `app_ui_status.c` | The Wi-Fi and battery screen (a tap on them, sleep screen); `app_battery.c` gives the voltage, the level and the trend (charging or not) |
 | `google_auth.c` | The Google account (Tasks, Gmail, Calendar): OAuth 2.0 for installed apps with the client of `CONFIG.INI` (`Google_client`, `Google_secret`), GOOGLE.HTM on the configuration drive (opening the consent page) while not linked, `Google_code` exchanged at start-up then erased, the refresh token in `/state/google.json`, the access token renewed, the revocation; `google_api()` for the API calls |
 | `google_tasks.c` | Google Tasks for the model: the tools `tasks_lists`, `tasks_get`, `tasks_add`, `tasks_update`, lists and tasks found by their titles (case and accents ignored) |

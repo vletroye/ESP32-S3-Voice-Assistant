@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * The "Système" page of the Settings screen: see app_ui_system.h. Drawn by the LVGL task (no float in a printf: its
+ * The "Système" screen: see app_ui_system.h. Drawn by the LVGL task (no float in a printf: its
  * stack is small).
  */
 
@@ -21,14 +21,21 @@
 #include "esp_timer.h"
 #include "nvs.h"
 #include "lvgl.h"
+#include "ui.h"
 #include "file_lang.h"
 #include "app_battery.h"
 #include "app_ui_system.h"
 
 LV_FONT_DECLARE(ui_font_Latin14);
+LV_FONT_DECLARE(ui_font_Latin20);
 
 #define SYSTEM_ROWS         14
 #define SYSTEM_DIM          0x8A97BC
+#define SYSTEM_REFRESH_MS   2000
+
+static lv_obj_t *s_screen = NULL;
+static lv_obj_t *s_title = NULL;
+static lv_obj_t *s_table = NULL;
 
 /* main.c: why the device started */
 extern const char *assistant_reset_reason(void);
@@ -40,7 +47,7 @@ static void row(lv_obj_t *table, int *r, const char *name, const char *value)
     (*r)++;
 }
 
-void ui_system_fill(lv_obj_t *table)
+static void fill(lv_obj_t *table)
 {
     const app_lang_t *lang = app_lang_get();
     char text[96];
@@ -121,7 +128,7 @@ static void table_draw_cb(lv_event_t *e)
     }
 }
 
-lv_obj_t *ui_system_create(lv_obj_t *parent)
+static lv_obj_t *table_create(lv_obj_t *parent)
 {
     lv_obj_t *table = lv_table_create(parent);
     lv_table_set_col_cnt(table, 2);
@@ -145,8 +152,76 @@ lv_obj_t *ui_system_create(lv_obj_t *parent)
     lv_obj_set_style_pad_bottom(table, 3, LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_left(table, 4, LV_PART_ITEMS | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(table, 4, LV_PART_ITEMS | LV_STATE_DEFAULT);
-    lv_obj_set_size(table, lv_pct(100), 124);
+    lv_obj_set_size(table, 308, 240 - 48);
+    lv_obj_align(table, LV_ALIGN_TOP_MID, 0, 46);
     lv_obj_set_scroll_dir(table, LV_DIR_VER);
     lv_obj_add_event_cb(table, table_draw_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
     return table;
+}
+
+static void refresh_cb(lv_timer_t *t)
+{
+    if (s_screen && lv_scr_act() == s_screen) {
+        fill(s_table);
+    }
+}
+
+static void back_cb(lv_event_t *e)
+{
+    lv_scr_load(ui_ScreenListen);
+}
+
+static void screen_create(void)
+{
+    s_screen = lv_obj_create(NULL);
+    lv_obj_clear_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_img_src(s_screen, &ui_img_setup_bg_png, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_t *back = lv_img_create(s_screen);
+    lv_img_set_src(back, &ui_img_settings_back_png);
+    lv_obj_set_pos(back, 10, 10);
+    lv_obj_add_flag(back, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_ADV_HITTEST);
+    lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
+
+    s_title = lv_label_create(s_screen);
+    lv_obj_set_style_text_font(s_title, &ui_font_Latin20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_title, LV_ALIGN_TOP_MID, 0, 14);
+
+    s_table = table_create(s_screen);
+    lv_timer_create(refresh_cb, SYSTEM_REFRESH_MS, NULL);
+}
+
+/* A long press on the Settings icon: this screen, and not the Settings screen when the finger is lifted (LVGL sends
+   a click after a long press too) */
+static void open_cb(lv_event_t *e)
+{
+    lv_indev_t *indev = lv_indev_get_act();
+    if (indev) {
+        lv_indev_wait_release(indev);
+    }
+    if (!s_screen) {
+        screen_create();
+    }
+    lv_label_set_text(s_title, app_lang_get()->system_title);
+    fill(s_table);
+    lv_scr_load(s_screen);
+    lv_obj_scroll_to_y(s_table, 0, LV_ANIM_OFF);
+}
+
+void ui_system_init(void)
+{
+    lv_obj_add_event_cb(ui_ImageListenSettings, open_cb, LV_EVENT_LONG_PRESSED, NULL);
+}
+
+bool ui_system_shown(void)
+{
+    return s_screen && lv_disp_get_scr_act(NULL) == s_screen;
+}
+
+void ui_system_close(void)
+{
+    if (s_screen && lv_scr_act() == s_screen) {
+        lv_scr_load(ui_ScreenListen);
+    }
 }

@@ -1208,6 +1208,14 @@ static const char *reset_reason_text(esp_reset_reason_t reason)
     }
 }
 
+/* Why it started (the Système page of the Settings screen) */
+static const char *s_reset_reason = "";
+
+const char *assistant_reset_reason(void)
+{
+    return s_reset_reason;
+}
+
 void app_main()
 {
     // JSON trees (conversation history, API events) go to PSRAM: internal RAM is kept for stacks and DMA
@@ -1241,6 +1249,7 @@ void app_main()
     state_mount();
     // This start in the history (BOOTS.TXT of the configuration drive)
     state_boot_record(esp_app_get_description()->version, reset_reason_text(reset));
+    s_reset_reason = reset_reason_text(reset);
     // The Google account (Google Tasks): its client in CONFIG.INI, its token on LittleFS, a Google_code to exchange
     google_auth_init();
     // The MCP servers of CONFIG.INI (Homey...): their tools read once the Wi-Fi is up

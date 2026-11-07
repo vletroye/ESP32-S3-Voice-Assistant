@@ -504,6 +504,31 @@ google_failed =  (código rechazado)
 google_not_configured =  (por configurar)
 google_setup_howto = Añade Google_client y Google_secret en CONFIG.INI (ver el README, Google) y reinicia.
 
+# Système page of the Settings screen (its last page): its title, the names of its rows, then the formats
+# of their values (%s the chip, %u numbers: revision, cores, MHz; megabytes; kilobytes; NVS entries;
+# days, hours, minutes)
+system_title = Sistema
+system_firmware = Firmware
+system_board = Placa
+system_chip = Procesador
+system_chip_fmt = %s, rev. %u.%u, %u núcleos, %u MHz
+system_flash = Flash
+system_psram = PSRAM
+system_ram = RAM interna
+system_files = Archivos
+system_state = Estado
+system_nvs = Ajustes (NVS)
+system_idf = ESP-IDF
+system_mac = Dirección MAC
+system_uptime = Encendido desde
+system_reset = Arranque
+system_mb = %u MB
+system_mb_free = %u MB, %u MB libres
+system_kb_free = %u KB libres (mínimo %u KB)
+system_kb_used = %u KB usados de %u KB
+system_entries = %u entradas usadas de %u
+system_uptime_fmt = %u d %u h %02u min
+
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug
 settings_debug = Trazas

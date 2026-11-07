@@ -275,6 +275,27 @@ typedef struct {
     const char *google_failed;
     const char *google_not_configured;
     const char *google_setup_howto;
+    const char *system_title;       /* Système page of the Settings screen: its names, then its formats */
+    const char *system_firmware;
+    const char *system_board;
+    const char *system_chip;
+    const char *system_chip_fmt;
+    const char *system_flash;
+    const char *system_psram;
+    const char *system_ram;
+    const char *system_files;
+    const char *system_state;
+    const char *system_nvs;
+    const char *system_idf;
+    const char *system_mac;
+    const char *system_uptime;
+    const char *system_reset;
+    const char *system_mb;
+    const char *system_mb_free;
+    const char *system_kb_free;
+    const char *system_kb_used;
+    const char *system_entries;
+    const char *system_uptime_fmt;
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;
     const char *settings_debug_info;

@@ -3,9 +3,10 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Countdown of a timer and the split-flap eyes: see app_ui_timer.h.
+ * Countdown of a timer and the stopwatch eyes: see app_ui_timer.h.
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -17,144 +18,104 @@
 LV_FONT_DECLARE(ui_font_Latin20);
 
 #define TIMER_REFRESH_MS    200
-/* Colours of the clock: pale blue-white digits with a blue glow (app_clock.c) */
+/* Colours of the clock: pale blue-white with a blue glow (app_clock.c) */
 #define COLOR_DIGIT         0xDDE9FF
 #define COLOR_GLOW          0x4F86FF
-#define COLOR_FLAP          0x1B2240
-#define COLOR_HINGE         0x05070F
+#define COLOR_HAND          0xFFB300
 
-/* A flap in the screen of the eyes (EYES_W x EYES_H): two of them, side by side, centred */
+/* The countdown at the top middle, level with the costs at the top right */
+#define COUNT_TOP_Y         10
+
+/* A stopwatch per eye in the screen of the eyes (EYES_W x EYES_H): a dial, its button on top, two hands */
 #define EYES_W              60
 #define EYES_H              34
-#define FLAP_W              24
-#define FLAP_H              28
-#define FLAP_HALF           (FLAP_H / 2)
-#define FLAP_GAP            4
-#define FLAP_FLIP_MS        280
+#define WATCH_W             26
+#define WATCH_H             EYES_H
+#define WATCH_R             11          /* the dial's radius */
+#define WATCH_BUTTON_W      6
+#define WATCH_BUTTON_H      3
+/* The long hand turns once in this time, the short one 12 times slower */
+#define WATCH_TURN_MS       2000
 
-typedef struct {
-    lv_obj_t *box;
-    lv_obj_t *top, *top_label;          /* the upper half: the new digit, uncovered as the flap falls */
-    lv_obj_t *bottom, *bottom_label;    /* the lower half: the old digit until the flap lands */
-    lv_obj_t *flap, *flap_label;        /* the half turning over: the old upper half, then the new lower half */
-    char digit[2];
-    char old[2];
-} flap_t;
+static lv_obj_t *s_count = NULL;
+static lv_obj_t *s_watches[2];
+static int32_t s_angle = 0;             /* the long hand, in tenths of a degree */
+static bool s_watches_shown = false;
 
-static flap_t s_flaps[2];
-static lv_obj_t *s_counts[3];           /* above the heads asleep, listening, thinking */
-static bool s_flaps_shown = false;
-
-/* A half of a flap: a box clipping a label of the flap's full height */
-static lv_obj_t *half_create(lv_obj_t *parent, lv_coord_t y, lv_obj_t **label)
+/* A hand from the centre, at this angle (tenths of a degree, 0 at the top, clockwise) */
+static void hand_draw(lv_draw_ctx_t *ctx, const lv_point_t *centre, int32_t angle, lv_coord_t length,
+                      lv_coord_t width)
 {
-    lv_obj_t *half = lv_obj_create(parent);
-    lv_obj_remove_style_all(half);
-    lv_obj_clear_flag(half, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_bg_color(half, lv_color_hex(COLOR_FLAP), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(half, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_size(half, FLAP_W, FLAP_HALF);
-    lv_obj_set_pos(half, 0, y);
-    *label = lv_label_create(half);
-    lv_obj_set_size(*label, FLAP_W, FLAP_H);
-    lv_obj_set_style_text_font(*label, &ui_font_Latin20, LV_PART_MAIN);
-    lv_obj_set_style_text_color(*label, lv_color_hex(COLOR_DIGIT), LV_PART_MAIN);
-    lv_obj_set_style_text_align(*label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(*label, (FLAP_H - lv_font_get_line_height(&ui_font_Latin20)) / 2, LV_PART_MAIN);
-    lv_label_set_text(*label, "0");
-    lv_obj_set_pos(*label, 0, -y);
-    return half;
+    lv_draw_line_dsc_t line;
+    lv_draw_line_dsc_init(&line);
+    line.color = lv_color_hex(COLOR_HAND);
+    line.width = width;
+    line.round_start = 1;
+    line.round_end = 1;
+    float a = (float)angle * (float)M_PI / 1800.0f;
+    lv_point_t end = {
+        .x = centre->x + (lv_coord_t)lroundf(sinf(a) * length),
+        .y = centre->y - (lv_coord_t)lroundf(cosf(a) * length),
+    };
+    lv_draw_line(ctx, &line, centre, &end);
 }
 
-static void flap_create(flap_t *f, lv_obj_t *parent, lv_coord_t x, lv_coord_t y)
+static void watch_draw_cb(lv_event_t *e)
 {
-    f->box = lv_obj_create(parent);
-    lv_obj_remove_style_all(f->box);
-    lv_obj_clear_flag(f->box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_size(f->box, FLAP_W, FLAP_H);
-    lv_obj_set_pos(f->box, x, y);
-    lv_obj_set_style_radius(f->box, 3, LV_PART_MAIN);
-    lv_obj_set_style_clip_corner(f->box, true, LV_PART_MAIN);
-    lv_obj_set_style_shadow_color(f->box, lv_color_hex(COLOR_GLOW), LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(f->box, 6, LV_PART_MAIN);
-    lv_obj_set_style_shadow_opa(f->box, LV_OPA_40, LV_PART_MAIN);
-    f->top = half_create(f->box, 0, &f->top_label);
-    f->bottom = half_create(f->box, FLAP_HALF, &f->bottom_label);
-    f->flap = half_create(f->box, 0, &f->flap_label);
-    lv_obj_add_flag(f->flap, LV_OBJ_FLAG_HIDDEN);
-    // The hinge: a dark line across the middle
-    lv_obj_t *hinge = lv_obj_create(f->box);
-    lv_obj_remove_style_all(hinge);
-    lv_obj_set_size(hinge, FLAP_W, 1);
-    lv_obj_set_pos(hinge, 0, FLAP_HALF);
-    lv_obj_set_style_bg_color(hinge, lv_color_hex(COLOR_HINGE), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(hinge, LV_OPA_COVER, LV_PART_MAIN);
-    strcpy(f->digit, "0");
-    strcpy(f->old, "0");
+    lv_obj_t *obj = lv_event_get_target(e);
+    lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(e);
+    lv_area_t box;
+    lv_obj_get_coords(obj, &box);
+    lv_point_t centre = { .x = box.x1 + WATCH_W / 2, .y = box.y2 - WATCH_R - 1 };
+
+    // The button on top, and its stem
+    lv_draw_rect_dsc_t rect;
+    lv_draw_rect_dsc_init(&rect);
+    rect.bg_color = lv_color_hex(COLOR_DIGIT);
+    rect.radius = 1;
+    lv_area_t button = {
+        .x1 = centre.x - WATCH_BUTTON_W / 2, .x2 = centre.x + WATCH_BUTTON_W / 2,
+        .y1 = centre.y - WATCH_R - WATCH_BUTTON_H - 2, .y2 = centre.y - WATCH_R - 2,
+    };
+    lv_draw_rect(ctx, &rect, &button);
+
+    // The dial: a glow, then the ring
+    lv_draw_arc_dsc_t arc;
+    lv_draw_arc_dsc_init(&arc);
+    arc.color = lv_color_hex(COLOR_GLOW);
+    arc.opa = LV_OPA_40;
+    arc.width = 4;
+    lv_draw_arc(ctx, &arc, &centre, WATCH_R + 1, 0, 360);
+    arc.color = lv_color_hex(COLOR_DIGIT);
+    arc.opa = LV_OPA_COVER;
+    arc.width = 2;
+    lv_draw_arc(ctx, &arc, &centre, WATCH_R, 0, 360);
+
+    // The hands, then the pin
+    hand_draw(ctx, &centre, s_angle / 12, WATCH_R - 6, 2);
+    hand_draw(ctx, &centre, s_angle, WATCH_R - 3, 1);
+    rect.bg_color = lv_color_hex(COLOR_HAND);
+    rect.radius = LV_RADIUS_CIRCLE;
+    lv_area_t pin = { .x1 = centre.x - 1, .x2 = centre.x + 1, .y1 = centre.y - 1, .y2 = centre.y + 1 };
+    lv_draw_rect(ctx, &rect, &pin);
 }
 
-/*
- * The flap turning over, v from 0 to FLAP_H: first the old upper half falls towards the hinge (shrinking), then the
- * new lower half unfolds from it (growing), covering the old one
- */
-static void flip_anim_cb(void *var, int32_t v)
+static void turn_anim_cb(void *var, int32_t v)
 {
-    flap_t *f = var;
-    if (v < FLAP_HALF) {
-        lv_coord_t h = FLAP_HALF - v;
-        lv_label_set_text(f->flap_label, f->old);
-        lv_obj_set_height(f->flap, h);
-        lv_obj_set_y(f->flap, FLAP_HALF - h);
-        lv_obj_set_y(f->flap_label, h - FLAP_HALF);
-    } else {
-        lv_coord_t h = v - FLAP_HALF;
-        lv_label_set_text(f->flap_label, f->digit);
-        lv_obj_set_height(f->flap, h);
-        lv_obj_set_y(f->flap, FLAP_HALF);
-        lv_obj_set_y(f->flap_label, -FLAP_HALF);
+    s_angle = v;
+    if (s_watches_shown) {
+        lv_obj_invalidate(s_watches[0]);
+        lv_obj_invalidate(s_watches[1]);
     }
 }
 
-static void flip_ready_cb(lv_anim_t *a)
+/* Asleep with a timer: the stopwatches instead of the closed eyes and the Z */
+static void watches_show(bool shown)
 {
-    flap_t *f = a->var;
-    lv_label_set_text(f->bottom_label, f->digit);
-    lv_obj_add_flag(f->flap, LV_OBJ_FLAG_HIDDEN);
-}
-
-/* The flap shows this digit: turned over when it changes (at once when not shown) */
-static void flap_set(flap_t *f, char digit, bool animate)
-{
-    if (f->digit[0] == digit) {
+    if (shown == s_watches_shown) {
         return;
     }
-    f->old[0] = f->digit[0];
-    f->digit[0] = digit;
-    lv_label_set_text(f->top_label, f->digit);
-    if (!animate) {
-        lv_label_set_text(f->bottom_label, f->digit);
-        return;
-    }
-    lv_label_set_text(f->bottom_label, f->old);
-    lv_obj_clear_flag(f->flap, LV_OBJ_FLAG_HIDDEN);
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, f);
-    lv_anim_set_exec_cb(&a, flip_anim_cb);
-    lv_anim_set_values(&a, 0, FLAP_H);
-    lv_anim_set_time(&a, FLAP_FLIP_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_in);
-    lv_anim_set_ready_cb(&a, flip_ready_cb);
-    lv_anim_start(&a);
-}
-
-/* Asleep with a timer: the flaps instead of the closed eyes and the Z */
-static void flaps_show(bool shown)
-{
-    if (shown == s_flaps_shown) {
-        return;
-    }
-    s_flaps_shown = shown;
+    s_watches_shown = shown;
     lv_obj_t *sleep[] = { ui_ImageSleepEye, ui_ContainerBigZ, ui_ContainerSmallZ };
     for (size_t i = 0; i < sizeof(sleep) / sizeof(sleep[0]); i++) {
         if (shown) {
@@ -165,9 +126,9 @@ static void flaps_show(bool shown)
     }
     for (int i = 0; i < 2; i++) {
         if (shown) {
-            lv_obj_clear_flag(s_flaps[i].box, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(s_watches[i], LV_OBJ_FLAG_HIDDEN);
         } else {
-            lv_obj_add_flag(s_flaps[i].box, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(s_watches[i], LV_OBJ_FLAG_HIDDEN);
         }
     }
 }
@@ -186,44 +147,46 @@ static void refresh_cb(lv_timer_t *t)
     } else if (left >= 0) {
         snprintf(text, sizeof(text), "%ld:%02ld", left / 60, left % 60);
     }
-    for (int i = 0; i < 3; i++) {
-        if (strcmp(lv_label_get_text(s_counts[i]), text) != 0) {
-            lv_label_set_text(s_counts[i], text);
-        }
-        if (text[0]) {
-            lv_obj_clear_flag(s_counts[i], LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_add_flag(s_counts[i], LV_OBJ_FLAG_HIDDEN);
-        }
+    if (strcmp(lv_label_get_text(s_count), text) != 0) {
+        lv_label_set_text(s_count, text);
     }
-    bool was_shown = s_flaps_shown;
-    flaps_show(left >= 0);
-    if (left >= 0) {
-        int seconds = (int)(left % 60);
-        flap_set(&s_flaps[0], (char)('0' + seconds / 10), was_shown);
-        flap_set(&s_flaps[1], (char)('0' + seconds % 10), was_shown);
+    if (text[0]) {
+        lv_obj_clear_flag(s_count, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_count, LV_OBJ_FLAG_HIDDEN);
     }
+    watches_show(left >= 0);
 }
 
-void ui_timer_init(lv_coord_t above_y)
+void ui_timer_init(void)
 {
-    lv_obj_t *eye_screens[3] = { ui_Image3, ui_ImageListenEyeScreen, ui_ImageGetEyeScreen };
-    for (int i = 0; i < 3; i++) {
-        s_counts[i] = lv_label_create(eye_screens[i]);
-        lv_obj_set_style_text_font(s_counts[i], &ui_font_Latin20, LV_PART_MAIN);
-        lv_obj_set_style_text_color(s_counts[i], lv_color_hex(COLOR_DIGIT), LV_PART_MAIN);
-        lv_obj_set_style_text_letter_space(s_counts[i], 1, LV_PART_MAIN);
-        lv_label_set_text(s_counts[i], "");
-        lv_obj_align(s_counts[i], LV_ALIGN_OUT_TOP_MID, 0, -above_y);
-        lv_obj_clear_flag(s_counts[i], LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_flag(s_counts[i], LV_OBJ_FLAG_HIDDEN);
-    }
-    // The flaps in the screen of the eyes asleep
-    const lv_coord_t x = (EYES_W - 2 * FLAP_W - FLAP_GAP) / 2;
-    const lv_coord_t y = (EYES_H - FLAP_H) / 2;
+    s_count = lv_label_create(ui_ScreenListen);
+    lv_obj_set_style_text_font(s_count, &ui_font_Latin20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(s_count, lv_color_hex(COLOR_DIGIT), LV_PART_MAIN);
+    lv_obj_set_style_text_letter_space(s_count, 1, LV_PART_MAIN);
+    lv_label_set_text(s_count, "");
+    lv_obj_align(s_count, LV_ALIGN_TOP_MID, 0, COUNT_TOP_Y);
+    lv_obj_clear_flag(s_count, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(s_count, LV_OBJ_FLAG_HIDDEN);
+
+    // The stopwatches in the screen of the eyes asleep, one per eye
     for (int i = 0; i < 2; i++) {
-        flap_create(&s_flaps[i], ui_Image3, x + i * (FLAP_W + FLAP_GAP), y);
-        lv_obj_add_flag(s_flaps[i].box, LV_OBJ_FLAG_HIDDEN);
+        s_watches[i] = lv_obj_create(ui_Image3);
+        lv_obj_remove_style_all(s_watches[i]);
+        lv_obj_clear_flag(s_watches[i], LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_size(s_watches[i], WATCH_W, WATCH_H);
+        lv_obj_set_pos(s_watches[i], i == 0 ? (EYES_W / 2 - WATCH_W) / 2 : EYES_W / 2 + (EYES_W / 2 - WATCH_W) / 2, 0);
+        lv_obj_add_event_cb(s_watches[i], watch_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+        lv_obj_add_flag(s_watches[i], LV_OBJ_FLAG_HIDDEN);
     }
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, &s_angle);
+    lv_anim_set_exec_cb(&a, turn_anim_cb);
+    lv_anim_set_values(&a, 0, 3600 * 12 - 1);   // 12 turns of the long hand: one of the short one
+    lv_anim_set_time(&a, WATCH_TURN_MS * 12);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_start(&a);
+
     lv_timer_create(refresh_cb, TIMER_REFRESH_MS, NULL);
 }

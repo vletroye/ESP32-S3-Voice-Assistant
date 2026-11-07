@@ -145,6 +145,7 @@ static void save(void)
         cJSON_AddNumberToObject(o, "week_day", a->week_day);
         cJSON_AddNumberToObject(o, "nth", a->nth);
         cJSON_AddStringToObject(o, "radio", a->radio);
+        cJSON_AddStringToObject(o, "radio_url", a->radio_url);
         cJSON_AddNumberToObject(o, "seconds", a->seconds);
         cJSON_AddItemToArray(list, o);
     }
@@ -216,6 +217,8 @@ void alarms_init(void)
         a->nth = json_int(o, "nth");
         const cJSON *radio = cJSON_GetObjectItem(o, "radio");
         strlcpy(a->radio, cJSON_IsString(radio) ? radio->valuestring : "", sizeof(a->radio));
+        const cJSON *url = cJSON_GetObjectItem(o, "radio_url");
+        strlcpy(a->radio_url, cJSON_IsString(url) ? url->valuestring : "", sizeof(a->radio_url));
         a->seconds = json_int(o, "seconds");
         if (a->id >= s_next_id) {
             s_next_id = a->id + 1;

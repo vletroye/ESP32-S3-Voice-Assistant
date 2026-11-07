@@ -169,6 +169,27 @@ typedef struct {
     const char *alarm_reminder;
     const char *alarm_missed;
     const char *alarm_missed_plain;
+    const char *alarms_title;     /* Screen of the alarms (app_ui_alarms.c), letters by the clock */
+    const char *alarms_timers;
+    const char *alarms_alarms;
+    const char *alarms_reminders;
+    const char *alarms_none;
+    const char *alarms_left;
+    const char *alarms_radio;
+    const char *repeat_once;
+    const char *repeat_daily;
+    const char *repeat_weekdays;
+    const char *repeat_weekend;
+    const char *repeat_weekly;
+    const char *repeat_monthly;
+    const char *repeat_monthly_nth;
+    const char *repeat_ordinals;
+    const char *repeat_monthly_last;
+    const char *repeat_monthly_end;
+    const char *repeat_yearly;
+    const char *alarms_badge_timer;
+    const char *alarms_badge_alarm;
+    const char *alarms_badge_reminder;
     const char *resume_ask;
     const char *resume_yes;
     const char *resume_no;

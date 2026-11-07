@@ -163,10 +163,25 @@ static void ring_loud(const alarm_t *a, const char *text)
 
     bool radio = false;
     if (a->radio[0]) {
-        char first[64];
-        radio_set_next_fade_in(ALARM_RAMP_S * 1000);
-        radio = radio_browser_play(a->radio, NULL, NULL, first, sizeof(first)) > 0;
-        ESP_LOGI(TAG, "radio \"%s\": %s", a->radio, radio ? first : "not found, the chime instead");
+        // Its stream found when it was set; else the directory, tried a few times (it may not answer once)
+        radio_station_t station = { 0 };
+        strlcpy(station.name, a->radio, sizeof(station.name));
+        strlcpy(station.url, a->radio_url, sizeof(station.url));
+        radio_station_t *found = station.url[0] ? NULL : calloc(RADIO_BROWSER_MAX, sizeof(radio_station_t));
+        for (int attempt = 0; found && attempt < 3 && !s_stop; attempt++) {
+            if (radio_browser_search(a->radio, NULL, NULL, found, RADIO_BROWSER_MAX) > 0) {
+                station = found[0];
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        free(found);
+        if (station.url[0] && !s_stop) {
+            radio_set_next_fade_in(ALARM_RAMP_S * 1000);
+            radio_play_now(station.name, station.url);
+            radio = true;
+        }
+        ESP_LOGI(TAG, "radio \"%s\": %s", a->radio, radio ? station.name : "not found, the chime instead");
     }
     size_t pos = 0;
     bool said = !a->label[0] || radio;      // a radio is not talked over: its name only shown

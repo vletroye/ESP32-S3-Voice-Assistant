@@ -879,6 +879,12 @@ void radio_play(const char *name, const char *url)
     radio_play_list(&station, 1, 0);
 }
 
+void radio_play_now(const char *name, const char *url)
+{
+    s_awake = false;
+    radio_play(name, url);
+}
+
 /* The previous / next station, the list looping (after the last one, the first) */
 static bool move(int delta)
 {

@@ -26,6 +26,7 @@ extern "C" {
 
 #define ALARM_LABEL_SIZE    96
 #define ALARM_RADIO_SIZE    64
+#define ALARM_URL_SIZE      256
 
 typedef enum {
     ALARM_KIND_TIMER,       /* a duration: rings, then says its name ("les pâtes") */
@@ -58,6 +59,7 @@ typedef struct {
     int month;                      /* ALARM_REPEAT_YEARLY: 0..11 */
     int week_day, nth;              /* ALARM_REPEAT_MONTHLY_NTH / _LAST: 0..6, 1..5 */
     char radio[ALARM_RADIO_SIZE];   /* an alarm playing a radio: the station's name, "" for the ring */
+    char radio_url[ALARM_URL_SIZE]; /* its stream, found when the alarm was set ("": looked for when it rings) */
     int seconds;                    /* a timer: its duration (said when it rings) */
 } alarm_t;
 

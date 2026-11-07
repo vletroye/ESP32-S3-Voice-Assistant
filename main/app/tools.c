@@ -332,7 +332,18 @@ static char *alarm_set(alarm_kind_t kind, const cJSON *input, bool *is_error)
     const char *label = string_input(input, kind == ALARM_KIND_REMINDER ? "text" : "label");
     strlcpy(a.label, label ? label : "", sizeof(a.label));
     const char *radio = string_input(input, "radio");
-    strlcpy(a.radio, kind == ALARM_KIND_ALARM && radio ? radio : "", sizeof(a.radio));
+    bool radio_found = false;
+    if (kind == ALARM_KIND_ALARM && radio && radio[0]) {
+        // The station looked for now, its stream kept: the alarm does not depend on the directory when it rings
+        strlcpy(a.radio, radio, sizeof(a.radio));
+        radio_station_t *found = calloc(RADIO_BROWSER_MAX, sizeof(radio_station_t));
+        if (found && radio_browser_search(radio, NULL, NULL, found, RADIO_BROWSER_MAX) > 0) {
+            strlcpy(a.radio, found[0].name, sizeof(a.radio));
+            strlcpy(a.radio_url, found[0].url, sizeof(a.radio_url));
+            radio_found = true;
+        }
+        free(found);
+    }
     if (!alarms_clock_set()) {
         *is_error = true;
         return strdup("{\"error\":\"the device's clock is not set yet (no Internet time): try again in a moment\"}");
@@ -341,7 +352,19 @@ static char *alarm_set(alarm_kind_t kind, const cJSON *input, bool *is_error)
         *is_error = true;
         return strdup("{\"error\":\"that time is past, or too many are set already (50)\"}");
     }
-    return alarm_answer(&a);
+    char *answer = alarm_answer(&a);
+    if (a.radio[0] && !radio_found) {
+        // Said to the model: looked for again when it rings, the chime otherwise
+        char *note = NULL;
+        asprintf(&note, "{\"ok\":true,\"note\":\"the radio directory did not find this station now: it will be "
+                 "looked for again when the alarm rings, else the chime rings\",\"set\":%s",
+                 strstr(answer, "\"set\":") + 6);
+        if (note) {
+            free(answer);
+            answer = note;
+        }
+    }
+    return answer;
 }
 
 static int kind_from(const char *name)

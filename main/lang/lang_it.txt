@@ -317,6 +317,32 @@ alarm_reminder = Promemoria: %s.
 alarm_missed = Durante un'interruzione di corrente ho perso questo promemoria delle %s: %s.
 alarm_missed_plain = Durante un'interruzione di corrente ho perso una sveglia delle %s.
 
+# Screen of the timers, alarms and reminders (a tap on the clock): its title, its sections, nothing set,
+# a timer's time left (%s), an alarm's radio (%s its name); how they repeat (%d the day of the month;
+# repeat_monthly_nth: %s the rank from repeat_ordinals, %s the weekday); the letters shown by the clock
+# when a timer, an alarm, a reminder is set
+alarms_title = Sveglie e promemoria
+alarms_timers = Timer
+alarms_alarms = Sveglie
+alarms_reminders = Promemoria
+alarms_none = Niente in programma.
+alarms_left = mancano %s
+alarms_radio =  · radio %s
+repeat_once = una volta
+repeat_daily = ogni giorno
+repeat_weekdays = nei giorni feriali
+repeat_weekend = nel fine settimana
+repeat_weekly = ogni %s
+repeat_monthly = il %d di ogni mese
+repeat_monthly_nth = il %s %s del mese
+repeat_ordinals = primo, secondo, terzo, quarto, quinto
+repeat_monthly_last = l'ultimo %s del mese
+repeat_monthly_end = l'ultimo giorno del mese
+repeat_yearly = ogni anno
+alarms_badge_timer = T
+alarms_badge_alarm = S
+alarms_badge_reminder = P
+
 # woken up after Resume_ask_min of pause in a conversation (reasoning mode or not): go on? ("oui" / "non": a new
 # conversation)
 resume_ask = Ciao! Vuoi continuare la conversazione precedente?

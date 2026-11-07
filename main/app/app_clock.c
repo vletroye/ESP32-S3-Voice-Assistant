@@ -15,7 +15,10 @@
 #include "app_wifi.h"
 #include "app_battery.h"
 #include "esp_wifi.h"
+#include "file_lang.h"
+#include "alarms.h"
 
+LV_FONT_DECLARE(ui_font_Latin14);
 LV_FONT_DECLARE(ui_font_Latin16);
 
 /* Seven-segment digit geometry (pixels) */
@@ -108,6 +111,7 @@ static lv_obj_t *s_battery;
 static lv_obj_t *s_battery_tip;
 static lv_obj_t *s_battery_cells[APP_BATTERY_SECTIONS];
 static int s_wifi_level = -2;   /* lit arcs 0..3, WIFI_DISCONNECTED, -2 not shown yet */
+static lv_obj_t *s_badges;      /* letters at the top right of the time: a timer, an alarm, a reminder set */
 
 void app_clock_sync_start(const char *tz)
 {
@@ -381,11 +385,32 @@ static void battery_create(lv_obj_t *parent)
     lv_obj_add_flag(s_battery_tip, LV_OBJ_FLAG_HIDDEN);
 }
 
+/* "M A R": a timer, an alarm, a reminder set (alarms.c) */
+static void badges_refresh(void)
+{
+    const app_lang_t *lang = app_lang_get();
+    const char *letters[] = { lang->alarms_badge_timer, lang->alarms_badge_alarm, lang->alarms_badge_reminder };
+    char text[24] = "";
+    alarm_t next;
+    for (int kind = 0; kind < 3; kind++) {
+        if (alarms_next(kind, &next)) {
+            if (text[0]) {
+                strlcat(text, " ", sizeof(text));
+            }
+            strlcat(text, letters[kind], sizeof(text));
+        }
+    }
+    if (strcmp(lv_label_get_text(s_badges), text) != 0) {
+        lv_label_set_text(s_badges, text);
+    }
+}
+
 static void clock_refresh(lv_timer_t *timer)
 {
     volume_refresh();
     wifi_refresh();
     battery_refresh();
+    badges_refresh();
 
     time_t now = time(NULL);
     struct tm t;
@@ -423,9 +448,11 @@ void app_clock_show(bool shown)
     if (shown) {
         lv_obj_clear_flag(s_box, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(s_date, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_badges, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(s_box, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_date, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_badges, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -466,6 +493,13 @@ void app_clock_create(lv_obj_t *parent, const char *const weekdays[7])
     lv_obj_set_style_text_align(s_date, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_align(s_date, LV_ALIGN_BOTTOM_MID, 0, DATE_BOTTOM_Y);
     lv_label_set_text(s_date, "");
+
+    // The letters of the timers, alarms and reminders set, at the top right of the time
+    s_badges = lv_label_create(parent);
+    lv_obj_set_style_text_font(s_badges, &ui_font_Latin14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(s_badges, lv_color_hex(COLOR_GLOW), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_label_set_text(s_badges, "");
+    lv_obj_align_to(s_badges, s_box, LV_ALIGN_OUT_RIGHT_TOP, 6, -4);
 
     // Volume: bar, speaker icon (symbol font) and percentage, centred in a column at the bottom left
     s_volume_bar = lv_obj_create(parent);

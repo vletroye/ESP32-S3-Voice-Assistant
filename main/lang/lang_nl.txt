@@ -318,6 +318,32 @@ alarm_reminder = Herinnering: %s.
 alarm_missed = Tijdens een stroomonderbreking heb ik deze herinnering van %s gemist: %s.
 alarm_missed_plain = Tijdens een stroomonderbreking heb ik een wekker van %s gemist.
 
+# Screen of the timers, alarms and reminders (a tap on the clock): its title, its sections, nothing set,
+# a timer's time left (%s), an alarm's radio (%s its name); how they repeat (%d the day of the month;
+# repeat_monthly_nth: %s the rank from repeat_ordinals, %s the weekday); the letters shown by the clock
+# when a timer, an alarm, a reminder is set
+alarms_title = Wekkers en herinneringen
+alarms_timers = Timers
+alarms_alarms = Wekkers
+alarms_reminders = Herinneringen
+alarms_none = Niets gepland.
+alarms_left = nog %s
+alarms_radio =  · radio %s
+repeat_once = eenmalig
+repeat_daily = elke dag
+repeat_weekdays = op weekdagen
+repeat_weekend = in het weekend
+repeat_weekly = elke %s
+repeat_monthly = de %de van elke maand
+repeat_monthly_nth = de %s %s van de maand
+repeat_ordinals = 1e, 2e, 3e, 4e, 5e
+repeat_monthly_last = de laatste %s van de maand
+repeat_monthly_end = de laatste dag van de maand
+repeat_yearly = elk jaar
+alarms_badge_timer = T
+alarms_badge_alarm = W
+alarms_badge_reminder = H
+
 # woken up after Resume_ask_min of pause in a conversation (reasoning mode or not): go on? ("oui" / "non": a new
 # conversation)
 resume_ask = Hallo! Wil je het vorige gesprek voortzetten?

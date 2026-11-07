@@ -695,6 +695,13 @@ Ask in your own words; the model sets them (with the models that take tools):
   (3 by default).
 - **Volume**: a timer or an alarm always starts from silence and rises to 80 % of the speaker in 30 s, whatever the
   volume set (a radio fades in the same way); the volume set comes back after. A reminder uses the volume set.
+- **On the sleep screen**: letters at the top right of the time say what is set: **M** a timer, **A** an alarm,
+  **R** a reminder in French ("T", "A", "R" in English; `alarms_badge_*` of `LANG_<XX>.TXT`). A tap on the time
+  opens **Alarmes et rappels** / **Alarms and reminders**: the timers (their end, the time left, counting down), the
+  alarms and the reminders (the next day and time, the label, how it repeats: "en semaine" / "weekdays", "chaque
+  lundi, jeudi" / "every monday, thursday", "le 2e mardi du mois" / "the 2nd tuesday of the month"…, the radio).
+- **Radio**: the station is looked for when the alarm is set and its stream kept, so that it plays even if the radio
+  directory does not answer when it rings (else looked for again, three times, then the chime).
 - **Ask**: "Quelles alarmes ai-je ?" / "Which alarms do I have?", "Combien de temps reste-t-il ?" / "How much time is
   left?", "Supprime l'alarme de 7 h" / "Delete the 7 o'clock alarm".
 - They are kept across restarts (`/state/alarms.json`). One due while the device was off is not rung late: a missed
@@ -1805,6 +1812,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |
 | `tools.c` | Tools offered to the models (definitions, dispatch) |
 | `alarms.c` | Timers, alarms and reminders: the list (`/state/alarms.json`), repetitions (days of the week, monthly by day, nth or last weekday, last day, yearly), the next one due, the missed ones; the tools `timer_set`, `alarm_set`, `reminder_set`, `alarms_list`, `alarm_delete`, `alarm_snooze` (`tools.c`) |
+| `app_ui_alarms.c` | The screen of the timers, alarms and reminders (a tap on the clock of the sleep screen), refreshed every second; the letters by the clock are drawn by `app_clock.c` |
 | `alarm_ring.c` | Ringing them in its own task: a chime made on the device (two bell notes), from silence to 80 % in 30 s (software gain, the codec set once while silent), or the alarm's radio fading in as long; the label said once loud; stopped by a touch or the wake word, or after `Alarm_stop_min`; a reminder: a short chime, then its text said as a reply |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/state/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |

@@ -84,6 +84,9 @@ const char *radio_station_name(void);
 /** The title being played (ICY metadata of the stream: "Artist - Title"), "" when the station gives none */
 void radio_title(char *buf, size_t size);
 
+/** Play this station at once, even while the assistant is awake (an alarm ringing); a wake word still suspends it */
+void radio_play_now(const char *name, const char *url);
+
 /** The next station started fades in over this time (an alarm), instead of the usual 2 s */
 void radio_set_next_fade_in(uint32_t ms);
 

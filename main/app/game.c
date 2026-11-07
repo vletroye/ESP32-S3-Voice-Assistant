@@ -138,6 +138,63 @@ static void trim(char *s)
 }
 
 /* The firmware's file installed when missing or emptied */
+/*
+ * Lines of GAMES.INI as an older firmware gave them, and what replaces them: a file the user has not changed there
+ * gets the new texts, any other line (own games, own rules) is kept
+ */
+static const char *const s_games_updates[][2] = {
+    { "first = Open a friendly but heated debate: state a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one or two sentences.",
+      "first = Open a heated debate: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short punchy sentence." },
+    { "rules = You are in a lively debate with the other assistant. Contradict its last line with one strong, funny argument, then make a counter-claim. Never agree completely. Stay polite and good-natured.",
+      "rules = You are in a fast verbal sparring match with the other assistant: quick-fire repartee, back and forth. Answer its last line with ONE short punchy sentence (15 words at most): a witty comeback, a jab or a sharp counter-argument, never a speech. Never agree. Stay good-natured." },
+};
+
+static void games_update(void)
+{
+    FILE *f = fopen(GAMES_FILE, "r");
+    if (!f) {
+        return;
+    }
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *text = size > 0 ? heap_caps_malloc(size + 1, MALLOC_CAP_SPIRAM) : NULL;
+    size_t got = text ? fread(text, 1, size, f) : 0;
+    fclose(f);
+    if (!text) {
+        return;
+    }
+    text[got] = '\0';
+    bool changed = false;
+    for (size_t i = 0; i < sizeof(s_games_updates) / sizeof(s_games_updates[0]); i++) {
+        char *at = strstr(text, s_games_updates[i][0]);
+        if (!at) {
+            continue;
+        }
+        size_t old_len = strlen(s_games_updates[i][0]), new_len = strlen(s_games_updates[i][1]);
+        char *next = heap_caps_malloc(strlen(text) - old_len + new_len + 1, MALLOC_CAP_SPIRAM);
+        if (!next) {
+            break;
+        }
+        size_t head = at - text;
+        memcpy(next, text, head);
+        memcpy(next + head, s_games_updates[i][1], new_len);
+        strcpy(next + head + new_len, at + old_len);
+        free(text);
+        text = next;
+        changed = true;
+    }
+    if (changed) {
+        f = fopen(GAMES_FILE, "w");
+        bool ok = f && fputs(text, f) >= 0;
+        if (f) {
+            ok &= fclose(f) == 0;
+        }
+        ESP_LOGI(TAG, "%s %s", ok ? "Updated" : "Could not update", GAMES_FILE);
+    }
+    free(text);
+}
+
 static void games_install(void)
 {
     FILE *f = fopen(GAMES_FILE, "r");
@@ -148,6 +205,7 @@ static void games_install(void)
         fclose(f);
     }
     if (size > 0) {
+        games_update();
         return;
     }
     f = fopen(GAMES_FILE, "w");
@@ -549,8 +607,8 @@ static char *line_make(void)
     char *system = NULL;
     asprintf(&system, "You are a voice assistant playing a game out loud with another voice assistant (another "
              "device), in front of the user. Speak only the language whose code is '%s'. Your character: %s; stay in "
-             "character. Game: %s. Rules: %s Each of your lines is spoken aloud: one to three short sentences, no "
-             "lists, no emojis, no markdown, no stage directions, never speak for the other player.",
+             "character. Game: %s. Rules: %s Each of your lines is spoken aloud: as short as the rules say (else one to three short sentences), "
+             "no lists, no emojis, no markdown, no stage directions, never speak for the other player.",
              lang->code, s_tone_text ? s_tone_text : "yourself", g->name, g->rules ? g->rules : "");
     char *question = NULL;
     size_t size = 0;

@@ -748,7 +748,7 @@ joins in), then a game's phrase:
 
 | You say | They do |
 | --- | --- |
-| "Disputez-vous" / "Argue with each other" | A debate: one states a bold opinion, the other contradicts it, and so on |
+| "Disputez-vous" / "Argue with each other" | A debate, quick-fire: one throws out a bold opinion, the other hits back in one short punchy sentence, and so on |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers; "c'est correct" / "that's right": the other asks the next one; wrong: the first gives the answer and asks another |
 
 - The two BOX take turns **out loud**, each with **its own voice** and **its own model**; each line is shown only on
@@ -769,7 +769,8 @@ joins in), then a game's phrase:
   (`name_fr`…), the phrases starting it (`phrases_fr = disputez-vous | débattez`, the start of what is said, case
   and accents ignored), the instruction of the first line (`first`) and the rules of every line (`rules`), in English
   (the model speaks the language of the BOX anyway). A story told in turns, a quiz, a game of "who am I"… Emptied, the
-  file comes back as the firmware gives it.
+  file comes back as the firmware gives it; a line still as an older firmware gave it is updated by a new one
+  (your own lines and games are kept).
 
 ## 3. Advanced user guide
 

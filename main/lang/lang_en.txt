@@ -489,14 +489,14 @@ settings_params_title = Settings
 settings_followup_beep = Beep after a reply
 
 # Google Tasks (when Google_client and Google_secret are in CONFIG.INI): the row of the Paramètres page,
-# its buttons and question, the screen linking the account (its steps: \n for a new line), where the
-# linking stands after the row's name
+# its buttons and question, how to link the account (from a PC: GOOGLE.HTM in configuration mode) and
+# its button, where the linking stands after the row's name
 settings_google = Google Tasks
 google_connect = Connect
 google_disconnect = Disconnect
 google_unlink_ask = Disconnect the Google account from the assistant?
-google_title = Connect Google
-google_steps = 1. Scan and accept.\n2. The next page does not open: copy its address.\n3. Paste it in CONFIG.INI:\nGoogle_code = ...\n4. Restart within 10 minutes.
+google_to_config = Configuration mode
+google_steps = Google allows this sign-in from a computer only. In configuration mode, open GOOGLE.HTM on the PC and accept. The next page does not open: copy its address into CONFIG.INI (Google_code = ...), save, then restart.
 google_linking =  (linking)
 google_failed =  (code refused)
 google_not_configured =  (to set up)

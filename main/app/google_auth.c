@@ -25,6 +25,7 @@
 static const char *TAG = "google";
 
 #define GOOGLE_TOKEN_FILE   STATE_DIR "/google.json"
+#define GOOGLE_LINK_FILE    "/spiffs/google.htm"        /* GOOGLE.HTM of the configuration drive */
 #define GOOGLE_AUTH_URL     "https://accounts.google.com/o/oauth2/v2/auth"
 #define GOOGLE_TOKEN_URL    "https://oauth2.googleapis.com/token"
 #define GOOGLE_REVOKE_URL   "https://oauth2.googleapis.com/revoke"
@@ -198,6 +199,33 @@ void google_auth_consent_url(char *out, size_t size)
     // offline + consent: a refresh token is given (again, after an unlink)
     snprintf(out, size, GOOGLE_AUTH_URL "?client_id=%s&redirect_uri=%s&response_type=code&scope=%s"
              "&access_type=offline&prompt=consent", client, redirect, scopes);
+}
+
+void google_auth_export_link(void)
+{
+    google_state_t state = google_auth_state();
+    if (state == GOOGLE_NOT_CONFIGURED || state == GOOGLE_LINKED) {
+        remove(GOOGLE_LINK_FILE);
+        return;
+    }
+    char url[600], html_url[700];
+    google_auth_consent_url(url, sizeof(url));
+    // "&" written "&amp;" in the attribute
+    size_t n = 0;
+    for (const char *c = url; *c && n + 6 < sizeof(html_url); c++) {
+        n += *c == '&' ? (size_t)snprintf(html_url + n, sizeof(html_url) - n, "&amp;") : (html_url[n] = *c, 1);
+    }
+    html_url[n] = '\0';
+    FILE *f = fopen(GOOGLE_LINK_FILE, "w");
+    if (!f) {
+        return;
+    }
+    // Opened by a double click on the PC: straight to Google's consent page
+    fprintf(f, "<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0; "
+            "url=%s\"><title>Google</title></head><body><p><a href=\"%s\">Google</a></p><p>Google_code = "
+            "http://localhost/?code=... (CONFIG.INI)</p></body></html>\n", html_url, html_url);
+    fclose(f);
+    ESP_LOGI(TAG, "GOOGLE.HTM written (the account to link)");
 }
 
 /* The tokens of a token response kept; false if it has no access token */

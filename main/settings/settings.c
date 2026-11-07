@@ -24,6 +24,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "settings.h"
+#include "google_auth.h"
 #include "bsp_board.h"
 #include "esp_ota_ops.h"
 
@@ -51,6 +52,8 @@ esp_err_t settings_factory_reset(void)
     // The costs as read on the configuration drive (COSTS.TXT: not written while the assistant works), the starts
     costs_write_text();
     state_boots_export();
+    // The page linking the Google account (GOOGLE.HTM), while it is not linked
+    google_auth_export_link();
     // The traces, if on, to be read on the configuration drive (DEBUG.TXT)
     if (debug_trace_on()) {
         debug_trace_dump();

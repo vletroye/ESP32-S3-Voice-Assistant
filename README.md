@@ -1633,17 +1633,21 @@ party. Setting it up takes about 15 minutes, once.
 **2. In `CONFIG.INI`** (configuration mode): `Google_client = <client ID>` and `Google_secret = <client secret>`,
 save, restart. On the **Paramètres** / **Settings** page of the Settings screen, the **Google Tasks** row then offers **Connecter** / **Connect** (before, it says "(à configurer)" / "(to set up)", and its **?** button what `CONFIG.INI` needs). These keys must be saved with a configuration mode of version 2.36 or later: an older one drops them as unknown.
 
-**3. Link your account**, once:
+**3. Link your account**, once, **from a computer**: Google blocks this sign-in in a phone's browser ("The
+loopback flow has been blocked in order to keep users secure").
 
-1. **Google Tasks → Connecter** / **Connect**: the device shows a QR code.
-2. Scan it with the phone, choose your account. Google warns that the app is not verified (it is yours): **Advanced
-   → Go to … (unsafe)**, then allow "See, edit, create and delete all your tasks".
-3. The phone then opens an address starting with `http://localhost/?code=...` that **does not open** ("site can't
+1. **Google Tasks → Connecter** / **Connect**: the steps are shown; **Mode configuration** / **Configuration mode**
+   switches to it (or "édite la config" / "edit the config").
+2. On the configuration drive, open **GOOGLE.HTM** (a double click): the PC's browser goes to Google's consent page.
+   Choose your account. Google warns that the app is not verified (it is yours): **Advanced → Go to … (unsafe)**,
+   then allow "See, edit, create and delete all your tasks".
+3. The browser then opens an address starting with `http://localhost/?code=...` that **does not open** ("site can't
    be reached"): that is expected. **Copy this whole address** from the address bar.
-4. Within **10 minutes** (the code expires): configuration mode, `Google_code = <the address>` in `CONFIG.INI`,
-   save, restart. The device exchanges it for its access, keeps the access in `/state/google.json` (never shown nor
-   logged) and erases `Google_code`. The row then shows **Déconnecter** / **Disconnect**; "(code refusé)" / "(code
-   refused)" after its name if the code was too old, already used or of another client: link again.
+4. Still in configuration mode, within **10 minutes** (the code expires): `Google_code = <the address>` in
+   `CONFIG.INI`, save, restart. The device exchanges it for its access, keeps the access in `/state/google.json`
+   (never shown nor logged) and erases `Google_code`; GOOGLE.HTM is no longer put on the drive. The row then shows
+   **Déconnecter** / **Disconnect**; "(code refusé)" / "(code refused)" after its name if the code was too old,
+   already used or of another client: link again.
 
 **Disconnect** (same row, confirmed) forgets the account and withdraws the access at Google; it can also be withdrawn
 from your Google account (Security, third-party connections). The factory reset forgets it too; the soft reset keeps
@@ -1824,9 +1828,8 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
 | `app_ui_status.c` | The Wi-Fi and battery screen (a tap on them, sleep screen); `app_battery.c` gives the voltage, the level and the trend (charging or not) |
-| `google_auth.c` | The Google account: OAuth 2.0 for installed apps with the client of `CONFIG.INI` (`Google_client`, `Google_secret`), the consent page's address (QR code), `Google_code` exchanged at start-up then erased, the refresh token in `/state/google.json`, the access token renewed, the revocation; `google_api()` for the API calls |
+| `google_auth.c` | The Google account: OAuth 2.0 for installed apps with the client of `CONFIG.INI` (`Google_client`, `Google_secret`), GOOGLE.HTM on the configuration drive (opening the consent page) while not linked, `Google_code` exchanged at start-up then erased, the refresh token in `/state/google.json`, the access token renewed, the revocation; `google_api()` for the API calls |
 | `google_tasks.c` | Google Tasks for the model: the tools `tasks_lists`, `tasks_get`, `tasks_add`, `tasks_update`, lists and tasks found by their titles (case and accents ignored) |
-| `app_ui_google.c` | The screen linking the Google account: a QR code to Google's consent page, and the steps |
 | `file_state.c` | The LittleFS partition `state` of the files written often (conversation, costs, test results, places): mounted on `/state`, those of an older firmware moved there from SPIFFS, erased by the factory reset; also `boots.txt`, the history of the starts, shown as `BOOTS.TXT` |
 | `debug_trace.c` | Debug traces: every log line caught (`esp_log_set_vprintf`), with the time of day and the number of the exchange, in a 1 MB ring buffer in PSRAM; marks; the dump to `/spiffs/debug.txt` |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |

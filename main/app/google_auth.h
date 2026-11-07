@@ -5,10 +5,11 @@
  *
  * The user's Google account, for Google Tasks (and later Calendar): OAuth 2.0 for an installed app, with the
  * client of the user's own Google Cloud project (Google_client and Google_secret of CONFIG.INI, type "Desktop app").
- * Linked once: the Settings screen shows a QR code to Google's consent page; once accepted on the phone, Google sends
- * the browser to http://localhost/?code=... (a page that does not open); that address, pasted as Google_code in
- * CONFIG.INI, is exchanged at the next start for a refresh token, kept in /state/google.json (never shown nor
- * logged), and Google_code is erased. Then the device reaches Google alone: an access token of an hour is asked with
+ * Linked once, from a computer (Google blocks this flow in a phone's browser): on the way to the configuration mode,
+ * GOOGLE.HTM is put on its drive, opening Google's consent page; once accepted, Google sends the browser to
+ * http://localhost/?code=... (a page that does not open); that address, pasted as Google_code in CONFIG.INI, is
+ * exchanged at the next start for a refresh token, kept in /state/google.json (never shown nor logged), and
+ * Google_code is erased. Then the device reaches Google alone: an access token of an hour is asked with
  * the refresh token whenever needed.
  */
 
@@ -35,8 +36,14 @@ void google_auth_init(void);
 
 google_state_t google_auth_state(void);
 
-/** The address of Google's consent page (for the QR code), "" when not configured */
+/** The address of Google's consent page, "" when not configured */
 void google_auth_consent_url(char *out, size_t size);
+
+/**
+ * @brief On the way to the configuration mode: GOOGLE.HTM (/spiffs/google.htm) opening the consent page, when Google
+ *        is configured and not linked; removed otherwise
+ */
+void google_auth_export_link(void);
 
 /** Called every second by the main task: exchanges a Google_code once the Wi-Fi is up, revokes after an unlink */
 void google_auth_poll(bool wifi_up);

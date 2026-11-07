@@ -154,6 +154,15 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "BOOTS   TXT", 12);
         PRINTF("%s shown as BOOTS.TXT", t->path);
     }
+    // The page linking the Google account (GOOGLE.HTM), written by the assistant while it is not linked
+    FILE *google = fopen(PHRASES_DIR "/google.htm", "r");
+    if (google) {
+        fclose(google);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/google.htm", sizeof(t->path));
+        memcpy(t->fat_name, "GOOGLE  HTM", 12);
+        PRINTF("%s shown as GOOGLE.HTM", t->path);
+    }
     // Results of the model test ("teste les modèles"), when there are some
     FILE *speed = fopen(PHRASES_DIR "/speed.txt", "r");
     if (speed) {

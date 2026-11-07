@@ -264,11 +264,11 @@ typedef struct {
     const char *mcp_off;
     const char *settings_params_title;  /* Paramètres page: its title, the switch of the beep after a reply */
     const char *settings_followup_beep;
-    const char *settings_google;  /* Paramètres page: Google, its screen (google_steps: \n new lines) */
+    const char *settings_google;  /* Paramètres page: Google, how to link it from a PC */
     const char *google_connect;
     const char *google_disconnect;
     const char *google_unlink_ask;
-    const char *google_title;
+    const char *google_to_config;
     const char *google_steps;
     const char *google_linking;
     const char *google_failed;

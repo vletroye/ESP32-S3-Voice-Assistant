@@ -29,7 +29,6 @@
 #include "model_test.h"
 #include "google_auth.h"
 #include "mcp_client.h"
-#include "app_ui_google.h"
 #include "debug_trace.h"
 #include "app_audio.h"
 #include "ai_providers.h"
@@ -1416,39 +1415,38 @@ static void beep_switch_cb(lv_event_t *e)
     settings_save_str("Followup_beep", on ? "on" : "off");
 }
 
-/* Back from the linking screen: the button says where it stands */
-static void gcal_back_cb(void)
-{
-    params_page_refresh();
-}
+extern void assistant_request_config(void);
 
 static void gcal_unlink_box_cb(lv_event_t *e)
 {
     lv_obj_t *box = lv_event_get_current_target(e);
-    if (lv_msgbox_get_active_btn(box) == 0 && google_auth_state() == GOOGLE_LINKED) {
+    google_state_t state = google_auth_state();
+    if (lv_msgbox_get_active_btn(box) == 0 && state == GOOGLE_LINKED) {
         google_auth_unlink();
         params_page_refresh();
+    } else if (lv_msgbox_get_active_btn(box) == 0 && state != GOOGLE_NOT_CONFIGURED) {
+        assistant_request_config();     // to link: GOOGLE.HTM on the configuration drive
     }
     lv_msgbox_close_async(box);
 }
 
-/* Not configured: how to; not linked: the linking screen (QR code); linked: unlinked once confirmed */
+/*
+ * Not configured: what CONFIG.INI needs; not linked: the steps, and the configuration mode (GOOGLE.HTM on its drive);
+ * linked: unlinked once confirmed
+ */
 static void gcal_button_cb(lv_event_t *e)
 {
     google_state_t state = google_auth_state();
-    if (state != GOOGLE_LINKED && state != GOOGLE_NOT_CONFIGURED) {
-        ui_google_open(gcal_back_cb);
-        return;
-    }
     const app_lang_t *lang = app_lang_get();
     static const char *buttons[3];
     static const char *ok_button[2] = { "OK", "" };
-    buttons[0] = lang->settings_yes;
+    buttons[0] = state == GOOGLE_LINKED ? lang->settings_yes : lang->google_to_config;
     buttons[1] = lang->settings_no;
     buttons[2] = "";
     bool howto = state == GOOGLE_NOT_CONFIGURED;
-    lv_obj_t *box = lv_msgbox_create(NULL, lang->settings_google, howto ? lang->google_howto : lang->google_unlink_ask,
-                                     howto ? ok_button : buttons, false);
+    lv_obj_t *box = lv_msgbox_create(NULL, lang->settings_google,
+                                     howto ? lang->google_howto : state == GOOGLE_LINKED ? lang->google_unlink_ask :
+                                     lang->google_steps, howto ? ok_button : buttons, false);
     lv_obj_set_width(box, 280);
     lv_obj_set_style_text_font(lv_msgbox_get_title(box), &ui_font_Latin16, LV_PART_MAIN);
     lv_obj_set_style_text_font(lv_msgbox_get_text(box), &ui_font_Latin16, LV_PART_MAIN);

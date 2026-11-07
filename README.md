@@ -1631,7 +1631,7 @@ party. Setting it up takes about 15 minutes, once.
    secret** (shown in the window, or on the client's page).
 
 **2. In `CONFIG.INI`** (configuration mode): `Google_client = <client ID>` and `Google_secret = <client secret>`,
-save, restart. The **Paramètres** / **Settings** page of the Settings screen now has a **Google Tasks** row.
+save, restart. On the **Paramètres** / **Settings** page of the Settings screen, the **Google Tasks** row then offers **Connecter** / **Connect** (before, it says "(à configurer)" / "(to set up)", and its **?** button what `CONFIG.INI` needs). These keys must be saved with a configuration mode of version 2.36 or later: an older one drops them as unknown.
 
 **3. Link your account**, once:
 

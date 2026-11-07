@@ -500,6 +500,8 @@ google_title = Google verbinden
 google_steps = 1. Scannen und zustimmen.\n2. Die nächste Seite öffnet sich nicht: ihre Adresse kopieren.\n3. In CONFIG.INI einfügen:\nGoogle_code = ...\n4. Innerhalb von 10 Minuten neu starten.
 google_linking =  (läuft)
 google_failed =  (Code abgelehnt)
+google_not_configured =  (einzurichten)
+google_howto = Füge Google_client und Google_secret in CONFIG.INI hinzu (siehe README, Google Tasks) und starte neu.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

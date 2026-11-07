@@ -499,6 +499,8 @@ google_title = Conectar Google
 google_steps = 1. Escanea y acepta.\n2. La página siguiente no se abre: copia su dirección.\n3. Pégala en CONFIG.INI:\nGoogle_code = ...\n4. Reinicia antes de 10 minutos.
 google_linking =  (en curso)
 google_failed =  (código rechazado)
+google_not_configured =  (por configurar)
+google_howto = Añade Google_client y Google_secret en CONFIG.INI (ver el README, Google Tasks) y reinicia.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

@@ -499,6 +499,8 @@ google_title = Collega Google
 google_steps = 1. Inquadra e accetta.\n2. La pagina successiva non si apre: copiane l'indirizzo.\n3. Incollalo in CONFIG.INI:\nGoogle_code = ...\n4. Riavvia entro 10 minuti.
 google_linking =  (in corso)
 google_failed =  (codice rifiutato)
+google_not_configured =  (da configurare)
+google_howto = Aggiungi Google_client e Google_secret in CONFIG.INI (vedi il README, Google Tasks), poi riavvia.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

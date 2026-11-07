@@ -1395,9 +1395,11 @@ static void params_page_refresh(void)
     if (s_gcal_label) {
         google_state_t state = google_auth_state();
         lv_label_set_text_fmt(s_gcal_label, "%s%s", lang->settings_google,
+                              state == GOOGLE_NOT_CONFIGURED ? lang->google_not_configured :
                               state == GOOGLE_FAILED ? lang->google_failed :
                               state == GOOGLE_LINKING ? lang->google_linking : "");
-        lv_label_set_text(s_gcal_button_label, state == GOOGLE_LINKED ? lang->google_disconnect : lang->google_connect);
+        lv_label_set_text(s_gcal_button_label, state == GOOGLE_NOT_CONFIGURED ? "?" :
+                          state == GOOGLE_LINKED ? lang->google_disconnect : lang->google_connect);
     }
     lv_label_set_text(s_beep_label, lang->settings_followup_beep);
     if (settings_get_parameter()->followup_beep) {
@@ -1423,26 +1425,30 @@ static void gcal_back_cb(void)
 static void gcal_unlink_box_cb(lv_event_t *e)
 {
     lv_obj_t *box = lv_event_get_current_target(e);
-    if (lv_msgbox_get_active_btn(box) == 0) {
+    if (lv_msgbox_get_active_btn(box) == 0 && google_auth_state() == GOOGLE_LINKED) {
         google_auth_unlink();
         params_page_refresh();
     }
     lv_msgbox_close_async(box);
 }
 
-/* Not linked: the linking screen (QR code); linked: unlinked once confirmed */
+/* Not configured: how to; not linked: the linking screen (QR code); linked: unlinked once confirmed */
 static void gcal_button_cb(lv_event_t *e)
 {
-    if (google_auth_state() != GOOGLE_LINKED) {
+    google_state_t state = google_auth_state();
+    if (state != GOOGLE_LINKED && state != GOOGLE_NOT_CONFIGURED) {
         ui_google_open(gcal_back_cb);
         return;
     }
     const app_lang_t *lang = app_lang_get();
     static const char *buttons[3];
+    static const char *ok_button[2] = { "OK", "" };
     buttons[0] = lang->settings_yes;
     buttons[1] = lang->settings_no;
     buttons[2] = "";
-    lv_obj_t *box = lv_msgbox_create(NULL, lang->settings_google, lang->google_unlink_ask, buttons, false);
+    bool howto = state == GOOGLE_NOT_CONFIGURED;
+    lv_obj_t *box = lv_msgbox_create(NULL, lang->settings_google, howto ? lang->google_howto : lang->google_unlink_ask,
+                                     howto ? ok_button : buttons, false);
     lv_obj_set_width(box, 280);
     lv_obj_set_style_text_font(lv_msgbox_get_title(box), &ui_font_Latin16, LV_PART_MAIN);
     lv_obj_set_style_text_font(lv_msgbox_get_text(box), &ui_font_Latin16, LV_PART_MAIN);
@@ -1453,7 +1459,8 @@ static void gcal_button_cb(lv_event_t *e)
 
 static void params_page_create(void)
 {
-    if (google_auth_state() != GOOGLE_NOT_CONFIGURED) {
+    {
+        // Google Tasks: always shown (not configured: "?" says what CONFIG.INI needs)
         lv_obj_t *row = switch_row_create(LV_FLEX_ALIGN_SPACE_BETWEEN, SETTINGS_PAGE_PARAMS);
         s_gcal_label = lv_label_create(row);
         lv_obj_set_style_text_color(s_gcal_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);

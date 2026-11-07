@@ -272,6 +272,8 @@ typedef struct {
     const char *google_steps;
     const char *google_linking;
     const char *google_failed;
+    const char *google_not_configured;
+    const char *google_howto;
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;
     const char *settings_debug_info;

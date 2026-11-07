@@ -361,6 +361,8 @@ static const lang_field_t s_fields[] = {
     { "google_steps", offsetof(app_lang_t, google_steps), FIELD_TEXT, 1 },
     { "google_linking", offsetof(app_lang_t, google_linking), FIELD_TEXT, 1 },
     { "google_failed", offsetof(app_lang_t, google_failed), FIELD_TEXT, 1 },
+    { "google_not_configured", offsetof(app_lang_t, google_not_configured), FIELD_TEXT, 1 },
+    { "google_howto", offsetof(app_lang_t, google_howto), FIELD_TEXT, 1 },
     { "settings_debug_title", offsetof(app_lang_t, settings_debug_title), FIELD_TEXT, 1 },
     { "settings_debug", offsetof(app_lang_t, settings_debug), FIELD_TEXT, 1 },
     { "settings_debug_info", offsetof(app_lang_t, settings_debug_info), FIELD_TEXT, 1 },

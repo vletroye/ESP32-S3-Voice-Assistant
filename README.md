@@ -2171,7 +2171,10 @@ A power cut clears them. Every start is also added to `BOOTS.TXT` (the last 50, 
 - **Homey**: with a server named `Homey` (`McpN_name`), the main task opens an MCP session (`initialize`, then
   `notifications/initialized`) once the Wi-Fi is up, reads `tools/list` (~190 tools, ~180 KB, parsed in
   PSRAM) and keeps 16 of them (`s_selected` in `homey_mcp.c`, ~2,900 tokens of definitions instead of ~50,000).
-  Calls go through `tools/call` on the local network. JSON results lose their useless fields (icons, update
+  Calls go through `tools/call` on the local network. A `zone_id` given as a room's name ("bureau", as some models
+  do) is replaced by that room's id before the call (`zones_list`, kept 10 minutes; case and accents ignored, else
+  the only room whose name holds it); a name matching no room, or several, answers the model with the rooms' names
+  and ids so that it tries again. JSON results lose their useless fields (icons, update
   dates, parent zone, flow folder, empty sub-zone lists: the room list goes from ~7,300 to ~3,600 characters)
   and are cut at 12,000 characters (logged when it happens). Once answered, the history keeps only their first
   600 characters, so a long list is not sent again in full with every question. The instructions then tell

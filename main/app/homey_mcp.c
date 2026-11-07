@@ -346,6 +346,11 @@ static const char *zone_find(const char *wanted, int *candidates)
     *candidates = 0;
     const cJSON *zone;
     cJSON_ArrayForEach(zone, s_zones) {
+        // Already an id (of a form other than the usual one): kept as it is
+        if (strcmp(cJSON_GetObjectItem(zone, "id")->valuestring, wanted) == 0) {
+            *candidates = 1;
+            return cJSON_GetObjectItem(zone, "id")->valuestring;
+        }
         fold(cJSON_GetObjectItem(zone, "name")->valuestring, have, sizeof(have));
         if (strcmp(want, have) == 0) {
             *candidates = 1;

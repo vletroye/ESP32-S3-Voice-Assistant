@@ -655,10 +655,7 @@ static void message(game_msg_t *m)
             cJSON_AddStringToObject(item, "text", m->text);
             cJSON_AddItemToArray(s_history, item);
             s_turns = m->turn;
-            // The other speaks it now: it scrolls at the reading speed (the end flag never set: the panel stays
-            // until the next line)
-            ui_ctrl_reply_show_scrolled(m->text);
-            ui_ctrl_reply_set_audio_start_flag(true);
+            // Not shown here: only the BOX speaking a line shows it, this one keeps its own last line
         } else if (strcmp(m->type, "done") == 0) {
             s_peer_done = m->turn > s_peer_done ? m->turn : s_peer_done;
         } else if (strcmp(m->type, "stop") == 0) {

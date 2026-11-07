@@ -244,7 +244,8 @@ static void consent_url(const char *verifier, char *out, size_t size)
     mbedtls_sha256((const unsigned char *)verifier, strlen(verifier), hash, 0);
     char challenge[48];
     base64url(hash, sizeof(hash), challenge, sizeof(challenge));
-    char client[160], scopes[160], redirect[64];
+    // Static, as the other large buffers here: the main task's stack is small (6.5 KB), and these run deep in it
+    static char client[160], scopes[160], redirect[64];
     url_encode(client, sizeof(client), s_client);
     url_encode(scopes, sizeof(scopes), GOOGLE_SCOPES);
     url_encode(redirect, sizeof(redirect), GOOGLE_REDIRECT);
@@ -272,7 +273,7 @@ void google_auth_export_link(void)
         return;
     }
     // A new verifier for each new page (the code of an older one is refused)
-    char verifier[PKCE_VERIFIER_SIZE], url[700], html_url[800];
+    static char verifier[PKCE_VERIFIER_SIZE], url[700], html_url[800];
     pkce_new(verifier, sizeof(verifier));
     consent_url(verifier, url, sizeof(url));
     // "&" written "&amp;" in the attribute
@@ -323,7 +324,7 @@ static void code_exchange(void)
     start = start ? start + 5 : code;
     start[strcspn(start, "& \t\r\n")] = '\0';
     url_decode(start);
-    char code_enc[512], client[160], secret[160], redirect[64];
+    static char code_enc[512], client[160], secret[160], redirect[64];
     url_encode(code_enc, sizeof(code_enc), start);
     url_encode(client, sizeof(client), s_client);
     url_encode(secret, sizeof(secret), s_secret);
@@ -365,7 +366,7 @@ static void unlink_now(void)
     xSemaphoreTake(s_lock, portMAX_DELAY);
     if (s_refresh) {
         // Revoked at Google too (the device no longer appears among the account's connected apps)
-        char token[600], body[700];
+        static char token[600], body[700];
         url_encode(token, sizeof(token), s_refresh);
         snprintf(body, sizeof(body), "token=%s", token);
         int status;
@@ -407,7 +408,7 @@ static const char *access_token(void)
     if (s_access && esp_timer_get_time() < s_access_until) {
         return s_access;
     }
-    char refresh[600], client[160], secret[160];
+    static char refresh[600], client[160], secret[160];      // (under s_lock)
     url_encode(refresh, sizeof(refresh), s_refresh);
     url_encode(client, sizeof(client), s_client);
     url_encode(secret, sizeof(secret), s_secret);

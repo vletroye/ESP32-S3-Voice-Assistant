@@ -36,6 +36,7 @@
 #include "esp_tinyuf2.h"
 #include "esp_check.h"
 #include <ctype.h>
+#include <strings.h>
 #include <dirent.h>
 #include <stdio.h>
 
@@ -407,6 +408,8 @@ static bool is_blank(char c)
  * meanwhile by voice or by the assistant), keep their inline comment, and are dropped when the key no longer
  * exists. The keys written are listed in `used`.
  */
+static bool config_key_canonical(const char *name, char *out);
+
 static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[][NVS_KEY_NAME_MAX_SIZE],
                                 int *used_count)
 {
@@ -447,6 +450,11 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
         }
         memcpy(key, p, key_len);
         key[key_len] = '\0';
+        // A key written with other capitals: shown as the device knows it ("Google_Code" -> "Google_code")
+        char canonical[NVS_KEY_NAME_MAX_SIZE];
+        if (config_key_canonical(key, canonical)) {
+            strlcpy(key, canonical, sizeof(key));
+        }
         // Inline comment: from the blank before a ';' (as the INI parser reads it)
         const char *comment = NULL;
         for (const char *c = eq + 1; c < line + len; c++) {
@@ -519,6 +527,34 @@ static bool is_mcp_key(const char *key)
     for (size_t f = 0; f < sizeof(s_mcp_fields) / sizeof(s_mcp_fields[0]); f++) {
         if (strcmp(p, s_mcp_fields[f]) == 0) {
             return true;
+        }
+    }
+    return false;
+}
+
+/*
+ * [Voice assistant] The name of a key of CONFIG.INI as the device knows it, from a name written with other capitals
+ * ("Google_Code", "mcp2_URL" -> "Google_code", "Mcp2_url"): into out (NVS_KEY_NAME_MAX_SIZE); false when it is none
+ */
+static bool config_key_canonical(const char *name, char *out)
+{
+    for (size_t k = 0; k < sizeof(s_ini_key_order) / sizeof(s_ini_key_order[0]); k++) {
+        if (strcasecmp(name, s_ini_key_order[k]) == 0) {
+            strlcpy(out, s_ini_key_order[k], NVS_KEY_NAME_MAX_SIZE);
+            return true;
+        }
+    }
+    if (strncasecmp(name, "mcp", 3) == 0 && isdigit((unsigned char)name[3])) {
+        const char *p = name + 3;
+        int n = 0;
+        while (isdigit((unsigned char)*p) && n <= MCP_SERVERS_MAX) {
+            n = n * 10 + (*p++ - '0');
+        }
+        for (size_t f = 0; *p == '_' && f < sizeof(s_mcp_fields) / sizeof(s_mcp_fields[0]); f++) {
+            if (strcasecmp(p + 1, s_mcp_fields[f]) == 0) {
+                snprintf(out, NVS_KEY_NAME_MAX_SIZE, "Mcp%d_%s", n, s_mcp_fields[f]);
+                return is_mcp_key(out);
+            }
         }
     }
     return false;
@@ -828,15 +864,20 @@ static int nvs_write_back(void* user, const char* section, const char* name,
     if (strcmp(name, INI_LAYOUT_KEY) == 0) {
         return 1;   // [Voice assistant] reserved
     }
-    if (!is_config_key(name)) {
+    // [Voice assistant] Saved under the device's name of the key, whatever its capitals ("Google_Code")
+    char key[NVS_KEY_NAME_MAX_SIZE];
+    if (!config_key_canonical(name, key)) {
         // [Voice assistant] Not a key of CONFIG.INI: a line cut by a file read while being written
         PRINTFE("CONFIG.INI: unknown key '%s' ignored", name);
         return 1;
     }
+    if (strcmp(key, name) != 0) {
+        PRINTF("CONFIG.INI: '%s' saved as %s", name, key);
+    }
     PRINTFD("... [%s]", section);
-    PRINTFD("... (%s=%s)", name, value);
+    PRINTFD("... (%s=%s)", key, value);
     // [Voice assistant] The NVS full (many MCP servers...): said, without stopping (the keys before are saved)
-    esp_err_t err = nvs_set_str(nvs, name, value);
+    esp_err_t err = nvs_set_str(nvs, key, value);
     if (err == ESP_OK) {
         err = nvs_commit(nvs);
     }

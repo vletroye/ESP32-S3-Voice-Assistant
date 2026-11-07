@@ -786,7 +786,8 @@ USB drive named "ESP-BOX" holding these files:
 
 ### 3.2 `CONFIG.INI`: settings and API keys
 
-The settings, one `Key = value` per line. On the first start (no Wi-Fi nor key yet), the BOX opens the
+The settings, one `Key = value` per line (the key's capitals do not matter: `google_CODE` is saved as
+`Google_code`). On the first start (no Wi-Fi nor key yet), the BOX opens the
 configuration mode by itself. The keys keep the order and the comments of the file as you last saved it; keys it
 does not hold are added in the order of the table below (`s_ini_key_order` in `board_flash.c`). A switch takes
 `on` / `off` (also `yes` / `no`, `true` / `false`, `1` / `0`; anything else: its default); a number out of its

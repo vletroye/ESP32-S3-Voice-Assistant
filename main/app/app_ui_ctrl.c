@@ -79,9 +79,9 @@ LV_FONT_DECLARE(ui_font_Latin20);
 /* Text under the robot (listening / thinking): lines shown, bottom position (from the screen bottom), right above
  * the model in use */
 #define LISTEN_TEXT_LINES               (2)
-#define LISTEN_TEXT_BOTTOM_Y            (MODEL_ROW_BOTTOM_Y - MODEL_ROW_HEIGHT)
-/* The robot is raised to leave room for these lines */
-#define ROBOT_RAISE_PX                  (10)
+#define LISTEN_TEXT_BOTTOM_Y            (MODEL_ROW_BOTTOM_Y - MODEL_ROW_HEIGHT + 10)
+/* The robot is moved up by this (negative: down) from its place in the generated screens */
+#define ROBOT_RAISE_PX                  (0)
 
 static char *TAG = "ui_ctrl";
 
@@ -867,7 +867,7 @@ static void busy_show(const char *text)
     // The head as on the listening screen: body, eye screen, eyes
     lv_obj_t *body = lv_img_create(wait);
     lv_img_set_src(body, &ui_img_body_png);
-    lv_obj_align(body, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_align(body, LV_ALIGN_CENTER, 0, -8);
     lv_obj_t *screen = lv_img_create(body);
     lv_img_set_src(screen, &ui_img_body_eye_screen_png);
     lv_obj_align(screen, LV_ALIGN_CENTER, 10, 5);

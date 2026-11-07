@@ -169,8 +169,9 @@ static void ring_loud(const alarm_t *a, const char *text)
         strlcpy(station.url, a->radio_url, sizeof(station.url));
         radio_station_t *found = station.url[0] ? NULL : calloc(RADIO_BROWSER_MAX, sizeof(radio_station_t));
         for (int attempt = 0; found && attempt < 3 && !s_stop; attempt++) {
-            if (radio_browser_search(a->radio, NULL, NULL, found, RADIO_BROWSER_MAX) > 0) {
-                station = found[0];
+            int n = radio_browser_search(a->radio, NULL, NULL, found, RADIO_BROWSER_MAX);
+            if (n > 0) {
+                station = found[radio_browser_best(a->radio, found, n)];
                 break;
             }
             vTaskDelay(pdMS_TO_TICKS(1000));

@@ -267,6 +267,24 @@ int radio_browser_search(const char *name, const char *tag, const char *countryc
     return found;
 }
 
+int radio_browser_best(const char *name, const radio_station_t *list, int count)
+{
+    int best = 0;
+    size_t best_extra = (size_t)-1;
+    size_t len = name ? strlen(name) : 0;
+    for (int i = 0; i < count && len; i++) {
+        if (strcasecmp(list[i].name, name) == 0) {
+            return i;
+        }
+        size_t extra = strlen(list[i].name) - len;
+        if (strcasestr(list[i].name, name) && extra < best_extra) {
+            best = i;
+            best_extra = extra;
+        }
+    }
+    return best;
+}
+
 int radio_browser_play(const char *name, const char *tag, const char *countrycode, char *first, size_t size)
 {
     if (first && size) {

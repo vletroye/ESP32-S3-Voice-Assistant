@@ -700,7 +700,12 @@ Ask in your own words; the model sets them (with the models that take tools):
   opens **Alarmes et rappels** / **Alarms and reminders**: the timers (their end, the time left, counting down), the
   alarms and the reminders (the next day and time, the label, how it repeats: "en semaine" / "weekdays", "chaque
   lundi, jeudi" / "every monday, thursday", "le 2e mardi du mois" / "the 2nd tuesday of the month"…, the radio).
-- **Radio**: the station is looked for when the alarm is set and its stream kept, so that it plays even if the radio
+- **A timer running**: its countdown (m:ss, the nearest timer) above the robot's head, asleep, listening or
+  thinking; asleep, the robot's closed eyes become two **split flaps**, like a station's departure board, turning
+  over with the seconds of the countdown (the units every second, the tens every ten); the closed eyes and the Z
+  come back once no timer runs.
+- **Radio**: the station is looked for when the alarm is set and its stream kept (of the stations found, the one
+  named as asked, else the one whose name adds the least to it: "RTBF Classic 21" rather than "Classic 21 Blues"), so that it plays even if the radio
   directory does not answer when it rings (else looked for again, three times, then the chime).
 - **Ask**: "Quelles alarmes ai-je ?" / "Which alarms do I have?", "Combien de temps reste-t-il ?" / "How much time is
   left?", "Supprime l'alarme de 7 h" / "Delete the 7 o'clock alarm".
@@ -1812,6 +1817,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |
 | `tools.c` | Tools offered to the models (definitions, dispatch) |
 | `alarms.c` | Timers, alarms and reminders: the list (`/state/alarms.json`), repetitions (days of the week, monthly by day, nth or last weekday, last day, yearly), the next one due, the missed ones; the tools `timer_set`, `alarm_set`, `reminder_set`, `alarms_list`, `alarm_delete`, `alarm_snooze` (`tools.c`) |
+| `app_ui_timer.c` | A timer running: its countdown above the robot's heads (children of the screens of the eyes, like the provider's icon), and the split-flap eyes of the robot asleep (two flaps of two clipped halves each: the old upper half falls, then the new lower half unfolds) |
 | `app_ui_alarms.c` | The screen of the timers, alarms and reminders (a tap on the clock of the sleep screen), refreshed every second; the letters by the clock are drawn by `app_clock.c` |
 | `alarm_ring.c` | Ringing them in its own task: a chime made on the device (two bell notes), from silence to 80 % in 30 s (software gain, the codec set once while silent), or the alarm's radio fading in as long; the label said once loud; stopped by a touch or the wake word, or after `Alarm_stop_min`; a reminder: a short chime, then its text said as a reply |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/state/places.json` (read at start-up, saved when idle) |

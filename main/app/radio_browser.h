@@ -33,6 +33,13 @@ int radio_browser_search(const char *name, const char *tag, const char *countryc
  */
 int radio_browser_play(const char *name, const char *tag, const char *countrycode, char *first, size_t size);
 
+/**
+ * @brief Of the stations found, the one best matching the name asked (an alarm's station): the same name (case
+ *        ignored), else the one whose name holds it with the fewest other characters ("RTBF Classic 21" rather than
+ *        "Classic 21 Blues" for "Classic 21"), else the first (the most listened)
+ */
+int radio_browser_best(const char *name, const radio_station_t *list, int count);
+
 /** Count a listen of the station (the directory's popularity), as the API asks for each station played */
 void radio_browser_click(const char *uuid);
 

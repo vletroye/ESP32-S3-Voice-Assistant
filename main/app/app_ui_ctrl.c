@@ -38,6 +38,7 @@
 #include "app_ui_radio.h"
 #include "app_ui_status.h"
 #include "app_ui_alarms.h"
+#include "app_ui_timer.h"
 #include "bsp/esp-bsp.h"
 
 #include "ui_helpers.h"
@@ -1988,7 +1989,7 @@ static lv_obj_t *s_head_badges[3] = { NULL };
 static void eye_screen_ext_draw_cb(lv_event_t *e)
 {
     lv_coord_t *size = lv_event_get_param(e);
-    lv_coord_t needed = HEAD_LOGO_GAP_Y + 21;   // the icons are 20 x 21
+    lv_coord_t needed = HEAD_LOGO_GAP_Y + 21 + 2 + UI_TIMER_LABEL_H;    // the icons are 20 x 21, a timer above
     if (*size < needed) {
         *size = needed;
     }
@@ -2299,6 +2300,8 @@ void ui_ctrl_init(void)
     scroll_arrow_create();
     model_row_create();
     head_icons_create();
+    // A timer running: its countdown above the heads, split-flap eyes asleep
+    ui_timer_init(HEAD_LOGO_GAP_Y + 21 + 2);
     ui_radio_init();
     ui_status_init();
     ui_alarms_init();

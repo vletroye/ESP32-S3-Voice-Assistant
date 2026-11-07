@@ -337,9 +337,11 @@ static char *alarm_set(alarm_kind_t kind, const cJSON *input, bool *is_error)
         // The station looked for now, its stream kept: the alarm does not depend on the directory when it rings
         strlcpy(a.radio, radio, sizeof(a.radio));
         radio_station_t *found = calloc(RADIO_BROWSER_MAX, sizeof(radio_station_t));
-        if (found && radio_browser_search(radio, NULL, NULL, found, RADIO_BROWSER_MAX) > 0) {
-            strlcpy(a.radio, found[0].name, sizeof(a.radio));
-            strlcpy(a.radio_url, found[0].url, sizeof(a.radio_url));
+        int n = found ? radio_browser_search(radio, NULL, NULL, found, RADIO_BROWSER_MAX) : 0;
+        if (n > 0) {
+            const radio_station_t *best = &found[radio_browser_best(radio, found, n)];
+            strlcpy(a.radio, best->name, sizeof(a.radio));
+            strlcpy(a.radio_url, best->url, sizeof(a.radio_url));
             radio_found = true;
         }
         free(found);

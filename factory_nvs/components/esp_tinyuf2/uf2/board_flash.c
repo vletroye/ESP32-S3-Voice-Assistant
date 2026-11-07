@@ -485,7 +485,7 @@ static const char *const s_ini_key_order[] = {
     "City", "Volume", "ChatGPT_key", "Claude_key", "Gemini_key", "Homey_url", "Homey_key", "Confirm_off", "OpenRouter_key",
     "OpenRouter_free", "XAI_key", "Mistral_key", "Perplexity_key", "Deepgram_key", "Groq_key",
     "ElevenLabs_key",
-    "Screen_off_s", "Resume_ask_min", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Read_lists", "Currency", "Radio_resume",
+    "Screen_off_s", "Resume_ask_min", "Alarm_stop_min", "Show_clock", "End_speech_ms", "Sleep_after_cmd", "Read_lists", "Currency", "Radio_resume",
     "Radio_level", "Radio_treble", "Followup_beep", "Debug",
 };
 

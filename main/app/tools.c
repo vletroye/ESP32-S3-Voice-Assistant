@@ -18,6 +18,8 @@
 #include "radio_browser.h"
 #include "ai_provider_perplexity.h"
 #include "google_calendar.h"
+#include "alarms.h"
+#include "alarm_ring.h"
 
 static const char *TAG = "tools";
 
@@ -51,7 +53,44 @@ static const char s_definitions_json[] =
     "\"input_schema\":{\"type\":\"object\",\"properties\":{"
     "\"name\":{\"type\":\"string\",\"description\":\"Part of the station name, e.g. 'Nostalgie'\"},"
     "\"tag\":{\"type\":\"string\",\"description\":\"One genre tag, e.g. 'jazz'\"},"
-    "\"countrycode\":{\"type\":\"string\",\"description\":\"ISO 3166-1 alpha-2 code, e.g. 'BE'\"}}}}"
+    "\"countrycode\":{\"type\":\"string\",\"description\":\"ISO 3166-1 alpha-2 code, e.g. 'BE'\"}}}},"
+    "{\"name\":\"timer_set\","
+    "\"description\":\"Start a countdown timer on the device: when it ends, a chime rises from silence, then its label is said; it rings until the user touches the screen or says the wake word. Several timers can run. Keep the answer short (e.g. 'C'est parti pour 10 minutes.').\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"duration_s\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":86400,\"description\":\"Its duration in seconds\"},"
+    "\"label\":{\"type\":\"string\",\"description\":\"What it is for, in the user's language, to be said when it ends (e.g. 'les pâtes'); omit if none was given\"}},"
+    "\"required\":[\"duration_s\"]}},"
+    "{\"name\":\"alarm_set\","
+    "\"description\":\"Set an alarm clock at a local date and time, once or repeated. It rings with a chime rising from silence (its label said once loud), or plays a radio station rising from silence when 'radio' is given, until the user touches the screen or says the wake word. To change an alarm, delete it (alarm_delete) and set a new one. Confirm briefly with the day and time.\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"time\":{\"type\":\"string\",\"description\":\"Local date and time of the first time it rings, as YYYY-MM-DDTHH:MM (e.g. 2026-11-12T07:30), worked out from the current date and time you were given\"},"
+    "\"repeat\":{\"type\":\"string\",\"enum\":[\"none\",\"daily\",\"weekdays\",\"weekend\",\"weekly\",\"monthly\",\"monthly_nth_weekday\",\"monthly_last_weekday\",\"monthly_last_day\",\"yearly\"],\"description\":\"How it repeats (none by default). The rule is taken from 'time': monthly = the same day of the month, monthly_nth_weekday = the same weekday and rank as 'time' (the 2nd Tuesday), monthly_last_weekday = the last such weekday of the month, monthly_last_day = the last day of the month, yearly = the same date every year (birthdays); weekly uses 'days'\"},"
+    "\"days\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"monday\",\"tuesday\",\"wednesday\",\"thursday\",\"friday\",\"saturday\",\"sunday\"]},\"description\":\"The days of a weekly one\"},"
+    "\"label\":{\"type\":\"string\",\"description\":\"Its name, in the user's language, if one was given (e.g. 'réveil', 'médicaments')\"},"
+    "\"radio\":{\"type\":\"string\",\"description\":\"A radio station to wake up with, as named by the user (e.g. 'Classic 21')\"}},"
+    "\"required\":[\"time\"]}},"
+    "{\"name\":\"reminder_set\","
+    "\"description\":\"Remind the user of something at a local date and time, once or repeated: a short chime, then the text is said. Confirm briefly with the day and time.\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"time\":{\"type\":\"string\",\"description\":\"Local date and time of the first time it rings, as YYYY-MM-DDTHH:MM (e.g. 2026-11-12T07:30), worked out from the current date and time you were given\"},"
+    "\"text\":{\"type\":\"string\",\"description\":\"What to remind, in the user's language, said as is (e.g. 'appeler Paul')\"},"
+    "\"repeat\":{\"type\":\"string\",\"enum\":[\"none\",\"daily\",\"weekdays\",\"weekend\",\"weekly\",\"monthly\",\"monthly_nth_weekday\",\"monthly_last_weekday\",\"monthly_last_day\",\"yearly\"],\"description\":\"How it repeats (none by default). The rule is taken from 'time': monthly = the same day of the month, monthly_nth_weekday = the same weekday and rank as 'time' (the 2nd Tuesday), monthly_last_weekday = the last such weekday of the month, monthly_last_day = the last day of the month, yearly = the same date every year (birthdays); weekly uses 'days'\"},"
+    "\"days\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"monday\",\"tuesday\",\"wednesday\",\"thursday\",\"friday\",\"saturday\",\"sunday\"]},\"description\":\"The days of a weekly one\"}},"
+    "\"required\":[\"time\",\"text\"]}},"
+    "{\"name\":\"alarms_list\","
+    "\"description\":\"The timers, alarms and reminders set, by time: id, kind, label, local time (when, weekday), seconds left of a timer, repetition, radio. Use it to answer what is set, and before deleting or changing one.\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"kind\":{\"type\":\"string\",\"enum\":[\"timer\",\"alarm\",\"reminder\"],\"description\":\"Only this kind\"}}}},"
+    "{\"name\":\"alarm_delete\","
+    "\"description\":\"Delete a timer, alarm or reminder by its id (from alarms_list), or all of a kind (all=true; ask the user to confirm first when it deletes several).\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"id\":{\"type\":\"integer\"},"
+    "\"all\":{\"type\":\"boolean\"},"
+    "\"kind\":{\"type\":\"string\",\"enum\":[\"timer\",\"alarm\",\"reminder\",\"any\"],\"description\":\"With all=true: the kind deleted\"}}}},"
+    "{\"name\":\"alarm_snooze\","
+    "\"description\":\"Ring the timer, alarm or reminder that is ringing or just rang (within 10 minutes) again in some minutes ('encore 5 minutes', 'snooze').\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"minutes\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":120,\"description\":\"5 when not said\"}}}}"
     "]";
 
 /*
@@ -239,6 +278,128 @@ static char *run_play_radio(const cJSON *input, bool *is_error)
     return text;
 }
 
+/* ---------- Timers, alarms, reminders (alarms.c) ---------- */
+
+/* "2026-11-12T07:30" (local time; seconds and a zone after it ignored), 0 when not understood */
+static time_t local_time(const char *text)
+{
+    struct tm t = {0};
+    if (!text || sscanf(text, "%d-%d-%dT%d:%d", &t.tm_year, &t.tm_mon, &t.tm_mday, &t.tm_hour, &t.tm_min) != 5) {
+        return 0;
+    }
+    t.tm_year -= 1900;
+    t.tm_mon -= 1;
+    t.tm_isdst = -1;
+    return mktime(&t);
+}
+
+static char *alarm_answer(const alarm_t *a)
+{
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddBoolToObject(result, "ok", true);
+    cJSON_AddItemToObject(result, "set", alarms_to_json(a));
+    char *text = cJSON_PrintUnformatted(result);
+    cJSON_Delete(result);
+    return text;
+}
+
+static char *alarm_set(alarm_kind_t kind, const cJSON *input, bool *is_error)
+{
+    alarm_t a = { .kind = kind };
+    if (kind == ALARM_KIND_TIMER) {
+        const cJSON *duration = cJSON_GetObjectItem(input, "duration_s");
+        if (!cJSON_IsNumber(duration) || duration->valueint < 1) {
+            *is_error = true;
+            return strdup("{\"error\":\"give duration_s\"}");
+        }
+        a.seconds = duration->valueint;
+        a.due = time(NULL) + a.seconds;
+    } else {
+        a.due = local_time(string_input(input, "time"));
+        if (!a.due) {
+            *is_error = true;
+            return strdup("{\"error\":\"give time as YYYY-MM-DDTHH:MM, local time\"}");
+        }
+        a.repeat = alarms_repeat_from(string_input(input, "repeat"));
+        const cJSON *day;
+        cJSON_ArrayForEach(day, cJSON_GetObjectItem(input, "days")) {
+            a.days |= cJSON_IsString(day) ? alarms_day_bit(day->valuestring) : 0;
+        }
+        if (a.days && a.repeat == ALARM_REPEAT_NONE) {
+            a.repeat = ALARM_REPEAT_WEEKLY;
+        }
+    }
+    const char *label = string_input(input, kind == ALARM_KIND_REMINDER ? "text" : "label");
+    strlcpy(a.label, label ? label : "", sizeof(a.label));
+    const char *radio = string_input(input, "radio");
+    strlcpy(a.radio, kind == ALARM_KIND_ALARM && radio ? radio : "", sizeof(a.radio));
+    if (!alarms_clock_set()) {
+        *is_error = true;
+        return strdup("{\"error\":\"the device's clock is not set yet (no Internet time): try again in a moment\"}");
+    }
+    if (!alarms_add(&a)) {
+        *is_error = true;
+        return strdup("{\"error\":\"that time is past, or too many are set already (50)\"}");
+    }
+    return alarm_answer(&a);
+}
+
+static int kind_from(const char *name)
+{
+    return !name ? -1 : strcmp(name, "timer") == 0 ? ALARM_KIND_TIMER : strcmp(name, "alarm") == 0 ?
+           ALARM_KIND_ALARM : strcmp(name, "reminder") == 0 ? ALARM_KIND_REMINDER : -1;
+}
+
+static char *alarms_list_run(const cJSON *input)
+{
+    int kind = kind_from(string_input(input, "kind"));
+    int count = 0;
+    alarm_t *list = alarms_list(&count);
+    cJSON *result = cJSON_CreateObject();
+    cJSON *items = cJSON_AddArrayToObject(result, "items");
+    for (int i = 0; i < count; i++) {
+        if (kind < 0 || list[i].kind == (alarm_kind_t)kind) {
+            cJSON_AddItemToArray(items, alarms_to_json(&list[i]));
+        }
+    }
+    free(list);
+    cJSON_AddNumberToObject(result, "count", cJSON_GetArraySize(items));
+    char *text = cJSON_PrintUnformatted(result);
+    cJSON_Delete(result);
+    return text;
+}
+
+static char *alarm_delete_run(const cJSON *input, bool *is_error)
+{
+    const cJSON *id = cJSON_GetObjectItem(input, "id");
+    char *text = NULL;
+    if (cJSON_IsNumber(id)) {
+        bool done = alarms_remove(id->valueint);
+        *is_error = !done;
+        asprintf(&text, done ? "{\"deleted\":%d}" : "{\"error\":\"no item %d: call alarms_list\"}", id->valueint);
+        return text;
+    }
+    if (cJSON_IsTrue(cJSON_GetObjectItem(input, "all"))) {
+        asprintf(&text, "{\"deleted\":%d}", alarms_remove_all(kind_from(string_input(input, "kind"))));
+        return text;
+    }
+    *is_error = true;
+    return strdup("{\"error\":\"give id, or all=true\"}");
+}
+
+static char *alarm_snooze_run(const cJSON *input, bool *is_error)
+{
+    const cJSON *minutes = cJSON_GetObjectItem(input, "minutes");
+    int m = cJSON_IsNumber(minutes) ? minutes->valueint : 5;
+    if (!alarm_ring_snooze(m)) {
+        *is_error = true;
+        return strdup("{\"error\":\"nothing rang in the last 10 minutes\"}");
+    }
+    char *text = NULL;
+    asprintf(&text, "{\"ok\":true,\"rings_again_in_minutes\":%d}", m);
+    return text;
+}
+
 char *tools_run(const char *name, const cJSON *input, bool *is_error)
 {
     *is_error = false;
@@ -258,6 +419,18 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
         result = run_play_radio(input, is_error);
     } else if (strcmp(name, "web_search") == 0) {
         result = run_web_search(input, is_error);
+    } else if (strcmp(name, "timer_set") == 0) {
+        result = alarm_set(ALARM_KIND_TIMER, input, is_error);
+    } else if (strcmp(name, "alarm_set") == 0) {
+        result = alarm_set(ALARM_KIND_ALARM, input, is_error);
+    } else if (strcmp(name, "reminder_set") == 0) {
+        result = alarm_set(ALARM_KIND_REMINDER, input, is_error);
+    } else if (strcmp(name, "alarms_list") == 0) {
+        result = alarms_list_run(input);
+    } else if (strcmp(name, "alarm_delete") == 0) {
+        result = alarm_delete_run(input, is_error);
+    } else if (strcmp(name, "alarm_snooze") == 0) {
+        result = alarm_snooze_run(input, is_error);
     } else if (strcmp(name, "calendar_events") == 0) {
         const cJSON *days = cJSON_GetObjectItem(input, "days");
         result = gcal_events(string_input(input, "date"), cJSON_IsNumber(days) ? days->valueint : 1, is_error);

@@ -151,6 +151,14 @@ menu "Example Configuration"
             conversation, the reasoning mode off). 0: never asked. Default of Resume_ask_min in CONFIG.INI,
             which takes precedence.
 
+    config ASSISTANT_ALARM_STOP_MIN
+        int "A timer or an alarm stops ringing by itself after this (min)"
+        default 3
+        range 1 60
+        help
+            A timer or an alarm not stopped (a touch, the wake word) stops ringing by itself after this many
+            minutes. Default of Alarm_stop_min in CONFIG.INI, which takes precedence.
+
     config ASSISTANT_FREE_MODELS
         int "Free OpenRouter models offered"
         default 3

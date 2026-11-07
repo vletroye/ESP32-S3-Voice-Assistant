@@ -308,6 +308,16 @@ reasoning_not_on = Het redeneren stond niet aan.
 # %s: the label of the model in use
 reasoning_unsupported = Het model %s kan niet redeneren. Kies een ander model om het redeneren aan te zetten.
 
+# Timers, alarms, reminders when they ring: a timer (alone, then with its label %s), an alarm (%s its
+# time; then its label), a reminder (%s its text), one missed during a power cut (%s its time, %s its text)
+alarm_timer = De timer is afgelopen.
+alarm_timer_label = Timer afgelopen: %s.
+alarm_alarm = Het is %s.
+alarm_alarm_label = Het is %s: %s.
+alarm_reminder = Herinnering: %s.
+alarm_missed = Tijdens een stroomonderbreking heb ik deze herinnering van %s gemist: %s.
+alarm_missed_plain = Tijdens een stroomonderbreking heb ik een wekker van %s gemist.
+
 # woken up after Resume_ask_min of pause in a conversation (reasoning mode or not): go on? ("oui" / "non": a new
 # conversation)
 resume_ask = Hallo! Wil je het vorige gesprek voortzetten?

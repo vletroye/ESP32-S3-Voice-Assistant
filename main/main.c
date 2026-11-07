@@ -43,6 +43,8 @@
 #include "tools.h"
 #include "weather.h"
 #include "mcp_client.h"
+#include "alarms.h"
+#include "alarm_ring.h"
 #include "sentence_splitter.h"
 #include "tts_stream.h"
 #include "stt_stream.h"
@@ -1237,6 +1239,8 @@ void app_main()
     gcal_init();
     // The MCP servers of CONFIG.INI (Homey...): their tools read once the Wi-Fi is up
     mcp_init();
+    // Timers, alarms and reminders kept (LittleFS)
+    alarms_init();
     // The backup of CONFIG.INI made by the factory reset of an older firmware (keys included): no longer kept
     if (remove("/spiffs/config.bkp") == 0) {
         ESP_LOGI(TAG, "CONFIG.BKP removed");
@@ -1326,11 +1330,22 @@ void app_main()
     // The screens were made before: the provider's icon on the robot's forehead, the Settings screen
     ui_ctrl_settings_sync();
 
+    // Ringing the timers, alarms and reminders due (its chime made once)
+    alarm_ring_init();
+
     s_main_task = xTaskGetCurrentTaskHandle();
     for (int seconds = 0; ; seconds++) {
         // A second, or less when the assistant goes to sleep with something to save (assistant_save_soon)
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
 
+        // A timer, an alarm or a reminder due: rung once the assistant sleeps (after a reply, a conversation)
+        if (!alarm_ring_active() && !s_reply_active && ui_ctrl_is_asleep()) {
+            alarm_t due;
+            bool missed = false;
+            if (alarms_due(&due, &missed)) {
+                alarm_ring_start(&due, missed);
+            }
+        }
         // The tools of the MCP servers (Homey...), read once the Wi-Fi is up (again every minute while one cannot be
         // reached), or switched on or off on the MCP page: the model's tools, the home rules, the page
         if (mcp_poll(wifi_connected_already() == WIFI_STATUS_CONNECTED_OK)) {

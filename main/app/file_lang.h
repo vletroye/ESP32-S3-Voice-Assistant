@@ -162,6 +162,13 @@ typedef struct {
     const char *reasoning_off;
     const char *reasoning_not_on;
     const char *reasoning_unsupported;  /* %s: the label of the model */
+    const char *alarm_timer;      /* Timers, alarms, reminders when they ring (alarm_ring.c) */
+    const char *alarm_timer_label;
+    const char *alarm_alarm;
+    const char *alarm_alarm_label;
+    const char *alarm_reminder;
+    const char *alarm_missed;
+    const char *alarm_missed_plain;
     const char *resume_ask;
     const char *resume_yes;
     const char *resume_no;

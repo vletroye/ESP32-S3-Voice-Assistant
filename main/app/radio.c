@@ -446,6 +446,14 @@ static inline int32_t treble_apply(int32_t sample)
  */
 #define RADIO_FADE_MS           2000
 #define RADIO_FADE_SAMPLES      (RADIO_OUT_RATE * RADIO_FADE_MS / 1000)
+/* The fade-in of the next start (an alarm: from silence over tens of seconds), then RADIO_FADE_SAMPLES again */
+static volatile uint32_t s_next_fade_samples = 0;
+static uint32_t s_fade_samples = RADIO_FADE_SAMPLES;
+
+void radio_set_next_fade_in(uint32_t ms)
+{
+    s_next_fade_samples = (uint32_t)((uint64_t)RADIO_OUT_RATE * ms / 1000);
+}
 #define RADIO_GAIN_MIN_DB       (-12.0f)
 #define RADIO_GAIN_MAX_DB       6.0f
 #define RADIO_SILENCE_DBFS      (-45.0f)        /* quieter blocks are not measured */
@@ -519,8 +527,8 @@ static inline int32_t level_apply(int32_t sample)
     }
     l->gain += (l->gain_target - l->gain) * (1.0f / RADIO_LEVEL_BLOCK);
     float v = x * l->gain;
-    if (l->fade < RADIO_FADE_SAMPLES) {
-        float t = (float)l->fade++ / RADIO_FADE_SAMPLES;
+    if (l->fade < s_fade_samples) {
+        float t = (float)l->fade++ / s_fade_samples;
         v *= t * t;
     }
     // Fade-out at a stop: the reverse curve, from the level reached (even in the middle of the fade-in)
@@ -625,6 +633,8 @@ static void play_stream(void)
         return;
     }
     level_reset();      // fade-in, and the level of this station measured afresh
+    s_fade_samples = s_next_fade_samples ? s_next_fade_samples : RADIO_FADE_SAMPLES;
+    s_next_fade_samples = 0;
 
     esp_aac_dec_cfg_t aac_cfg = ESP_AAC_DEC_CONFIG_DEFAULT();
     aac_cfg.aac_plus_enable = true;

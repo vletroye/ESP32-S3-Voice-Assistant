@@ -12,6 +12,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,6 +83,9 @@ const char *radio_station_name(void);
 
 /** The title being played (ICY metadata of the stream: "Artist - Title"), "" when the station gives none */
 void radio_title(char *buf, size_t size);
+
+/** The next station started fades in over this time (an alarm), instead of the usual 2 s */
+void radio_set_next_fade_in(uint32_t ms);
 
 /** Treble of the radio in dB (-12..6; negative: softer, 0: unchanged), applied at once (Radio_treble at start-up) */
 void radio_set_treble(int db);

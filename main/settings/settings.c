@@ -384,6 +384,9 @@ esp_err_t settings_read_parameter_from_nvs(void)
     // Reasoning mode: asked whether to go on with the conversation after this pause, 0: never
     g_sys_param.resume_ask_min = read_int("Resume_ask_min", CONFIG_ASSISTANT_RESUME_ASK_MIN, 0, 120,
                                           OUT_OF_RANGE_CLAMP);
+    // A timer or an alarm not stopped stops ringing by itself after this (minutes)
+    g_sys_param.alarm_stop_min = read_int("Alarm_stop_min", CONFIG_ASSISTANT_ALARM_STOP_MIN, 1, 60,
+                                          OUT_OF_RANGE_CLAMP);
     // Screen off after this many seconds without presence (BOX-3-SENSOR radar), 0: never
     g_sys_param.screen_off_s = read_int("Screen_off_s", CONFIG_ASSISTANT_SCREEN_OFF_S, 0, INT_MAX, OUT_OF_RANGE_CLAMP);
     // Radio: treble in dB, level the stations are brought to in dBFS, resumed after a conversation

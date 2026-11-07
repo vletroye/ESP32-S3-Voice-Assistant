@@ -34,6 +34,7 @@
 #include "esp_heap_caps.h"
 #include "radio.h"
 #include "llm.h"
+#include "alarm_ring.h"
 
 static const char *TAG = "app_audio";
 
@@ -392,6 +393,10 @@ void sr_handler_task(void *pvParam)
             radio_suspend();
             // Someone speaks to the assistant: the screen goes on if it was off
             app_presence_activity();
+            // A timer or an alarm ringing stops (the user may then say "encore 5 minutes")
+            if (alarm_ring_stop()) {
+                ESP_LOGI(TAG, "Ringing stopped by the wake word or a touch");
+            }
             // A new question interrupts the reply being spoken
             assistant_reply_stop();
             // Woken up (not a follow-up) after a pause in a conversation: asked first whether to go on with it

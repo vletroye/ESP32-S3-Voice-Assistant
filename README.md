@@ -37,6 +37,7 @@ been largely rewritten.
   - [2.5 Voice commands](#25-voice-commands)
   - [2.6 Radio](#26-radio)
   - [2.7 Updating the firmware](#27-updating-the-firmware)
+  - [2.8 Timers, alarms and reminders](#28-timers-alarms-and-reminders)
 - [3. Advanced user guide](#3-advanced-user-guide)
   - [3.1 Files of the configuration drive](#31-files-of-the-configuration-drive)
   - [3.2 `CONFIG.INI`: settings and API keys](#32-configini-settings-and-api-keys)
@@ -675,6 +676,34 @@ and models (your changes to them are then lost), use the **soft reset** of the
 [Settings screen](#24-on-the-device-settings-screen), or empty the file concerned. When a release changes the sounds
 or the wake word models, its notes say so: flash the full image again (this erases the settings).
 
+### 2.8 Timers, alarms and reminders
+
+Ask in your own words; the model sets them (with the models that take tools):
+
+| | Examples | When it is due |
+| --- | --- | --- |
+| **Timer** | "Minuteur de 10 minutes pour les pâtes" / "10-minute timer for the pasta" | A chime rising from silence, then "Minuteur terminé : les pâtes." / "Timer up: the pasta." |
+| **Alarm** | "Réveille-moi à 7 h en semaine" / "Wake me at 7 on weekdays", "Réveille-moi demain à 7 h avec Classic 21" / "Wake me tomorrow at 7 with Classic 21" | The chime (or the radio) rising from silence, then "Il est 07:00 : réveil." / "It is 07:00: wake-up." |
+| **Reminder** | "Rappelle-moi jeudi à 15 h d'appeler Paul" / "Remind me Thursday at 3 pm to call Paul" | A short chime, then "Rappel : appeler Paul." / "Reminder: call Paul." |
+
+- **Repetitions**: every day, weekdays, the weekend, chosen days ("le lundi et le jeudi" / "on Mondays and
+  Thursdays"), every month (the same day, "le deuxième mardi du mois" / "the second Tuesday of the month", "le
+  dernier vendredi du mois" / "the last Friday of the month", the last day), every year ("l'anniversaire de Marie le
+  3 mai" / "Marie's birthday on 3 May").
+- **Stop**: touch the screen, or say the wake word. Then "encore 5 minutes" / "5 more minutes" rings it again later
+  (within 10 minutes of its ring). Not stopped, a timer or an alarm stops by itself after `Alarm_stop_min` minutes
+  (3 by default).
+- **Volume**: a timer or an alarm always starts from silence and rises to 80 % of the speaker in 30 s, whatever the
+  volume set (a radio fades in the same way); the volume set comes back after. A reminder uses the volume set.
+- **Ask**: "Quelles alarmes ai-je ?" / "Which alarms do I have?", "Combien de temps reste-t-il ?" / "How much time is
+  left?", "Supprime l'alarme de 7 h" / "Delete the 7 o'clock alarm".
+- They are kept across restarts (`/state/alarms.json`). One due while the device was off is not rung late: a missed
+  one-time alarm or reminder of the last 12 hours is said once the clock is set again ("Pendant une coupure, j'ai
+  manqué ce rappel de 15:00 : appeler Paul." / "While the power was off, I missed this reminder of 15:00: call
+  Paul."); a repeated one goes on with its next time. Due during a conversation, it rings once the assistant sleeps.
+- The device needs the Internet time (SNTP) to know the time: right after a start without Wi-Fi, nothing rings until
+  the clock is set.
+
 ## 3. Advanced user guide
 
 Everything below is optional: the assistant works with the defaults of the [Quick start](#1-quick-start). The
@@ -779,6 +808,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
 | `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (the reasoning mode or not, a restart included), the assistant asks whether to go on with it (`0` to `120`; `0`: never asked) | `5` |
+| `Alarm_stop_min` | A [timer or an alarm](#28-timers-alarms-and-reminders) not stopped (a touch, the wake word) stops ringing by itself after this many minutes (`1` to `60`) | `3` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
 | `Radio_level` | Level every radio station is brought to, in dBFS, from `-30` to `-6`: higher is louder (the gain goes from -12 to +6 dB) | `-16` |
 | `Radio_treble` | Treble of the radio (above about 3 kHz), in dB, from `-12` to `6`: negative softens them on the small speaker, `0` leaves the sound as it is (also changed from the radio screen) | `-6` |
@@ -1774,6 +1804,8 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `debug_trace.c` | Debug traces: every log line caught (`esp_log_set_vprintf`), with the time of day and the number of the exchange, in a 1 MB ring buffer in PSRAM; marks; the dump to `/spiffs/debug.txt` |
 | `model_test.c` | Model test ("teste les modèles"): speech models (synthesis then transcription of a test sentence), same question to each model, `SPEED.TXT`, speed written to `AGENTS.INI`, slow free models excluded on request; one model alone for the Settings screen (`model_test_one`, even a disabled one) |
 | `tools.c` | Tools offered to the models (definitions, dispatch) |
+| `alarms.c` | Timers, alarms and reminders: the list (`/state/alarms.json`), repetitions (days of the week, monthly by day, nth or last weekday, last day, yearly), the next one due, the missed ones; the tools `timer_set`, `alarm_set`, `reminder_set`, `alarms_list`, `alarm_delete`, `alarm_snooze` (`tools.c`) |
+| `alarm_ring.c` | Ringing them in its own task: a chime made on the device (two bell notes), from silence to 80 % in 30 s (software gain, the codec set once while silent), or the alarm's radio fading in as long; the label said once loud; stopped by a touch or the wake word, or after `Alarm_stop_min`; a reminder: a short chime, then its text said as a reply |
 | `weather.c` | Weather from Open-Meteo (geocoding, current conditions, daily forecast); places already looked up kept in `/state/places.json` (read at start-up, saved when idle) |
 | `app_volume.c` | Speaker volume changed by voice (applied when silent, saved to NVS) |
 | `file_phrases.c` | Phrase files of the voice commands (`main/phrases/phrases_<lang>.txt`, installed on SPIFFS): sections named after the lists, patterns (`[optional]`, `(choice\|choice)`) expanded once per language |

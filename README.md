@@ -762,7 +762,7 @@ joins in), then a game's phrase:
   chef, a sports commentator, an old sailor, a butler, a knight, a science-fiction fan, a grandmother full of
   proverbs), never the same for both; each says who it is in its first line. `persona` keeps each one's
   `PERSO_<XX>.TXT`.
-- If no other BOX answers within 3 seconds: "Je ne trouve pas d'autre BOX sur le réseau." / "I can't find another
+- If no other BOX answers within 8 seconds: "Je ne trouve pas d'autre BOX sur le réseau." / "I can't find another
   BOX on the network." Both BOX must have this firmware, and the router must let them talk to each other (no "client
   isolation" on the Wi-Fi).
 - **Your own games**: **GAMES.INI** of the configuration drive, one section per game: its name per language

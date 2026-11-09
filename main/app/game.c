@@ -35,8 +35,11 @@ static const char *TAG = "game";
 #define GAMES_FILE          "/spiffs/games.ini"
 #define GAMES_MAX           12
 #define GAME_TEXT_MAX       1200        /* a line, at most (UDP) */
-/* Looking for the other BOX: answered within this, else "no other BOX" */
-#define GAME_INVITE_MS      3000
+/*
+ * Looking for the other BOX: answered within this, else "no other BOX". Long enough for a BOX that heard the
+ * phrase too but transcribes it later (its invitation seen meanwhile, see s_invite_seen)
+ */
+#define GAME_INVITE_MS      8000
 /* The other BOX silent this long: the game ends */
 #define GAME_SILENCE_MS     90000
 /* Each message sent this many times (UDP on a local network: rarely lost; duplicates are dropped by the turn) */
@@ -121,6 +124,12 @@ static char *s_tone_text = NULL;    /* the personality given to the model */
 static cJSON *s_history = NULL;     /* [{"me":true,"text":"..."}] */
 static char *s_ready_line = NULL;   /* my next line, made while the other speaks */
 static int64_t s_since = 0;         /* the start of the current wait */
+/*
+ * An invitation received while busy (the phrase heard here too, still transcribed): joined when the phrase is
+ * transcribed, within GAME_INVITE_MS (else both BOX would invite, each ignoring the other's)
+ */
+static game_msg_t s_invite_seen;
+static int64_t s_invite_seen_us = 0;
 
 /* ---------- games.ini ---------- */
 
@@ -559,6 +568,18 @@ static void playing_start(int game, uint32_t nonce, bool starter, uint64_t peer,
              s_tone_text ? s_tone_text : "-", s_turns_max);
 }
 
+/* Join the game this invitation is for: the answering side, the inviting BOX starts */
+static void invite_join(int game, const game_msg_t *m)
+{
+    s_invite_seen_us = 0;
+    tone_choose(m->tone);
+    playing_start(game, m->nonce, false, m->from, m->ip);
+    cJSON *j = msg_new("join");
+    cJSON_AddNumberToObject(j, "tone", s_my_tone);
+    send_to(s_peer_ip, j);
+    cJSON_Delete(j);
+}
+
 bool game_try_start(const char *text)
 {
     if (!s_queue || s_sock < 0) {
@@ -571,6 +592,14 @@ bool game_try_start(const char *text)
     }
     if (wifi_connected_already() != WIFI_STATUS_CONNECTED_OK) {
         return false;
+    }
+    if (s_invite_seen_us && esp_timer_get_time() - s_invite_seen_us < GAME_INVITE_MS * 1000LL &&
+            game_find(s_invite_seen.game) == game) {
+        // The other BOX heard it too and already invites: joined
+        ESP_LOGI(TAG, "%s: joining the invitation already received", s_games[game].id);
+        game_reset();
+        invite_join(game, &s_invite_seen);
+        return true;
     }
     game_reset();
     s_game = game;
@@ -691,12 +720,13 @@ static void message(game_msg_t *m)
             join = true;        // both heard it: the lower id starts, the other answers
         }
         if (join) {
-            tone_choose(m->tone);
-            playing_start(game, m->nonce, false, m->from, m->ip);
-            cJSON *j = msg_new("join");
-            cJSON_AddNumberToObject(j, "tone", s_my_tone);
-            send_to(s_peer_ip, j);
-            cJSON_Delete(j);
+            invite_join(game, m);
+        } else if (game >= 0 && s_state == G_IDLE) {
+            // Busy (the phrase heard here too, being transcribed): kept, joined once transcribed
+            s_invite_seen = *m;
+            s_invite_seen.text = NULL;
+            s_invite_seen_us = esp_timer_get_time();
+            ESP_LOGI(TAG, "%s: invitation received while busy, kept", m->game);
         }
     } else if (strcmp(m->type, "join") == 0) {
         if (s_state == G_INVITING && m->nonce == s_nonce) {

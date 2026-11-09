@@ -48,6 +48,8 @@ static const char *TAG = "game";
 
 /* main.c */
 extern void assistant_show(const char *text);
+/* main.c: said, then asleep (no listening after it) */
+extern void assistant_say_final(const char *text);
 extern void assistant_say(const char *text);
 extern void assistant_save_soon(void);
 extern void assistant_reply_stop(void);
@@ -149,7 +151,8 @@ static void trim(char *s)
 /* The firmware's file installed when missing or emptied */
 /*
  * Lines of GAMES.INI as an older firmware gave them, and what replaces them: a file the user has not changed there
- * gets the new texts, any other line (own games, own rules) is kept
+ * gets the new texts, any other line (own games, own rules) is kept. Applied in order: a text of an older firmware
+ * goes through each newer one
  */
 static const char *const s_games_updates[][2] = {
     { "rules = You play a riddle contest with the other assistant, turn by turn. If its last line asks a riddle: answer it in one short sentence. If its last line answers YOUR riddle: if the answer is right, say only that it is correct and congratulate it (it then asks the next riddle); if it is wrong, say so, give the right answer, then ask a new riddle. If its last line says your answer was correct: ask a new riddle. Never repeat a riddle already asked.",
@@ -158,6 +161,10 @@ static const char *const s_games_updates[][2] = {
       "first = Open a heated debate: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short punchy sentence." },
     { "rules = You are in a lively debate with the other assistant. Contradict its last line with one strong, funny argument, then make a counter-claim. Never agree completely. Stay polite and good-natured.",
       "rules = You are in a fast verbal sparring match with the other assistant: quick-fire repartee, back and forth. Answer its last line with ONE short punchy sentence (15 words at most): a witty comeback, a jab or a sharp counter-argument, never a speech. Never agree. Stay good-natured." },
+    { "first = Open a heated debate: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short punchy sentence.",
+      "first = Open a verbal duel: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short, sharp sentence (10 words at most)." },
+    { "rules = You are in a fast verbal sparring match with the other assistant: quick-fire repartee, back and forth. Answer its last line with ONE short punchy sentence (15 words at most): a witty comeback, a jab or a sharp counter-argument, never a speech. Never agree. Stay good-natured.",
+      "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most): a dry comeback, a jab or a blunt counter-argument. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree." },
 };
 
 static void games_update(void)
@@ -537,7 +544,7 @@ static void game_end(const char *why)
     ESP_LOGI(TAG, "Game over: %s", why);
     game_reset();
     if (why && why[0]) {
-        assistant_say(why);
+        assistant_say_final(why);
     } else {
         ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
     }
@@ -638,7 +645,8 @@ static char *line_make(void)
     char *system = NULL;
     asprintf(&system, "You are a voice assistant playing a game out loud with another voice assistant (another "
              "device), in front of the user. Speak only the language whose code is '%s'. Your character: %s; stay in "
-             "character. Game: %s. Rules: %s Each of your lines is spoken aloud: as short as the rules say (else one to three short sentences), "
+             "character. Game: %s. Rules: %s Never begin a line with an interjection or a laugh (Ha, Ah, Oh, Well, "
+             "Hmm...) and vary how your lines start. Each of your lines is spoken aloud: as short as the rules say (else one to three short sentences), "
              "no lists, no emojis, no markdown, no stage directions, never speak for the other player.",
              lang->code, s_tone_text ? s_tone_text : "yourself", g->name, g->rules ? g->rules : "");
     char *question = NULL;
@@ -750,8 +758,9 @@ static void message(game_msg_t *m)
         } else if (strcmp(m->type, "done") == 0) {
             s_peer_done = m->turn > s_peer_done ? m->turn : s_peer_done;
         } else if (strcmp(m->type, "stop") == 0) {
+            // Quietly: the other says the end (or listens to the user who stopped it), nothing spoken over it
             tts_stream_cancel();
-            game_end(app_lang_get()->game_over);
+            game_end(NULL);
         }
     }
     free(m->text);
@@ -784,7 +793,10 @@ void game_poll(void)
     // Whose line is next: the one starting says the odd ones
     bool mine = ((s_turns + 1) % 2 == 1) == s_starter;
     if (s_turns >= s_turns_max) {
-        game_end(app_lang_get()->game_over);
+        // The last line was the other's: it still speaks it, then sends "stop" (ending this one quietly)
+        if (esp_timer_get_time() - s_since > GAME_SILENCE_MS * 1000LL) {
+            game_end(NULL);
+        }
         return;
     }
     if (!mine) {

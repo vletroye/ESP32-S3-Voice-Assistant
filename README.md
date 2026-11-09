@@ -748,14 +748,15 @@ joins in), then a game's phrase:
 
 | You say | They do |
 | --- | --- |
-| "Disputez-vous" / "Argue with each other" | A debate, quick-fire: one throws out a bold opinion, the other hits back in one short punchy sentence, and so on |
+| "Disputez-vous" / "Argue with each other" | A verbal duel, quick-fire and dry: one throws out a bold opinion, the other hits back in one short sharp sentence (10 words at most), and so on |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers; right ("c'est correct" / "that's right"): the one who found it asks the next one; wrong: the one who asked gives the answer and asks another |
 
 - The two BOX take turns **out loud**, each with **its own voice** and **its own model**; each line is shown only on
   the screen of the BOX speaking it, scrolling as it is spoken (the other keeps its own last line). They talk to each other over the local network (UDP, port 47110): no microphone needed between them, no
   server.
 - **The wake word** (or a touch) on either of them **stops the game on both**. Otherwise it ends after
-  `Game_turns_max` lines (20 by default, `CONFIG.INI`), the last one concluding it. Each line is a question to the
+  `Game_turns_max` lines (20 by default, `CONFIG.INI`), the last one concluding it; the BOX that said it then says the game is over, and neither listens
+  afterwards. Each line is a question to the
   model in use (with Claude Haiku or a free OpenRouter model, a game of 20 lines costs a few cents at most).
 - **Their characters** (`Game_tone` in `CONFIG.INI`): `random` (the default) draws one for each BOX from the
   firmware's list (a pompous philosopher, a blasé teenager, a pirate, an absent-minded professor, a dramatic poet, a

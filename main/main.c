@@ -171,6 +171,8 @@ static char *speech_refused_text(llm_speech_kind_t kind);
 
 static int64_t s_first_text_us = 0;
 static int64_t elapsed_ms(int64_t start_us);
+/* assistant_say_final(): no listening after the message */
+static volatile bool s_sleep_after_message = false;
 
 static void on_llm_text(const char *delta, void *ctx)
 {
@@ -322,6 +324,12 @@ static void on_reply_audio(tts_event_t event)
         ui_ctrl_reply_set_audio_end_flag(true);
         return;
     }
+    if (s_sleep_after_message) {
+        // The end of a game: asleep at once, the other BOX may still be speaking (heard, it would be answered)
+        s_sleep_after_message = false;
+        ui_ctrl_reply_set_audio_end_flag(true);
+        return;
+    }
     if (s_reply_goodbye) {
         // The assistant said goodbye: no follow-up listening, the next conversation starts afresh
         ESP_LOGI(TAG, "The reply says goodbye, going to sleep");
@@ -443,6 +451,12 @@ void assistant_say(const char *text)
     speak_message(text);
 }
 
+void assistant_say_final(const char *text)
+{
+    speak_message(text);
+    s_sleep_after_message = true;      // after: reply_begin() clears it (a reply interrupted leaves no trace)
+}
+
 void assistant_test_done(void)
 {
     ui_ctrl_show_panel(UI_CTRL_PANEL_SLEEP, 0);
@@ -455,6 +469,7 @@ static void reply_begin(void)
     s_reply_active = true;
     s_reply_local_cmd = false;
     s_reply_goodbye = false;
+    s_sleep_after_message = false;
     s_unread_ms = 0;
     s_shown_chars = 0;
     s_no_credit_shown = false;

@@ -152,6 +152,8 @@ static void trim(char *s)
  * gets the new texts, any other line (own games, own rules) is kept
  */
 static const char *const s_games_updates[][2] = {
+    { "rules = You play a riddle contest with the other assistant, turn by turn. If its last line asks a riddle: answer it in one short sentence. If its last line answers YOUR riddle: if the answer is right, say only that it is correct and congratulate it (it then asks the next riddle); if it is wrong, say so, give the right answer, then ask a new riddle. If its last line says your answer was correct: ask a new riddle. Never repeat a riddle already asked.",
+      "rules = You play a riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Look at the other's last line: (1) it asks a riddle: give your answer in one short sentence, nothing else. (2) it is an answer to YOUR riddle and it is right: say it is correct in a few words and ask NOTHING (the other found it: it asks the next riddle). (3) it is an answer to YOUR riddle and it is wrong: say so, give the right answer, then ask a new riddle. (4) it says your answer was right: ask a new riddle. (5) it says your answer was wrong, gives the answer and asks a new riddle: answer that new riddle. Never repeat a riddle already asked." },
     { "first = Open a friendly but heated debate: state a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one or two sentences.",
       "first = Open a heated debate: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short punchy sentence." },
     { "rules = You are in a lively debate with the other assistant. Contradict its last line with one strong, funny argument, then make a counter-claim. Never agree completely. Stay polite and good-natured.",
@@ -686,6 +688,7 @@ static void on_speech(tts_event_t event)
 static void line_say(char *text)
 {
     int turn = s_turns + 1;
+    ESP_LOGI(TAG, "line %d (mine): %s", turn, text);
     send_peer("line", turn, text);
     ui_ctrl_reply_show_scrolled(text);
     s_spoken = false;

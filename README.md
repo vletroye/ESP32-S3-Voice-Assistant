@@ -749,7 +749,7 @@ joins in), then a game's phrase:
 | You say | They do |
 | --- | --- |
 | "Disputez-vous" / "Argue with each other" | A debate, quick-fire: one throws out a bold opinion, the other hits back in one short punchy sentence, and so on |
-| "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers; "c'est correct" / "that's right": the other asks the next one; wrong: the first gives the answer and asks another |
+| "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers; right ("c'est correct" / "that's right"): the one who found it asks the next one; wrong: the one who asked gives the answer and asks another |
 
 - The two BOX take turns **out loud**, each with **its own voice** and **its own model**; each line is shown only on
   the screen of the BOX speaking it, scrolling as it is spoken (the other keeps its own last line). They talk to each other over the local network (UDP, port 47110): no microphone needed between them, no

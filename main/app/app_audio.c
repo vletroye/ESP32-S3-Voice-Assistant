@@ -365,6 +365,15 @@ void sr_handler_task(void *pvParam)
             result.no_speech = false;
         }
 
+        if (ESP_MN_STATE_TIMEOUT == result.state && result.no_speech && result.game) {
+            // The line of the other BOX not heard: the game uses the words it sent
+            ESP_LOGI(TAG, "Game: nothing heard");
+            assistant_listen_abort();
+            audio_record_stop();
+            game_heard(NULL);
+            continue;
+        }
+
         if (ESP_MN_STATE_TIMEOUT == result.state && result.no_speech) {
             ESP_LOGI(TAG, "No speech, back to sleep");
             assistant_listen_abort();
@@ -382,6 +391,15 @@ void sr_handler_task(void *pvParam)
             } else {
                 assistant_listen_abort();
             }
+            continue;
+        }
+
+        if (WAKENET_DETECTED == result.wakenet_mode && result.game) {
+            // Another BOX of a game says its line: listened to, without beep, the game going on
+            radio_suspend();
+            audio_record_start();
+            assistant_listen_start();
+            ui_ctrl_show_panel(UI_CTRL_PANEL_LISTEN, 0);
             continue;
         }
 

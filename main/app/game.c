@@ -3,13 +3,14 @@
  *
  * SPDX-License-Identifier: CC0-1.0
  *
- * Games between two BOX: see game.h.
+ * Games between BOX: see game.h.
  */
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -28,6 +29,7 @@
 #include "radio.h"
 #include "app_wifi.h"
 #include "app_ui_ctrl.h"
+#include "app_sr.h"
 #include "game.h"
 
 static const char *TAG = "game";
@@ -36,14 +38,27 @@ static const char *TAG = "game";
 #define GAMES_MAX           12
 #define GAME_TEXT_MAX       1200        /* a line, at most (UDP) */
 /*
- * Looking for the other BOX: answered within this, else "no other BOX". Long enough for a BOX that heard the
- * phrase too but transcribes it later (its invitation seen meanwhile, see s_invite_seen)
+ * Looking for the other BOX: the claims of the first line collected this long; alone, this one waits for the others
+ * up to GAME_INVITE_MS (a BOX that heard the phrase too but transcribes it later), else "no other BOX"
  */
+#define GAME_START_WAIT_MS  2500
 #define GAME_INVITE_MS      8000
-/* The other BOX silent this long: the game ends */
+/* A line heard: the other BOX' claims of the next one awaited this long after the first one */
+#define GAME_HEARD_WAIT_MS  3000
+/* Nobody claimed the next line this long after the end of a line: the lowest id goes on */
+#define GAME_DONE_WAIT_MS   12000
+/* The BOX elected silent this long: the game ends */
+#define GAME_SPEAK_WAIT_MS  60000
+/* A listening waits this long for the speech of the line (the speaker's voice comes a second after its "speak") */
+#define GAME_LISTEN_WAIT_MS 15000
+/* The speaker done: a listening started again after its pause stops after this; the first one after this */
+#define GAME_MORE_WAIT_MS   2500
+#define GAME_TAIL_WAIT_MS   8000
+/* A line not ended this long after it started: the game ends */
 #define GAME_SILENCE_MS     90000
 /* Each message sent this many times (UDP on a local network: rarely lost; duplicates are dropped by the turn) */
 #define GAME_SEND_TIMES     2
+#define GAME_PLAYERS_MAX    8
 #define GAME_TURNS_DEFAULT  20
 
 /* main.c */
@@ -89,29 +104,49 @@ typedef struct {
     char blunder_after[48]; /* blunder_rule only after a line of the other with one of these tags */
     int blunder;            /* percent of the lines given blunder_rule */
     char *blunder_rule;     /* a wrong guess on purpose, with humour (the riddles) */
+    char turns[64];         /* "GUESS>RIDDLE WRONG; RIGHT>GUESS": who says the line after a tag (else the first claim) */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
 static int s_game_count = 0;
 static char s_games_lang[8] = "";
 
-/* A message received, given by the network task to the main task */
+/*
+ * A message received, given by the network task to the main task; "local": the listening of this BOX ended (its
+ * transcript in text, NULL if nothing heard), from the SR handler task (game_heard)
+ */
 typedef struct {
-    char type[8];           /* invite, join, line, done, stop, end */
+    char type[8];           /* claim, join, speak, done, heard, stop, local */
     uint64_t from;          /* the sender's id (its MAC) */
-    uint32_t ip;            /* its address (network order) */
-    uint32_t nonce;         /* the game's */
+    uint32_t nonce;         /* the game's (the one of the claim elected to start) */
     int turn;
-    int tone;               /* the tone drawn by the one inviting / joining, -1 for none */
+    int round;              /* a claim made again after a tie */
+    int64_t ts;             /* a claim's time, ms since 1970 (SNTP): the earliest one speaks */
+    int turns_max;          /* claim: the lines of the game, if this one starts */
+    int tone;               /* claim, join: the character drawn, -1 for none */
     char game[24];
-    char *text;             /* a line, allocated */
+    char tag[16];           /* speak: the tag of the line ("GUESS"), not spoken */
+    char *text;             /* done: the line as said (if not heard); local: the transcript; allocated */
 } game_msg_t;
 
 typedef enum {
     G_IDLE,
-    G_INVITING,             /* looking for the other BOX */
-    G_PLAYING,              /* lines taken in turn */
+    G_STARTING,             /* the BOX that heard the phrase claim the first line, the others join */
+    G_SPEAKING,             /* this BOX makes and says its line */
+    G_LISTENING,            /* another one speaks: listened to with the microphone */
+    G_ELECTING,             /* a line said: who says the next one (the first to have heard it) */
 } game_state_t;
+
+/* A BOX of the game, and its claim of the next line */
+typedef struct {
+    uint64_t id;
+    int claim_turn;         /* its claim: of the line after this many lines (-1: none) */
+    int64_t ts;             /* the claim's time (ms since 1970) */
+    int64_t seen_us;        /* when this BOX got it (esp_timer) */
+    int round;
+    uint32_t nonce;         /* the start claims: the game's id and lines if it is elected */
+    int turns_max;
+} player_t;
 
 static int s_sock = -1;
 static QueueHandle_t s_queue = NULL;
@@ -121,23 +156,36 @@ static volatile game_state_t s_state = G_IDLE;
 static volatile bool s_stop_requested = false;
 static int s_game = -1;
 static uint32_t s_nonce = 0;
-static uint64_t s_peer_id = 0;
-static uint32_t s_peer_ip = 0;
-static bool s_starter = false;
-static int s_turns = 0;             /* lines said so far (both) */
+static player_t s_players[GAME_PLAYERS_MAX];
+static int s_player_count = 0;
+static int s_turns = 0;             /* lines said so far (all BOX) */
 static int s_turns_max = GAME_TURNS_DEFAULT;
-static int s_peer_done = 0;         /* the last line the other BOX finished speaking */
 static int s_my_tone = -1;
+static uint32_t s_tones_seen = 0;   /* the characters drawn by the others (bits) */
 static char *s_tone_text = NULL;    /* the personality given to the model */
-static cJSON *s_history = NULL;     /* [{"me":true,"text":"..."}] */
-static char *s_ready_line = NULL;   /* my next line, made while the other speaks */
-static int64_t s_since = 0;         /* the start of the current wait */
+static cJSON *s_history = NULL;     /* [{"id":"..","me":true,"tag":"GUESS","text":"..."}] */
+static int64_t s_since = 0;         /* the start of the current wait (esp_timer, us) */
+static bool s_spoke = false;        /* this BOX said a line already (its character introduced) */
+
+static int64_t s_reclaim_us = 0;    /* a tie: this BOX claims again at this time (0: no) */
+
+/* The line being listened to */
+static uint64_t s_speaker = 0;     /* the BOX speaking the line listened to */
+static uint64_t s_last_speaker = 0; /* the BOX of the last line: it does not claim the next one */
+static char s_line_tag[16] = "";
+static char *s_heard = NULL;        /* what was transcribed (several listenings if the speaker paused) */
+static bool s_done_seen = false;    /* the speaker finished */
+static char *s_done_text = NULL;    /* the line as the speaker sent it: used if nothing was heard */
+static volatile bool s_listen_on = false;   /* a listening of the game is asked or under way */
+static bool s_listen_more = false;  /* a listening started again after a pause of the speaker */
+static int64_t s_done_us = 0;
+
 /*
- * An invitation received while busy (the phrase heard here too, still transcribed): joined when the phrase is
- * transcribed, within GAME_INVITE_MS (else both BOX would invite, each ignoring the other's)
+ * A claim received while busy (the phrase heard here too, still transcribed): joined when the phrase is transcribed,
+ * within GAME_INVITE_MS
  */
-static game_msg_t s_invite_seen;
-static int64_t s_invite_seen_us = 0;
+static game_msg_t s_claim_seen;
+static int64_t s_claim_seen_us = 0;
 
 /* ---------- games.ini ---------- */
 
@@ -187,6 +235,8 @@ static const char *const s_games_updates[][2] = {
       "rules = A riddle contest with the other assistant, turn by turn. Start every line with one tag (in English, never spoken), chosen from the other's last line: after its RIDDLE or WRONG line (a riddle for you): GUESS: just your guess to that riddle. After its GUESS line (a guess to YOUR last riddle): compare it with the ANSWER you wrote with that riddle; if it means the same: RIGHT: a few words saying it is correct, nothing more (the other found it: it asks the next riddle); if not: WRONG: say so with a short teasing remark about its guess, give the right answer, then ask a new riddle. After its RIGHT line (your guess was right): RIDDLE: ask a new riddle. Every line asking a riddle ends with ANSWER: followed by its answer (kept secret: never spoken, never shown to the other). No introduction, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT\nsecret = ANSWER\nblunder = 35\nblunder_after = RIDDLE WRONG\nblunder_rule = This time, guess WRONG on purpose: a funny answer that sounds almost plausible (a pun, an absurd but related idea), said with full confidence." },
     { "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle.",
       "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer is a single word or a short phrase, and end the line with ANSWER: followed by that answer." },
+    { "secret = ANSWER\nblunder = 35",
+      "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nblunder = 35" },
 };
 
 static void games_update(void)
@@ -341,6 +391,8 @@ static void games_load(void)
             strlcpy(g->secret, value, sizeof(g->secret));
         } else if (strcmp(key, "blunder_after") == 0) {
             strlcpy(g->blunder_after, value, sizeof(g->blunder_after));
+        } else if (strcmp(key, "turns") == 0) {
+            strlcpy(g->turns, value, sizeof(g->turns));
         } else if (strcmp(key, "blunder") == 0) {
             g->blunder = atoi(value);
         } else if (strcmp(key, "blunder_rule") == 0) {
@@ -453,16 +505,29 @@ static cJSON *msg_new(const char *type)
     return m;
 }
 
-/* A message to the other BOX: this type, a turn, a text (or none) */
-static void send_peer(const char *type, int turn, const char *text)
+/* The time of a claim: ms since 1970, the same on every BOX (SNTP) */
+static int64_t now_ms(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+/* To every BOX of the network: this type, a turn, a text (or none) */
+static void send_all(cJSON *m)
+{
+    send_to(htonl(INADDR_BROADCAST), m);
+    cJSON_Delete(m);
+}
+
+static void send_simple(const char *type, int turn, const char *text)
 {
     cJSON *m = msg_new(type);
     cJSON_AddNumberToObject(m, "turn", turn);
     if (text) {
         cJSON_AddStringToObject(m, "text", text);
     }
-    send_to(s_peer_ip, m);
-    cJSON_Delete(m);
+    send_all(m);
 }
 
 static void net_task(void *arg)
@@ -485,15 +550,22 @@ static void net_task(void *arg)
             game_msg_t msg = { 0 };
             strlcpy(msg.type, type->valuestring, sizeof(msg.type));
             msg.from = sender;
-            msg.ip = from.sin_addr.s_addr;
             const cJSON *v = cJSON_GetObjectItem(json, "n");
             msg.nonce = cJSON_IsNumber(v) ? (uint32_t)v->valuedouble : 0;
             v = cJSON_GetObjectItem(json, "turn");
             msg.turn = cJSON_IsNumber(v) ? v->valueint : 0;
+            v = cJSON_GetObjectItem(json, "round");
+            msg.round = cJSON_IsNumber(v) ? v->valueint : 0;
+            v = cJSON_GetObjectItem(json, "ts");
+            msg.ts = cJSON_IsNumber(v) ? (int64_t)v->valuedouble : 0;
+            v = cJSON_GetObjectItem(json, "max");
+            msg.turns_max = cJSON_IsNumber(v) ? v->valueint : 0;
             v = cJSON_GetObjectItem(json, "tone");
             msg.tone = cJSON_IsNumber(v) ? v->valueint : -1;
             v = cJSON_GetObjectItem(json, "game");
             strlcpy(msg.game, cJSON_IsString(v) ? v->valuestring : "", sizeof(msg.game));
+            v = cJSON_GetObjectItem(json, "tag");
+            strlcpy(msg.tag, cJSON_IsString(v) ? v->valuestring : "", sizeof(msg.tag));
             v = cJSON_GetObjectItem(json, "text");
             msg.text = cJSON_IsString(v) ? strdup(v->valuestring) : NULL;
             if (xQueueSend(s_queue, &msg, 0) != pdTRUE) {
@@ -541,8 +613,27 @@ bool game_active(void)
     return s_state != G_IDLE;
 }
 
-/* My personality: PERSO_<XX>.TXT (Game_tone = persona), else one of the list, not the other's */
-static void tone_choose(int other)
+bool game_listening(void)
+{
+    return s_listen_on;
+}
+
+void game_heard(char *text)
+{
+    game_msg_t msg = { 0 };
+    strlcpy(msg.type, "local", sizeof(msg.type));
+    msg.from = s_my_id;
+    msg.text = text;
+    if (!s_queue || xQueueSend(s_queue, &msg, 0) != pdTRUE) {
+        free(text);
+        s_listen_on = false;
+        return;
+    }
+    assistant_save_soon();
+}
+
+/* My personality: PERSO_<XX>.TXT (Game_tone = persona), else one of the list, not one drawn by another BOX */
+static void tone_choose(void)
 {
     char *setting = settings_read_value("Game_tone");
     bool persona = setting && strcasecmp(setting, "persona") == 0;
@@ -554,27 +645,208 @@ static void tone_choose(int other)
         asprintf(&s_tone_text, "%s %s", persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY));
         return;
     }
+    int tries = 0;
     do {
         s_my_tone = (int)(esp_random() % TONES_COUNT);
-    } while (s_my_tone == other && TONES_COUNT > 1);
+    } while ((s_tones_seen & (1u << s_my_tone)) && ++tries < 50);
     s_tone_text = strdup(s_tones[s_my_tone]);
+}
+
+/* ---------- the BOX of the game and their claims ---------- */
+
+static player_t *player_find(uint64_t id)
+{
+    for (int i = 0; i < s_player_count; i++) {
+        if (s_players[i].id == id) {
+            return &s_players[i];
+        }
+    }
+    return NULL;
+}
+
+static player_t *player_add(uint64_t id)
+{
+    player_t *p = player_find(id);
+    if (!p && s_player_count < GAME_PLAYERS_MAX) {
+        p = &s_players[s_player_count++];
+        memset(p, 0, sizeof(*p));
+        p->id = id;
+        p->claim_turn = -1;
+        ESP_LOGI(TAG, "player %d: %llx%s", s_player_count, (unsigned long long)id, id == s_my_id ? " (this BOX)" : "");
+    }
+    return p;
+}
+
+/* Its number, as the other lines are named for the model ("Player 2") */
+static int player_number(uint64_t id)
+{
+    for (int i = 0; i < s_player_count; i++) {
+        if (s_players[i].id == id) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+/* A claim of the line after s_turns (turn 0: the first one), its time kept: the earliest speaks */
+static void claim_take(const game_msg_t *m)
+{
+    player_t *p = player_add(m->from);
+    if (!p) {
+        return;
+    }
+    if (p->claim_turn != m->turn || m->round >= p->round) {
+        if (p->claim_turn != m->turn) {
+            p->seen_us = esp_timer_get_time();
+        }
+        p->claim_turn = m->turn;
+        p->ts = m->ts;
+        p->round = m->round;
+        p->nonce = m->nonce;
+        p->turns_max = m->turns_max;
+    }
+}
+
+/* This BOX claims the next line: when it heard the phrase (start) or the line said (heard) */
+static void claim_send(int round)
+{
+    game_msg_t mine = {
+        .from = s_my_id,
+        .nonce = s_nonce,
+        .turn = s_turns,
+        .round = round,
+        .ts = now_ms(),
+        .turns_max = s_turns_max,
+    };
+    claim_take(&mine);
+    cJSON *m = msg_new(s_state == G_STARTING ? "claim" : "heard");
+    cJSON_AddNumberToObject(m, "turn", s_turns);
+    cJSON_AddNumberToObject(m, "round", round);
+    cJSON_AddNumberToObject(m, "ts", (double)mine.ts);
+    if (s_state == G_STARTING) {
+        cJSON_AddStringToObject(m, "game", s_games[s_game].id);
+        cJSON_AddNumberToObject(m, "max", s_turns_max);
+        cJSON_AddNumberToObject(m, "tone", s_my_tone);
+    }
+    send_all(m);
+    ESP_LOGI(TAG, "claim of line %d (round %d)", s_turns + 1, round);
+}
+
+/* ---------- the lines ---------- */
+
+static const char *tag_skip(const char *text, size_t *tag_len);
+
+/* The tag of a line ("GUESS"), "" if none */
+static void tag_of(const char *text, char *tag, size_t size)
+{
+    size_t len = 0;
+    tag_skip(text, &len);
+    const char *start = text + strspn(text, " \n");
+    snprintf(tag, size, "%.*s", (int)(len < size ? len : size - 1), start);
+}
+
+/* A word of a list of tags ("RIDDLE WRONG") */
+static bool tag_in(const char *list, size_t list_len, const char *tag)
+{
+    size_t tag_len = strlen(tag);
+    for (const char *p = list; p < list + list_len; ) {
+        p += strspn(p, " ,");
+        size_t n = strcspn(p, " ,;");
+        if (p + n > list + list_len) {
+            n = list + list_len - p;
+        }
+        if (n && n == tag_len && strncmp(p, tag, n) == 0) {
+            return true;
+        }
+        p += n ? n : 1;
+    }
+    return false;
+}
+
+/*
+ * turns: "GUESS>RIDDLE WRONG; RIGHT>GUESS": after a line tagged GUESS, the BOX of the last line tagged RIDDLE or
+ * WRONG says the next one (no claim). 0 when the line's tag has no such rule (the earliest claim speaks).
+ */
+static uint64_t owner_after(const char *tag)
+{
+    const char *rules = s_games[s_game].turns;
+    if (!tag[0] || !rules[0]) {
+        return 0;
+    }
+    for (const char *r = rules; *r; ) {
+        r += strspn(r, " ;");
+        size_t len = strcspn(r, ";");
+        const char *gt = memchr(r, '>', len);
+        if (gt) {
+            char left[16];
+            snprintf(left, sizeof(left), "%.*s", (int)(gt - r), r);
+            trim(left);
+            for (char *e = left + strlen(left); e > left && e[-1] == ' '; e--) {
+                e[-1] = '\0';
+            }
+            if (strcmp(left, tag) == 0) {
+                // The last line (before this one) whose tag is on the right
+                const char *right = gt + 1;
+                size_t right_len = r + len - right;
+                int count = cJSON_GetArraySize(s_history);
+                for (int i = count - 2; i >= 0; i--) {
+                    const cJSON *item = cJSON_GetArrayItem(s_history, i);
+                    const cJSON *t = cJSON_GetObjectItem(item, "tag");
+                    if (cJSON_IsString(t) && tag_in(right, right_len, t->valuestring)) {
+                        const cJSON *id = cJSON_GetObjectItem(item, "id");
+                        return cJSON_IsString(id) ? strtoull(id->valuestring, NULL, 16) : 0;
+                    }
+                }
+                return 0;
+            }
+        }
+        r += len;
+    }
+    return 0;
+}
+
+static void history_add(uint64_t id, const char *tag, const char *text)
+{
+    cJSON *item = cJSON_CreateObject();
+    char hex[20];
+    snprintf(hex, sizeof(hex), "%llx", (unsigned long long)id);
+    cJSON_AddStringToObject(item, "id", hex);
+    cJSON_AddBoolToObject(item, "me", id == s_my_id);
+    cJSON_AddStringToObject(item, "tag", tag);
+    cJSON_AddStringToObject(item, "text", text);
+    cJSON_AddItemToArray(s_history, item);
+}
+
+static void listen_stop(void)
+{
+    if (s_listen_on) {
+        s_listen_on = false;
+        app_sr_cancel();
+    }
 }
 
 static void game_reset(void)
 {
+    listen_stop();
     s_state = G_IDLE;
     s_game = -1;
-    s_peer_id = 0;
-    s_peer_ip = 0;
+    s_player_count = 0;
     s_turns = 0;
-    s_peer_done = 0;
+    s_speaker = 0;
+    s_last_speaker = 0;
+    s_spoke = false;
+    s_tones_seen = 0;
+    s_reclaim_us = 0;
+    s_done_seen = false;
+    free(s_heard);
+    s_heard = NULL;
+    free(s_done_text);
+    s_done_text = NULL;
     cJSON_Delete(s_history);
     s_history = NULL;
-    free(s_ready_line);
-    s_ready_line = NULL;
 }
 
-/* The end, said on screen (and spoken), back to sleep */
+/* The end, said on screen (and spoken), back to sleep without listening; NULL: quietly */
 static void game_end(const char *why)
 {
     ESP_LOGI(TAG, "Game over: %s", why ? why : "(quietly)");     // NULL in a printf: a crash
@@ -586,43 +858,22 @@ static void game_end(const char *why)
     }
 }
 
-static void playing_start(int game, uint32_t nonce, bool starter, uint64_t peer, uint32_t ip)
+/* Ready to play this game: the claims of its first line to come */
+static void start_setup(int game, uint32_t nonce)
 {
+    game_reset();
     s_game = game;
     s_nonce = nonce;
-    s_starter = starter;
-    s_peer_id = peer;
-    s_peer_ip = ip;
-    s_turns = 0;
-    s_peer_done = 0;
-    cJSON_Delete(s_history);
     s_history = cJSON_CreateArray();
-    free(s_ready_line);
-    s_ready_line = NULL;
     char *max = settings_read_value("Game_turns_max");
     s_turns_max = max ? atoi(max) : GAME_TURNS_DEFAULT;
     s_turns_max = s_turns_max < 2 ? 2 : s_turns_max > 100 ? 100 : s_turns_max;
     free(max);
-    s_state = G_PLAYING;
+    tone_choose();
+    player_add(s_my_id);
+    s_state = G_STARTING;
     s_since = esp_timer_get_time();
     radio_suspend();
-    char title[96];
-    snprintf(title, sizeof(title), app_lang_get()->game_title, s_games[game].name);
-    assistant_show(title);
-    ESP_LOGI(TAG, "%s: playing %s, %s, %d lines at most", s_games[game].id, starter ? "starting" : "answering",
-             s_tone_text ? s_tone_text : "-", s_turns_max);
-}
-
-/* Join the game this invitation is for: the answering side, the inviting BOX starts */
-static void invite_join(int game, const game_msg_t *m)
-{
-    s_invite_seen_us = 0;
-    tone_choose(m->tone);
-    playing_start(game, m->nonce, false, m->from, m->ip);
-    cJSON *j = msg_new("join");
-    cJSON_AddNumberToObject(j, "tone", s_my_tone);
-    send_to(s_peer_ip, j);
-    cJSON_Delete(j);
 }
 
 bool game_try_start(const char *text)
@@ -638,26 +889,20 @@ bool game_try_start(const char *text)
     if (wifi_connected_already() != WIFI_STATUS_CONNECTED_OK) {
         return false;
     }
-    if (s_invite_seen_us && esp_timer_get_time() - s_invite_seen_us < GAME_INVITE_MS * 1000LL &&
-            game_find(s_invite_seen.game) == game) {
-        // The other BOX heard it too and already invites: joined
-        ESP_LOGI(TAG, "%s: joining the invitation already received", s_games[game].id);
-        game_reset();
-        invite_join(game, &s_invite_seen);
+    if (s_state == G_STARTING && game == s_game) {
+        claim_send(0);          // joined as asleep, then heard the phrase too
         return true;
     }
-    game_reset();
-    s_game = game;
-    s_nonce = esp_random();
-    tone_choose(-1);
-    s_state = G_INVITING;
-    s_since = esp_timer_get_time();
-    // To every BOX of the network
-    cJSON *m = msg_new("invite");
-    cJSON_AddStringToObject(m, "game", s_games[game].id);
-    cJSON_AddNumberToObject(m, "tone", s_my_tone);
-    send_to(htonl(INADDR_BROADCAST), m);
-    cJSON_Delete(m);
+    bool seen = s_claim_seen_us && esp_timer_get_time() - s_claim_seen_us < GAME_INVITE_MS * 1000LL &&
+                game_find(s_claim_seen.game) == game;
+    start_setup(game, seen ? s_claim_seen.nonce : esp_random());
+    if (seen) {
+        // Another BOX heard it too and claims already: this one claims in the same election
+        ESP_LOGI(TAG, "%s: the claim of another BOX already received", s_games[game].id);
+        claim_take(&s_claim_seen);
+    }
+    s_claim_seen_us = 0;
+    claim_send(0);
     assistant_show(app_lang_get()->game_searching);
     ESP_LOGI(TAG, "%s: looking for the other BOX", s_games[game].id);
     return true;
@@ -673,39 +918,19 @@ bool game_stop(void)
     return true;
 }
 
-static const char *tag_skip(const char *text, size_t *tag_len);
-
-/* blunder_after: the other's last line starts with one of these tags (none given: any line) */
+/* blunder_after: the last line (another BOX's) starts with one of these tags (none given: any line) */
 static bool blunder_allowed(const game_def_t *g)
 {
     if (!g->blunder_after[0]) {
         return true;
     }
-    const char *last = NULL;
-    const cJSON *item;
-    cJSON_ArrayForEach(item, s_history) {
-        if (!cJSON_IsTrue(cJSON_GetObjectItem(item, "me"))) {
-            last = cJSON_GetObjectItem(item, "text")->valuestring;
-        }
-    }
-    size_t tag_len = 0;
-    if (!last) {
+    const cJSON *last = cJSON_GetArrayItem(s_history, cJSON_GetArraySize(s_history) - 1);
+    if (!last || cJSON_IsTrue(cJSON_GetObjectItem(last, "me"))) {
         return false;
     }
-    tag_skip(last, &tag_len);
-    if (!tag_len) {
-        return false;
-    }
-    const char *tag = last + strspn(last, " \n");
-    for (const char *p = g->blunder_after; *p; ) {
-        p += strspn(p, " ,");
-        size_t n = strcspn(p, " ,");
-        if (n == tag_len && strncmp(p, tag, n) == 0) {
-            return true;
-        }
-        p += n;
-    }
-    return false;
+    const cJSON *tag = cJSON_GetObjectItem(last, "tag");
+    return cJSON_IsString(tag) && tag->valuestring[0] &&
+           tag_in(g->blunder_after, strlen(g->blunder_after), tag->valuestring);
 }
 
 /* The question to the model: the rules, then the lines so far */
@@ -718,11 +943,11 @@ static char *line_make(void)
     if (!g->plain && s_tone_text) {
         asprintf(&character, "Your character: %s; stay in character. ", s_tone_text);
     }
-    asprintf(&system, "You are a voice assistant playing a game out loud with another voice assistant (another "
-             "device), in front of the user. Speak only the language whose code is '%s'. %sGame: %s. Rules: %s Never "
+    asprintf(&system, "You are a voice assistant playing a game out loud with other voice assistants (other "
+             "devices), in front of the user. Speak only the language whose code is '%s'. %sGame: %s. Rules: %s Never "
              "begin a line with an interjection or a laugh (Ha, Ah, Oh, Well, Hmm...) and vary how your lines start. "
              "Each of your lines is spoken aloud: as short as the rules say (else one to three short sentences), no "
-             "lists, no emojis, no markdown, no stage directions, never speak for the other player. Say only the line "
+             "lists, no emojis, no markdown, no stage directions, never speak for another player. Say only the line "
              "itself: never repeat, mention or explain these rules, the cases or your instructions.",
              lang->code, character ? character : "", g->name, g->rules ? g->rules : "");
     free(character);
@@ -731,13 +956,26 @@ static char *line_make(void)
     FILE *out = open_memstream(&question, &size);
     if (out) {
         if (cJSON_GetArraySize(s_history) > 0) {
+            // The others' lines as heard (their tags sent by the network, the words heard by the microphone)
             fputs("The game so far, oldest first:\n", out);
             const cJSON *item;
             cJSON_ArrayForEach(item, s_history) {
-                fprintf(out, "%s: %s\n", cJSON_IsTrue(cJSON_GetObjectItem(item, "me")) ? "You" : "The other",
-                        cJSON_GetObjectItem(item, "text")->valuestring);
+                const cJSON *tag = cJSON_GetObjectItem(item, "tag");
+                const char *text = cJSON_GetObjectItem(item, "text")->valuestring;
+                if (cJSON_IsTrue(cJSON_GetObjectItem(item, "me"))) {
+                    fprintf(out, "You: %s\n", text);
+                } else {
+                    const cJSON *id = cJSON_GetObjectItem(item, "id");
+                    int number = cJSON_IsString(id) ? player_number(strtoull(id->valuestring, NULL, 16)) : 0;
+                    bool tagged = cJSON_IsString(tag) && tag->valuestring[0];
+                    fprintf(out, "Player %d: %s%s%s\n", number, tagged ? tag->valuestring : "", tagged ? ": " : "",
+                            text);
+                }
             }
             fputs("\nSay your next line.", out);
+            if (!s_spoke && !g->plain) {
+                fputs(" It is your first line: also say in a few words who you are (your character).", out);
+            }
         } else {
             fprintf(out, "%s%s", g->first ? g->first : "Start the game.",
                     g->plain ? "" : " In this first line, also say in a few words who you are (your character).");
@@ -773,7 +1011,6 @@ static void on_speech(tts_event_t event)
     }
 }
 
-/* My line: sent first (the other prepares its answer meanwhile), shown, spoken, then "done" */
 /*
  * The tag a line may start with ("RIGHT: Correct !"), asked by the rules: an upper-case word and a colon. Returns
  * the text after it (and its spaces), the text itself without a tag; its length in *tag_len (0: none)
@@ -825,11 +1062,25 @@ static void line_shorten(char *text, const char *short_after)
     }
 }
 
+/* A line said: the claims of the next one */
+static void electing_start(uint64_t speaker)
+{
+    s_last_speaker = speaker;
+    s_speaker = 0;
+    s_state = G_ELECTING;
+    s_done_us = esp_timer_get_time();
+    s_since = s_done_us;
+    s_reclaim_us = 0;
+}
+
+/*
+ * My line: "speak" (the others start listening), shown, spoken, then "done" with its words (used only by a BOX that
+ * heard nothing). Its tag is sent, never spoken; secret: "ANSWER: ..." kept for itself (in its history).
+ */
 static void line_say(char *text)
 {
     int turn = s_turns + 1;
     ESP_LOGI(TAG, "line %d (mine): %s", turn, text);
-    // secret: "ANSWER: ..." kept for itself (in its history), never sent, shown nor spoken
     char *open = strdup(text);
     if (!open) {
         return;
@@ -848,7 +1099,12 @@ static void line_say(char *text)
             open[n - 1] = '\0';
         }
     }
-    send_peer("line", turn, open);      // with its tag: the other's model sees it
+    char tag[16];
+    tag_of(text, tag, sizeof(tag));
+    cJSON *m = msg_new("speak");
+    cJSON_AddNumberToObject(m, "turn", turn);
+    cJSON_AddStringToObject(m, "tag", tag);
+    send_all(m);
     size_t tag_len;
     const char *said = tag_skip(open, &tag_len);
     ui_ctrl_reply_show_scrolled(said);
@@ -860,62 +1116,246 @@ static void line_say(char *text)
     while (!s_spoken && !s_stop_requested && esp_timer_get_time() - t0 < 60 * 1000000LL) {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    free(open);
-    cJSON *item = cJSON_CreateObject();
-    cJSON_AddBoolToObject(item, "me", true);
-    cJSON_AddStringToObject(item, "text", text);
-    cJSON_AddItemToArray(s_history, item);
-    s_turns = turn;
-    s_since = esp_timer_get_time();
     if (!s_stop_requested) {
-        send_peer("done", turn, NULL);
+        send_simple("done", turn, said);
     }
+    free(open);
+    history_add(s_my_id, tag, text);
+    s_turns = turn;
+    s_spoke = true;
+    electing_start(s_my_id);
 }
 
-/* A message of the network task */
+/* The line of another BOX listened to (and its "done" received): kept, then this BOX claims the next one */
+static void line_heard(void)
+{
+    const char *text = s_heard && s_heard[0] ? s_heard : s_done_text ? s_done_text : "";
+    ESP_LOGI(TAG, "line %d (player %d, %s): %s%s", s_turns + 1, player_number(s_speaker), s_line_tag,
+             text, s_heard && s_heard[0] ? "" : " (not heard: the words sent)");
+    char *line = NULL;
+    asprintf(&line, "%s%s%s", s_line_tag, s_line_tag[0] ? ": " : "", text);
+    history_add(s_speaker, s_line_tag, line ? line : text);
+    free(line);
+    free(s_heard);
+    s_heard = NULL;
+    free(s_done_text);
+    s_done_text = NULL;
+    s_turns++;
+    electing_start(s_speaker);
+    claim_send(0);
+}
+
+/* Elected: speak (the next line, or the end after the last one), else wait for the one elected */
+static void decided(uint64_t winner)
+{
+    ESP_LOGI(TAG, "line %d: player %d%s", s_turns + 1, player_number(winner), winner == s_my_id ? " (this BOX)" : "");
+    s_reclaim_us = 0;
+    s_since = esp_timer_get_time();
+    if (s_turns >= s_turns_max) {
+        if (winner == s_my_id) {
+            send_simple("stop", s_turns, NULL);
+            game_end(app_lang_get()->game_end_natural);
+        } else {
+            s_state = G_LISTENING;      // its "stop" ends this one quietly
+        }
+        return;
+    }
+    s_state = winner == s_my_id ? G_SPEAKING : G_LISTENING;
+}
+
+/*
+ * The claims of the line after s_turns: the earliest of the latest round wins; a tie: the BOX tied claim again
+ * after a random delay. Decided once every BOX that listened claimed, or a while after the first claim.
+ */
+static void elect(void)
+{
+    int64_t now = esp_timer_get_time();
+    int round = -1, claims = 0, expected = 0;
+    int64_t first_us = 0;
+    for (int i = 0; i < s_player_count; i++) {
+        player_t *p = &s_players[i];
+        expected += p->id != s_last_speaker;
+        if (p->claim_turn == s_turns) {
+            claims++;
+            round = p->round > round ? p->round : round;
+            first_us = !first_us || p->seen_us < first_us ? p->seen_us : first_us;
+        }
+    }
+    bool start = s_state == G_STARTING;
+    if (s_reclaim_us && now >= s_reclaim_us) {
+        s_reclaim_us = 0;
+        claim_send(round + 1);
+        return;
+    }
+    if (start) {
+        // The claims a moment; alone, the others a while longer (a BOX that heard it may transcribe it later)
+        if (!claims || now - first_us < GAME_START_WAIT_MS * 1000LL ||
+                (s_player_count < 2 && now - first_us < GAME_INVITE_MS * 1000LL)) {
+            return;
+        }
+    } else if (claims < expected && (!claims || now - first_us < GAME_HEARD_WAIT_MS * 1000LL)) {
+        if (!claims && now - s_done_us > GAME_DONE_WAIT_MS * 1000LL) {
+            // Nobody heard it: the lowest id but the last speaker goes on
+            uint64_t low = 0;
+            for (int i = 0; i < s_player_count; i++) {
+                if (s_players[i].id != s_last_speaker && (!low || s_players[i].id < low)) {
+                    low = s_players[i].id;
+                }
+            }
+            if (low) {
+                decided(low);
+            } else {
+                game_end(app_lang_get()->game_peer_left);
+            }
+        }
+        return;
+    }
+    if (start && s_player_count < 2) {
+        game_end(app_lang_get()->game_no_peer);
+        return;
+    }
+    // A rule of the game names who answers this line's tag (the riddles: its asker judges a guess)
+    const cJSON *last = cJSON_GetArrayItem(s_history, cJSON_GetArraySize(s_history) - 1);
+    const cJSON *last_tag = last ? cJSON_GetObjectItem(last, "tag") : NULL;
+    uint64_t owner = !start && cJSON_IsString(last_tag) ? owner_after(last_tag->valuestring) : 0;
+    if (owner && owner != s_last_speaker && player_find(owner)) {
+        decided(owner);
+        return;
+    }
+    player_t *best = NULL;
+    int tied = 0;
+    for (int i = 0; i < s_player_count; i++) {
+        player_t *p = &s_players[i];
+        if (p->claim_turn != s_turns || p->round != round) {
+            continue;
+        }
+        if (!best || p->ts < best->ts) {
+            best = p;
+            tied = 1;
+        } else if (p->ts == best->ts) {
+            tied++;
+        }
+    }
+    if (!best) {
+        return;
+    }
+    if (tied > 1) {
+        // The same time: the BOX tied claim again, each after its own random delay
+        player_t *me = player_find(s_my_id);
+        if (me && me->claim_turn == s_turns && me->round == round && me->ts == best->ts && !s_reclaim_us) {
+            s_reclaim_us = now + (100 + esp_random() % 400) * 1000LL;
+            ESP_LOGI(TAG, "claims at the same time: claiming again");
+        }
+        return;
+    }
+    if (start) {
+        // The game of the claim elected: its id, its number of lines
+        s_nonce = best->nonce;
+        if (best->turns_max > 0) {
+            s_turns_max = best->turns_max;
+        }
+        char title[96];
+        snprintf(title, sizeof(title), app_lang_get()->game_title, s_games[s_game].name);
+        assistant_show(title);
+        ESP_LOGI(TAG, "%s: %d BOX, %s, %d lines at most", s_games[s_game].id, s_player_count,
+                 s_tone_text ? s_tone_text : "-", s_turns_max);
+    }
+    decided(best->id);
+}
+
+/* A message of the network task, or "local": the listening of this BOX ended */
 static void message(game_msg_t *m)
 {
-    if (strcmp(m->type, "invite") == 0) {
+    if (strcmp(m->type, "local") == 0) {
+        s_listen_on = false;
+        if (m->text && m->text[0]) {
+            char *joined = NULL;
+            asprintf(&joined, "%s%s%s", s_heard ? s_heard : "", s_heard ? " " : "", m->text);
+            free(s_heard);
+            s_heard = joined;
+        }
+        if (s_state == G_LISTENING && s_speaker) {
+            if (!s_done_seen) {
+                // The speaker paused 1.5 s but goes on: listened to again
+                s_listen_more = true;
+                s_listen_on = true;
+                app_sr_start_game_listen(GAME_LISTEN_WAIT_MS);
+            } else {
+                line_heard();
+            }
+        }
+    } else if (strcmp(m->type, "claim") == 0) {
         games_load();
         int game = game_find(m->game);
-        bool join = false;
-        if (game >= 0 && s_state == G_IDLE && ui_ctrl_is_asleep()) {
-            join = true;        // asleep: it takes part
-        } else if (game >= 0 && s_state == G_INVITING && m->from < s_my_id) {
-            join = true;        // both heard it: the lower id starts, the other answers
-        }
-        if (join) {
-            invite_join(game, m);
-        } else if (game >= 0 && s_state == G_IDLE) {
-            // Busy (the phrase heard here too, being transcribed): kept, joined once transcribed
-            s_invite_seen = *m;
-            s_invite_seen.text = NULL;
-            s_invite_seen_us = esp_timer_get_time();
-            ESP_LOGI(TAG, "%s: invitation received while busy, kept", m->game);
+        if (game < 0) {
+            // not a game of this BOX
+        } else {
+            if (m->tone >= 0 && m->tone < 32) {
+                s_tones_seen |= 1u << m->tone;
+            }
+            if (s_state == G_IDLE && ui_ctrl_is_asleep()) {
+                // Asleep: it takes part (it listens, claims the lines it hears)
+                start_setup(game, m->nonce);
+                claim_take(m);
+                cJSON *j = msg_new("join");
+                cJSON_AddNumberToObject(j, "tone", s_my_tone);
+                send_all(j);
+                ESP_LOGI(TAG, "%s: joined", s_games[game].id);
+            } else if (s_state == G_IDLE) {
+                // Busy (the phrase heard here too, being transcribed): kept, claimed once transcribed
+                s_claim_seen = *m;
+                s_claim_seen.text = NULL;
+                s_claim_seen_us = esp_timer_get_time();
+                ESP_LOGI(TAG, "%s: claim received while busy, kept", m->game);
+            } else if (s_state == G_STARTING && game == s_game) {
+                claim_take(m);
+            }
         }
     } else if (strcmp(m->type, "join") == 0) {
-        if (s_state == G_INVITING && m->nonce == s_nonce) {
-            if (s_my_tone >= 0 && m->tone == s_my_tone) {
-                tone_choose(m->tone);       // the same drawn by both: another one
-            }
-            playing_start(s_game, s_nonce, true, m->from, m->ip);
+        if (m->tone >= 0 && m->tone < 32) {
+            s_tones_seen |= 1u << m->tone;
         }
-    } else if (s_state == G_PLAYING && m->nonce == s_nonce && m->from == s_peer_id) {
-        s_since = esp_timer_get_time();
-        if (strcmp(m->type, "line") == 0 && m->turn == s_turns + 1 && m->text) {
-            cJSON *item = cJSON_CreateObject();
-            cJSON_AddBoolToObject(item, "me", false);
-            cJSON_AddStringToObject(item, "text", m->text);
-            cJSON_AddItemToArray(s_history, item);
-            s_turns = m->turn;
-            // Not shown here: only the BOX speaking a line shows it, this one keeps its own last line
-        } else if (strcmp(m->type, "done") == 0) {
-            s_peer_done = m->turn > s_peer_done ? m->turn : s_peer_done;
+        if (s_state == G_STARTING) {
+            player_add(m->from);
+        }
+    } else if (s_state != G_IDLE && s_state != G_STARTING && m->nonce == s_nonce) {
+        player_add(m->from);
+        if (strcmp(m->type, "heard") == 0) {
+            claim_take(m);
+        } else if (strcmp(m->type, "speak") == 0 && m->turn == s_turns + 1 && s_state != G_SPEAKING) {
+            // Another BOX says the next line: listened to with the microphone
+            s_speaker = m->from;
+            strlcpy(s_line_tag, m->tag, sizeof(s_line_tag));
+            free(s_heard);
+            s_heard = NULL;
+            free(s_done_text);
+            s_done_text = NULL;
+            s_done_seen = false;
+            s_listen_more = false;
+            s_state = G_LISTENING;
+            s_since = esp_timer_get_time();
+            s_listen_on = true;
+            app_sr_start_game_listen(GAME_LISTEN_WAIT_MS);
+        } else if (strcmp(m->type, "done") == 0 && m->from == s_speaker && m->turn == s_turns + 1) {
+            s_done_seen = true;
+            s_done_us = esp_timer_get_time();
+            free(s_done_text);
+            s_done_text = m->text;
+            m->text = NULL;
+            if (!s_listen_on) {
+                line_heard();
+            }
         } else if (strcmp(m->type, "stop") == 0) {
-            // Quietly: the other says the end (or listens to the user who stopped it), nothing spoken over it
+            // Quietly: the one stopping says the end (or listens to the user who stopped it)
             tts_stream_cancel();
             game_end(NULL);
         }
+    } else if (s_state == G_STARTING && strcmp(m->type, "speak") == 0 && m->turn == 1) {
+        // The first line already said by the BOX elected (this one claimed later): its game is joined
+        s_nonce = m->nonce;
+        s_state = G_ELECTING;
+        message(m);
+        return;
     }
     free(m->text);
 }
@@ -928,8 +1368,8 @@ void game_poll(void)
     }
     if (s_stop_requested) {
         s_stop_requested = false;
-        if (s_state == G_PLAYING) {
-            send_peer("stop", s_turns, NULL);
+        if (s_state != G_IDLE && s_state != G_STARTING) {
+            send_simple("stop", s_turns, NULL);
         }
         if (s_state != G_IDLE) {
             ESP_LOGI(TAG, "Stopped by the wake word or a touch");
@@ -937,51 +1377,41 @@ void game_poll(void)
         }
         return;
     }
-    if (s_state == G_INVITING && esp_timer_get_time() - s_since > GAME_INVITE_MS * 1000LL) {
-        game_end(app_lang_get()->game_no_peer);
-        return;
-    }
-    if (s_state != G_PLAYING) {
-        return;
-    }
-    // Whose line is next: the one starting says the odd ones
-    bool mine = ((s_turns + 1) % 2 == 1) == s_starter;
-    if (s_turns >= s_turns_max) {
-        // The last line was the other's: it still speaks it, then sends "stop" (ending this one quietly)
-        if (esp_timer_get_time() - s_since > GAME_SILENCE_MS * 1000LL) {
-            game_end(NULL);
-        }
-        return;
-    }
-    if (!mine) {
-        if (esp_timer_get_time() - s_since > GAME_SILENCE_MS * 1000LL) {
+    int64_t now = esp_timer_get_time();
+    switch (s_state) {
+    case G_STARTING:
+        elect();
+        break;
+    case G_ELECTING:
+        elect();
+        break;
+    case G_LISTENING:
+        if (s_speaker && s_listen_on && s_done_seen &&
+                now - s_done_us > (s_listen_more ? GAME_MORE_WAIT_MS : GAME_TAIL_WAIT_MS) * 1000LL) {
+            // Listened to again after a pause, but the speaker had finished (or a noise keeps the listening on):
+            // what was heard is kept, else the words sent
+            listen_stop();
+            line_heard();
+        } else if (!s_speaker && now - s_since > GAME_SPEAK_WAIT_MS * 1000LL) {
+            // The one elected never spoke (or, after the last line, never ended the game)
+            game_end(s_turns >= s_turns_max ? NULL : app_lang_get()->game_peer_left);
+        } else if (s_speaker && !s_done_seen && now - s_since > GAME_SILENCE_MS * 1000LL) {
             game_end(app_lang_get()->game_peer_left);
         }
-        return;
-    }
-    // My line: made at once (while the other may still be speaking its own), said once the other is done
-    if (!s_ready_line) {
-        s_ready_line = line_make();
-        if (s_ready_line) {
-            line_shorten(s_ready_line, s_games[s_game].short_after);
-        }
-        if (!s_ready_line) {
+        break;
+    case G_SPEAKING: {
+        char *text = line_make();
+        if (!text) {
+            send_simple("stop", s_turns, NULL);
             game_end(app_lang_get()->game_peer_left);
             return;
         }
+        line_shorten(text, s_games[s_game].short_after);
+        line_say(text);
+        free(text);
+        break;
     }
-    if (s_turns > 0 && s_peer_done < s_turns) {
-        if (esp_timer_get_time() - s_since > GAME_SILENCE_MS * 1000LL) {
-            game_end(app_lang_get()->game_peer_left);
-        }
-        return;     // the other is still speaking
-    }
-    char *text = s_ready_line;
-    s_ready_line = NULL;
-    line_say(text);
-    free(text);
-    if (s_turns >= s_turns_max && !s_stop_requested) {
-        send_peer("stop", s_turns, NULL);
-        game_end(app_lang_get()->game_over);
+    default:
+        break;
     }
 }

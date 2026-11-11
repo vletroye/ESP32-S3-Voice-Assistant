@@ -69,6 +69,11 @@ static const char *TAG = "app_sr";
  * grown for End_speech_ms and this more (the transcription gives its words a little after they are said)
  */
 #define SR_TEXT_QUIET_EXTRA_MS      600
+/*
+ * A game: the other BOX speak slowly, with pauses between their sentences (their speech comes sentence by sentence):
+ * the line ends after this much silence at least, whatever End_speech_ms
+ */
+#define SR_GAME_END_SILENCE_MS      1500
 
 static const esp_afe_sr_iface_t *afe_handle = NULL;
 static srmodel_list_t *models = NULL;
@@ -86,6 +91,8 @@ static volatile int s_tapped = 0;
 static volatile uint32_t s_followup_window_ms = 0;
 /* The pending follow-up listens while the reply stays shown (it asks something, its text is being read) */
 static volatile bool s_followup_keep_reply = false;
+/* Non-zero: the pending manual session listens to the line of another BOX of a game, its voice within this delay */
+static volatile uint32_t s_game_wait_ms = 0;
 
 sr_data_t *g_sr_data = NULL;
 
@@ -151,6 +158,7 @@ static void audio_detect_task(void *arg)
     TickType_t listen_start = 0;
     uint32_t no_speech_timeout_ms = SR_NO_SPEECH_TIMEOUT_MS;
     uint32_t vad_ignore_ms = SR_VAD_IGNORE_WAKE_MS;
+    bool game_session = false;      // the line of another BOX of a game: SR_GAME_END_SILENCE_MS of silence ends it
     esp_afe_sr_data_t *afe_data = arg;
     const uint32_t frame_ms = afe_handle->get_fetch_chunksize(afe_data) * 1000 / afe_handle->get_samp_rate(afe_data);
     ESP_LOGI(TAG, "fetch frame: %" PRIu32 " ms", frame_ms);
@@ -191,10 +199,19 @@ static void audio_detect_task(void *arg)
             paused_ms = 0;
             no_speech_timeout_ms = SR_NO_SPEECH_TIMEOUT_MS;
             vad_ignore_ms = SR_VAD_IGNORE_WAKE_MS;
+            game_session = false;
             if (manul_detect_flag) {
                 bool followup = (s_followup_window_ms > 0);
                 bool keep_reply = false;
-                if (followup) {
+                bool game = s_game_wait_ms > 0;
+                if (game) {
+                    // No beep nor sound of its own before: the voice of the other BOX is counted at once
+                    followup = true;
+                    game_session = true;
+                    no_speech_timeout_ms = s_game_wait_ms;
+                    vad_ignore_ms = 0;
+                    s_game_wait_ms = 0;
+                } else if (followup) {
                     no_speech_timeout_ms = s_followup_window_ms;
                     vad_ignore_ms = SR_VAD_IGNORE_FOLLOWUP_MS;
                     keep_reply = s_followup_keep_reply;
@@ -202,13 +219,14 @@ static void audio_detect_task(void *arg)
                     s_followup_keep_reply = false;
                 }
                 manul_detect_flag = false;
-                debug_trace_turn(followup ? "listening again after the reply" : "tap");
+                debug_trace_turn(game ? "a line of a game" : followup ? "listening again after the reply" : "tap");
                 sr_result_t result = {
                     .wakenet_mode = WAKENET_DETECTED,
                     .state = ESP_MN_STATE_DETECTING,
                     .command_id = 0,
                     .followup = followup,
                     .keep_reply = keep_reply,
+                    .game = game,
                 };
                 xQueueSend(g_sr_data->result_que, &result, 0);
             }
@@ -231,7 +249,7 @@ static void audio_detect_task(void *arg)
                       pdTICKS_TO_MS(xTaskGetTickCount() - listen_start), res->data_volume);
                 local_state = res->vad_state;
                 frame_keep = 0;
-            } else {
+            } else if (frame_keep < UINT8_MAX) {
                 frame_keep++;
             }
 
@@ -268,7 +286,11 @@ static void audio_detect_task(void *arg)
             // growing for the silence that ends a question, the listening ends (answered from the transcription)
             // instead of waiting for the whole delay without speech
             uint32_t text_quiet_ms = speech_seen ? 0 : stt_stream_text_quiet_ms();
-            if (!no_speech && text_quiet_ms >= settings_get_parameter()->end_speech_ms + SR_TEXT_QUIET_EXTRA_MS) {
+            uint32_t end_ms = settings_get_parameter()->end_speech_ms;
+            if (game_session && end_ms < SR_GAME_END_SILENCE_MS) {
+                end_ms = SR_GAME_END_SILENCE_MS;
+            }
+            if (!no_speech && text_quiet_ms >= end_ms + SR_TEXT_QUIET_EXTRA_MS) {
                 ESP_LOGI(TAG, "voice not detected here, but transcribed: its text unchanged for %" PRIu32 " ms",
                          text_quiet_ms);
                 no_speech = true;
@@ -279,8 +301,11 @@ static void audio_detect_task(void *arg)
                 ESP_LOGI(TAG, "listening cancelled");
             }
             bool short_speech = !speech_seen && speech_ms >= SR_SHORT_SPEECH_MS && max_volume > SR_SHORT_SPEECH_DBFS;
-            bool speech_ended = (speech_seen || short_speech) && (SR_SILENCE_END_FRAMES == frame_keep) &&
-                                (VAD_SILENCE == res->vad_state);
+            // The VAD reports silence after End_speech_ms of it; a game wants SR_GAME_END_SILENCE_MS at least
+            uint32_t silence_ms = settings_get_parameter()->end_speech_ms + frame_keep * frame_ms;
+            bool silence_long = game_session ? silence_ms >= SR_GAME_END_SILENCE_MS && frame_keep >= SR_SILENCE_END_FRAMES
+                                             : SR_SILENCE_END_FRAMES == frame_keep;
+            bool speech_ended = (speech_seen || short_speech) && silence_long && (VAD_SILENCE == res->vad_state);
             if (speech_ended && !speech_seen) {
                 ESP_LOGI(TAG, "short speech (%" PRIu32 " ms, %.1f dBFS): transcribed", speech_ms, max_volume);
             }
@@ -292,6 +317,7 @@ static void audio_detect_task(void *arg)
                     .state = ESP_MN_STATE_TIMEOUT,
                     .command_id = 0,
                     .no_speech = no_speech,
+                    .game = game_session,
                 };
                 xQueueSend(g_sr_data->result_que, &result, 0);
                 g_sr_data->afe_handle->enable_wakenet(afe_data);
@@ -470,6 +496,14 @@ esp_err_t app_sr_start_once(void)
     ESP_RETURN_ON_FALSE(NULL != g_sr_data, ESP_ERR_INVALID_STATE, TAG, "SR is not running");
     s_followup_window_ms = 0;
     s_followup_keep_reply = false;
+    manul_detect_flag = true;
+    return ESP_OK;
+}
+
+esp_err_t app_sr_start_game_listen(uint32_t wait_ms)
+{
+    ESP_RETURN_ON_FALSE(NULL != g_sr_data, ESP_ERR_INVALID_STATE, TAG, "SR is not running");
+    s_game_wait_ms = wait_ms > 0 ? wait_ms : 1;
     manul_detect_flag = true;
     return ESP_OK;
 }

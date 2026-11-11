@@ -38,7 +38,7 @@ been largely rewritten.
   - [2.6 Radio](#26-radio)
   - [2.7 Updating the firmware](#27-updating-the-firmware)
   - [2.8 Timers, alarms and reminders](#28-timers-alarms-and-reminders)
-  - [2.9 Games between two BOX](#29-games-between-two-box)
+  - [2.9 Games between BOX](#29-games-between-box)
 - [3. Advanced user guide](#3-advanced-user-guide)
   - [3.1 Files of the configuration drive](#31-files-of-the-configuration-drive)
   - [3.2 `CONFIG.INI`: settings and API keys](#32-configini-settings-and-api-keys)
@@ -238,8 +238,9 @@ settings of the [Quick start](#1-quick-start).
   milk to the shopping list"), your mails (Gmail: "Ai-je des nouveaux mails ?" / "Do I have new emails?") and your
   agenda (Google Calendar: "Qu'est-ce que j'ai demain ?" / "What do I have tomorrow?") (see
   [Google: Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar)).
-- **Games between two BOX**: "Disputez-vous" / "Argue with each other", "Concours de devinettes" / "Riddle contest":
-  two BOX take turns out loud, each with its own voice (see [Games between two BOX](#29-games-between-two-box)).
+- **Games between BOX**: "Disputez-vous" / "Argue with each other", "Concours de devinettes" / "Riddle contest":
+  two BOX or more take turns out loud, each with its own voice, hearing each other (see
+  [Games between BOX](#29-games-between-box)).
 - **Any MCP server** whose tools the model can use, besides the Homey (see [MCP servers](#312-mcp-servers)).
 - **Clear errors**: a missing credit, a refused key or a network problem is said and shown, for each provider.
 - **Costs on screen**: what the conversation and the day cost, and a detailed page (tap the cost).
@@ -742,31 +743,39 @@ Ask in your own words; the model sets them (with the models that take tools):
 - The device needs the Internet time (SNTP) to know the time: right after a start without Wi-Fi, nothing rings until
   the clock is set.
 
-### 2.9 Games between two BOX
+### 2.9 Games between BOX
 
-With **two BOX on the same Wi-Fi network**, say "Bonjour ESP" / "Hi ESP" (to both, or to one: the other, asleep,
-joins in), then a game's phrase:
+With **two BOX or more on the same Wi-Fi network**, say "Bonjour ESP" / "Hi ESP" (to all, or to one: the others,
+asleep, join in), then a game's phrase:
 
 | You say | They do |
 | --- | --- |
 | "Disputez-vous" / "Argue with each other" | A verbal duel, quick-fire, assertive and dry, with irony: one asserts a bold opinion as an obvious fact, the other hits back in one short sharp sentence (10 words at most), and so on |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers (wrong on purpose about one time in three, with humour); right ("c'est correct" / "that's right"): the one who found it asks the next one; wrong: the one who asked gives the answer and asks another |
 
-- The two BOX take turns **out loud**, each with **its own voice** and **its own model**; each line is shown only on
-  the screen of the BOX speaking it, scrolling as it is spoken (the other keeps its own last line). They talk to each other over the local network (UDP, port 47110): no microphone needed between them, no
-  server.
-- **The wake word** (or a touch) on either of them **stops the game on both**. Otherwise it ends after
-  `Game_turns_max` lines (20 by default, `CONFIG.INI`), the last one concluding it; the BOX that said it then says the game is over, and neither listens
-  afterwards. Each line is a question to the
-  model in use (with Claude Haiku or a free OpenRouter model, a game of 20 lines costs a few cents at most).
+- The BOX take turns **out loud**, each with **its own voice** and **its own model**, and **hear each other with
+  their microphones**: while one speaks, the others listen (the robot listening, no beep), a line ending after
+  **1.5 s of silence at least** (whatever `End_speech_ms`: the voices pause between their sentences), then "Entendu"
+  / "Heard". Each line is shown only on the screen of the BOX speaking it, scrolling as it is spoken.
+- **Who speaks** is agreed over the local network (UDP broadcast, port 47110; no server): the BOX that heard the
+  phrase each claim the first line with the time (from the Internet clock), the earliest says it; then each BOX
+  that heard a line claims the next one, and the first to have heard it says it (two claims at the very same
+  millisecond: both claim again after a random delay). A game's rule may name the next one instead (the riddles:
+  the one who asked judges the guess, the one who found it asks the next riddle). The words of each line are also
+  sent, used only by a BOX that heard nothing.
+- **A touch** on any BOX (or the wake word to one not listening) **stops the game on all**. Otherwise it ends
+  after `Game_turns_max` lines (20 by default, `CONFIG.INI`, the one of the BOX that started), the last one
+  concluding it; the BOX elected next then says "Ok, c'est bon. Arrêtons-nous là." / "Okay, that's enough. Let's
+  stop there.", and none listens afterwards. Each line is a question to the model in use, and each BOX listening
+  transcribes it (with Claude Haiku or a free OpenRouter model, a game of 20 lines costs a few cents at most).
 - **Their characters** (`Game_tone` in `CONFIG.INI`): `random` (the default) draws one for each BOX from the
   firmware's list (a pompous philosopher, a blasé teenager, a pirate, an absent-minded professor, a dramatic poet, a
   chef, a sports commentator, an old sailor, a butler, a knight, a science-fiction fan, a grandmother full of
-  proverbs), never the same for both; each says who it is in its first line. `persona` keeps each one's
+  proverbs), not one already drawn by another BOX; each says who it is in its first line. `persona` keeps each one's
   `PERSO_<XX>.TXT`.
 - If no other BOX answers within 8 seconds: "Je ne trouve pas d'autre BOX sur le réseau." / "I can't find another
-  BOX on the network." Both BOX must have this firmware, and the router must let them talk to each other (no "client
-  isolation" on the Wi-Fi).
+  BOX on the network." All BOX must have this firmware, be close enough to hear each other, and the router must
+  let them talk to each other (no "client isolation" on the Wi-Fi).
 - **Your own games**: **GAMES.INI** of the configuration drive, one section per game: its name per language
   (`name_fr`…), the phrases starting it (`phrases_fr = disputez-vous | débattez`, the start of what is said, case
   and accents ignored), the instruction of the first line (`first`), the rules of every line (`rules`), both in English
@@ -775,7 +784,8 @@ joins in), then a game's phrase:
   (never shown nor spoken), and a line starting with this one keeps only its first sentence (the riddles: a right
   guess gets "Correct !" and nothing more, the one who found it asks the next riddle); `secret = TAG`: what
   follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent to the other (the riddles: the
-  answer, to judge the other's guess); `blunder = 35`, `blunder_after` and `blunder_rule`: that instruction added
+  answer, to judge the other's guess); `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS`: who says the line after a
+  tag (after a GUESS line, the BOX of the last RIDDLE or WRONG line; else the first BOX to have heard it); `blunder = 35`, `blunder_after` and `blunder_rule`: that instruction added
   to 35 % of the lines following a line of the other with one of these tags (the riddles: a wrong guess on purpose,
   a funny one, teased by the other). A story told in turns, a quiz, a game of "who am I"… Emptied, the
   file comes back as the firmware gives it; a line still as an older firmware gave it is updated by a new one
@@ -888,7 +898,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (a restart included, the reasoning mode or not): a new conversation starts, unless the first sentence is "continue la conversation précédente" / "continue the previous conversation" (`0` to `120`; `0`: never, the conversation always goes on) | `5` |
 | `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar); empty: not offered | *(its client ID, ending in `.apps.googleusercontent.com`)* |
 | `Google_code` | Once, to link the account: the address `http://127.0.0.1/?code=...` the browser reached after accepting (within 10 minutes); emptied once used (the line stays) | |
-| `Game_tone` | The characters of the [games between two BOX](#29-games-between-two-box): `random` (drawn from the firmware's list) or `persona` (each one's `PERSO_<XX>.TXT`) | `random` |
+| `Game_tone` | The characters of the [games between BOX](#29-games-between-box): `random` (drawn from the firmware's list) or `persona` (each one's `PERSO_<XX>.TXT`) | `random` |
 | `Game_turns_max` | Lines of a game at most (2 to 100), if nobody stops it with the wake word | `20` |
 | `Alarm_stop_min` | A [timer or an alarm](#28-timers-alarms-and-reminders) not stopped (a touch, the wake word) stops ringing by itself after this many minutes (`1` to `60`) | `3` |
 | `Radio_resume` | `on`: a radio interrupted by the wake word plays again when the assistant goes back to sleep; `off`: it stays stopped ("remets la radio" / "resume the radio"). A station asked during the conversation plays anyway | `on` |
@@ -2059,7 +2069,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `radio_browser.c` | Radio-Browser: server chosen from its list, searches by name, tag and country, listens counted |
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
-| `game.c` | Games between two BOX: GAMES.INI (installed when missing), the phrases starting them, the other BOX found by UDP broadcast (port 47110), who starts, the lines in turn (made by `llm_ask_apart`: the model in use, apart from the conversation; sent before being spoken, "done" once spoken), the characters (`Game_tone`), the stop on both |
+| `game.c` | Games between BOX: GAMES.INI (installed when missing, its old lines updated), the phrases starting them, the BOX of the game agreed by UDP broadcast (port 47110): claims timed by SNTP, the earliest speaks (ties claimed again), the rules naming the next one (`turns`); the lines made by `llm_ask_apart` (the model in use, apart from the conversation), "speak" then the others listen with their microphones (`app_sr_start_game_listen`, 1.5 s of silence), "done" with the words; the characters (`Game_tone`), the stop on all, the natural end |
 | `app_ui_system.c` | The Système screen (a long press on the Settings icon): firmware, board and dock, processor, memories (free, lowest), partitions, NVS, MAC, uptime, reset reason |
 | `app_ui_status.c` | The Wi-Fi and battery screen (a tap on them, sleep screen); `app_battery.c` gives the voltage, the level and the trend (charging or not) |
 | `google_auth.c` | The Google account (Tasks, Gmail, Calendar): OAuth 2.0 for installed apps with the client of `CONFIG.INI` (`Google_client`, `Google_secret`), GOOGLE.HTM on the configuration drive (opening the consent page) while not linked, `Google_code` exchanged at start-up then erased, the refresh token in `/state/google.json`, the access token renewed, the revocation; `google_api()` for the API calls |

@@ -44,6 +44,8 @@ typedef struct {
     bool was_listening;         /* tapped: a listening session was going on (ended, its transcription to drop) */
     bool keep_reply;            /* WAKENET_DETECTED: the reply stays shown while listening (text to read, a question
                                    asked), with moving bars instead of the listen panel */
+    bool game;                  /* the line of another BOX of a game is listened to (game.c): no beep, its
+                                   transcript given to the game */
 } sr_result_t;
 
 typedef enum {
@@ -93,6 +95,12 @@ esp_err_t app_sr_start_once(void);
  * bars at its top right instead of the listen panel.
  */
 esp_err_t app_sr_start_followup(uint32_t window_ms, bool keep_reply);
+
+/**
+ * @brief Listen to the line of another BOX of a game (game.c): no beep, its voice within wait_ms, ended by 1.5 s of
+ *        silence at least (the other BOX pause between their sentences); the transcript goes to game_heard()
+ */
+esp_err_t app_sr_start_game_listen(uint32_t wait_ms);
 
 #ifdef __cplusplus
 }

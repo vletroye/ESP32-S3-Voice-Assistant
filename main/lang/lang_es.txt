@@ -536,6 +536,7 @@ game_searching = Busco la otra BOX...
 game_no_peer = No encuentro otra BOX en la red.
 game_peer_left = La otra BOX ya no responde: fin de la partida.
 game_over = ¡Fin de la partida!
+game_end_natural = Vale, ya está. Dejémoslo aquí.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

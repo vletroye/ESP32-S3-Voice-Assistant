@@ -301,6 +301,7 @@ typedef struct {
     const char *game_no_peer;
     const char *game_peer_left;
     const char *game_over;
+    const char *game_end_natural;   /* said by the BOX ending a game after its last line */
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;
     const char *settings_debug_info;

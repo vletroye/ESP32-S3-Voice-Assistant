@@ -1009,6 +1009,11 @@ void assistant_listen_end(void)
     char *text = s_tapped_text ? s_tapped_text : stt_stream_finish(STT_FINAL_TIMEOUT_MS);
     s_tapped_text = NULL;
     ESP_LOGI(TAG, "[timing] final transcript %lld ms after the end of speech", elapsed_ms(t_start));
+    if (game_listening()) {
+        // The line of another BOX of a game: the game takes it (no answer of the model here)
+        game_heard(text);
+        return;
+    }
     if (s_cancelled) {
         ESP_LOGI(TAG, "Question dropped (cancelled)");
         free(text);
@@ -1386,9 +1391,9 @@ void app_main()
     s_main_task = xTaskGetCurrentTaskHandle();
     for (int seconds = 0; ; seconds++) {
         // A second, or less when the assistant goes to sleep with something to save (assistant_save_soon)
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(game_active() ? 100 : 1000));
 
-        // A game between two BOX: its next step (a line made, said, the other's awaited)
+        // A game between BOX: its next step (a line made, said, the other's awaited)
         game_poll();
         // A timer, an alarm or a reminder due: rung once the assistant sleeps (after a reply, a conversation)
         if (!alarm_ring_active() && !game_active() && !s_reply_active && ui_ctrl_is_asleep()) {

@@ -173,6 +173,15 @@ static void phrase_files_find(void)
         memcpy(t->fat_name, "GAMES   INI", 12);
         PRINTF("%s shown as GAMES.INI", t->path);
     }
+    // The requirements written by the last "création collaborative" (PROJECT.TXT), when there are some
+    FILE *project = fopen(PHRASES_DIR "/project.txt", "r");
+    if (project) {
+        fclose(project);
+        text_file_t *t = &s_text_files[slot++];
+        strlcpy(t->path, PHRASES_DIR "/project.txt", sizeof(t->path));
+        memcpy(t->fat_name, "PROJECT TXT", 12);
+        PRINTF("%s shown as PROJECT.TXT", t->path);
+    }
     // Results of the model test ("teste les modèles"), when there are some
     FILE *speed = fopen(PHRASES_DIR "/speed.txt", "r");
     if (speed) {

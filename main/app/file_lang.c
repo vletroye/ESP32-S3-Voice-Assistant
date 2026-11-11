@@ -391,6 +391,8 @@ static const lang_field_t s_fields[] = {
     { "game_peer_left", offsetof(app_lang_t, game_peer_left), FIELD_TEXT, 1 },
     { "game_over", offsetof(app_lang_t, game_over), FIELD_TEXT, 1 },
     { "game_end_natural", offsetof(app_lang_t, game_end_natural), FIELD_TEXT, 1 },
+    { "game_document_writing", offsetof(app_lang_t, game_document_writing), FIELD_TEXT, 1 },
+    { "game_document_written", offsetof(app_lang_t, game_document_written), FIELD_TEXT, 1 },
     { "game_voice_refused", offsetof(app_lang_t, game_voice_refused), FIELD_TEXT, 1 },
     { "settings_debug_title", offsetof(app_lang_t, settings_debug_title), FIELD_TEXT, 1 },
     { "settings_debug", offsetof(app_lang_t, settings_debug), FIELD_TEXT, 1 },

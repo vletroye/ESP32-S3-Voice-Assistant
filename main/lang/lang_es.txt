@@ -537,6 +537,8 @@ game_no_peer = No encuentro otra BOX en la red.
 game_peer_left = La otra BOX ya no responde: fin de la partida.
 game_over = ¡Fin de la partida!
 game_voice_refused = Mi voz se niega a pronunciar algunos insultos (el servicio Mistral los bloquea): elige otra voz para los juegos.
+game_document_writing = Redactando el pliego de requisitos...
+game_document_written = El pliego de requisitos está guardado en %s, visible en el modo de configuración.
 game_end_natural = Vale, ya está. Dejémoslo aquí.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button

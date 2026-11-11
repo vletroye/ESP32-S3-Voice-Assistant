@@ -124,6 +124,8 @@ typedef struct {
     char *characters;       /* "a | b | c": this game's characters (Game_tone = random), else s_tones */
     char *last;             /* the instruction of the last line */
     int sentences;          /* each line cut after this many sentences (0: not cut) */
+    char document[24];      /* the file written at the end by the BOX ending the game ("project.txt") */
+    char *document_rule;    /* what it is */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
@@ -303,6 +305,10 @@ static const char *const s_games_updates[][2] = {
       "phrases_es = creación colaborativa | cre(ad|ar) juntos | invent(ad|ar) (juntos|algo)\n" },
     { "phrases_it = creazione collaborativa | create insieme | inventate insieme | inventate qualcosa\n",
       "phrases_it = creazione collaborativa | crea(te|re) insieme | inventa(te|re) (insieme|qualcosa)\n" },
+    { "rules = A brainstorming of experts out loud, building together the plan to make real the invention of the first line. Each line (two or three short sentences, 40 words at most) brings ONE useful contribution from your expert's point of view: a concrete step of the plan, a technical solution, a cost or a business model, a law or a rule to deal with, a risk, a test, a doubt, or a strong objection to the last line with a better alternative. Disagree when it makes sense, diverge, propose another way; never repeat what was said, always move the plan forward. Address the others by their role.",
+      "rules = A brainstorming of experts out loud, building together the plan to make real the invention of the first line. Each line (two or three short sentences, 40 words at most) brings ONE useful contribution from your expert's point of view: a concrete step of the plan, a technical solution, a cost or a business model, a law or a rule to deal with, a risk, a test, a doubt, or a strong objection to the last line with a better alternative. Disagree when it makes sense, diverge, propose another way; never repeat what was said, always move the plan forward. Never name or mention the others' roles, professions or characters, nor your own: speak about the idea, not about the people." },
+    { "last = This is the last line of the game: sum up the plan agreed in two or three sentences, in character.",
+      "last = This is the last line of the game: sum up the plan agreed in two or three sentences.\ndocument = project.txt\ndocument_rule = Write the requirements specification of this invention for a specialised subcontractor who will develop it, from what the brainstorming decided or implies: title; context and goal; scope; functional requirements; technical requirements; legal and regulatory constraints; budget and business model; risks and how to handle them; milestones and deliverables; acceptance criteria. Numbered sections and short numbered requirements, plain text without markdown symbols." },
 };
 
 static void games_update(void)
@@ -411,6 +417,7 @@ static void games_free(void)
         free(s_games[i].themes);
         free(s_games[i].characters);
         free(s_games[i].last);
+        free(s_games[i].document_rule);
         free(s_games[i].theme_rule);
     }
     s_game_count = 0;
@@ -510,6 +517,11 @@ static void games_load_locked(void)
         } else if (strcmp(key, "characters") == 0) {
             free(g->characters);
             g->characters = strdup(value);
+        } else if (strcmp(key, "document") == 0) {
+            strlcpy(g->document, value, sizeof(g->document));
+        } else if (strcmp(key, "document_rule") == 0) {
+            free(g->document_rule);
+            g->document_rule = strdup(value);
         } else if (strcmp(key, "sentences") == 0) {
             g->sentences = atoi(value);
         } else if (strcmp(key, "last") == 0) {
@@ -1661,6 +1673,62 @@ static void line_heard(void)
     claim_send(0);
 }
 
+/*
+ * document: at the end, the game written down by the BOX ending it (the creation: the requirements for a
+ * subcontractor, PROJECT.TXT on the configuration drive, replaced each time). Allocated: what to say after it, NULL
+ * if no document
+ */
+static char *document_write(void)
+{
+    const game_def_t *g = &s_games[s_game];
+    if (!g->document[0] || !g->document_rule || cJSON_GetArraySize(s_history) == 0) {
+        return NULL;
+    }
+    assistant_show(app_lang_get()->game_document_writing);
+    char *system = NULL;
+    asprintf(&system, "You write clear documents in the language whose code is '%s', from a discussion held out loud "
+             "by several voice assistants (its words transcribed, some of them misheard).", app_lang_get()->code);
+    char *question = NULL;
+    size_t size = 0;
+    FILE *out = open_memstream(&question, &size);
+    if (out) {
+        fprintf(out, "Game: %s. The discussion, oldest first:\n", g->name);
+        const cJSON *item;
+        cJSON_ArrayForEach(item, s_history) {
+            const cJSON *id = cJSON_GetObjectItem(item, "id");
+            int number = cJSON_IsString(id) ? player_number(strtoull(id->valuestring, NULL, 16)) : 0;
+            fprintf(out, "Player %d: %s\n", number, cJSON_GetObjectItem(item, "text")->valuestring);
+        }
+        fprintf(out, "\n%s", g->document_rule);
+        fclose(out);
+    }
+    char *answer = NULL;
+    llm_error_t err = system && question ? llm_ask_apart(system, question, &answer) : LLM_ERR_OTHER;
+    free(system);
+    free(question);
+    char path[48], name[24];
+    snprintf(path, sizeof(path), "/spiffs/%s", g->document);
+    snprintf(name, sizeof(name), "%s", g->document);
+    for (char *c = name; *c; c++) {
+        *c = (char)toupper((unsigned char)*c);
+    }
+    bool ok = false;
+    if (err == LLM_OK && answer && answer[0]) {
+        FILE *f = fopen(path, "w");
+        ok = f && fputs(answer, f) >= 0;
+        if (f) {
+            ok &= fclose(f) == 0;
+        }
+    }
+    ESP_LOGI(TAG, "%s: %s (%u characters)", path, ok ? "written" : "not written", answer ? (unsigned)strlen(answer) : 0);
+    free(answer);
+    char *said = NULL;
+    if (ok) {
+        asprintf(&said, app_lang_get()->game_document_written, name);
+    }
+    return said;
+}
+
 /* Elected: speak (the next line, or the end after the last one), else wait for the one elected */
 static void decided(uint64_t winner)
 {
@@ -1670,7 +1738,12 @@ static void decided(uint64_t winner)
     if (s_turns >= s_turns_max) {
         if (winner == s_my_id) {
             send_simple("stop", s_turns, NULL);
-            game_end(app_lang_get()->game_end_natural);
+            char *document = document_write();
+            char *said = NULL;
+            asprintf(&said, "%s%s%s", app_lang_get()->game_end_natural, document ? " " : "", document ? document : "");
+            game_end(said ? said : app_lang_get()->game_end_natural);
+            free(said);
+            free(document);
         } else {
             s_state = G_LISTENING;      // its "stop" ends this one quietly
         }

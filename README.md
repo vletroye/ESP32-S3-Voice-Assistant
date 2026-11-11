@@ -752,7 +752,7 @@ asleep, join in), then a game's phrase:
 | You say | They do |
 | --- | --- |
 | "Disputez-vous" / "Argue with each other" | A real fight of words, quick-fire: one asserts a bold opinion as an obvious fact, then each hits back in one short sharp sentence (12 words at most), arrogant and ironic ("j'ai raison, tu as tort" / "I'm right, you're wrong", "laisse tomber, tu ne peux pas me contredire" / "give up, you can't contradict me"), with colourful insults in the style of Captain Haddock ("bachi-bouzouk", "moule à gaufres", "ectoplasme à roulettes" / "bashi-bazouk", "nincompoop"…), never vulgar |
-| "Création collaborative" / "Collaborative creation", "Inventez ensemble" / "Invent together" | A brainstorming of experts (a visionary scientist, an engineer, an economist, a lawyer, a civil servant, an investor, an ethicist, a sceptic…): the first announces a totally new invention in a field drawn (science, technology, law, economics, public administration, health…), the others build the plan to make it real, each bringing a step, a solution, a cost, a law, a risk or an objection; the last line sums the plan up |
+| "Création collaborative" / "Collaborative creation", "Inventez ensemble" / "Invent together" | A brainstorming of experts (a visionary scientist, an engineer, an economist, a lawyer, a civil servant, an investor, an ethicist, a sceptic…): the first announces a totally new invention in a field drawn (science, technology, law, economics, public administration, health…), the others build the plan to make it real, each bringing a step, a solution, a cost, a law, a risk or an objection (never naming the others' roles); the last line sums the plan up, then the BOX ending the game writes the requirements for a specialised subcontractor in **PROJECT.TXT** (configuration drive, replaced each time) |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers (wrong on purpose about one time in three, with humour); right ("c'est correct" / "that's right"): the one who found it asks the next one; wrong: the one who asked gives the answer and asks another |
 
 - The BOX take turns **out loud**, each with **its own voice** and **its own model**, and **hear each other with
@@ -793,7 +793,9 @@ asleep, join in), then a game's phrase:
   follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent to the other (the riddles: the
   answer, to judge the other's guess); `themes = a | b | c` and `theme_rule` (`%s` for the theme): a theme drawn for each line (`theme_for = first`:
   for the first line only); `characters = a | b | c`: this game's characters instead of the firmware's list (the
-  creation: its experts); `last`: the instruction of the last line (the creation: sum up the plan); `sentences = 1`: each line cut after
+  creation: its experts); `last`: the instruction of the last line (the creation: sum up the plan); `document = project.txt` and
+  `document_rule`: at the end the BOX ending the game writes that file from all the lines, as the rule asks
+  (shown on the configuration drive, replaced each time); `sentences = 1`: each line cut after
   that many sentences (the debate: the model made three sentences of 40 words when asked for one), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the
   answers of the riddles are remembered (the last 60, in the state partition) and never asked again;
   `next = RIDDLE>GUESS; GUESS>RIGHT WRONG`: the tag a line must have after a line's tag (given to the model,

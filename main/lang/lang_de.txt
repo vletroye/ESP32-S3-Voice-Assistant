@@ -538,6 +538,8 @@ game_no_peer = Ich finde keine andere BOX im Netzwerk.
 game_peer_left = Die andere BOX antwortet nicht mehr: Spielende.
 game_over = Spielende!
 game_voice_refused = Meine Stimme weigert sich, manche Schimpfwörter auszusprechen (der Dienst Mistral blockiert sie): wähle eine andere Stimme für die Spiele.
+game_document_writing = Das Lastenheft wird geschrieben...
+game_document_written = Das Lastenheft ist in %s gespeichert, sichtbar im Konfigurationsmodus.
 game_end_natural = Okay, das reicht. Lassen wir es dabei.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button

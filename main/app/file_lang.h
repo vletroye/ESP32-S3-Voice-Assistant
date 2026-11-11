@@ -302,6 +302,8 @@ typedef struct {
     const char *game_peer_left;
     const char *game_over;
     const char *game_end_natural;   /* said by the BOX ending a game after its last line */
+    const char *game_document_writing;  /* the document of a game being written (the creation's requirements) */
+    const char *game_document_written;  /* "... saved in %s ...": its file name */
     const char *game_voice_refused; /* a line refused by the moderation of the speech service */
     const char *settings_debug_title;   /* Debug page: its title, the switch, what is kept (%u lines, %u KB), Dump */
     const char *settings_debug;

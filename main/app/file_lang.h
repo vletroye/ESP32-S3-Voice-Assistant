@@ -297,7 +297,7 @@ typedef struct {
     const char *system_entries;
     const char *system_uptime_fmt;
     const char *game_title;         /* Games between two BOX (game.c): %s the game's name */
-    const char *game_searching;
+    const char *game_organizing;     /* a game being set up (neutral on the BOX and the game) */
     const char *game_no_peer;
     const char *game_peer_left;
     const char *game_over;

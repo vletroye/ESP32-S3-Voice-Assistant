@@ -1064,7 +1064,7 @@ static void game_start(int game)
     }
     s_claim_seen_us = 0;
     claim_send(0);
-    assistant_show(app_lang_get()->game_searching);
+    assistant_show(app_lang_get()->game_organizing);
     ESP_LOGI(TAG, "%s: looking for the other BOX", s_games[game].id);
 }
 

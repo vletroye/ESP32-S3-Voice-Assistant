@@ -386,7 +386,7 @@ static const lang_field_t s_fields[] = {
     { "system_entries", offsetof(app_lang_t, system_entries), FIELD_TEXT, 1 },
     { "system_uptime_fmt", offsetof(app_lang_t, system_uptime_fmt), FIELD_TEXT, 1 },
     { "game_title", offsetof(app_lang_t, game_title), FIELD_TEXT, 1 },
-    { "game_searching", offsetof(app_lang_t, game_searching), FIELD_TEXT, 1 },
+    { "game_organizing", offsetof(app_lang_t, game_organizing), FIELD_TEXT, 1 },
     { "game_no_peer", offsetof(app_lang_t, game_no_peer), FIELD_TEXT, 1 },
     { "game_peer_left", offsetof(app_lang_t, game_peer_left), FIELD_TEXT, 1 },
     { "game_over", offsetof(app_lang_t, game_over), FIELD_TEXT, 1 },

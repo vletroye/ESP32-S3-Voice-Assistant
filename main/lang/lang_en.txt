@@ -532,7 +532,7 @@ system_uptime_fmt = %u d %u h %02u min
 # Games between two BOX (GAMES.INI): the screen of a game (%s its name), looking for the other BOX, none
 # found, the other silent, the end
 game_title = Game: %s
-game_searching = Looking for the other BOX...
+game_organizing = Organizing the session...
 game_no_peer = I can't find another BOX on the network.
 game_peer_left = The other BOX no longer answers: game over.
 game_over = Game over!

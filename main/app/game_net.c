@@ -36,6 +36,36 @@ static int s_sock = -1;
 static QueueHandle_t s_queue = NULL;
 static uint64_t s_my_id = 0;
 
+/*
+ * The other BOX heard on the network and their address: each message also goes to each of them directly. A
+ * broadcast is neither acknowledged nor sent again by the Wi-Fi: a BOX listening (its audio sent to the
+ * transcription) missed every "done" broadcast, a direct packet is acknowledged and repeated by the Wi-Fi.
+ */
+#define GAME_PEERS_MAX      8
+typedef struct {
+    uint64_t id;
+    uint32_t ip;            /* network order */
+} peer_t;
+static peer_t s_peers[GAME_PEERS_MAX];
+static volatile int s_peer_count = 0;
+
+/* From the network task: a BOX and its address, kept (the newest address) */
+static void peer_seen(uint64_t id, uint32_t ip)
+{
+    for (int i = 0; i < s_peer_count; i++) {
+        if (s_peers[i].id == id) {
+            s_peers[i].ip = ip;
+            return;
+        }
+    }
+    if (s_peer_count < GAME_PEERS_MAX) {
+        s_peers[s_peer_count].id = id;
+        s_peers[s_peer_count].ip = ip;
+        s_peer_count++;
+        ESP_LOGI(TAG, "BOX %llx at %s", (unsigned long long)id, inet_ntoa(*(struct in_addr *)&ip));
+    }
+}
+
 uint64_t game_net_id(void)
 {
     return s_my_id;
@@ -75,6 +105,10 @@ cJSON *game_net_msg(const char *type, uint32_t nonce)
 
 void game_net_send(cJSON *msg)
 {
+    // To each BOX known, directly (acknowledged by the Wi-Fi), then to all (the BOX not known yet)
+    for (int i = 0; i < s_peer_count; i++) {
+        send_to(s_peers[i].ip, msg);
+    }
     send_to(htonl(INADDR_BROADCAST), msg);
     cJSON_Delete(msg);
 }
@@ -117,6 +151,7 @@ static void net_task(void *arg)
         const cJSON *id = cJSON_GetObjectItem(json, "id");
         uint64_t sender = cJSON_IsString(id) ? strtoull(id->valuestring, NULL, 16) : 0;
         if (cJSON_IsString(type) && sender && sender != s_my_id) {
+            peer_seen(sender, from.sin_addr.s_addr);
             // Each message once in the log (its copies not): to tell a message lost on the way from one not taken
             static char s_last[40];
             const cJSON *t = cJSON_GetObjectItem(json, "turn");

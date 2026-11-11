@@ -180,7 +180,7 @@ denk (gut|gründlich) nach
 schalte [das ](nachdenken|denken) aus
 
 [s_continue_conversation]
-# Nach einer Pause geweckt (außerhalb des Denkmodus): das vorige Gespräch bleibt, sonst beginnt ein neues
+# Nach einer Pause geweckt: das vorige Gespräch bleibt, sonst beginnt ein neues
 (setze|führe|setzen wir|führen wir) [das ](vorige |letzte |)gespräch fort
 (mach|machen wir) (weiter mit dem|mit dem) (vorigen |letzten |)gespräch weiter
 weiter mit dem (vorigen |letzten |)gespräch

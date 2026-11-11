@@ -166,7 +166,7 @@ modalità ragionamento
 (disattiva|spegni|ferma) il ragionamento
 
 [s_continue_conversation]
-# Svegliato dopo una pausa (fuori dalla modalità ragionamento): la conversazione precedente resta, altrimenti ne inizia una nuova
+# Svegliato dopo una pausa: la conversazione precedente resta, altrimenti ne inizia una nuova
 (continua|continuiamo|riprendi|riprendiamo) [la ](conversazione|discussione)[ precedente]
 
 [s_new_conversation]

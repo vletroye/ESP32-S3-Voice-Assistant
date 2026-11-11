@@ -455,7 +455,7 @@ question.
 | on recommence à zéro · recommençons à zéro | let's start again from scratch · start over from scratch |
 | j'ai une autre question · une autre question · autre question | I have another question · another question |
 | passons à autre chose · on passe à autre chose · parlons d'autre chose · changeons de sujet · on change de sujet · changement de sujet | let's move on · let's talk about something else · let's change the subject · change of subject |
-| After a pause (outside the reasoning mode), to keep the previous conversation: continue · continuons · reprends · reprenons · on continue · on reprend la conversation / discussion (précédente / d'avant) | continue · resume · go on with · carry on with · let's continue the (previous / last) conversation |
+| After a pause, to keep the previous conversation: continue · continuons · reprends · reprenons · on continue · on reprend la conversation / discussion (précédente / d'avant) | continue · resume · go on with · carry on with · let's continue the (previous / last) conversation |
 
 **Reasoning mode.** "**J'ai une question difficile**" ("I have a difficult question") makes the model in use think
 more, until the end of the conversation: its effort becomes `high` (Claude's `output_config.effort` with its thinking
@@ -469,15 +469,10 @@ says so. The mode ends with the conversation ("au revoir", "nouvelle discussion"
 "désactive le raisonnement" ("turn off reasoning"), which keeps the conversation.
 
 Woken up after `Resume_ask_min` minutes of pause (5 by default, `CONFIG.INI`; after a restart too, the time of the
-last exchange being kept with it):
-- **in this mode**, the assistant asks "Bonjour ! Veux-tu continuer la conversation précédente ?" ("Hello! Do you
-  want to go on with the previous conversation?"): "oui" / "yes" listens at once, the conversation (and the mode)
-  kept; "non" / "no" starts a new conversation (the mode off), then listens; a longer sentence is taken as a question
-  of the conversation;
-- **in any other conversation** nothing is asked: the first question starts a **new conversation**, unless it starts
-  with "continue la conversation précédente" / "continue the previous conversation" (alone: "D'accord, je t'écoute."
-  / "All right, I'm listening.", then listened to; followed by a question: answered within the previous
-  conversation).
+last exchange being kept with it), in this mode or not, nothing is asked: the first question starts a **new
+conversation** (the mode off), unless it starts with "continue la conversation précédente" / "continue the previous
+conversation" (alone: "D'accord, je t'écoute." / "All right, I'm listening.", then listened to, the conversation and
+the mode kept; followed by a question: answered within the previous conversation).
 
 | French | English |
 | --- | --- |
@@ -883,7 +878,7 @@ range is brought to the nearest bound, or its default is used with a warning in 
 | `Read_lists` | `off`: in the replies listing languages, providers, models or voices, the reading stops at the `::` or `..` of the text and the list is only shown (the reply stays on screen while it is read, the assistant already listening); `on`: the list is read too | `off` |
 | `Sleep_after_cmd` | `on`: after the reply to a voice command handled by the device itself (language, voice, volume, memory, clock…), the assistant goes back to sleep instead of listening again; a command that asks a question (which provider, which model, confirm the town…) still listens for the answer. `off`: it listens again, as after an answer of the model | `off` |
 | `Screen_off_s` | With the BOX-3-SENSOR dock: seconds without presence before the screen goes off while the assistant sleeps (`0`: never); each presence seen by the radar, or a touch, starts the count again | `120` |
-| `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (a restart included): in the reasoning mode the assistant asks whether to go on with it; otherwise a new conversation starts, unless the first sentence is "continue la conversation précédente" / "continue the previous conversation" (`0` to `120`; `0`: never, the conversation always goes on) | `5` |
+| `Resume_ask_min` | Woken up after this many minutes of pause in a conversation (a restart included, the reasoning mode or not): a new conversation starts, unless the first sentence is "continue la conversation précédente" / "continue the previous conversation" (`0` to `120`; `0`: never, the conversation always goes on) | `5` |
 | `Google_client`, `Google_secret` | The OAuth client ("Desktop app") of your Google Cloud project, for [Google Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar); empty: not offered | *(its client ID, ending in `.apps.googleusercontent.com`)* |
 | `Google_code` | Once, to link the account: the address `http://127.0.0.1/?code=...` the browser reached after accepting (within 10 minutes); emptied once used (the line stays) | |
 | `Game_tone` | The characters of the [games between two BOX](#29-games-between-two-box): `random` (drawn from the firmware's list) or `persona` (each one's `PERSO_<XX>.TXT`) | `random` |

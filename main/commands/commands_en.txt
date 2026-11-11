@@ -169,7 +169,7 @@ reasoning mode
 (turn off|disable|stop|deactivate) [the ]reasoning[ mode]
 
 [s_continue_conversation]
-# Woken up after a pause (outside the reasoning mode): the previous conversation kept, else a new one starts
+# Woken up after a pause: the previous conversation kept, else a new one starts
 (continue|resume|go on with|carry on with|let s continue|let s go on with) [the ](previous |last |)(conversation|discussion)
 
 [s_new_conversation]

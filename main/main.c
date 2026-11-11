@@ -356,12 +356,10 @@ static void on_reply_audio(tts_event_t event)
 }
 
 /*
- * Woken up after a pause of Resume_ask_min or more in a conversation (after a restart too, its time kept with it):
- * - in the reasoning mode, "Veux-tu continuer la conversation précédente ?" is asked instead of listening at once (its
- *   answer is listened to after it, voice_cmd.c);
- * - otherwise nothing is asked: listened to as usual, and the first question starts a new conversation unless it
- *   starts with "continue la conversation précédente" (s_fresh_pending).
- * Called from app_audio.c (SR handler task); false: listen as usual.
+ * Woken up after a pause of Resume_ask_min or more in a conversation (the reasoning mode or not; after a restart too,
+ * its time kept with it): nothing is asked, listened to as usual, and the first question starts a new conversation
+ * (the reasoning mode off) unless it starts with "continue la conversation précédente" (s_fresh_pending).
+ * Called from app_audio.c (SR handler task); always false: listen as usual.
  */
 static volatile bool s_fresh_pending = false;
 
@@ -374,18 +372,10 @@ bool assistant_resume_ask(void)
     }
     // Once for this pause: the answer (or a follow-up) does not come here again
     llm_exchange_touch();
-    if (!llm_reasoning()) {
-        ESP_LOGI(TAG, "Conversation, %lld min since the last answer: a new one unless continued",
-                 pause_us / 60000000LL);
-        s_fresh_pending = true;
-        return false;
-    }
-    ESP_LOGI(TAG, "Reasoning mode, %lld min since the last answer: going on?", pause_us / 60000000LL);
-    s_cancelled = false;
-    llm_cancel_clear();
-    voice_cmd_expect_resume();
-    speak_message(app_lang_get()->resume_ask);
-    return true;
+    ESP_LOGI(TAG, "%s, %lld min since the last answer: a new one unless continued",
+             llm_reasoning() ? "Reasoning mode" : "Conversation", pause_us / 60000000LL);
+    s_fresh_pending = true;
+    return false;
 }
 
 /*
@@ -1043,7 +1033,7 @@ void assistant_listen_end(void)
     ui_ctrl_label_show_text(UI_CTRL_LABEL_LISTEN_SPEAK, app_lang_get()->thinking);
 
     if (s_fresh_pending) {
-        // The first question after a pause (outside the reasoning mode): a new conversation, unless it starts with
+        // The first question after a pause: a new conversation (the reasoning mode off), unless it starts with
         // "continue la conversation précédente"
         s_fresh_pending = false;
         if (!voice_cmd_is_continue(text)) {

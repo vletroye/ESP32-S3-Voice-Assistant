@@ -167,7 +167,7 @@ denk (goed|grondig) na
 stop met redeneren
 
 [s_continue_conversation]
-# Gewekt na een pauze (buiten de redeneermodus): het vorige gesprek blijft, anders begint een nieuw
+# Gewekt na een pauze: het vorige gesprek blijft, anders begint een nieuw
 (ga verder met|ga door met|hervat|vervolg|laten we verdergaan met) [het |de ](vorige |)(gesprek|conversatie)
 
 [s_new_conversation]

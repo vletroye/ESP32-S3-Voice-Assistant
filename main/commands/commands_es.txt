@@ -174,7 +174,7 @@ modo razonamiento
 (desactiva|apaga|para) el razonamiento
 
 [s_continue_conversation]
-# Despertado tras una pausa (fuera del modo razonamiento): se conserva la conversación anterior, si no empieza una nueva
+# Despertado tras una pausa: se conserva la conversación anterior, si no empieza una nueva
 (continúa|continua|continuemos|sigue|sigamos|retoma|retomemos) [con ][la ](conversación|charla)[ anterior]
 
 [s_new_conversation]

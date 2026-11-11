@@ -498,6 +498,25 @@ static bool blunder_allowed(const game_def_t *g)
 }
 
 /* The question to the model: the rules, then the lines so far */
+/* One of the tags of a list ("THINK RIGHT") in another one */
+static bool tags_meet(const char *list, const char *tags)
+{
+    for (const char *p = list; *p;) {
+        p += strspn(p, " ");
+        size_t n = strcspn(p, " ");
+        char tag[16];
+        snprintf(tag, sizeof(tag), "%.*s", (int)n, p);
+        if (n && game_tag_in(tags, strlen(tags), tag)) {
+            return true;
+        }
+        p += n;
+    }
+    return false;
+}
+
+/* A line made again: what the first one forgot (added to the instruction), NULL otherwise */
+static const char *s_line_note = NULL;
+
 static char *line_make(void)
 {
     const game_def_t *g = game_def(s_game);
@@ -556,7 +575,10 @@ static char *line_make(void)
         }
         // A theme drawn (each line: the model uses it when it asks or opens something new), and what was used
         char *used = game_used_read(g->id);
-        if (g->themes && g->themes[0] && (!g->theme_first || cJSON_GetArraySize(s_history) == 0)) {
+        bool opening = cJSON_GetArraySize(s_history) == 0;
+        bool themed = !g->theme_for[0] || opening ||
+                      (strcmp(g->theme_for, "first") != 0 && tags[0] && tags_meet(g->theme_for, tags));
+        if (g->themes && g->themes[0] && themed) {
             char theme[64];
             game_theme_draw(g, used, theme, sizeof(theme));
             const char *rule = g->theme_rule && strstr(g->theme_rule, "%s") ? g->theme_rule
@@ -591,6 +613,9 @@ static char *line_make(void)
         if (g->blunder_rule && g->blunder > 0 && blunder_allowed(g) && (int)(esp_random() % 100) < g->blunder) {
             ESP_LOGI(TAG, "this line: %s", "blunder_rule");
             fprintf(out, " %s", g->blunder_rule);
+        }
+        if (s_line_note) {
+            fprintf(out, " %s", s_line_note);
         }
         if (s_turns + 1 >= s_turns_max) {
             fprintf(out, " %s", g->last && g->last[0] ? g->last
@@ -1200,6 +1225,24 @@ void game_poll(void)
                 ESP_LOGW(TAG, "line tagged \"%s\" instead of %s: asked again", tag, allowed);
                 free(text);
                 text = line_make();
+            }
+        }
+        // A line that must give the secret (a new riddle, the person thought of) without it: the model has
+        // nothing to answer from afterwards
+        const game_def_t *g = game_def(s_game);
+        if (text && g->secret[0] && g->secret_with[0]) {
+            char secret[20];
+            snprintf(secret, sizeof(secret), "%s:", g->secret);
+            line_clean(text);
+            game_tag_of(text, tag, sizeof(tag));
+            if (tag[0] && game_tag_in(g->secret_with, strlen(g->secret_with), tag) && !strstr(text, secret)) {
+                ESP_LOGW(TAG, "line tagged %s without %s: asked again", tag, secret);
+                free(text);
+                static char note[96];
+                snprintf(note, sizeof(note), "Do not forget to end this line with %s followed by your answer.", secret);
+                s_line_note = note;
+                text = line_make();
+                s_line_note = NULL;
             }
         }
         if (!text) {

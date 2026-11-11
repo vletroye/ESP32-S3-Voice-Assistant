@@ -805,10 +805,11 @@ asleep, join in), then a game's phrase:
   | `lines = 40` | This game's number of lines instead of `Game_turns_max` (the guessing games are longer) |
   | `sentences = 1` | Each line cut after that many sentences (the debate: the model made three of 40 words when asked for one) |
   | `reasoning = yes` | Its lines and document made in the reasoning mode of the model, when it reasons (the creation: better ideas, but each line takes tens of seconds) |
-  | `themes = a \| b \| c`, `theme_rule` (`%s`: the theme), `theme_for = first` | A theme drawn for each line (or the first one only: the debate's topic), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time) |
+  | `themes = a \| b \| c`, `theme_rule` (`%s`: the theme), `theme_for = first` or tags | A theme drawn for each line (or the first one only: the debate's topic; or only the lines that may have one of these tags: Akinator's `THINK`), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time) |
   | `document = project.txt`, `document_rule` | At the end, the BOX ending the game writes that file from all the lines, as the rule asks (shown on the configuration drive, replaced each time: the creation's requirements) |
   | `short_after = TAG` | The rules may ask each line to start with an upper-case tag (never shown nor spoken): a line starting with this one keeps only its first sentence (the riddles: a right guess gets "Correct !" and nothing more) |
   | `secret = TAG` | What follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent (the riddles: the answer, to judge the guess; the last 60 answers remembered in the state partition, never asked again) |
+  | `secret_with = TAG` | The tags of the lines that must give the secret ("RIDDLE", "THINK"): such a line without it is asked again once |
   | `next = RIDDLE>GUESS; GUESS>RIGHT WRONG` | The tag a line must have after a line's tag: given to the model, checked, asked again once if not followed |
   | `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS` | Who says the line after a tag (after a GUESS line, the BOX of the last RIDDLE or WRONG line); else the first BOX to have heard it |
   | `blunder = 35`, `blunder_after`, `blunder_rule` | That instruction added to 35 % of the lines following a line with one of these tags (the riddles: a wrong guess on purpose, a funny one) |

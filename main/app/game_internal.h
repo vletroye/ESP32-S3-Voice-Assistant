@@ -32,6 +32,7 @@ typedef struct {
     bool plain;             /* character = no: no character */
     char short_after[16];   /* a tag: a line starting with "TAG:" keeps only its first sentence */
     char secret[16];        /* a tag: what follows "TAG:" is kept for itself (the answer of its riddle) */
+    char secret_with[32];   /* the tags of the lines that must give it ("RIDDLE"): asked again once if missing */
     char blunder_after[48]; /* blunder_rule only after a line with one of these tags */
     int blunder;            /* percent of the lines given blunder_rule */
     char *blunder_rule;     /* a wrong guess on purpose, with humour (the riddles) */
@@ -39,7 +40,8 @@ typedef struct {
     char next[96];          /* "RIDDLE>GUESS; GUESS>RIGHT WRONG": the tags a line may have after a tag */
     char *themes;           /* "a | b | c": one drawn for each line, given by theme_rule */
     char *theme_rule;       /* "... its theme is: %s ..." */
-    bool theme_first;       /* theme_for = first: only the first line gets it (the debate keeps its topic) */
+    char theme_for[32];     /* "first": only the first line gets it (the debate keeps its topic); tags ("THINK"):
+                               only the lines that may have one of them (and the first); else every line */
     char *characters;       /* "a | b | c": this game's characters (Game_tone = random), else the firmware's list */
     char *last;             /* the instruction of the last line */
     int sentences;          /* each line cut after this many sentences (0: not cut) */

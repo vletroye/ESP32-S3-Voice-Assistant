@@ -841,11 +841,27 @@ static void line_say(char *text)
 }
 
 /* The line of another BOX listened to (and its "done" received): kept, then this BOX claims the next one */
+static int words_of(const char *text)
+{
+    int n = 0;
+    for (const char *p = text; *p;) {
+        p += strspn(p, " ,.;:!?'\n");
+        size_t len = strcspn(p, " ,.;:!?'\n");
+        n += len > 0;
+        p += len;
+    }
+    return n;
+}
+
 static void line_heard(void)
 {
-    const char *text = s_heard && s_heard[0] ? s_heard : s_done_text ? s_done_text : "";
+    // Heard, unless the listening caught much less than the words sent ("S" for "Est-ce Marie Curie ?")
+    bool heard = s_heard && s_heard[0] &&
+                 (!s_done_text || words_of(s_heard) * 2 >= words_of(s_done_text));
+    const char *text = heard ? s_heard : s_done_text ? s_done_text : "";
     ESP_LOGI(TAG, "line %d (player %d, %s): %s%s", s_turns + 1, player_number(s_speaker), s_line_tag,
-             text, s_heard && s_heard[0] ? "" : " (not heard: the words sent)");
+             text, heard ? "" : s_heard && s_heard[0] ? " (heard only a part: the words sent)"
+             : " (not heard: the words sent)");
     char *line = NULL;
     asprintf(&line, "%s%s%s", s_line_tag, s_line_tag[0] ? ": " : "", text);
     history_add(s_speaker, s_line_tag, line ? line : text);

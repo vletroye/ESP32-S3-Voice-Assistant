@@ -39,6 +39,9 @@
 static const char *TAG = "game";
 
 #define GAMES_FILE          "/spiffs/games.ini"
+#define GAMES_FILE_MARK     "# GAMES.INI v2"
+/* GAMES.INI of an older firmware (a whole copy of its games), set aside */
+#define GAMES_OLD_FILE      "/spiffs/games_old.ini"
 #define GAMES_MAX           12
 #define GAME_TEXT_MAX       1200        /* a line, at most (UDP) */
 /*
@@ -83,6 +86,8 @@ extern void assistant_reply_stop(void);
 
 /* The firmware's games, installed when missing (main/games/games.ini, embedded NUL-terminated) */
 extern const char s_games_default_start[] asm("_binary_games_ini_start");
+/* GAMES.INI as installed: the help on the keys, no game (the user's games and changes go there) */
+extern const char s_games_user_start[] asm("_binary_games_user_ini_start");
 
 /*
  * Personalities drawn for Game_tone = random (in English: the model speaks the language of the BOX). Two BOX never
@@ -108,6 +113,7 @@ typedef struct {
     char id[24];
     char name[64];
     char phrases[400];      /* of the current language, "a | b | c" */
+    bool name_own, phrases_own;     /* of the current language (else the English ones, until it comes) */
     char *first;
     char *rules;
     bool plain;             /* character = no: no character, no introduction */
@@ -229,182 +235,34 @@ static void trim(char *s)
     }
 }
 
-/* The firmware's file installed when missing or emptied */
 /*
- * Lines of GAMES.INI as an older firmware gave them, and what replaces them: a file the user has not changed there
- * gets the new texts, any other line (own games, own rules) is kept. Applied in order: a text of an older firmware
- * goes through each newer one
+ * The games: the firmware's (main/games/games.ini, built in), then GAMES.INI of the configuration drive, which holds
+ * only the user's: a section of a firmware game changes the keys written in it, another one adds a game. No copy of
+ * the firmware's games to update: a change of their rules is in the firmware only.
  */
-static const char *const s_games_updates[][2] = {
-    { "rules = You play a riddle contest with the other assistant, turn by turn. If its last line asks a riddle: answer it in one short sentence. If its last line answers YOUR riddle: if the answer is right, say only that it is correct and congratulate it (it then asks the next riddle); if it is wrong, say so, give the right answer, then ask a new riddle. If its last line says your answer was correct: ask a new riddle. Never repeat a riddle already asked.",
-      "rules = You play a riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Look at the other's last line: (1) it asks a riddle: give your answer in one short sentence, nothing else. (2) it is an answer to YOUR riddle and it is right: say it is correct in a few words and ask NOTHING (the other found it: it asks the next riddle). (3) it is an answer to YOUR riddle and it is wrong: say so, give the right answer, then ask a new riddle. (4) it says your answer was right: ask a new riddle. (5) it says your answer was wrong, gives the answer and asks a new riddle: answer that new riddle. Never repeat a riddle already asked." },
-    { "first = Open a friendly but heated debate: state a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one or two sentences.",
-      "first = Open a heated debate: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short punchy sentence." },
-    { "rules = You are in a lively debate with the other assistant. Contradict its last line with one strong, funny argument, then make a counter-claim. Never agree completely. Stay polite and good-natured.",
-      "rules = You are in a fast verbal sparring match with the other assistant: quick-fire repartee, back and forth. Answer its last line with ONE short punchy sentence (15 words at most): a witty comeback, a jab or a sharp counter-argument, never a speech. Never agree. Stay good-natured." },
-    { "first = Open a heated debate: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short punchy sentence.",
-      "first = Open a verbal duel: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short, sharp sentence (10 words at most)." },
-    { "rules = You are in a fast verbal sparring match with the other assistant: quick-fire repartee, back and forth. Answer its last line with ONE short punchy sentence (15 words at most): a witty comeback, a jab or a sharp counter-argument, never a speech. Never agree. Stay good-natured.",
-      "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most): a dry comeback, a jab or a blunt counter-argument. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree." },
-    { "first = Open a verbal duel: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short, sharp sentence (10 words at most).",
-      "first = Open a verbal duel: assert a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...) as if it were an obvious fact, in one short, dry sentence (10 words at most), with a touch of irony." },
-    { "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most): a dry comeback, a jab or a blunt counter-argument. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree.",
-      "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most). Be assertive: state things as obvious facts, never hedge, never hesitate, never ask permission. Be dry and ironic: deadpan sarcasm, a mock compliment, a cold understatement. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree." },
-    { "rules = You play a riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Look at the other's last line: (1) it asks a riddle: give your answer in one short sentence, nothing else. (2) it is an answer to YOUR riddle and it is right: say it is correct in a few words and ask NOTHING (the other found it: it asks the next riddle). (3) it is an answer to YOUR riddle and it is wrong: say so, give the right answer, then ask a new riddle. (4) it says your answer was right: ask a new riddle. (5) it says your answer was wrong, gives the answer and asks a new riddle: answer that new riddle. Never repeat a riddle already asked.",
-      "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Your line is ONLY one of these, nothing else: a riddle; or your guess to the other's riddle (just the guess); or, when the other guessed your riddle right, a few words saying it is correct and nothing more (the other asks the next one); or, when its guess was wrong, a few words saying so, the right answer, then a new riddle; or, when the other says your guess was right, a new riddle; or, when it says your guess was wrong and asks a new riddle, your guess to that new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no" },
-    { "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Your line is ONLY one of these, nothing else: a riddle; or your guess to the other's riddle (just the guess); or, when the other guessed your riddle right, a few words saying it is correct and nothing more (the other asks the next one); or, when its guess was wrong, a few words saying so, the right answer, then a new riddle; or, when the other says your guess was right, a new riddle; or, when it says your guess was wrong and asks a new riddle, your guess to that new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no",
-      "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT" },
-    { "first = Open a riddle contest: ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle.",
-      "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle." },
-    { "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT",
-      "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so with a short teasing remark about its answer, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT\nblunder = 35\nblunder_rule = If this line is a GUESS: guess WRONG on purpose this time, with a funny answer that sounds almost plausible (a pun, an absurd but related idea), said with full confidence." },
-    { "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so with a short teasing remark about its answer, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT\nblunder = 35\nblunder_rule = If this line is a GUESS: guess WRONG on purpose this time, with a funny answer that sounds almost plausible (a pun, an absurd but related idea), said with full confidence.",
-      "rules = A riddle contest with the other assistant, turn by turn. Start every line with one tag (in English, never spoken), chosen from the other's last line: after its RIDDLE or WRONG line (a riddle for you): GUESS: just your guess to that riddle. After its GUESS line (a guess to YOUR last riddle): compare it with the ANSWER you wrote with that riddle; if it means the same: RIGHT: a few words saying it is correct, nothing more (the other found it: it asks the next riddle); if not: WRONG: say so with a short teasing remark about its guess, give the right answer, then ask a new riddle. After its RIGHT line (your guess was right): RIDDLE: ask a new riddle. Every line asking a riddle ends with ANSWER: followed by its answer (kept secret: never spoken, never shown to the other). No introduction, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT\nsecret = ANSWER\nblunder = 35\nblunder_after = RIDDLE WRONG\nblunder_rule = This time, guess WRONG on purpose: a funny answer that sounds almost plausible (a pun, an absurd but related idea), said with full confidence." },
-    { "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle.",
-      "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer is a single word or a short phrase, and end the line with ANSWER: followed by that answer." },
-    { "secret = ANSWER\nblunder = 35",
-      "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nblunder = 35" },
-    { "first = Open a verbal duel: assert a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...) as if it were an obvious fact, in one short, dry sentence (10 words at most), with a touch of irony.",
-      "first = Open a verbal duel: assert a bold, debatable opinion on the topic given as if it were an obvious fact, in one short, dry sentence (10 words at most), with a touch of irony.\nthemes = breakfast | socks with sandals | cats or dogs | cold pizza | holidays at the sea or in the mountains | phones at the table | getting up early | Christmas songs in November | books or their films | cooking or ordering in | rain | the best season | camping | big cities or the countryside | video games | sport on television | homework | the best fruit | coffee or tea | tidy or messy desks | Monday mornings | the perfect sandwich | snow | electric scooters | queues | birthdays | the best superpower | surprise parties | the beach | supermarket music | naps | crosswords | the remote control | cheese | dancing | the best pet | wearing a tie | open-plan offices | dessert first | road trips | the ideal Sunday\ntheme_rule = If this line opens the debate, its topic is: %s." },
-    { "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nblunder = 35",
-      "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nthemes = the kitchen | farm animals | outer space | sports | the bathroom | the sea | music | the weather | school | trees and plants | insects | the city | transport | the human body | clothes | the night | fire | water | toys | the garden | tools | the mountains | the desert | birds | the forest | numbers | time | the house | the circus | the library | the beach | snow | the moon | dinosaurs | pirates | the hospital | the market | the cinema | painting | electricity | computers | the telephone | bread | cheese | the river | castles | trains | the post | fruit | vegetables | the zoo | knights | robots | magic | the farm | money | letters of the alphabet | colours\ntheme_rule = If this line asks a new riddle, its theme is: %s. Invent an original riddle yourself, never a famous or classic one.\nblunder = 35" },
-    { "turns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nthemes = ",
-      "turns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nnext = RIDDLE>GUESS; WRONG>GUESS; GUESS>RIGHT WRONG; RIGHT>RIDDLE\nthemes = " },
-    { "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most). Be assertive: state things as obvious facts, never hedge, never hesitate, never ask permission. Be dry and ironic: deadpan sarcasm, a mock compliment, a cold understatement. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree.",
-      "rules = A verbal fight with the other player, quick-fire: each line a jab in ONE short, sharp sentence (12 words at most). Play the arrogant know-it-all: you are right, the other is wrong; you are the smartest, the other is a clueless amateur; its arguments are laughable and it cannot contradict you (\"give up, you can't win this\"). Mock its last line directly, with dry irony, mock pity and playful insults (fool, amateur, beginner...), never vulgar, never about real people. State things as obvious facts, never hedge. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree, never give in." },
-    { "theme_rule = If this line opens the debate, its topic is: %s.",
-      "theme_rule = The topic of the debate is: %s.\ntheme_for = first" },
-    { "rules = A verbal fight with the other player, quick-fire: each line a jab in ONE short, sharp sentence (12 words at most). Play the arrogant know-it-all: you are right, the other is wrong; you are the smartest, the other is a clueless amateur; its arguments are laughable and it cannot contradict you (\"give up, you can't win this\"). Mock its last line directly, with dry irony, mock pity and playful insults (fool, amateur, beginner...), never vulgar, never about real people. State things as obvious facts, never hedge. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree, never give in.",
-      "rules = A verbal fight with the other player, quick-fire: each line a jab in ONE short, sharp sentence (15 words at most). Play the arrogant know-it-all: you are right, the other is wrong; you are the smartest, the other is a clueless amateur; its arguments are laughable and it cannot contradict you (\"give up, you can't win this\"). Mock its last line directly, with dry irony and mock pity, and hurl one or two colourful, absurd, old-fashioned insults in the style of Captain Haddock in Tintin (in French: bachi-bouzouk, moule à gaufres, ectoplasme à roulettes, bougre d'extrait de cornichon, anacoluthe, cercopithèque, olibrius, zouave, marin d'eau douce, jus de réglisse, anthropopithèque, boit-sans-soif, mille millions de mille sabords, tonnerre de Brest...; in other languages their known translations or the same spirit), a different one each time, never vulgar, never about real people. State things as obvious facts, never hedge. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree, never give in." },
-    { "theme_rule = The topic of the debate is: %s.\ntheme_for = first",
-      "theme_rule = The topic of the debate is: %s; keep to it.\ntheme_for = first\nsentences = 1" },
-    { "phrases_fr = disputez-vous | disputez vous | débattez | faites un débat | engueulez-vous\n",
-      "phrases_fr = disput(ez|er|ons)[ vous] | débatt(ez|re|ons) | fai(tes|re|sons) un débat | engueul(ez|er)[ vous]\n" },
-    { "phrases_en = argue | have a debate | debate each other\n",
-      "phrases_en = argue[ with each other] | have a debate | debate[ each other]\n" },
-    { "phrases_es = discutid | pelead | haced un debate\n",
-      "phrases_es = discut(id|ir) | pele(ad|ar) | ha(ced|cer) un debate\n" },
-    { "phrases_it = litigate | discutete | fate un dibattito\n",
-      "phrases_it = litiga(te|re) | discut(ete|ere) | fa(te|re) un dibattito\n" },
-    { "phrases_fr = concours de devinettes | devinettes | faites des devinettes\n",
-      "phrases_fr = [un ](concours|jeu) [de ]devinette[s] | devinette[s] | fai(tes|re|sons) des devinette[s]\n" },
-    { "phrases_en = riddle contest | riddles | tell riddles\n",
-      "phrases_en = [a ]riddle (contest|game) | riddle[s] | tell[ me] riddles\n" },
-    { "phrases_nl = raadsels | raadselwedstrijd\n",
-      "phrases_nl = raadsel[s] | raadselwedstrijd\n" },
-    { "phrases_es = adivinanzas | concurso de adivinanzas\n",
-      "phrases_es = adivinanza[s] | concurso de adivinanza[s]\n" },
-    { "phrases_it = indovinelli | gara di indovinelli\n",
-      "phrases_it = indovinell(i|o) | gara di indovinelli\n" },
-    { "phrases_fr = création collaborative | créez ensemble | inventez ensemble | inventez quelque chose\n",
-      "phrases_fr = création[s] collaborative[s] | cré(ez|er|ons) [quelque chose ]ensemble | invent(ez|er|ons) (quelque chose|ensemble|quelque chose ensemble)\n" },
-    { "phrases_en = collaborative creation | create together | invent together | invent something\n",
-      "phrases_en = collaborative creation | create (together|something[ together]) | invent (together|something[ together])\n" },
-    { "phrases_de = gemeinsame erfindung | erschafft zusammen | erfindet zusammen | erfindet etwas\n",
-      "phrases_de = gemeinsame erfindung | erschafft zusammen | erfind(et|en) (zusammen|etwas)\n" },
-    { "phrases_es = creación colaborativa | cread juntos | inventad juntos | inventad algo\n",
-      "phrases_es = creación colaborativa | cre(ad|ar) juntos | invent(ad|ar) (juntos|algo)\n" },
-    { "phrases_it = creazione collaborativa | create insieme | inventate insieme | inventate qualcosa\n",
-      "phrases_it = creazione collaborativa | crea(te|re) insieme | inventa(te|re) (insieme|qualcosa)\n" },
-    { "rules = A brainstorming of experts out loud, building together the plan to make real the invention of the first line. Each line (two or three short sentences, 40 words at most) brings ONE useful contribution from your expert's point of view: a concrete step of the plan, a technical solution, a cost or a business model, a law or a rule to deal with, a risk, a test, a doubt, or a strong objection to the last line with a better alternative. Disagree when it makes sense, diverge, propose another way; never repeat what was said, always move the plan forward. Address the others by their role.",
-      "rules = A brainstorming of experts out loud, building together the plan to make real the invention of the first line. Each line (two or three short sentences, 40 words at most) brings ONE useful contribution from your expert's point of view: a concrete step of the plan, a technical solution, a cost or a business model, a law or a rule to deal with, a risk, a test, a doubt, or a strong objection to the last line with a better alternative. Disagree when it makes sense, diverge, propose another way; never repeat what was said, always move the plan forward. Never name or mention the others' roles, professions or characters, nor your own: speak about the idea, not about the people." },
-    { "last = This is the last line of the game: sum up the plan agreed in two or three sentences, in character.",
-      "last = This is the last line of the game: sum up the plan agreed in two or three sentences.\ndocument = project.txt\ndocument_rule = Write the requirements specification of this invention for a specialised subcontractor who will develop it, from what the brainstorming decided or implies: title; context and goal; scope; functional requirements; technical requirements; legal and regulatory constraints; budget and business model; risks and how to handle them; milestones and deliverables; acceptance criteria. Numbered sections and short numbered requirements, plain text without markdown symbols." },
-    { "last = This is the last line of the game: sum up the plan agreed in two or three sentences.\n",
-      "reasoning = yes\nlast = This is the last line: sum up the plan agreed in two or three sentences.\n" },
-};
-
-static void games_update(void)
-{
-    FILE *f = fopen(GAMES_FILE, "r");
-    if (!f) {
-        return;
-    }
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    char *text = size > 0 ? heap_caps_malloc(size + 1, MALLOC_CAP_SPIRAM) : NULL;
-    size_t got = text ? fread(text, 1, size, f) : 0;
-    fclose(f);
-    if (!text) {
-        return;
-    }
-    text[got] = '\0';
-    bool changed = false;
-    for (size_t i = 0; i < sizeof(s_games_updates) / sizeof(s_games_updates[0]); i++) {
-        char *at = strstr(text, s_games_updates[i][0]);
-        if (!at) {
-            continue;
-        }
-        size_t old_len = strlen(s_games_updates[i][0]), new_len = strlen(s_games_updates[i][1]);
-        char *next = heap_caps_malloc(strlen(text) - old_len + new_len + 1, MALLOC_CAP_SPIRAM);
-        if (!next) {
-            break;
-        }
-        size_t head = at - text;
-        memcpy(next, text, head);
-        memcpy(next + head, s_games_updates[i][1], new_len);
-        strcpy(next + head + new_len, at + old_len);
-        free(text);
-        text = next;
-        changed = true;
-    }
-    // Games added by a newer firmware: their section appended once ("# added: <id>" left to know it)
-    static const char *const s_games_added[] = { "create" };
-    for (size_t i = 0; i < sizeof(s_games_added) / sizeof(s_games_added[0]); i++) {
-        char mark[48], header[32];
-        snprintf(mark, sizeof(mark), "# added: %s", s_games_added[i]);
-        snprintf(header, sizeof(header), "[%s]", s_games_added[i]);
-        const char *from = strstr(s_games_default_start, mark);
-        if (strstr(text, mark) || strstr(text, header) || !from) {
-            continue;
-        }
-        const char *end = strstr(strstr(from, header) ? strstr(from, header) : from, "\n#");
-        size_t add = end ? (size_t)(end - from + 1) : strlen(from);
-        size_t len = strlen(text);
-        char *next = heap_caps_malloc(len + add + 3, MALLOC_CAP_SPIRAM);
-        if (!next) {
-            break;
-        }
-        memcpy(next, text, len);
-        size_t at = len;
-        if (at && next[at - 1] != '\n') {
-            next[at++] = '\n';
-        }
-        next[at++] = '\n';
-        memcpy(next + at, from, add);
-        next[at + add] = '\0';
-        free(text);
-        text = next;
-        changed = true;
-        ESP_LOGI(TAG, "game added: %s", s_games_added[i]);
-    }
-    if (changed) {
-        f = fopen(GAMES_FILE, "w");
-        bool ok = f && fputs(text, f) >= 0;
-        if (f) {
-            ok &= fclose(f) == 0;
-        }
-        ESP_LOGI(TAG, "%s %s", ok ? "Updated" : "Could not update", GAMES_FILE);
-    }
-    free(text);
-}
-
 static void games_install(void)
 {
     FILE *f = fopen(GAMES_FILE, "r");
+    char head[32] = "";
     long size = 0;
     if (f) {
+        size_t n = fread(head, 1, sizeof(head) - 1, f);
+        head[n] = '\0';
         fseek(f, 0, SEEK_END);
         size = ftell(f);
         fclose(f);
     }
-    if (size > 0) {
-        games_update();
+    if (size > 0 && strncmp(head, GAMES_FILE_MARK, strlen(GAMES_FILE_MARK)) == 0) {
         return;
     }
+    if (size > 0) {
+        // A whole copy of the games by an older firmware: it would override the firmware's rules; set aside
+        remove(GAMES_OLD_FILE);
+        rename(GAMES_FILE, GAMES_OLD_FILE);
+        ESP_LOGW(TAG, "%s of an older firmware kept as %s", GAMES_FILE, GAMES_OLD_FILE);
+    }
     f = fopen(GAMES_FILE, "w");
-    bool ok = f && fputs(s_games_default_start, f) >= 0;
+    bool ok = f && fputs(s_games_user_start, f) >= 0;
     if (f) {
         ok &= fclose(f) == 0;
     }
@@ -440,50 +298,37 @@ static void games_load(void)
     }
 }
 
-static void games_load_locked(void)
+/* The sections of a text (the firmware's games, then GAMES.INI): a section already read gets the keys written */
+static void games_parse(const char *text, const char *key_name, const char *key_phrases)
 {
-    const char *lang = app_lang_get()->code;
-    if (s_games && strcmp(s_games_lang, lang) == 0) {
-        return;
-    }
-    if (!s_games) {
-        s_games = heap_caps_calloc(GAMES_MAX, sizeof(game_def_t), MALLOC_CAP_SPIRAM);
-    }
-    games_free();
-    strlcpy(s_games_lang, lang, sizeof(s_games_lang));
-    FILE *f = s_games ? fopen(GAMES_FILE, "r") : NULL;
-    if (!f) {
-        return;
-    }
-    char key_name[24], key_phrases[24];
-    snprintf(key_name, sizeof(key_name), "name_%s", lang);
-    snprintf(key_phrases, sizeof(key_phrases), "phrases_%s", lang);
-    for (char *c = key_name; *c; c++) {
-        *c = (char)tolower((unsigned char)*c);
-    }
-    for (char *c = key_phrases; *c; c++) {
-        *c = (char)tolower((unsigned char)*c);
-    }
     char *line = heap_caps_malloc(2048, MALLOC_CAP_SPIRAM);
     game_def_t *g = NULL;
-    bool name_own = false, phrases_own = false;
-    while (line && fgets(line, 2048, f)) {
+    for (const char *p = text; line && p && *p; ) {
+        size_t n = strcspn(p, "\n");
+        snprintf(line, 2048, "%.*s", (int)(n < 2047 ? n : 2047), p);
+        p += n + (p[n] == '\n');
         trim(line);
         if (!line[0] || line[0] == '#' || line[0] == ';') {
             continue;
         }
         if (line[0] == '[') {
             char *end = strchr(line, ']');
-            if (!end || s_game_count >= GAMES_MAX) {
-                g = NULL;
+            g = NULL;
+            if (!end) {
                 continue;
             }
             *end = '\0';
-            g = &s_games[s_game_count++];
-            memset(g, 0, sizeof(*g));
-            strlcpy(g->id, line + 1, sizeof(g->id));
-            strlcpy(g->name, g->id, sizeof(g->name));
-            name_own = phrases_own = false;
+            for (int i = 0; i < s_game_count && !g; i++) {
+                if (strcmp(s_games[i].id, line + 1) == 0) {
+                    g = &s_games[i];        // a firmware game changed by GAMES.INI
+                }
+            }
+            if (!g && s_game_count < GAMES_MAX) {
+                g = &s_games[s_game_count++];
+                memset(g, 0, sizeof(*g));
+                strlcpy(g->id, line + 1, sizeof(g->id));
+                strlcpy(g->name, g->id, sizeof(g->name));
+            }
             continue;
         }
         char *eq = strchr(line, '=');
@@ -494,12 +339,12 @@ static void games_load_locked(void)
         char *key = line, *value = eq + 1;
         trim(key);
         trim(value);
-        if (strcmp(key, key_name) == 0 || (strcmp(key, "name_en") == 0 && !name_own)) {
+        if (strcmp(key, key_name) == 0 || (strcmp(key, "name_en") == 0 && !g->name_own)) {
             strlcpy(g->name, value, sizeof(g->name));
-            name_own |= strcmp(key, key_name) == 0;
-        } else if (strcmp(key, key_phrases) == 0 || (strcmp(key, "phrases_en") == 0 && !phrases_own)) {
+            g->name_own |= strcmp(key, key_name) == 0;
+        } else if (strcmp(key, key_phrases) == 0 || (strcmp(key, "phrases_en") == 0 && !g->phrases_own)) {
             strlcpy(g->phrases, value, sizeof(g->phrases));
-            phrases_own |= strcmp(key, key_phrases) == 0;
+            g->phrases_own |= strcmp(key, key_phrases) == 0;
         } else if (strcmp(key, "first") == 0) {
             free(g->first);
             g->first = strdup(value);
@@ -549,8 +394,50 @@ static void games_load_locked(void)
         }
     }
     free(line);
-    fclose(f);
-    ESP_LOGI(TAG, "%d game(s) in %s", s_game_count, GAMES_FILE);
+}
+
+static void games_load_locked(void)
+{
+    const char *lang = app_lang_get()->code;
+    if (s_games && strcmp(s_games_lang, lang) == 0) {
+        return;
+    }
+    if (!s_games) {
+        s_games = heap_caps_calloc(GAMES_MAX, sizeof(game_def_t), MALLOC_CAP_SPIRAM);
+    }
+    if (!s_games) {
+        return;
+    }
+    games_free();
+    strlcpy(s_games_lang, lang, sizeof(s_games_lang));
+    char key_name[24], key_phrases[24];
+    snprintf(key_name, sizeof(key_name), "name_%s", lang);
+    snprintf(key_phrases, sizeof(key_phrases), "phrases_%s", lang);
+    for (char *c = key_name; *c; c++) {
+        *c = (char)tolower((unsigned char)*c);
+    }
+    for (char *c = key_phrases; *c; c++) {
+        *c = (char)tolower((unsigned char)*c);
+    }
+    games_parse(s_games_default_start, key_name, key_phrases);
+    int builtin = s_game_count;
+    // GAMES.INI: the user's games and changes
+    FILE *f = fopen(GAMES_FILE, "r");
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        long size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        char *text = size > 0 ? heap_caps_malloc(size + 1, MALLOC_CAP_SPIRAM) : NULL;
+        size_t got = text ? fread(text, 1, size, f) : 0;
+        fclose(f);
+        if (text) {
+            text[got] = '\0';
+            games_parse(text, key_name, key_phrases);
+            free(text);
+        }
+    }
+    ESP_LOGI(TAG, "%d game(s): %d of the firmware, %d added by %s", s_game_count, builtin, s_game_count - builtin,
+             GAMES_FILE);
 }
 
 static int game_find(const char *id)

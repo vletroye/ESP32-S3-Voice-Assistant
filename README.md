@@ -782,31 +782,31 @@ asleep, join in), then a game's phrase:
 - If no other BOX answers within 8 seconds: "Je ne trouve pas d'autre BOX sur le réseau." / "I can't find another
   BOX on the network." All BOX must have this firmware, be close enough to hear each other, and the router must
   let them talk to each other (no "client isolation" on the Wi-Fi).
-- **Your own games**: **GAMES.INI** of the configuration drive, one section per game: its name per language
-  (`name_fr`…), the phrases starting it (`phrases_fr = disput(ez|er)[ vous] | débattez`, the start of what is said, case
-  and accents ignored, written as the voice commands: `[optional part]`, `(a|b|c)` one of the choices, so that
-  "inventer", "inventez" or "concours devinette" all start their game), the instruction of the first line (`first`), the rules of every line (`rules`), both in English
-  (the model speaks the language of the BOX anyway), `character = no` for plain lines (no character, no
-  introduction: the riddles), and `short_after = TAG`: the rules may ask each line to start with an upper-case tag
-  (never shown nor spoken), and a line starting with this one keeps only its first sentence (the riddles: a right
-  guess gets "Correct !" and nothing more, the one who found it asks the next riddle); `secret = TAG`: what
-  follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent to the other (the riddles: the
-  answer, to judge the other's guess); `themes = a | b | c` and `theme_rule` (`%s` for the theme): a theme drawn for each line (`theme_for = first`:
-  for the first line only); `characters = a | b | c`: this game's characters instead of the firmware's list (the
-  creation: its experts); `last`: the instruction of the last line (the creation: sum up the plan); `reasoning = yes`: its lines and document made in the reasoning mode
-  of the model in use, when it reasons (the creation: better ideas, but each line takes tens of seconds);
-  `document = project.txt` and
-  `document_rule`: at the end the BOX ending the game writes that file from all the lines, as the rule asks
-  (shown on the configuration drive, replaced each time); `sentences = 1`: each line cut after
-  that many sentences (the debate: the model made three sentences of 40 words when asked for one), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the
-  answers of the riddles are remembered (the last 60, in the state partition) and never asked again;
-  `next = RIDDLE>GUESS; GUESS>RIGHT WRONG`: the tag a line must have after a line's tag (given to the model,
-  checked, asked again once if not followed); `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS`: who says the line after a
-  tag (after a GUESS line, the BOX of the last RIDDLE or WRONG line; else the first BOX to have heard it); `blunder = 35`, `blunder_after` and `blunder_rule`: that instruction added
-  to 35 % of the lines following a line of the other with one of these tags (the riddles: a wrong guess on purpose,
-  a funny one, teased by the other). A story told in turns, a quiz, a game of "who am I"… Emptied, the
-  file comes back as the firmware gives it; a line still as an older firmware gave it is updated by a new one
-  (your own lines and games are kept).
+- **Your own games, your changes**: **GAMES.INI** of the configuration drive. The firmware's games (`[debate]`,
+  `[riddles]`, `[create]`) are built in and updated with the firmware: GAMES.INI holds only yours, and is never
+  overwritten. A section with the id of a firmware game changes only the keys written in it (`[debate]` then
+  `sentences = 2`); a section with a new id adds a game. Installed with the help on every key, it comes back so when
+  emptied; the GAMES.INI of an older firmware (a whole copy of its games) is set aside as `games_old.ini`. The
+  firmware's games, an example of every key, are in `main/games/games.ini` of the sources. The instructions are in
+  English (the model speaks the language of the BOX anyway). A story told in turns, a quiz, a game of "who am I"…
+
+  | Key | What it does |
+  | --- | --- |
+  | `name_<lang>` | Its name, said and shown (`name_en` when the language has none) |
+  | `phrases_<lang>` | What starts it, separated by `\|`: the start of what is said, case and accents ignored, written as the voice commands (`[optional part]`, `(a\|b\|c)` one of the choices): `disput(ez\|er\|ons)[ vous]`, so that "inventer", "inventez" or "concours devinette" all start their game |
+  | `first`, `rules` | The instruction of the first line, and of every line (the last line said is what it answers) |
+  | `last` | The instruction of the last line (the creation: sum up the plan) |
+  | `character = no` | Plain lines, without the characters of `Game_tone` (the riddles) |
+  | `characters = a \| b \| c` | This game's characters instead of the firmware's list (the creation: its experts) |
+  | `sentences = 1` | Each line cut after that many sentences (the debate: the model made three of 40 words when asked for one) |
+  | `reasoning = yes` | Its lines and document made in the reasoning mode of the model, when it reasons (the creation: better ideas, but each line takes tens of seconds) |
+  | `themes = a \| b \| c`, `theme_rule` (`%s`: the theme), `theme_for = first` | A theme drawn for each line (or the first one only: the debate's topic), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time) |
+  | `document = project.txt`, `document_rule` | At the end, the BOX ending the game writes that file from all the lines, as the rule asks (shown on the configuration drive, replaced each time: the creation's requirements) |
+  | `short_after = TAG` | The rules may ask each line to start with an upper-case tag (never shown nor spoken): a line starting with this one keeps only its first sentence (the riddles: a right guess gets "Correct !" and nothing more) |
+  | `secret = TAG` | What follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent (the riddles: the answer, to judge the guess; the last 60 answers remembered in the state partition, never asked again) |
+  | `next = RIDDLE>GUESS; GUESS>RIGHT WRONG` | The tag a line must have after a line's tag: given to the model, checked, asked again once if not followed |
+  | `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS` | Who says the line after a tag (after a GUESS line, the BOX of the last RIDDLE or WRONG line); else the first BOX to have heard it |
+  | `blunder = 35`, `blunder_after`, `blunder_rule` | That instruction added to 35 % of the lines following a line with one of these tags (the riddles: a wrong guess on purpose, a funny one) |
 
 ## 3. Advanced user guide
 
@@ -2087,7 +2087,7 @@ modules that manage a file of the configuration drive `file_<name>`.
 | `radio_browser.c` | Radio-Browser: server chosen from its list, searches by name, tag and country, listens counted |
 | `file_radio_favorites.c` | Favourite radios (`RADIO.TXT`) |
 | `app_ui_radio.c` | Radio screen (favourites, heart, volume, treble, previous / play / next) |
-| `game.c` | Games between BOX: GAMES.INI (installed when missing, its old lines updated), the phrases starting them, the BOX of the game agreed by UDP broadcast (port 47110): claims timed by SNTP, the earliest speaks (ties claimed again), the rules naming the next one (`turns`); the lines made by `llm_ask_apart` (the model in use, apart from the conversation), "speak" then the others listen with their microphones (`app_sr_start_game_listen`, 1.5 s of silence), "done" with the words; the characters (`Game_tone`), the stop on all, the natural end |
+| `game.c` | Games between BOX: the firmware's games built in (`main/games/games.ini`), merged key by key with GAMES.INI (the user's, installed as a help: `games_user.ini`), the phrases starting them, the BOX of the game agreed by UDP broadcast (port 47110): claims timed by SNTP, the earliest speaks (ties claimed again), the rules naming the next one (`turns`); the lines made by `llm_ask_apart` (the model in use, apart from the conversation), "speak" then the others listen with their microphones (`app_sr_start_game_listen`, 1.5 s of silence), "done" with the words; the characters (`Game_tone`), the stop on all, the natural end |
 | `app_ui_system.c` | The Système screen (a long press on the Settings icon): firmware, board and dock, processor, memories (free, lowest), partitions, NVS, MAC, uptime, reset reason |
 | `app_ui_status.c` | The Wi-Fi and battery screen (a tap on them, sleep screen); `app_battery.c` gives the voltage, the level and the trend (charging or not) |
 | `google_auth.c` | The Google account (Tasks, Gmail, Calendar): OAuth 2.0 for installed apps with the client of `CONFIG.INI` (`Google_client`, `Google_secret`), GOOGLE.HTM on the configuration drive (opening the consent page) while not linked, `Google_code` exchanged at start-up then erased, the refresh token in `/state/google.json`, the access token renewed, the revocation; `google_api()` for the API calls |

@@ -119,6 +119,7 @@ typedef struct {
     char next[96];          /* "RIDDLE>GUESS; GUESS>RIGHT WRONG": the tags a line may have after a tag */
     char *themes;           /* "a | b | c": one drawn for each line, given by theme_rule */
     char *theme_rule;       /* "... its theme is: %s ..." */
+    bool theme_first;       /* theme_for = first: only the first line gets it (the debate keeps its topic) */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
@@ -264,6 +265,8 @@ static const char *const s_games_updates[][2] = {
       "turns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nnext = RIDDLE>GUESS; WRONG>GUESS; GUESS>RIGHT WRONG; RIGHT>RIDDLE\nthemes = " },
     { "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most). Be assertive: state things as obvious facts, never hedge, never hesitate, never ask permission. Be dry and ironic: deadpan sarcasm, a mock compliment, a cold understatement. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree.",
       "rules = A verbal fight with the other player, quick-fire: each line a jab in ONE short, sharp sentence (12 words at most). Play the arrogant know-it-all: you are right, the other is wrong; you are the smartest, the other is a clueless amateur; its arguments are laughable and it cannot contradict you (\"give up, you can't win this\"). Mock its last line directly, with dry irony, mock pity and playful insults (fool, amateur, beginner...), never vulgar, never about real people. State things as obvious facts, never hedge. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree, never give in." },
+    { "theme_rule = If this line opens the debate, its topic is: %s.",
+      "theme_rule = The topic of the debate is: %s.\ntheme_for = first" },
 };
 
 static void games_update(void)
@@ -436,6 +439,8 @@ static void games_load_locked(void)
         } else if (strcmp(key, "themes") == 0) {
             free(g->themes);
             g->themes = strdup(value);
+        } else if (strcmp(key, "theme_for") == 0) {
+            g->theme_first = strcasecmp(value, "first") == 0;
         } else if (strcmp(key, "theme_rule") == 0) {
             free(g->theme_rule);
             g->theme_rule = strdup(value);
@@ -1266,7 +1271,7 @@ static char *line_make(void)
         }
         // A theme drawn (each line: the model uses it when it asks or opens something new), and what was used
         char *used = used_read(g->id);
-        if (g->themes && g->themes[0]) {
+        if (g->themes && g->themes[0] && (!g->theme_first || cJSON_GetArraySize(s_history) == 0)) {
             char theme[64];
             theme_draw(g, used, theme, sizeof(theme));
             const char *rule = g->theme_rule && strstr(g->theme_rule, "%s") ? g->theme_rule

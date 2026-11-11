@@ -773,7 +773,7 @@ asleep, join in), then a game's phrase:
 - **Their characters** (`Game_tone` in `CONFIG.INI`): `random` (the default) draws one for each BOX from the
   firmware's list (a pompous philosopher, a blasé teenager, a pirate, an absent-minded professor, a dramatic poet, a
   chef, a sports commentator, an old sailor, a butler, a knight, a science-fiction fan, a grandmother full of
-  proverbs), not one already drawn by another BOX; each says who it is in its first line. `persona` keeps each one's
+  proverbs), not one already drawn by another BOX; it gives each one its style and tone, never introduced nor named aloud. `persona` keeps each one's
   `PERSO_<XX>.TXT`.
 - If no other BOX answers within 8 seconds: "Je ne trouve pas d'autre BOX sur le réseau." / "I can't find another
   BOX on the network." All BOX must have this firmware, be close enough to hear each other, and the router must

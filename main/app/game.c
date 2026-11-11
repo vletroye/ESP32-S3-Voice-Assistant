@@ -187,7 +187,6 @@ static uint32_t s_tones_seen = 0;   /* the characters drawn by the others (bits)
 static char *s_tone_text = NULL;    /* the personality given to the model */
 static cJSON *s_history = NULL;     /* [{"id":"..","me":true,"tag":"GUESS","text":"..."}] */
 static int64_t s_since = 0;         /* the start of the current wait (esp_timer, us) */
-static bool s_spoke = false;        /* this BOX said a line already (its character introduced) */
 
 static int64_t s_reclaim_us = 0;    /* a tie: this BOX claims again at this time (0: no) */
 
@@ -1047,7 +1046,6 @@ static void game_reset(void)
     s_turns = 0;
     s_speaker = 0;
     s_last_speaker = 0;
-    s_spoke = false;
     s_tones_seen = 0;
     s_reclaim_us = 0;
     s_done_seen = false;
@@ -1282,7 +1280,9 @@ static char *line_make(void)
     char *system = NULL;
     char *character = NULL;
     if (!g->plain && s_tone_text) {
-        asprintf(&character, "Your character: %s; stay in character. ", s_tone_text);
+        // Its style only: introduced at every line, the character's name was repeated ("Mamie Rosette ici")
+        asprintf(&character, "Your character: %s; speak in its style, but never say your name, never introduce "
+                 "yourself nor describe your character. ", s_tone_text);
     }
     asprintf(&system, "You are a voice assistant playing a game out loud with other voice assistants (other "
              "devices), in front of the user. Speak only the language whose code is '%s'. %sGame: %s. Rules: %s Never "
@@ -1316,12 +1316,8 @@ static char *line_make(void)
                 }
             }
             fputs("\nSay your next line.", out);
-            if (!s_spoke && !g->plain) {
-                fputs(" It is your first line: also say in a few words who you are (your character).", out);
-            }
         } else {
-            fprintf(out, "%s%s", g->first ? g->first : "Start the game.",
-                    g->plain ? "" : " In this first line, also say in a few words who you are (your character).");
+            fputs(g->first ? g->first : "Start the game.", out);
         }
         // The tag this line must have, after the last one's (the model lost track of the turns)
         char tags[32];
@@ -1575,7 +1571,6 @@ static void line_say(char *text)
     free(open);
     history_add(s_my_id, tag, text);
     s_turns = turn;
-    s_spoke = true;
     electing_start(s_my_id);
 }
 

@@ -777,8 +777,8 @@ asleep, join in), then a game's phrase:
   BOX on the network." All BOX must have this firmware, be close enough to hear each other, and the router must
   let them talk to each other (no "client isolation" on the Wi-Fi).
 - **Your own games**: **GAMES.INI** of the configuration drive, one section per game: its name per language
-  (`name_fr`…), the phrases starting it (`phrases_fr = disputez-vous | débattez`, the start of what is said, case
-  and accents ignored), the instruction of the first line (`first`), the rules of every line (`rules`), both in English
+  (`name_fr`…), the phrases starting it (`phrases_fr = disputez-vous | débattez`, the start of what is said, case,
+  accents, small words such as "de" / "of" and plurals ignored), the instruction of the first line (`first`), the rules of every line (`rules`), both in English
   (the model speaks the language of the BOX anyway), `character = no` for plain lines (no character, no
   introduction: the riddles), and `short_after = TAG`: the rules may ask each line to start with an upper-case tag
   (never shown nor spoken), and a line starting with this one keeps only its first sentence (the riddles: a right

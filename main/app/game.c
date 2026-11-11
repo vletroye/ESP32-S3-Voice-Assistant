@@ -460,16 +460,53 @@ static void fold(const char *in, char *out, size_t size)
 }
 
 /* The game whose phrase begins what was said, -1 if none */
+/*
+ * The transcription drops or changes the small words and the plurals ("concours devinette" for "concours de
+ * devinettes"): compared without the articles and prepositions of the languages, nor a final s or x
+ */
+static void words_plain(char *text)
+{
+    static const char *const s_small[] = {
+        "de", "des", "du", "d", "la", "le", "les", "l", "un", "une", "a", "au", "aux",          // fr
+        "of", "the", "an",                                                                      // en
+        "het", "een", "van",                                                                    // nl
+        "der", "die", "das", "den", "dem", "ein", "eine", "einen",                              // de
+        "el", "los", "las", "del", "uno", "unos",                                               // es
+        "il", "lo", "gli", "di", "della", "dei", "delle", "uno",                                // it
+    };
+    char *out = text;
+    for (char *w = text; *w; ) {
+        size_t n = strcspn(w, " ");
+        bool small = false;
+        for (size_t i = 0; i < sizeof(s_small) / sizeof(s_small[0]) && !small; i++) {
+            small = strlen(s_small[i]) == n && strncmp(w, s_small[i], n) == 0;
+        }
+        if (!small) {
+            size_t keep = n > 3 && (w[n - 1] == 's' || w[n - 1] == 'x') ? n - 1 : n;
+            if (out != text) {
+                *out++ = ' ';
+            }
+            memmove(out, w, keep);
+            out += keep;
+        }
+        w += n;
+        w += strspn(w, " ");
+    }
+    *out = '\0';
+}
+
 static int game_of(const char *text)
 {
     char said[200];
     fold(text, said, sizeof(said));
+    words_plain(said);
     for (int i = 0; i < s_game_count; i++) {
         char phrases[400];
         strlcpy(phrases, s_games[i].phrases, sizeof(phrases));
         for (char *p = strtok(phrases, "|"); p; p = strtok(NULL, "|")) {
             char phrase[100];
             fold(p, phrase, sizeof(phrase));
+            words_plain(phrase);
             size_t len = strlen(phrase);
             if (len && strncmp(said, phrase, len) == 0 && (said[len] == '\0' || said[len] == ' ')) {
                 return i;

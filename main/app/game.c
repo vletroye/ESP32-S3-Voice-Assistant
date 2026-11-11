@@ -20,6 +20,7 @@
 #include "esp_mac.h"
 #include "esp_random.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "cJSON.h"
 #include "settings.h"
 #include "file_lang.h"
@@ -56,8 +57,12 @@ static const char *TAG = "game";
 #define GAME_TAIL_WAIT_MS   8000
 /* A line not ended this long after it started: the game ends */
 #define GAME_SILENCE_MS     90000
-/* Each message sent this many times (UDP on a local network: rarely lost; duplicates are dropped by the turn) */
-#define GAME_SEND_TIMES     2
+/*
+ * Each message sent this many times, GAME_SEND_GAP_MS apart (UDP broadcast: a copy may be lost, two sent at once
+ * were lost together; duplicates are dropped by the turn)
+ */
+#define GAME_SEND_TIMES     3
+#define GAME_SEND_GAP_MS    40
 #define GAME_PLAYERS_MAX    8
 #define GAME_TURNS_DEFAULT  20
 
@@ -489,6 +494,9 @@ static void send_to(uint32_t ip, cJSON *msg)
         .sin_addr.s_addr = ip,
     };
     for (int i = 0; i < GAME_SEND_TIMES; i++) {
+        if (i) {
+            vTaskDelay(pdMS_TO_TICKS(GAME_SEND_GAP_MS));
+        }
         sendto(s_sock, text, strlen(text), 0, (struct sockaddr *)&to, sizeof(to));
     }
     free(text);
@@ -825,9 +833,24 @@ static void listen_stop(void)
     }
 }
 
+/*
+ * During a game the Wi-Fi does not save power: asleep between beacons, the radio missed broadcasts (a "speak" lost,
+ * the game stuck)
+ */
+static void wifi_awake(bool awake)
+{
+    static bool s_awake = false;
+    if (awake != s_awake) {
+        s_awake = awake;
+        esp_wifi_set_ps(awake ? WIFI_PS_NONE : WIFI_PS_MIN_MODEM);
+        ESP_LOGI(TAG, "Wi-Fi power save %s", awake ? "off" : "on");
+    }
+}
+
 static void game_reset(void)
 {
     listen_stop();
+    wifi_awake(false);
     s_state = G_IDLE;
     s_game = -1;
     s_player_count = 0;
@@ -871,6 +894,7 @@ static void start_setup(int game, uint32_t nonce)
     free(max);
     tone_choose();
     player_add(s_my_id);
+    wifi_awake(true);
     s_state = G_STARTING;
     s_since = esp_timer_get_time();
     radio_suspend();
@@ -1153,7 +1177,11 @@ static void line_say(char *text)
         vTaskDelay(pdMS_TO_TICKS(50));
     }
     if (!s_stop_requested) {
-        send_simple("done", turn, said);
+        cJSON *d = msg_new("done");
+        cJSON_AddNumberToObject(d, "turn", turn);
+        cJSON_AddStringToObject(d, "tag", tag);
+        cJSON_AddStringToObject(d, "text", said);
+        send_all(d);
     }
     free(open);
     history_add(s_my_id, tag, text);
@@ -1197,6 +1225,10 @@ static void decided(uint64_t winner)
         return;
     }
     s_state = winner == s_my_id ? G_SPEAKING : G_LISTENING;
+    if (winner != s_my_id) {
+        // Another one speaks next: this one shows it listens at once (its listening starts with the voice)
+        ui_ctrl_show_panel(UI_CTRL_PANEL_LISTEN, 0);
+    }
 }
 
 /*
@@ -1372,6 +1404,20 @@ static void message(game_msg_t *m)
             s_since = esp_timer_get_time();
             s_listen_on = true;
             app_sr_start_game_listen(GAME_LISTEN_WAIT_MS);
+        } else if (strcmp(m->type, "done") == 0 && !s_speaker && m->turn == s_turns + 1 && s_state != G_SPEAKING) {
+            // Its "speak" lost: not listened to, the words it sent are used
+            ESP_LOGW(TAG, "line %d: its start was not received", m->turn);
+            s_speaker = m->from;
+            strlcpy(s_line_tag, m->tag, sizeof(s_line_tag));
+            free(s_heard);
+            s_heard = NULL;
+            s_done_seen = true;
+            s_done_us = esp_timer_get_time();
+            free(s_done_text);
+            s_done_text = m->text;
+            m->text = NULL;
+            s_state = G_LISTENING;
+            line_heard();
         } else if (strcmp(m->type, "done") == 0 && m->from == s_speaker && m->turn == s_turns + 1) {
             s_done_seen = true;
             s_done_us = esp_timer_get_time();

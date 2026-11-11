@@ -84,6 +84,7 @@ typedef struct {
     char *first;
     char *rules;
     bool plain;             /* character = no: no character, no introduction */
+    char short_after[16];   /* a tag: a line starting with "TAG:" keeps only its first sentence */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
@@ -172,6 +173,10 @@ static const char *const s_games_updates[][2] = {
       "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most). Be assertive: state things as obvious facts, never hedge, never hesitate, never ask permission. Be dry and ironic: deadpan sarcasm, a mock compliment, a cold understatement. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree." },
     { "rules = You play a riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Look at the other's last line: (1) it asks a riddle: give your answer in one short sentence, nothing else. (2) it is an answer to YOUR riddle and it is right: say it is correct in a few words and ask NOTHING (the other found it: it asks the next riddle). (3) it is an answer to YOUR riddle and it is wrong: say so, give the right answer, then ask a new riddle. (4) it says your answer was right: ask a new riddle. (5) it says your answer was wrong, gives the answer and asks a new riddle: answer that new riddle. Never repeat a riddle already asked.",
       "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Your line is ONLY one of these, nothing else: a riddle; or your guess to the other's riddle (just the guess); or, when the other guessed your riddle right, a few words saying it is correct and nothing more (the other asks the next one); or, when its guess was wrong, a few words saying so, the right answer, then a new riddle; or, when the other says your guess was right, a new riddle; or, when it says your guess was wrong and asks a new riddle, your guess to that new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no" },
+    { "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Your line is ONLY one of these, nothing else: a riddle; or your guess to the other's riddle (just the guess); or, when the other guessed your riddle right, a few words saying it is correct and nothing more (the other asks the next one); or, when its guess was wrong, a few words saying so, the right answer, then a new riddle; or, when the other says your guess was right, a new riddle; or, when it says your guess was wrong and asks a new riddle, your guess to that new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no",
+      "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT" },
+    { "first = Open a riddle contest: ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle.",
+      "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle." },
 };
 
 static void games_update(void)
@@ -319,6 +324,8 @@ static void games_load(void)
             g->rules = strdup(value);
         } else if (strcmp(key, "character") == 0) {
             g->plain = strcasecmp(value, "no") == 0;
+        } else if (strcmp(key, "short_after") == 0) {
+            strlcpy(g->short_after, value, sizeof(g->short_after));
         }
     }
     free(line);
@@ -708,15 +715,68 @@ static void on_speech(tts_event_t event)
 }
 
 /* My line: sent first (the other prepares its answer meanwhile), shown, spoken, then "done" */
+/*
+ * The tag a line may start with ("RIGHT: Correct !"), asked by the rules: an upper-case word and a colon. Returns
+ * the text after it (and its spaces), the text itself without a tag; its length in *tag_len (0: none)
+ */
+static const char *tag_skip(const char *text, size_t *tag_len)
+{
+    const char *p = text;
+    while (*p == ' ' || *p == '\n') {
+        p++;
+    }
+    const char *word = p;
+    while (*p >= 'A' && *p <= 'Z') {
+        p++;
+    }
+    size_t len = p - word;
+    while (*p == ' ') {
+        p++;
+    }
+    if (len < 2 || len > 12 || *p != ':') {
+        *tag_len = 0;
+        return text;
+    }
+    *tag_len = len;
+    p++;
+    while (*p == ' ' || *p == '\n') {
+        p++;
+    }
+    return p;
+}
+
+/* short_after: a line starting with this tag keeps only its first sentence (a riddle guessed: "Correct !" and
+   nothing more, the one who found it asks the next one) */
+static void line_shorten(char *text, const char *short_after)
+{
+    size_t tag_len = 0;
+    char *body = (char *)tag_skip(text, &tag_len);
+    const char *tag = text + strspn(text, " \n");
+    if (!short_after[0] || tag_len != strlen(short_after) || strncmp(tag, short_after, tag_len) != 0) {
+        return;
+    }
+    for (char *p = body; *p; p++) {
+        if (*p == '.' || *p == '!' || *p == '?') {
+            if (p[1] && p[1] != '.' && p[1] != '!' && p[1] != '?') {
+                ESP_LOGI(TAG, "%s: only its first sentence kept", short_after);
+                p[1] = '\0';
+            }
+            break;
+        }
+    }
+}
+
 static void line_say(char *text)
 {
     int turn = s_turns + 1;
     ESP_LOGI(TAG, "line %d (mine): %s", turn, text);
-    send_peer("line", turn, text);
-    ui_ctrl_reply_show_scrolled(text);
+    send_peer("line", turn, text);      // with its tag: the other's model sees it
+    size_t tag_len;
+    const char *said = tag_skip(text, &tag_len);
+    ui_ctrl_reply_show_scrolled(said);
     s_spoken = false;
     tts_stream_begin(on_speech);
-    tts_stream_say(text);
+    tts_stream_say(said);
     tts_stream_end();
     int64_t t0 = esp_timer_get_time();
     while (!s_spoken && !s_stop_requested && esp_timer_get_time() - t0 < 60 * 1000000LL) {
@@ -823,6 +883,9 @@ void game_poll(void)
     // My line: made at once (while the other may still be speaking its own), said once the other is done
     if (!s_ready_line) {
         s_ready_line = line_make();
+        if (s_ready_line) {
+            line_shorten(s_ready_line, s_games[s_game].short_after);
+        }
         if (!s_ready_line) {
             game_end(app_lang_get()->game_peer_left);
             return;

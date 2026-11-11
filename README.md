@@ -770,8 +770,10 @@ joins in), then a game's phrase:
 - **Your own games**: **GAMES.INI** of the configuration drive, one section per game: its name per language
   (`name_fr`…), the phrases starting it (`phrases_fr = disputez-vous | débattez`, the start of what is said, case
   and accents ignored), the instruction of the first line (`first`), the rules of every line (`rules`), both in English
-  (the model speaks the language of the BOX anyway), and `character = no` for plain lines (no character, no
-  introduction: the riddles). A story told in turns, a quiz, a game of "who am I"… Emptied, the
+  (the model speaks the language of the BOX anyway), `character = no` for plain lines (no character, no
+  introduction: the riddles), and `short_after = TAG`: the rules may ask each line to start with an upper-case tag
+  (never shown nor spoken), and a line starting with this one keeps only its first sentence (the riddles: a right
+  guess gets "Correct !" and nothing more, the one who found it asks the next riddle). A story told in turns, a quiz, a game of "who am I"… Emptied, the
   file comes back as the firmware gives it; a line still as an older firmware gave it is updated by a new one
   (your own lines and games are kept).
 

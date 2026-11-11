@@ -85,6 +85,8 @@ typedef struct {
     char *rules;
     bool plain;             /* character = no: no character, no introduction */
     char short_after[16];   /* a tag: a line starting with "TAG:" keeps only its first sentence */
+    int blunder;            /* percent of the lines given blunder_rule */
+    char *blunder_rule;     /* a wrong guess on purpose, with humour (the riddles) */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
@@ -177,6 +179,8 @@ static const char *const s_games_updates[][2] = {
       "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT" },
     { "first = Open a riddle contest: ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle.",
       "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle." },
+    { "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT",
+      "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so with a short teasing remark about its answer, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT\nblunder = 35\nblunder_rule = If this line is a GUESS: guess WRONG on purpose this time, with a funny answer that sounds almost plausible (a pun, an absurd but related idea), said with full confidence." },
 };
 
 static void games_update(void)
@@ -251,6 +255,7 @@ static void games_free(void)
     for (int i = 0; i < s_game_count; i++) {
         free(s_games[i].first);
         free(s_games[i].rules);
+        free(s_games[i].blunder_rule);
     }
     s_game_count = 0;
 }
@@ -326,6 +331,11 @@ static void games_load(void)
             g->plain = strcasecmp(value, "no") == 0;
         } else if (strcmp(key, "short_after") == 0) {
             strlcpy(g->short_after, value, sizeof(g->short_after));
+        } else if (strcmp(key, "blunder") == 0) {
+            g->blunder = atoi(value);
+        } else if (strcmp(key, "blunder_rule") == 0) {
+            free(g->blunder_rule);
+            g->blunder_rule = strdup(value);
         }
     }
     free(line);
@@ -686,6 +696,10 @@ static char *line_make(void)
         } else {
             fprintf(out, "%s%s", g->first ? g->first : "Start the game.",
                     g->plain ? "" : " In this first line, also say in a few words who you are (your character).");
+        }
+        if (g->blunder_rule && g->blunder > 0 && (int)(esp_random() % 100) < g->blunder) {
+            ESP_LOGI(TAG, "this line: %s", "blunder_rule");
+            fprintf(out, " %s", g->blunder_rule);
         }
         if (s_turns + 1 >= s_turns_max) {
             fputs(" This is the last line of the game: end it in one or two sentences, in character.", out);

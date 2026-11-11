@@ -117,6 +117,16 @@ static void net_task(void *arg)
         const cJSON *id = cJSON_GetObjectItem(json, "id");
         uint64_t sender = cJSON_IsString(id) ? strtoull(id->valuestring, NULL, 16) : 0;
         if (cJSON_IsString(type) && sender && sender != s_my_id) {
+            // Each message once in the log (its copies not): to tell a message lost on the way from one not taken
+            static char s_last[40];
+            const cJSON *t = cJSON_GetObjectItem(json, "turn");
+            char key[40];
+            snprintf(key, sizeof(key), "%.8s %llx %d", type->valuestring, (unsigned long long)sender,
+                     cJSON_IsNumber(t) ? t->valueint : -1);
+            if (strcmp(key, s_last) != 0) {
+                strlcpy(s_last, key, sizeof(s_last));
+                ESP_LOGI(TAG, "net: %s, line %d, %d bytes", type->valuestring, cJSON_IsNumber(t) ? t->valueint : -1, n);
+            }
             game_msg_t msg = { 0 };
             strlcpy(msg.type, type->valuestring, sizeof(msg.type));
             msg.from = sender;
@@ -170,8 +180,9 @@ bool game_net_init(void)
         ESP_LOGE(TAG, "UDP port %d not opened", GAME_PORT);
         return false;
     }
-    // Small: it only reads the messages and gives them to the main task
-    if (xTaskCreatePinnedToCoreWithCaps(net_task, "game_net", 3072, NULL, 4, NULL, 0, MALLOC_CAP_SPIRAM) != pdPASS) {
+    // Small: it only reads the messages and gives them to the main task. Above the listening's tasks (5, on core 0
+    // too: a BOX listening never got the "done" of the one speaking); it sleeps until a message comes
+    if (xTaskCreatePinnedToCoreWithCaps(net_task, "game_net", 3072, NULL, 7, NULL, 0, MALLOC_CAP_SPIRAM) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create task");
         return false;
     }

@@ -129,7 +129,6 @@ static uint64_t s_last_speaker = 0; /* the BOX of the last line: it does not cla
 static char s_line_tag[16] = "";
 static char *s_heard = NULL;        /* what was transcribed (several listenings if the speaker paused) */
 static bool s_done_seen = false;    /* the speaker finished */
-static char *s_done_text = NULL;    /* the line as the speaker sent it: used if nothing was heard */
 static volatile bool s_listen_on = false;   /* a listening of the game is asked or under way */
 static bool s_listen_more = false;  /* a listening started again after a pause of the speaker */
 static int64_t s_done_us = 0;
@@ -153,13 +152,10 @@ static void send_all(cJSON *m)
     game_net_send(m);
 }
 
-static void send_simple(const char *type, int turn, const char *text)
+static void send_simple(const char *type, int turn)
 {
     cJSON *m = msg_new(type);
     cJSON_AddNumberToObject(m, "turn", turn);
-    if (text) {
-        cJSON_AddStringToObject(m, "text", text);
-    }
     send_all(m);
 }
 
@@ -390,8 +386,6 @@ static void game_reset(void)
     s_done_seen = false;
     free(s_heard);
     s_heard = NULL;
-    free(s_done_text);
-    s_done_text = NULL;
     cJSON_Delete(s_history);
     s_history = NULL;
 }
@@ -831,7 +825,6 @@ static void line_say(char *text)
         cJSON *d = msg_new("done");
         cJSON_AddNumberToObject(d, "turn", turn);
         cJSON_AddStringToObject(d, "tag", tag);
-        cJSON_AddStringToObject(d, "text", said);
         send_all(d);
     }
     free(open);
@@ -840,36 +833,20 @@ static void line_say(char *text)
     electing_start(s_my_id);
 }
 
-/* The line of another BOX listened to (and its "done" received): kept, then this BOX claims the next one */
-static int words_of(const char *text)
-{
-    int n = 0;
-    for (const char *p = text; *p;) {
-        p += strspn(p, " ,.;:!?'\n");
-        size_t len = strcspn(p, " ,.;:!?'\n");
-        n += len > 0;
-        p += len;
-    }
-    return n;
-}
-
+/*
+ * The line of another BOX listened to (and its "done" received): kept, then this BOX claims the next one. Only by
+ * the voice: the words are never sent by the network (a human player some day)
+ */
 static void line_heard(void)
 {
-    // Heard, unless the listening caught much less than the words sent ("S" for "Est-ce Marie Curie ?")
-    bool heard = s_heard && s_heard[0] &&
-                 (!s_done_text || words_of(s_heard) * 2 >= words_of(s_done_text));
-    const char *text = heard ? s_heard : s_done_text ? s_done_text : "";
-    ESP_LOGI(TAG, "line %d (player %d, %s): %s%s", s_turns + 1, player_number(s_speaker), s_line_tag,
-             text, heard ? "" : s_heard && s_heard[0] ? " (heard only a part: the words sent)"
-             : " (not heard: the words sent)");
+    const char *text = s_heard && s_heard[0] ? s_heard : "(inaudible)";
+    ESP_LOGI(TAG, "line %d (player %d, %s): %s", s_turns + 1, player_number(s_speaker), s_line_tag, text);
     char *line = NULL;
     asprintf(&line, "%s%s%s", s_line_tag, s_line_tag[0] ? ": " : "", text);
     history_add(s_speaker, s_line_tag, line ? line : text);
     free(line);
     free(s_heard);
     s_heard = NULL;
-    free(s_done_text);
-    s_done_text = NULL;
     s_turns++;
     electing_start(s_speaker);
     claim_send(0);
@@ -939,7 +916,7 @@ static void decided(uint64_t winner)
     s_since = esp_timer_get_time();
     if (s_turns >= s_turns_max) {
         if (winner == s_my_id) {
-            send_simple("stop", s_turns, NULL);
+            send_simple("stop", s_turns);
             char *document = document_write();
             char *said = NULL;
             asprintf(&said, "%s%s%s", app_lang_get()->game_end_natural, document ? " " : "", document ? document : "");
@@ -1126,8 +1103,6 @@ static void message(game_msg_t *m)
             strlcpy(s_line_tag, m->tag, sizeof(s_line_tag));
             free(s_heard);
             s_heard = NULL;
-            free(s_done_text);
-            s_done_text = NULL;
             s_done_seen = false;
             s_listen_more = false;
             s_state = G_LISTENING;
@@ -1135,7 +1110,7 @@ static void message(game_msg_t *m)
             s_listen_on = true;
             app_sr_start_game_listen(GAME_LISTEN_WAIT_MS);
         } else if (strcmp(m->type, "done") == 0 && !s_speaker && m->turn == s_turns + 1 && s_state != G_SPEAKING) {
-            // Its "speak" lost: not listened to, the words it sent are used
+            // Its "speak" lost: not listened to, nothing heard
             ESP_LOGW(TAG, "line %d: its start was not received", m->turn);
             s_speaker = m->from;
             strlcpy(s_line_tag, m->tag, sizeof(s_line_tag));
@@ -1143,17 +1118,11 @@ static void message(game_msg_t *m)
             s_heard = NULL;
             s_done_seen = true;
             s_done_us = esp_timer_get_time();
-            free(s_done_text);
-            s_done_text = m->text;
-            m->text = NULL;
             s_state = G_LISTENING;
             line_heard();
         } else if (strcmp(m->type, "done") == 0 && m->from == s_speaker && m->turn == s_turns + 1) {
             s_done_seen = true;
             s_done_us = esp_timer_get_time();
-            free(s_done_text);
-            s_done_text = m->text;
-            m->text = NULL;
             if (!s_listen_on) {
                 line_heard();
             }
@@ -1200,7 +1169,7 @@ void game_poll(void)
     if (s_stop_requested) {
         s_stop_requested = false;
         if (s_state != G_IDLE && s_state != G_STARTING) {
-            send_simple("stop", s_turns, NULL);
+            send_simple("stop", s_turns);
         }
         if (s_state != G_IDLE) {
             ESP_LOGI(TAG, "Stopped by the wake word or a touch");
@@ -1262,7 +1231,7 @@ void game_poll(void)
             }
         }
         if (!text) {
-            send_simple("stop", s_turns, NULL);
+            send_simple("stop", s_turns);
             game_end(app_lang_get()->game_peer_left);
             return;
         }

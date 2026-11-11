@@ -767,8 +767,8 @@ asleep, join in), then a game's phrase:
   phrase each claim the first line with the time (from the Internet clock), the earliest says it; then each BOX
   that heard a line claims the next one, and the first to have heard it says it (two claims at the very same
   millisecond: both claim again after a random delay). A game's rule may name the next one instead (the riddles:
-  the one who asked judges the guess, the one who found it asks the next riddle). The words of each line are also
-  sent, used only by a BOX that heard nothing.
+  the one who asked judges the guess, the one who found it asks the next riddle). The words of a line are never
+  sent: only heard by the microphone (a line not heard is "(inaudible)" for the model), so that a human could play.
 - **A touch** on any BOX (or the wake word to one not listening) **stops the game on all**. Otherwise it ends
   after `Game_turns_max` lines (20 by default, `CONFIG.INI`, the one of the BOX that started), the last one
   concluding it; the BOX elected next then says "Ok, c'est bon. Arrêtons-nous là." / "Okay, that's enough. Let's

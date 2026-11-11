@@ -366,7 +366,7 @@ void sr_handler_task(void *pvParam)
         }
 
         if (ESP_MN_STATE_TIMEOUT == result.state && result.no_speech && result.game) {
-            // The line of the other BOX not heard: the game uses the words it sent
+            // The line of the other BOX not heard: "(inaudible)" for the game
             ESP_LOGI(TAG, "Game: nothing heard");
             assistant_listen_abort();
             audio_record_stop();

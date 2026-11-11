@@ -136,11 +136,11 @@ bool game_net_receive(game_msg_t *msg)
 
 static void net_task(void *arg)
 {
-    char *buf = heap_caps_malloc(GAME_TEXT_MAX + 512, MALLOC_CAP_SPIRAM);
+    char *buf = heap_caps_malloc(GAME_MSG_MAX + 1, MALLOC_CAP_SPIRAM);
     for (;;) {
         struct sockaddr_in from;
         socklen_t len = sizeof(from);
-        int n = buf ? recvfrom(s_sock, buf, GAME_TEXT_MAX + 511, 0, (struct sockaddr *)&from, &len) : -1;
+        int n = buf ? recvfrom(s_sock, buf, GAME_MSG_MAX, 0, (struct sockaddr *)&from, &len) : -1;
         if (n <= 0) {
             vTaskDelay(pdMS_TO_TICKS(500));
             continue;
@@ -181,11 +181,8 @@ static void net_task(void *arg)
             strlcpy(msg.game, cJSON_IsString(v) ? v->valuestring : "", sizeof(msg.game));
             v = cJSON_GetObjectItem(json, "tag");
             strlcpy(msg.tag, cJSON_IsString(v) ? v->valuestring : "", sizeof(msg.tag));
-            v = cJSON_GetObjectItem(json, "text");
-            msg.text = cJSON_IsString(v) ? strdup(v->valuestring) : NULL;
             if (xQueueSend(s_queue, &msg, 0) != pdTRUE) {
                 ESP_LOGW(TAG, "message \"%s\" (line %d) lost: the queue is full", msg.type, msg.turn);
-                free(msg.text);
             } else {
                 assistant_save_soon();      // the main task, at once
             }

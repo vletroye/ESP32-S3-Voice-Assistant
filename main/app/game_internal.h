@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include "cJSON.h"
 
-#define GAME_TEXT_MAX       1200        /* a line, at most (UDP) */
+#define GAME_MSG_MAX        512         /* a message, at most (UDP): never the words of a line, only heard */
 
 /* ---------- game_defs.c ---------- */
 
@@ -114,7 +114,7 @@ typedef struct {
     int tone;               /* claim, join: the character drawn, -1 for none */
     char game[24];
     char tag[16];           /* speak: the tag of the line ("GUESS"), not spoken */
-    char *text;             /* done: the line as said (if not heard); local: the transcript; allocated */
+    char *text;             /* local: the transcript; allocated */
 } game_msg_t;
 
 /** The socket and the task reading it; false if the UDP port could not be opened */

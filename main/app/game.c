@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lwip/sockets.h"
 #include "esp_heap_caps.h"
@@ -113,6 +114,11 @@ typedef struct {
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
+/*
+ * The games read by the main task (a claim received) and by the SR handler task (the phrase heard) at the same
+ * time: the phrase was compared with a list being read again, empty, and went to the model
+ */
+static SemaphoreHandle_t s_games_lock = NULL;
 static int s_game_count = 0;
 static char s_games_lang[8] = "";
 
@@ -321,8 +327,21 @@ static void games_free(void)
     s_game_count = 0;
 }
 
+static void games_load_locked(void);
+
 /* Read again for the language in use (its names and phrases, else the English ones) */
 static void games_load(void)
+{
+    if (s_games_lock) {
+        xSemaphoreTake(s_games_lock, portMAX_DELAY);
+    }
+    games_load_locked();
+    if (s_games_lock) {
+        xSemaphoreGive(s_games_lock);
+    }
+}
+
+static void games_load_locked(void)
 {
     const char *lang = app_lang_get()->code;
     if (s_games && strcmp(s_games_lang, lang) == 0) {
@@ -630,6 +649,7 @@ void game_init(void)
     for (int i = 0; i < 6; i++) {
         s_my_id = (s_my_id << 8) | mac[i];
     }
+    s_games_lock = xSemaphoreCreateMutex();
     games_install();
     // In PSRAM, as its task's stack: the internal RAM is short, TLS needs it for the calls to the services
     s_queue = xQueueCreateWithCaps(16, sizeof(game_msg_t), MALLOC_CAP_SPIRAM);
@@ -939,20 +959,38 @@ static void start_setup(int game, uint32_t nonce)
 
 bool game_try_start(const char *text)
 {
-    if (!s_queue || s_sock < 0) {
+    if (!s_queue || s_sock < 0 || !s_games_lock) {
         return false;
     }
-    games_load();
+    xSemaphoreTake(s_games_lock, portMAX_DELAY);
+    games_load_locked();
     int game = game_of(text);
+    xSemaphoreGive(s_games_lock);
     if (game < 0) {
         return false;
     }
     if (wifi_connected_already() != WIFI_STATUS_CONNECTED_OK) {
         return false;
     }
+    // Started by the main task, which plays the game (this is the SR handler task)
+    game_msg_t msg = { .from = s_my_id, .turn = game };
+    strlcpy(msg.type, "start", sizeof(msg.type));
+    if (xQueueSend(s_queue, &msg, 0) != pdTRUE) {
+        return false;
+    }
+    assistant_save_soon();
+    return true;
+}
+
+/* The phrase of a game heard here: this BOX claims its first line */
+static void game_start(int game)
+{
     if (s_state == G_STARTING && game == s_game) {
         claim_send(0);          // joined as asleep, then heard the phrase too
-        return true;
+        return;
+    }
+    if (s_state != G_IDLE && s_state != G_STARTING) {
+        return;                 // a game going on
     }
     bool seen = s_claim_seen_us && esp_timer_get_time() - s_claim_seen_us < GAME_INVITE_MS * 1000LL &&
                 game_find(s_claim_seen.game) == game;
@@ -966,7 +1004,6 @@ bool game_try_start(const char *text)
     claim_send(0);
     assistant_show(app_lang_get()->game_searching);
     ESP_LOGI(TAG, "%s: looking for the other BOX", s_games[game].id);
-    return true;
 }
 
 bool game_stop(void)
@@ -1371,7 +1408,9 @@ static void elect(void)
 /* A message of the network task, or "local": the listening of this BOX ended */
 static void message(game_msg_t *m)
 {
-    if (strcmp(m->type, "local") == 0) {
+    if (strcmp(m->type, "start") == 0) {
+        game_start(m->turn);
+    } else if (strcmp(m->type, "local") == 0) {
         s_listen_on = false;
         if (m->text && m->text[0]) {
             char *joined = NULL;

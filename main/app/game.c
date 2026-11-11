@@ -33,6 +33,7 @@
 #include "app_ui_ctrl.h"
 #include "app_sr.h"
 #include "file_state.h"
+#include "file_phrases.h"
 #include "game.h"
 
 static const char *TAG = "game";
@@ -274,6 +275,34 @@ static const char *const s_games_updates[][2] = {
       "rules = A verbal fight with the other player, quick-fire: each line a jab in ONE short, sharp sentence (15 words at most). Play the arrogant know-it-all: you are right, the other is wrong; you are the smartest, the other is a clueless amateur; its arguments are laughable and it cannot contradict you (\"give up, you can't win this\"). Mock its last line directly, with dry irony and mock pity, and hurl one or two colourful, absurd, old-fashioned insults in the style of Captain Haddock in Tintin (in French: bachi-bouzouk, moule à gaufres, ectoplasme à roulettes, bougre d'extrait de cornichon, anacoluthe, cercopithèque, olibrius, zouave, marin d'eau douce, jus de réglisse, anthropopithèque, boit-sans-soif, mille millions de mille sabords, tonnerre de Brest...; in other languages their known translations or the same spirit), a different one each time, never vulgar, never about real people. State things as obvious facts, never hedge. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree, never give in." },
     { "theme_rule = The topic of the debate is: %s.\ntheme_for = first",
       "theme_rule = The topic of the debate is: %s; keep to it.\ntheme_for = first\nsentences = 1" },
+    { "phrases_fr = disputez-vous | disputez vous | débattez | faites un débat | engueulez-vous\n",
+      "phrases_fr = disput(ez|er|ons)[ vous] | débatt(ez|re|ons) | fai(tes|re|sons) un débat | engueul(ez|er)[ vous]\n" },
+    { "phrases_en = argue | have a debate | debate each other\n",
+      "phrases_en = argue[ with each other] | have a debate | debate[ each other]\n" },
+    { "phrases_es = discutid | pelead | haced un debate\n",
+      "phrases_es = discut(id|ir) | pele(ad|ar) | ha(ced|cer) un debate\n" },
+    { "phrases_it = litigate | discutete | fate un dibattito\n",
+      "phrases_it = litiga(te|re) | discut(ete|ere) | fa(te|re) un dibattito\n" },
+    { "phrases_fr = concours de devinettes | devinettes | faites des devinettes\n",
+      "phrases_fr = [un ](concours|jeu) [de ]devinette[s] | devinette[s] | fai(tes|re|sons) des devinette[s]\n" },
+    { "phrases_en = riddle contest | riddles | tell riddles\n",
+      "phrases_en = [a ]riddle (contest|game) | riddle[s] | tell[ me] riddles\n" },
+    { "phrases_nl = raadsels | raadselwedstrijd\n",
+      "phrases_nl = raadsel[s] | raadselwedstrijd\n" },
+    { "phrases_es = adivinanzas | concurso de adivinanzas\n",
+      "phrases_es = adivinanza[s] | concurso de adivinanza[s]\n" },
+    { "phrases_it = indovinelli | gara di indovinelli\n",
+      "phrases_it = indovinell(i|o) | gara di indovinelli\n" },
+    { "phrases_fr = création collaborative | créez ensemble | inventez ensemble | inventez quelque chose\n",
+      "phrases_fr = création[s] collaborative[s] | cré(ez|er|ons) [quelque chose ]ensemble | invent(ez|er|ons) (quelque chose|ensemble|quelque chose ensemble)\n" },
+    { "phrases_en = collaborative creation | create together | invent together | invent something\n",
+      "phrases_en = collaborative creation | create (together|something[ together]) | invent (together|something[ together])\n" },
+    { "phrases_de = gemeinsame erfindung | erschafft zusammen | erfindet zusammen | erfindet etwas\n",
+      "phrases_de = gemeinsame erfindung | erschafft zusammen | erfind(et|en) (zusammen|etwas)\n" },
+    { "phrases_es = creación colaborativa | cread juntos | inventad juntos | inventad algo\n",
+      "phrases_es = creación colaborativa | cre(ad|ar) juntos | invent(ad|ar) (juntos|algo)\n" },
+    { "phrases_it = creazione collaborativa | create insieme | inventate insieme | inventate qualcosa\n",
+      "phrases_it = creazione collaborativa | crea(te|re) insieme | inventa(te|re) (insieme|qualcosa)\n" },
 };
 
 static void games_update(void)
@@ -558,64 +587,42 @@ static void fold(const char *in, char *out, size_t size)
 
 /* The game whose phrase begins what was said, -1 if none */
 /*
- * The transcription drops or changes the small words and the plurals ("concours devinette" for "concours de
- * devinettes"): compared without the articles and prepositions of the languages, nor a final s or x
+ * The game whose phrase begins what was said, -1 if none. The phrases of GAMES.INI are separated by "|" and written
+ * as the voice commands' patterns ("invent(ez|er|ons) [quelque chose ]ensemble", file_phrases.h): the transcription
+ * writes the verb or the small words its own way
  */
-static void words_plain(char *text)
-{
-    static const char *const s_small[] = {
-        "de", "des", "du", "d", "la", "le", "les", "l", "un", "une", "a", "au", "aux",          // fr
-        "of", "the", "an",                                                                      // en
-        "het", "een", "van",                                                                    // nl
-        "der", "die", "das", "den", "dem", "ein", "eine", "einen",                              // de
-        "el", "los", "las", "del", "uno", "unos",                                               // es
-        "il", "lo", "gli", "di", "della", "dei", "delle", "uno",                                // it
-    };
-    char *out = text;
-    for (char *w = text; *w; ) {
-        size_t n = strcspn(w, " ");
-        bool small = false;
-        for (size_t i = 0; i < sizeof(s_small) / sizeof(s_small[0]) && !small; i++) {
-            small = strlen(s_small[i]) == n && strncmp(w, s_small[i], n) == 0;
-        }
-        if (!small) {
-            // The verb's ending too ("inventer", "inventez", "inventons": "invent"), then a plural
-            size_t keep = n;
-            if (keep > 5 && strncmp(w + keep - 3, "ons", 3) == 0) {
-                keep -= 3;
-            } else if (keep > 4 && (strncmp(w + keep - 2, "ez", 2) == 0 || strncmp(w + keep - 2, "er", 2) == 0)) {
-                keep -= 2;
-            } else if (keep > 3 && (w[keep - 1] == 's' || w[keep - 1] == 'x')) {
-                keep--;
-            }
-            if (out != text) {
-                *out++ = ' ';
-            }
-            memmove(out, w, keep);
-            out += keep;
-        }
-        w += n;
-        w += strspn(w, " ");
-    }
-    *out = '\0';
-}
-
 static int game_of(const char *text)
 {
     char said[200];
     fold(text, said, sizeof(said));
-    words_plain(said);
     for (int i = 0; i < s_game_count; i++) {
-        char phrases[400];
-        strlcpy(phrases, s_games[i].phrases, sizeof(phrases));
-        for (char *p = strtok(phrases, "|"); p; p = strtok(NULL, "|")) {
-            char phrase[100];
-            fold(p, phrase, sizeof(phrase));
-            words_plain(phrase);
-            size_t len = strlen(phrase);
-            if (len && strncmp(said, phrase, len) == 0 && (said[len] == '\0' || said[len] == ' ')) {
+        const char *p = s_games[i].phrases;
+        while (*p) {
+            // One pattern: up to a "|" outside brackets
+            const char *end = p;
+            for (int depth = 0; *end && (*end != '|' || depth > 0); end++) {
+                depth += (*end == '(' || *end == '[') - (*end == ')' || *end == ']');
+            }
+            char pattern[160];
+            snprintf(pattern, sizeof(pattern), "%.*s", (int)(end - p), p);
+            trim(pattern);
+            for (size_t n = strlen(pattern); n && pattern[n - 1] == ' '; n--) {
+                pattern[n - 1] = '\0';
+            }
+            char *phrases[48];
+            int count = pattern[0] ? phrases_expand(pattern, phrases, 48) : 0;
+            bool found = false;
+            for (int k = 0; k < count; k++) {
+                char phrase[100];
+                fold(phrases[k], phrase, sizeof(phrase));
+                size_t len = strlen(phrase);
+                found |= len && strncmp(said, phrase, len) == 0 && (said[len] == '\0' || said[len] == ' ');
+                free(phrases[k]);
+            }
+            if (found) {
                 return i;
             }
+            p = *end ? end + 1 : end;
         }
     }
     return -1;

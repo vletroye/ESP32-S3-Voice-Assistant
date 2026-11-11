@@ -293,7 +293,7 @@ Every feature in detail: [Features in detail](#411-features-in-detail).
 - Tap the Wi-Fi icon or the battery at the bottom right of the sleep screen: the **Wi-Fi and battery** screen (see
   [Features in detail](#411-features-in-detail)). Tap the volume at the bottom left: the radio screen.
 - Double-tap during an answer: interrupts it and listens.
-- Double-tap while listening ("J'écoute …" / "I'm listening …") or thinking ("Entendu …" / "Heard …", "Je
+- Double-tap anywhere, the robot included, while listening ("J'écoute …" / "I'm listening …") or thinking ("Entendu …" / "Heard …", "Je
   réfléchis …" / "Thinking …"): the question is dropped
   and the assistant goes back to sleep, saying nothing. While listening, the session ends as without speech; while
   thinking, the answer's stream is left at once (every client reads `llm_cancelled()` and closes its connection).

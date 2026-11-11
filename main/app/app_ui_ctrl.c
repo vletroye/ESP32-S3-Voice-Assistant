@@ -2357,6 +2357,9 @@ void ui_ctrl_init(void)
     // While listening or thinking: a double tap drops it, back to sleep
     lv_obj_add_event_cb(ui_PanelListen, cancel_double_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(ui_PanelGet, cancel_double_tap_cb, LV_EVENT_CLICKED, NULL);
+    // A tap on the robot (its body, clickable) goes up to the panel through its glow, which would stop it
+    lv_obj_add_flag(ui_ImageListenBackGlow, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_add_flag(ui_ImageGetBackGlow, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_add_event_cb(ui_ContainerReplyContent, reply_double_tap_cb, LV_EVENT_CLICKED, NULL);
     // A long press anywhere (asleep, listening, thinking, answering): a mark in the debug traces, if on
     lv_obj_t *const marked[] = { ui_PanelSleep, ui_PanelListen, ui_PanelGet, ui_PanelReply, ui_ContainerReplyContent };

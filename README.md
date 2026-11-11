@@ -773,9 +773,11 @@ joins in), then a game's phrase:
   (the model speaks the language of the BOX anyway), `character = no` for plain lines (no character, no
   introduction: the riddles), and `short_after = TAG`: the rules may ask each line to start with an upper-case tag
   (never shown nor spoken), and a line starting with this one keeps only its first sentence (the riddles: a right
-  guess gets "Correct !" and nothing more, the one who found it asks the next riddle); `blunder = 35` and
-  `blunder_rule`: that instruction added to 35 % of the lines (the riddles: a wrong guess on purpose, a funny one,
-  teased by the other). A story told in turns, a quiz, a game of "who am I"… Emptied, the
+  guess gets "Correct !" and nothing more, the one who found it asks the next riddle); `secret = TAG`: what
+  follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent to the other (the riddles: the
+  answer, to judge the other's guess); `blunder = 35`, `blunder_after` and `blunder_rule`: that instruction added
+  to 35 % of the lines following a line of the other with one of these tags (the riddles: a wrong guess on purpose,
+  a funny one, teased by the other). A story told in turns, a quiz, a game of "who am I"… Emptied, the
   file comes back as the firmware gives it; a line still as an older firmware gave it is updated by a new one
   (your own lines and games are kept).
 

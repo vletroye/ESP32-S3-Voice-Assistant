@@ -85,6 +85,8 @@ typedef struct {
     char *rules;
     bool plain;             /* character = no: no character, no introduction */
     char short_after[16];   /* a tag: a line starting with "TAG:" keeps only its first sentence */
+    char secret[16];        /* a tag: what follows "TAG:" is kept for itself (the answer of its riddle) */
+    char blunder_after[48]; /* blunder_rule only after a line of the other with one of these tags */
     int blunder;            /* percent of the lines given blunder_rule */
     char *blunder_rule;     /* a wrong guess on purpose, with humour (the riddles) */
 } game_def_t;
@@ -181,6 +183,10 @@ static const char *const s_games_updates[][2] = {
       "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle." },
     { "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT",
       "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so with a short teasing remark about its answer, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT\nblunder = 35\nblunder_rule = If this line is a GUESS: guess WRONG on purpose this time, with a funny answer that sounds almost plausible (a pun, an absurd but related idea), said with full confidence." },
+    { "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Start every line with one of these tags (in English, never spoken), then say only what it allows, nothing else: GUESS: your guess to the other's riddle, just the guess. RIGHT: the other's guess to YOUR riddle is right: a few words saying it is correct, and nothing more (the other found it: it asks the next riddle). WRONG: the other's guess to YOUR riddle is wrong: say so with a short teasing remark about its answer, give the right answer, then ask a new riddle. RIDDLE: the other said your guess was right: ask a new riddle. No introduction, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT\nblunder = 35\nblunder_rule = If this line is a GUESS: guess WRONG on purpose this time, with a funny answer that sounds almost plausible (a pun, an absurd but related idea), said with full confidence.",
+      "rules = A riddle contest with the other assistant, turn by turn. Start every line with one tag (in English, never spoken), chosen from the other's last line: after its RIDDLE or WRONG line (a riddle for you): GUESS: just your guess to that riddle. After its GUESS line (a guess to YOUR last riddle): compare it with the ANSWER you wrote with that riddle; if it means the same: RIGHT: a few words saying it is correct, nothing more (the other found it: it asks the next riddle); if not: WRONG: say so with a short teasing remark about its guess, give the right answer, then ask a new riddle. After its RIGHT line (your guess was right): RIDDLE: ask a new riddle. Every line asking a riddle ends with ANSWER: followed by its answer (kept secret: never spoken, never shown to the other). No introduction, no explanation. Never repeat a riddle already asked.\ncharacter = no\nshort_after = RIGHT\nsecret = ANSWER\nblunder = 35\nblunder_after = RIDDLE WRONG\nblunder_rule = This time, guess WRONG on purpose: a funny answer that sounds almost plausible (a pun, an absurd but related idea), said with full confidence." },
+    { "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer you know (a single word or a short phrase). Ask only the riddle.",
+      "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer is a single word or a short phrase, and end the line with ANSWER: followed by that answer." },
 };
 
 static void games_update(void)
@@ -331,6 +337,10 @@ static void games_load(void)
             g->plain = strcasecmp(value, "no") == 0;
         } else if (strcmp(key, "short_after") == 0) {
             strlcpy(g->short_after, value, sizeof(g->short_after));
+        } else if (strcmp(key, "secret") == 0) {
+            strlcpy(g->secret, value, sizeof(g->secret));
+        } else if (strcmp(key, "blunder_after") == 0) {
+            strlcpy(g->blunder_after, value, sizeof(g->blunder_after));
         } else if (strcmp(key, "blunder") == 0) {
             g->blunder = atoi(value);
         } else if (strcmp(key, "blunder_rule") == 0) {
@@ -663,6 +673,41 @@ bool game_stop(void)
     return true;
 }
 
+static const char *tag_skip(const char *text, size_t *tag_len);
+
+/* blunder_after: the other's last line starts with one of these tags (none given: any line) */
+static bool blunder_allowed(const game_def_t *g)
+{
+    if (!g->blunder_after[0]) {
+        return true;
+    }
+    const char *last = NULL;
+    const cJSON *item;
+    cJSON_ArrayForEach(item, s_history) {
+        if (!cJSON_IsTrue(cJSON_GetObjectItem(item, "me"))) {
+            last = cJSON_GetObjectItem(item, "text")->valuestring;
+        }
+    }
+    size_t tag_len = 0;
+    if (!last) {
+        return false;
+    }
+    tag_skip(last, &tag_len);
+    if (!tag_len) {
+        return false;
+    }
+    const char *tag = last + strspn(last, " \n");
+    for (const char *p = g->blunder_after; *p; ) {
+        p += strspn(p, " ,");
+        size_t n = strcspn(p, " ,");
+        if (n == tag_len && strncmp(p, tag, n) == 0) {
+            return true;
+        }
+        p += n;
+    }
+    return false;
+}
+
 /* The question to the model: the rules, then the lines so far */
 static char *line_make(void)
 {
@@ -697,7 +742,7 @@ static char *line_make(void)
             fprintf(out, "%s%s", g->first ? g->first : "Start the game.",
                     g->plain ? "" : " In this first line, also say in a few words who you are (your character).");
         }
-        if (g->blunder_rule && g->blunder > 0 && (int)(esp_random() % 100) < g->blunder) {
+        if (g->blunder_rule && g->blunder > 0 && blunder_allowed(g) && (int)(esp_random() % 100) < g->blunder) {
             ESP_LOGI(TAG, "this line: %s", "blunder_rule");
             fprintf(out, " %s", g->blunder_rule);
         }
@@ -784,9 +829,28 @@ static void line_say(char *text)
 {
     int turn = s_turns + 1;
     ESP_LOGI(TAG, "line %d (mine): %s", turn, text);
-    send_peer("line", turn, text);      // with its tag: the other's model sees it
+    // secret: "ANSWER: ..." kept for itself (in its history), never sent, shown nor spoken
+    char *open = strdup(text);
+    if (!open) {
+        return;
+    }
+    const char *secret = s_games[s_game].secret;
+    if (secret[0]) {
+        for (char *p = strstr(open, secret); p; p = strstr(p + 1, secret)) {
+            const char *after = p + strlen(secret);
+            after += strspn(after, " ");
+            if (*after == ':') {
+                *p = '\0';
+                break;
+            }
+        }
+        for (size_t n = strlen(open); n && (open[n - 1] == ' ' || open[n - 1] == '\n' || open[n - 1] == '('); n--) {
+            open[n - 1] = '\0';
+        }
+    }
+    send_peer("line", turn, open);      // with its tag: the other's model sees it
     size_t tag_len;
-    const char *said = tag_skip(text, &tag_len);
+    const char *said = tag_skip(open, &tag_len);
     ui_ctrl_reply_show_scrolled(said);
     s_spoken = false;
     tts_stream_begin(on_speech);
@@ -796,6 +860,7 @@ static void line_say(char *text)
     while (!s_spoken && !s_stop_requested && esp_timer_get_time() - t0 < 60 * 1000000LL) {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
+    free(open);
     cJSON *item = cJSON_CreateObject();
     cJSON_AddBoolToObject(item, "me", true);
     cJSON_AddStringToObject(item, "text", text);

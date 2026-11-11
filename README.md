@@ -914,8 +914,9 @@ range is brought to the nearest bound, or its default is used with a warning in 
 a space (`Volume = 70 ; a bit quieter`), are kept. The file as last saved, **without its values** (`Claude_key =`:
 the values are in their own keys, not stored twice), is kept in the NVS key `Config_layout` (up to 3,999
 characters) and the file is rebuilt from it with the current values (a voice or volume changed by voice shows its
-new value next to its comment); keys added by a newer version are appended at the end, those of an MCP server
-switched on or off on the device after the others (under an `[MCP]` section if the file has none). The file can
+new value next to its comment); keys added by a newer version are appended after the others, before the `[MCP]` section, which stays last
+(a key of the main section found under `[MCP]` is moved back above it); those of an MCP server switched on or off on
+the device go in that section (an `[MCP]` section is added if the file has none). The file can
 hold up to 8,192 characters. The sections (`[MCP]`) only make the file easier to read: the keys are the same
 wherever they are. The room left in the NVS, which holds all the keys, is in the log at start-up
 (`NVS: … entries used`); a key that does not fit any more is reported by the configuration mode instead of

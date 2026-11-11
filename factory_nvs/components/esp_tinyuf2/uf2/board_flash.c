@@ -418,6 +418,7 @@ static bool is_blank(char c)
  * exists. The keys written are listed in `used`.
  */
 static bool config_key_canonical(const char *name, char *out);
+static bool is_mcp_key(const char *key);
 
 static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[][NVS_KEY_NAME_MAX_SIZE],
                                 int *used_count)
@@ -463,6 +464,15 @@ static void ini_gen_from_layout(nvs_handle_t nvs, const char *layout, char used[
         char canonical[NVS_KEY_NAME_MAX_SIZE];
         if (config_key_canonical(key, canonical)) {
             strlcpy(key, canonical, sizeof(key));
+        }
+        // Written already (a key of the main section found under [MCP]: written before it)
+        bool written = false;
+        for (int i = 0; i < *used_count && !written; i++) {
+            written = (strcmp(key, used[i]) == 0);
+        }
+        if (written) {
+            line = next;
+            continue;
         }
         // Inline comment: from the blank before a ';' (as the INI parser reads it)
         const char *comment = NULL;
@@ -731,18 +741,27 @@ static void ini_gen_from_nvs(const char *part, const char *name)
     // other one in NVS order
     static char used[INI_LAYOUT_MAX_KEYS][NVS_KEY_NAME_MAX_SIZE];
     int used_count = 0;
+    char *layout_mcp = NULL;    // in layout: its [MCP] section, written after the other keys
     size_t layout_len = 0;
     char *layout = NULL;
     // A layout without any key (CONFIG.INI emptied on the PC, to get a clean one): as if there were none
     if (nvs_get_str(nvs, INI_LAYOUT_KEY, NULL, &layout_len) == ESP_OK && (layout = (char *)malloc(layout_len)) &&
             nvs_get_str(nvs, INI_LAYOUT_KEY, layout, &layout_len) == ESP_OK && strchr(layout, '=')) {
-        ini_gen_from_layout(nvs, layout, used, &used_count);
+        // The [MCP] section stays last: the keys a newer firmware adds go before it, not under it
+        layout_mcp = strstr(layout, "\n[MCP]");
+        if (layout_mcp) {
+            layout_mcp++;
+            char c = *layout_mcp;
+            *layout_mcp = '\0';
+            ini_gen_from_layout(nvs, layout, used, &used_count);
+            *layout_mcp = c;
+        } else {
+            ini_gen_from_layout(nvs, layout, used, &used_count);
+        }
     } else {
         ini_insert_section(name);
     }
     ini_gen_ordered(nvs, used, &used_count);
-    ini_gen_mcp(nvs, layout, used, &used_count);
-    free(layout);
 
     do {
         nvs_entry_info_t info;
@@ -757,8 +776,9 @@ static void ini_gen_from_nvs(const char *part, const char *name)
                     strlcpy(text_file->content, str, CFG_UF2_TEXT_FILE_SIZE);
                 }
             } else if (result == ESP_OK) {
-                // [Voice assistant] Already written from the layout, or the layout itself
-                bool skip = (strcmp(info.key, INI_LAYOUT_KEY) == 0);
+                // [Voice assistant] Already written from the layout, or the layout itself; the MCP servers' keys
+                // in their section, after
+                bool skip = (strcmp(info.key, INI_LAYOUT_KEY) == 0) || is_mcp_key(info.key);
                 for (int i = 0; i < used_count && !skip; i++) {
                     skip = (strcmp(info.key, used[i]) == 0);
                 }
@@ -787,6 +807,12 @@ next:
         it = nvs_entry_next(it);
     } while (it != NULL);
 #endif
+    // [Voice assistant] The [MCP] section last: as last written, then the servers' keys not written yet
+    if (layout_mcp) {
+        ini_gen_from_layout(nvs, layout_mcp, used, &used_count);
+    }
+    ini_gen_mcp(nvs, layout, used, &used_count);
+    free(layout);
     strcpy(_ini_file_dummy, _ini_file);
     for (int i = 0; i < UF2_TEXT_COUNT; i++) {
         text_file_t *t = &s_text_files[i];

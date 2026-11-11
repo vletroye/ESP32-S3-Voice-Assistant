@@ -579,7 +579,15 @@ static void words_plain(char *text)
             small = strlen(s_small[i]) == n && strncmp(w, s_small[i], n) == 0;
         }
         if (!small) {
-            size_t keep = n > 3 && (w[n - 1] == 's' || w[n - 1] == 'x') ? n - 1 : n;
+            // The verb's ending too ("inventer", "inventez", "inventons": "invent"), then a plural
+            size_t keep = n;
+            if (keep > 5 && strncmp(w + keep - 3, "ons", 3) == 0) {
+                keep -= 3;
+            } else if (keep > 4 && (strncmp(w + keep - 2, "ez", 2) == 0 || strncmp(w + keep - 2, "er", 2) == 0)) {
+                keep -= 2;
+            } else if (keep > 3 && (w[keep - 1] == 's' || w[keep - 1] == 'x')) {
+                keep--;
+            }
             if (out != text) {
                 *out++ = ' ';
             }

@@ -32,6 +32,7 @@
 #include "app_wifi.h"
 #include "app_ui_ctrl.h"
 #include "app_sr.h"
+#include "file_state.h"
 #include "game.h"
 
 static const char *TAG = "game";
@@ -65,6 +66,10 @@ static const char *TAG = "game";
 #define GAME_SEND_TIMES     3
 #define GAME_SEND_GAP_MS    40
 #define GAME_PLAYERS_MAX    8
+/* What the games used lately (the answers of the riddles, the themes): not taken again */
+#define GAMES_USED_FILE     STATE_DIR "/games_used.txt"
+#define GAMES_USED_KEPT     60
+#define GAMES_USED_SHOWN    40
 #define GAME_TURNS_DEFAULT  20
 
 /* main.c */
@@ -111,6 +116,8 @@ typedef struct {
     int blunder;            /* percent of the lines given blunder_rule */
     char *blunder_rule;     /* a wrong guess on purpose, with humour (the riddles) */
     char turns[64];         /* "GUESS>RIDDLE WRONG; RIGHT>GUESS": who says the line after a tag (else the first claim) */
+    char *themes;           /* "a | b | c": one drawn for each line, given by theme_rule */
+    char *theme_rule;       /* "... its theme is: %s ..." */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
@@ -248,6 +255,10 @@ static const char *const s_games_updates[][2] = {
       "first = Open a riddle contest: start with the tag RIDDLE: then ask one short riddle whose answer is a single word or a short phrase, and end the line with ANSWER: followed by that answer." },
     { "secret = ANSWER\nblunder = 35",
       "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nblunder = 35" },
+    { "first = Open a verbal duel: assert a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...) as if it were an obvious fact, in one short, dry sentence (10 words at most), with a touch of irony.",
+      "first = Open a verbal duel: assert a bold, debatable opinion on the topic given as if it were an obvious fact, in one short, dry sentence (10 words at most), with a touch of irony.\nthemes = breakfast | socks with sandals | cats or dogs | cold pizza | holidays at the sea or in the mountains | phones at the table | getting up early | Christmas songs in November | books or their films | cooking or ordering in | rain | the best season | camping | big cities or the countryside | video games | sport on television | homework | the best fruit | coffee or tea | tidy or messy desks | Monday mornings | the perfect sandwich | snow | electric scooters | queues | birthdays | the best superpower | surprise parties | the beach | supermarket music | naps | crosswords | the remote control | cheese | dancing | the best pet | wearing a tie | open-plan offices | dessert first | road trips | the ideal Sunday\ntheme_rule = If this line opens the debate, its topic is: %s." },
+    { "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nblunder = 35",
+      "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nthemes = the kitchen | farm animals | outer space | sports | the bathroom | the sea | music | the weather | school | trees and plants | insects | the city | transport | the human body | clothes | the night | fire | water | toys | the garden | tools | the mountains | the desert | birds | the forest | numbers | time | the house | the circus | the library | the beach | snow | the moon | dinosaurs | pirates | the hospital | the market | the cinema | painting | electricity | computers | the telephone | bread | cheese | the river | castles | trains | the post | fruit | vegetables | the zoo | knights | robots | magic | the farm | money | letters of the alphabet | colours\ntheme_rule = If this line asks a new riddle, its theme is: %s. Invent an original riddle yourself, never a famous or classic one.\nblunder = 35" },
 };
 
 static void games_update(void)
@@ -323,6 +334,8 @@ static void games_free(void)
         free(s_games[i].first);
         free(s_games[i].rules);
         free(s_games[i].blunder_rule);
+        free(s_games[i].themes);
+        free(s_games[i].theme_rule);
     }
     s_game_count = 0;
 }
@@ -415,6 +428,12 @@ static void games_load_locked(void)
             strlcpy(g->secret, value, sizeof(g->secret));
         } else if (strcmp(key, "blunder_after") == 0) {
             strlcpy(g->blunder_after, value, sizeof(g->blunder_after));
+        } else if (strcmp(key, "themes") == 0) {
+            free(g->themes);
+            g->themes = strdup(value);
+        } else if (strcmp(key, "theme_rule") == 0) {
+            free(g->theme_rule);
+            g->theme_rule = strdup(value);
         } else if (strcmp(key, "turns") == 0) {
             strlcpy(g->turns, value, sizeof(g->turns));
         } else if (strcmp(key, "blunder") == 0) {
@@ -1031,6 +1050,116 @@ static bool blunder_allowed(const game_def_t *g)
            tag_in(g->blunder_after, strlen(g->blunder_after), tag->valuestring);
 }
 
+/* ---------- what the games used lately ---------- */
+
+/* The items of this game used lately, oldest first, separated by "\n" (allocated; NULL: none) */
+static char *used_read(const char *game)
+{
+    FILE *f = fopen(GAMES_USED_FILE, "r");
+    if (!f) {
+        return NULL;
+    }
+    char *out = NULL;
+    size_t size = 0;
+    FILE *mem = open_memstream(&out, &size);
+    char line[160];
+    size_t id_len = strlen(game);
+    while (mem && fgets(line, sizeof(line), f)) {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (strncmp(line, game, id_len) == 0 && line[id_len] == '\t' && line[id_len + 1]) {
+            fprintf(mem, "%s\n", line + id_len + 1);
+        }
+    }
+    fclose(f);
+    if (mem) {
+        fclose(mem);
+    }
+    if (out && !out[0]) {
+        free(out);
+        out = NULL;
+    }
+    return out;
+}
+
+/* One more item used by this game: the file keeps the last GAMES_USED_KEPT lines */
+static void used_add(const char *game, const char *item)
+{
+    char *old = NULL;
+    size_t size = 0;
+    FILE *f = fopen(GAMES_USED_FILE, "r");
+    if (f) {
+        FILE *mem = open_memstream(&old, &size);
+        char line[160];
+        while (mem && fgets(line, sizeof(line), f)) {
+            fputs(line, mem);
+        }
+        if (mem) {
+            fclose(mem);
+        }
+        fclose(f);
+    }
+    int lines = 0;
+    for (const char *p = old; p && *p; p++) {
+        lines += *p == '\n';
+    }
+    const char *from = old;
+    for (; from && lines >= GAMES_USED_KEPT; lines--) {
+        const char *nl = strchr(from, '\n');
+        from = nl ? nl + 1 : from + strlen(from);
+    }
+    f = fopen(GAMES_USED_FILE, "w");
+    if (f) {
+        if (from) {
+            fputs(from, f);
+        }
+        fprintf(f, "%s\t%.120s\n", game, item);
+        fclose(f);
+    }
+    free(old);
+}
+
+/* The item is in the list ("a\nb\n"), case ignored */
+static bool used_has(const char *used, const char *item)
+{
+    size_t len = strlen(item);
+    for (const char *p = used; p && *p; ) {
+        const char *nl = strchr(p, '\n');
+        size_t n = nl ? (size_t)(nl - p) : strlen(p);
+        if (n == len && strncasecmp(p, item, n) == 0) {
+            return true;
+        }
+        p += n + (nl != NULL);
+    }
+    return false;
+}
+
+/* A theme of the game drawn, not one used lately if possible (copied in theme) */
+static void theme_draw(const game_def_t *g, const char *used, char *theme, size_t size)
+{
+    theme[0] = '\0';
+    int count = 0;
+    for (const char *p = g->themes; p && *p; p++) {
+        count += *p == '|';
+    }
+    count++;
+    for (int tries = 0; tries < 12; tries++) {
+        int pick = (int)(esp_random() % count);
+        const char *p = g->themes;
+        for (int i = 0; i < pick; i++) {
+            p = strchr(p, '|') + 1;
+        }
+        p += strspn(p, " ");
+        size_t n = strcspn(p, "|");
+        while (n && p[n - 1] == ' ') {
+            n--;
+        }
+        snprintf(theme, size, "%.*s", (int)n, p);
+        if (!used_has(used, theme)) {
+            return;
+        }
+    }
+}
+
 /* The question to the model: the rules, then the lines so far */
 static char *line_make(void)
 {
@@ -1079,6 +1208,40 @@ static char *line_make(void)
             fprintf(out, "%s%s", g->first ? g->first : "Start the game.",
                     g->plain ? "" : " In this first line, also say in a few words who you are (your character).");
         }
+        // A theme drawn (each line: the model uses it when it asks or opens something new), and what was used
+        char *used = used_read(g->id);
+        if (g->themes && g->themes[0]) {
+            char theme[64];
+            theme_draw(g, used, theme, sizeof(theme));
+            const char *rule = g->theme_rule && strstr(g->theme_rule, "%s") ? g->theme_rule
+                               : "Theme of anything new in this line: %s.";
+            const char *at = strstr(rule, "%s");
+            fprintf(out, " %.*s%s%s", (int)(at - rule), rule, theme, at + 2);
+            ESP_LOGI(TAG, "theme: %s", theme);
+            if (!g->secret[0] && cJSON_GetArraySize(s_history) == 0) {
+                used_add(g->id, theme);     // a debate's topic: not drawn again soon
+            }
+        }
+        if (used && g->secret[0]) {
+            // The last answers, one line each: never used again
+            fputs(" Never use one of these answers, already used in earlier games:", out);
+            int lines = 0;
+            for (const char *p = used; *p; p++) {
+                lines += *p == '\n';
+            }
+            const char *p = used;
+            for (; lines > GAMES_USED_SHOWN; lines--) {
+                p = strchr(p, '\n') + 1;
+            }
+            for (bool first = true; *p; first = false) {
+                const char *nl = strchr(p, '\n');
+                size_t n = nl ? (size_t)(nl - p) : strlen(p);
+                fprintf(out, "%s %.*s", first ? "" : ",", (int)n, p);
+                p += n + (nl != NULL);
+            }
+            fputs(".", out);
+        }
+        free(used);
         if (g->blunder_rule && g->blunder > 0 && blunder_allowed(g) && (int)(esp_random() % 100) < g->blunder) {
             ESP_LOGI(TAG, "this line: %s", "blunder_rule");
             fprintf(out, " %s", g->blunder_rule);
@@ -1225,6 +1388,17 @@ static void line_say(char *text)
             const char *after = p + strlen(secret);
             after += strspn(after, " ");
             if (*after == ':') {
+                // The answer remembered: not used again in the next games
+                char answer[100];
+                after++;
+                after += strspn(after, " ");
+                snprintf(answer, sizeof(answer), "%.*s", (int)strcspn(after, "\n"), after);
+                for (size_t n = strlen(answer); n && strchr(" .!", answer[n - 1]); n--) {
+                    answer[n - 1] = '\0';
+                }
+                if (answer[0]) {
+                    used_add(s_games[s_game].id, answer);
+                }
                 *p = '\0';
                 break;
             }

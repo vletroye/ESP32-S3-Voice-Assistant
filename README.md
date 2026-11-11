@@ -784,7 +784,10 @@ asleep, join in), then a game's phrase:
   (never shown nor spoken), and a line starting with this one keeps only its first sentence (the riddles: a right
   guess gets "Correct !" and nothing more, the one who found it asks the next riddle); `secret = TAG`: what
   follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent to the other (the riddles: the
-  answer, to judge the other's guess); `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS`: who says the line after a
+  answer, to judge the other's guess); `themes = a | b | c` and `theme_rule` (`%s` for the theme): a theme drawn for each line, not one used
+  lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the
+  answers of the riddles are remembered (the last 60, in the state partition) and never asked again;
+  `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS`: who says the line after a
   tag (after a GUESS line, the BOX of the last RIDDLE or WRONG line; else the first BOX to have heard it); `blunder = 35`, `blunder_after` and `blunder_rule`: that instruction added
   to 35 % of the lines following a line of the other with one of these tags (the riddles: a wrong guess on purpose,
   a funny one, teased by the other). A story told in turns, a quiz, a game of "who am I"… Emptied, the

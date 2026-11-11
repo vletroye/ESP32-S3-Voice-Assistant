@@ -19,8 +19,9 @@
  * The personality of each one is the one of PERSO_<XX>.TXT (Game_tone = persona) or one drawn from the firmware's
  * list (Game_tone = random, the default), not one drawn by another BOX.
  *
- * The turns run on the main task (game_poll), as the model test: each line is a question to the model in use, apart
- * from the conversation (llm_ask_apart).
+ * Three files (game_internal.h): game_defs.c (the games, GAMES.INI), game_net.c (the UDP messages), game.c (the
+ * game). The turns run on the main task (game_poll), as the model test: each line is a question to the model in
+ * use, apart from the conversation (llm_ask_apart).
  */
 
 #pragma once

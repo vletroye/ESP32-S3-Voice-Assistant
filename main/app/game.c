@@ -10,15 +10,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 #include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/semphr.h"
 #include "freertos/task.h"
-#include "lwip/sockets.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
-#include "esp_mac.h"
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
@@ -33,17 +28,11 @@
 #include "app_ui_ctrl.h"
 #include "app_sr.h"
 #include "file_state.h"
-#include "file_phrases.h"
 #include "game.h"
+#include "game_internal.h"
 
 static const char *TAG = "game";
 
-#define GAMES_FILE          "/spiffs/games.ini"
-#define GAMES_FILE_MARK     "# GAMES.INI v2"
-/* GAMES.INI of an older firmware (a whole copy of its games), set aside */
-#define GAMES_OLD_FILE      "/spiffs/games_old.ini"
-#define GAMES_MAX           12
-#define GAME_TEXT_MAX       1200        /* a line, at most (UDP) */
 /*
  * Looking for the other BOX: the claims of the first line collected this long; alone, this one waits for the others
  * up to GAME_INVITE_MS (a BOX that heard the phrase too but transcribes it later), else "no other BOX"
@@ -63,16 +52,7 @@ static const char *TAG = "game";
 #define GAME_TAIL_WAIT_MS   8000
 /* A line not ended this long after it started: the game ends */
 #define GAME_SILENCE_MS     90000
-/*
- * Each message sent this many times, GAME_SEND_GAP_MS apart (UDP broadcast: a copy may be lost, two sent at once
- * were lost together; duplicates are dropped by the turn)
- */
-#define GAME_SEND_TIMES     3
-#define GAME_SEND_GAP_MS    40
 #define GAME_PLAYERS_MAX    8
-/* What the games used lately (the answers of the riddles, the themes): not taken again */
-#define GAMES_USED_FILE     STATE_DIR "/games_used.txt"
-#define GAMES_USED_KEPT     60
 #define GAMES_USED_SHOWN    40
 #define GAME_TURNS_DEFAULT  20
 
@@ -83,11 +63,6 @@ extern void assistant_say_final(const char *text);
 extern void assistant_say(const char *text);
 extern void assistant_save_soon(void);
 extern void assistant_reply_stop(void);
-
-/* The firmware's games, installed when missing (main/games/games.ini, embedded NUL-terminated) */
-extern const char s_games_default_start[] asm("_binary_games_ini_start");
-/* GAMES.INI as installed: the help on the keys, no game (the user's games and changes go there) */
-extern const char s_games_user_start[] asm("_binary_games_user_ini_start");
 
 /*
  * Personalities drawn for Game_tone = random (in English: the model speaks the language of the BOX). Two BOX never
@@ -109,59 +84,6 @@ static const char *const s_tones[] = {
 };
 #define TONES_COUNT (sizeof(s_tones) / sizeof(s_tones[0]))
 
-typedef struct {
-    char id[24];
-    char name[64];
-    char phrases[400];      /* of the current language, "a | b | c" */
-    bool name_own, phrases_own;     /* of the current language (else the English ones, until it comes) */
-    char *first;
-    char *rules;
-    bool plain;             /* character = no: no character, no introduction */
-    char short_after[16];   /* a tag: a line starting with "TAG:" keeps only its first sentence */
-    char secret[16];        /* a tag: what follows "TAG:" is kept for itself (the answer of its riddle) */
-    char blunder_after[48]; /* blunder_rule only after a line of the other with one of these tags */
-    int blunder;            /* percent of the lines given blunder_rule */
-    char *blunder_rule;     /* a wrong guess on purpose, with humour (the riddles) */
-    char turns[64];         /* "GUESS>RIDDLE WRONG; RIGHT>GUESS": who says the line after a tag (else the first claim) */
-    char next[96];          /* "RIDDLE>GUESS; GUESS>RIGHT WRONG": the tags a line may have after a tag */
-    char *themes;           /* "a | b | c": one drawn for each line, given by theme_rule */
-    char *theme_rule;       /* "... its theme is: %s ..." */
-    bool theme_first;       /* theme_for = first: only the first line gets it (the debate keeps its topic) */
-    char *characters;       /* "a | b | c": this game's characters (Game_tone = random), else s_tones */
-    char *last;             /* the instruction of the last line */
-    int sentences;          /* each line cut after this many sentences (0: not cut) */
-    char document[24];      /* the file written at the end by the BOX ending the game ("project.txt") */
-    bool reasoning;         /* reasoning = yes: its lines and document made in the reasoning mode */
-    char *document_rule;    /* what it is */
-} game_def_t;
-
-static game_def_t *s_games = NULL;      /* PSRAM */
-/*
- * The games read by the main task (a claim received) and by the SR handler task (the phrase heard) at the same
- * time: the phrase was compared with a list being read again, empty, and went to the model
- */
-static SemaphoreHandle_t s_games_lock = NULL;
-static int s_game_count = 0;
-static char s_games_lang[8] = "";
-
-/*
- * A message received, given by the network task to the main task; "local": the listening of this BOX ended (its
- * transcript in text, NULL if nothing heard), from the SR handler task (game_heard)
- */
-typedef struct {
-    char type[8];           /* claim, join, speak, done, heard, stop, local */
-    uint64_t from;          /* the sender's id (its MAC) */
-    uint32_t nonce;         /* the game's (the one of the claim elected to start) */
-    int turn;
-    int round;              /* a claim made again after a tie */
-    int64_t ts;             /* a claim's time, ms since 1970 (SNTP): the earliest one speaks */
-    int turns_max;          /* claim: the lines of the game, if this one starts */
-    int tone;               /* claim, join: the character drawn, -1 for none */
-    char game[24];
-    char tag[16];           /* speak: the tag of the line ("GUESS"), not spoken */
-    char *text;             /* done: the line as said (if not heard); local: the transcript; allocated */
-} game_msg_t;
-
 typedef enum {
     G_IDLE,
     G_STARTING,             /* the BOX that heard the phrase claim the first line, the others join */
@@ -181,9 +103,8 @@ typedef struct {
     int turns_max;
 } player_t;
 
-static int s_sock = -1;
-static QueueHandle_t s_queue = NULL;
 static uint64_t s_my_id = 0;
+static bool s_net_ready = false;
 
 static volatile game_state_t s_state = G_IDLE;
 static volatile bool s_stop_requested = false;
@@ -220,365 +141,16 @@ static int64_t s_done_us = 0;
 static game_msg_t s_claim_seen;
 static int64_t s_claim_seen_us = 0;
 
-/* ---------- games.ini ---------- */
-
-static void trim(char *s)
-{
-    char *p = s;
-    while (*p == ' ' || *p == '\t') {
-        p++;
-    }
-    memmove(s, p, strlen(p) + 1);
-    size_t n = strlen(s);
-    while (n > 0 && (s[n - 1] == ' ' || s[n - 1] == '\t' || s[n - 1] == '\r' || s[n - 1] == '\n')) {
-        s[--n] = '\0';
-    }
-}
-
-/*
- * The games: the firmware's (main/games/games.ini, built in), then GAMES.INI of the configuration drive, which holds
- * only the user's: a section of a firmware game changes the keys written in it, another one adds a game. No copy of
- * the firmware's games to update: a change of their rules is in the firmware only.
- */
-static void games_install(void)
-{
-    FILE *f = fopen(GAMES_FILE, "r");
-    char head[32] = "";
-    long size = 0;
-    if (f) {
-        size_t n = fread(head, 1, sizeof(head) - 1, f);
-        head[n] = '\0';
-        fseek(f, 0, SEEK_END);
-        size = ftell(f);
-        fclose(f);
-    }
-    if (size > 0 && strncmp(head, GAMES_FILE_MARK, strlen(GAMES_FILE_MARK)) == 0) {
-        return;
-    }
-    if (size > 0) {
-        // A whole copy of the games by an older firmware: it would override the firmware's rules; set aside
-        remove(GAMES_OLD_FILE);
-        rename(GAMES_FILE, GAMES_OLD_FILE);
-        ESP_LOGW(TAG, "%s of an older firmware kept as %s", GAMES_FILE, GAMES_OLD_FILE);
-    }
-    f = fopen(GAMES_FILE, "w");
-    bool ok = f && fputs(s_games_user_start, f) >= 0;
-    if (f) {
-        ok &= fclose(f) == 0;
-    }
-    ESP_LOGI(TAG, "%s %s", ok ? "Installed" : "Could not install", GAMES_FILE);
-}
-
-static void games_free(void)
-{
-    for (int i = 0; i < s_game_count; i++) {
-        free(s_games[i].first);
-        free(s_games[i].rules);
-        free(s_games[i].blunder_rule);
-        free(s_games[i].themes);
-        free(s_games[i].characters);
-        free(s_games[i].last);
-        free(s_games[i].document_rule);
-        free(s_games[i].theme_rule);
-    }
-    s_game_count = 0;
-}
-
-static void games_load_locked(void);
-
-/* Read again for the language in use (its names and phrases, else the English ones) */
-static void games_load(void)
-{
-    if (s_games_lock) {
-        xSemaphoreTake(s_games_lock, portMAX_DELAY);
-    }
-    games_load_locked();
-    if (s_games_lock) {
-        xSemaphoreGive(s_games_lock);
-    }
-}
-
-/* The sections of a text (the firmware's games, then GAMES.INI): a section already read gets the keys written */
-static void games_parse(const char *text, const char *key_name, const char *key_phrases)
-{
-    char *line = heap_caps_malloc(2048, MALLOC_CAP_SPIRAM);
-    game_def_t *g = NULL;
-    for (const char *p = text; line && p && *p; ) {
-        size_t n = strcspn(p, "\n");
-        snprintf(line, 2048, "%.*s", (int)(n < 2047 ? n : 2047), p);
-        p += n + (p[n] == '\n');
-        trim(line);
-        if (!line[0] || line[0] == '#' || line[0] == ';') {
-            continue;
-        }
-        if (line[0] == '[') {
-            char *end = strchr(line, ']');
-            g = NULL;
-            if (!end) {
-                continue;
-            }
-            *end = '\0';
-            for (int i = 0; i < s_game_count && !g; i++) {
-                if (strcmp(s_games[i].id, line + 1) == 0) {
-                    g = &s_games[i];        // a firmware game changed by GAMES.INI
-                }
-            }
-            if (!g && s_game_count < GAMES_MAX) {
-                g = &s_games[s_game_count++];
-                memset(g, 0, sizeof(*g));
-                strlcpy(g->id, line + 1, sizeof(g->id));
-                strlcpy(g->name, g->id, sizeof(g->name));
-            }
-            continue;
-        }
-        char *eq = strchr(line, '=');
-        if (!g || !eq) {
-            continue;
-        }
-        *eq = '\0';
-        char *key = line, *value = eq + 1;
-        trim(key);
-        trim(value);
-        if (strcmp(key, key_name) == 0 || (strcmp(key, "name_en") == 0 && !g->name_own)) {
-            strlcpy(g->name, value, sizeof(g->name));
-            g->name_own |= strcmp(key, key_name) == 0;
-        } else if (strcmp(key, key_phrases) == 0 || (strcmp(key, "phrases_en") == 0 && !g->phrases_own)) {
-            strlcpy(g->phrases, value, sizeof(g->phrases));
-            g->phrases_own |= strcmp(key, key_phrases) == 0;
-        } else if (strcmp(key, "first") == 0) {
-            free(g->first);
-            g->first = strdup(value);
-        } else if (strcmp(key, "rules") == 0) {
-            free(g->rules);
-            g->rules = strdup(value);
-        } else if (strcmp(key, "character") == 0) {
-            g->plain = strcasecmp(value, "no") == 0;
-        } else if (strcmp(key, "short_after") == 0) {
-            strlcpy(g->short_after, value, sizeof(g->short_after));
-        } else if (strcmp(key, "secret") == 0) {
-            strlcpy(g->secret, value, sizeof(g->secret));
-        } else if (strcmp(key, "blunder_after") == 0) {
-            strlcpy(g->blunder_after, value, sizeof(g->blunder_after));
-        } else if (strcmp(key, "themes") == 0) {
-            free(g->themes);
-            g->themes = strdup(value);
-        } else if (strcmp(key, "characters") == 0) {
-            free(g->characters);
-            g->characters = strdup(value);
-        } else if (strcmp(key, "reasoning") == 0) {
-            g->reasoning = strcasecmp(value, "yes") == 0;
-        } else if (strcmp(key, "document") == 0) {
-            strlcpy(g->document, value, sizeof(g->document));
-        } else if (strcmp(key, "document_rule") == 0) {
-            free(g->document_rule);
-            g->document_rule = strdup(value);
-        } else if (strcmp(key, "sentences") == 0) {
-            g->sentences = atoi(value);
-        } else if (strcmp(key, "last") == 0) {
-            free(g->last);
-            g->last = strdup(value);
-        } else if (strcmp(key, "theme_for") == 0) {
-            g->theme_first = strcasecmp(value, "first") == 0;
-        } else if (strcmp(key, "theme_rule") == 0) {
-            free(g->theme_rule);
-            g->theme_rule = strdup(value);
-        } else if (strcmp(key, "next") == 0) {
-            strlcpy(g->next, value, sizeof(g->next));
-        } else if (strcmp(key, "turns") == 0) {
-            strlcpy(g->turns, value, sizeof(g->turns));
-        } else if (strcmp(key, "blunder") == 0) {
-            g->blunder = atoi(value);
-        } else if (strcmp(key, "blunder_rule") == 0) {
-            free(g->blunder_rule);
-            g->blunder_rule = strdup(value);
-        }
-    }
-    free(line);
-}
-
-static void games_load_locked(void)
-{
-    const char *lang = app_lang_get()->code;
-    if (s_games && strcmp(s_games_lang, lang) == 0) {
-        return;
-    }
-    if (!s_games) {
-        s_games = heap_caps_calloc(GAMES_MAX, sizeof(game_def_t), MALLOC_CAP_SPIRAM);
-    }
-    if (!s_games) {
-        return;
-    }
-    games_free();
-    strlcpy(s_games_lang, lang, sizeof(s_games_lang));
-    char key_name[24], key_phrases[24];
-    snprintf(key_name, sizeof(key_name), "name_%s", lang);
-    snprintf(key_phrases, sizeof(key_phrases), "phrases_%s", lang);
-    for (char *c = key_name; *c; c++) {
-        *c = (char)tolower((unsigned char)*c);
-    }
-    for (char *c = key_phrases; *c; c++) {
-        *c = (char)tolower((unsigned char)*c);
-    }
-    games_parse(s_games_default_start, key_name, key_phrases);
-    int builtin = s_game_count;
-    // GAMES.INI: the user's games and changes
-    FILE *f = fopen(GAMES_FILE, "r");
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        long size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        char *text = size > 0 ? heap_caps_malloc(size + 1, MALLOC_CAP_SPIRAM) : NULL;
-        size_t got = text ? fread(text, 1, size, f) : 0;
-        fclose(f);
-        if (text) {
-            text[got] = '\0';
-            games_parse(text, key_name, key_phrases);
-            free(text);
-        }
-    }
-    ESP_LOGI(TAG, "%d game(s): %d of the firmware, %d added by %s", s_game_count, builtin, s_game_count - builtin,
-             GAMES_FILE);
-}
-
-static int game_find(const char *id)
-{
-    for (int i = 0; i < s_game_count; i++) {
-        if (strcmp(s_games[i].id, id) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-/* A phrase to compare: lower case, without accents (UTF-8 Latin letters) nor punctuation, single spaces */
-static void fold(const char *in, char *out, size_t size)
-{
-    static const char from[] = "àáâãäåçèéêëìíîïñòóôõöùúûüýÿ";
-    static const char to[] = "aaaaaaceeeeiiiinooooouuuuyy";
-    size_t n = 0;
-    bool space = false;
-    for (const unsigned char *p = (const unsigned char *)in; *p && n + 2 < size; p++) {
-        char c = 0;
-        if (p[0] == 0xC3 && p[1]) {
-            unsigned char second = p[1] | 0x20;
-            for (size_t i = 0; i + 1 < sizeof(from) - 1; i += 2) {
-                if ((unsigned char)from[i + 1] == second) {
-                    c = to[i / 2];
-                    break;
-                }
-            }
-            p++;
-            if (!c) {
-                continue;
-            }
-        } else if (isalnum(*p)) {
-            c = (char)tolower(*p);
-        } else if (*p >= 0x80) {
-            continue;
-        }
-        if (!c) {
-            space = n > 0;      // punctuation, a dash, a blank: one space
-            continue;
-        }
-        if (space) {
-            out[n++] = ' ';
-            space = false;
-        }
-        out[n++] = c;
-    }
-    out[n] = '\0';
-}
-
-/* The game whose phrase begins what was said, -1 if none */
-/*
- * The game whose phrase begins what was said, -1 if none. The phrases of GAMES.INI are separated by "|" and written
- * as the voice commands' patterns ("invent(ez|er|ons) [quelque chose ]ensemble", file_phrases.h): the transcription
- * writes the verb or the small words its own way
- */
-static int game_of(const char *text)
-{
-    char said[200];
-    fold(text, said, sizeof(said));
-    for (int i = 0; i < s_game_count; i++) {
-        const char *p = s_games[i].phrases;
-        while (*p) {
-            // One pattern: up to a "|" outside brackets
-            const char *end = p;
-            for (int depth = 0; *end && (*end != '|' || depth > 0); end++) {
-                depth += (*end == '(' || *end == '[') - (*end == ')' || *end == ']');
-            }
-            char pattern[160];
-            snprintf(pattern, sizeof(pattern), "%.*s", (int)(end - p), p);
-            trim(pattern);
-            for (size_t n = strlen(pattern); n && pattern[n - 1] == ' '; n--) {
-                pattern[n - 1] = '\0';
-            }
-            char *phrases[48];
-            int count = pattern[0] ? phrases_expand(pattern, phrases, 48) : 0;
-            bool found = false;
-            for (int k = 0; k < count; k++) {
-                char phrase[100];
-                fold(phrases[k], phrase, sizeof(phrase));
-                size_t len = strlen(phrase);
-                found |= len && strncmp(said, phrase, len) == 0 && (said[len] == '\0' || said[len] == ' ');
-                free(phrases[k]);
-            }
-            if (found) {
-                return i;
-            }
-            p = *end ? end + 1 : end;
-        }
-    }
-    return -1;
-}
-
 /* ---------- network ---------- */
-
-static void send_to(uint32_t ip, cJSON *msg)
-{
-    char *text = cJSON_PrintUnformatted(msg);
-    if (!text || s_sock < 0) {
-        free(text);
-        return;
-    }
-    struct sockaddr_in to = {
-        .sin_family = AF_INET,
-        .sin_port = htons(GAME_PORT),
-        .sin_addr.s_addr = ip,
-    };
-    for (int i = 0; i < GAME_SEND_TIMES; i++) {
-        if (i) {
-            vTaskDelay(pdMS_TO_TICKS(GAME_SEND_GAP_MS));
-        }
-        sendto(s_sock, text, strlen(text), 0, (struct sockaddr *)&to, sizeof(to));
-    }
-    free(text);
-}
 
 static cJSON *msg_new(const char *type)
 {
-    cJSON *m = cJSON_CreateObject();
-    cJSON_AddStringToObject(m, "t", type);
-    char id[20];
-    snprintf(id, sizeof(id), "%llx", (unsigned long long)s_my_id);
-    cJSON_AddStringToObject(m, "id", id);
-    cJSON_AddNumberToObject(m, "n", s_nonce);
-    return m;
+    return game_net_msg(type, s_nonce);
 }
 
-/* The time of a claim: ms since 1970, the same on every BOX (SNTP) */
-static int64_t now_ms(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
-}
-
-/* To every BOX of the network: this type, a turn, a text (or none) */
 static void send_all(cJSON *m)
 {
-    send_to(htonl(INADDR_BROADCAST), m);
-    cJSON_Delete(m);
+    game_net_send(m);
 }
 
 static void send_simple(const char *type, int turn, const char *text)
@@ -591,81 +163,13 @@ static void send_simple(const char *type, int turn, const char *text)
     send_all(m);
 }
 
-static void net_task(void *arg)
-{
-    char *buf = heap_caps_malloc(GAME_TEXT_MAX + 512, MALLOC_CAP_SPIRAM);
-    for (;;) {
-        struct sockaddr_in from;
-        socklen_t len = sizeof(from);
-        int n = buf ? recvfrom(s_sock, buf, GAME_TEXT_MAX + 511, 0, (struct sockaddr *)&from, &len) : -1;
-        if (n <= 0) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            continue;
-        }
-        buf[n] = '\0';
-        cJSON *json = cJSON_Parse(buf);
-        const cJSON *type = cJSON_GetObjectItem(json, "t");
-        const cJSON *id = cJSON_GetObjectItem(json, "id");
-        uint64_t sender = cJSON_IsString(id) ? strtoull(id->valuestring, NULL, 16) : 0;
-        if (cJSON_IsString(type) && sender && sender != s_my_id) {
-            game_msg_t msg = { 0 };
-            strlcpy(msg.type, type->valuestring, sizeof(msg.type));
-            msg.from = sender;
-            const cJSON *v = cJSON_GetObjectItem(json, "n");
-            msg.nonce = cJSON_IsNumber(v) ? (uint32_t)v->valuedouble : 0;
-            v = cJSON_GetObjectItem(json, "turn");
-            msg.turn = cJSON_IsNumber(v) ? v->valueint : 0;
-            v = cJSON_GetObjectItem(json, "round");
-            msg.round = cJSON_IsNumber(v) ? v->valueint : 0;
-            v = cJSON_GetObjectItem(json, "ts");
-            msg.ts = cJSON_IsNumber(v) ? (int64_t)v->valuedouble : 0;
-            v = cJSON_GetObjectItem(json, "max");
-            msg.turns_max = cJSON_IsNumber(v) ? v->valueint : 0;
-            v = cJSON_GetObjectItem(json, "tone");
-            msg.tone = cJSON_IsNumber(v) ? v->valueint : -1;
-            v = cJSON_GetObjectItem(json, "game");
-            strlcpy(msg.game, cJSON_IsString(v) ? v->valuestring : "", sizeof(msg.game));
-            v = cJSON_GetObjectItem(json, "tag");
-            strlcpy(msg.tag, cJSON_IsString(v) ? v->valuestring : "", sizeof(msg.tag));
-            v = cJSON_GetObjectItem(json, "text");
-            msg.text = cJSON_IsString(v) ? strdup(v->valuestring) : NULL;
-            if (xQueueSend(s_queue, &msg, 0) != pdTRUE) {
-                free(msg.text);
-            } else {
-                assistant_save_soon();      // the main task, at once
-            }
-        }
-        cJSON_Delete(json);
-    }
-}
-
 void game_init(void)
 {
-    uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    for (int i = 0; i < 6; i++) {
-        s_my_id = (s_my_id << 8) | mac[i];
+    games_init();
+    if (game_net_init()) {
+        s_net_ready = true;
     }
-    s_games_lock = xSemaphoreCreateMutex();
-    games_install();
-    // In PSRAM, as its task's stack: the internal RAM is short, TLS needs it for the calls to the services
-    s_queue = xQueueCreateWithCaps(16, sizeof(game_msg_t), MALLOC_CAP_SPIRAM);
-    s_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    int yes = 1;
-    setsockopt(s_sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
-    struct sockaddr_in addr = {
-        .sin_family = AF_INET,
-        .sin_port = htons(GAME_PORT),
-        .sin_addr.s_addr = htonl(INADDR_ANY),
-    };
-    if (s_sock < 0 || bind(s_sock, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        ESP_LOGE(TAG, "UDP port %d not opened", GAME_PORT);
-        return;
-    }
-    // Small: it only reads the messages and gives them to the main task
-    if (xTaskCreatePinnedToCoreWithCaps(net_task, "game_net", 3072, NULL, 4, NULL, 0, MALLOC_CAP_SPIRAM) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create task");
-    }
+    s_my_id = game_net_id();
 }
 
 /* ---------- the game ---------- */
@@ -686,12 +190,10 @@ void game_heard(char *text)
     strlcpy(msg.type, "local", sizeof(msg.type));
     msg.from = s_my_id;
     msg.text = text;
-    if (!s_queue || xQueueSend(s_queue, &msg, 0) != pdTRUE) {
+    if (!game_net_post(&msg)) {
         free(text);
         s_listen_on = false;
-        return;
     }
-    assistant_save_soon();
 }
 
 /* My personality: PERSO_<XX>.TXT (Game_tone = persona), else one of the list, not one drawn by another BOX */
@@ -708,29 +210,16 @@ static void tone_choose(void)
         return;
     }
     // This game's characters (the creation: experts), else the firmware's list
-    const char *list = s_game >= 0 ? s_games[s_game].characters : NULL;
-    int count = TONES_COUNT;
-    if (list && list[0]) {
-        count = 1;
-        for (const char *p = list; *p; p++) {
-            count += *p == '|';
-        }
-    }
+    const char *list = s_game >= 0 ? game_def(s_game)->characters : NULL;
+    int count = game_list_count(list);
     int tries = 0;
     do {
-        s_my_tone = (int)(esp_random() % count);
+        s_my_tone = (int)(esp_random() % (count ? count : TONES_COUNT));
     } while ((s_tones_seen & (1u << (s_my_tone % 32))) && ++tries < 50);
-    if (list && list[0]) {
-        const char *p = list;
-        for (int i = 0; i < s_my_tone; i++) {
-            p = strchr(p, '|') + 1;
-        }
-        p += strspn(p, " ");
-        size_t n = strcspn(p, "|");
-        while (n && p[n - 1] == ' ') {
-            n--;
-        }
-        s_tone_text = strndup(p, n);
+    if (count) {
+        char character[120];
+        game_list_item(list, s_my_tone, character, sizeof(character));
+        s_tone_text = strdup(character);
     } else {
         s_tone_text = strdup(s_tones[s_my_tone]);
     }
@@ -799,7 +288,7 @@ static void claim_send(int round)
         .nonce = s_nonce,
         .turn = s_turns,
         .round = round,
-        .ts = now_ms(),
+        .ts = game_now_ms(),
         .turns_max = s_turns_max,
     };
     claim_take(&mine);
@@ -808,7 +297,7 @@ static void claim_send(int round)
     cJSON_AddNumberToObject(m, "round", round);
     cJSON_AddNumberToObject(m, "ts", (double)mine.ts);
     if (s_state == G_STARTING) {
-        cJSON_AddStringToObject(m, "game", s_games[s_game].id);
+        cJSON_AddStringToObject(m, "game", game_def(s_game)->id);
         cJSON_AddNumberToObject(m, "max", s_turns_max);
         cJSON_AddNumberToObject(m, "tone", s_my_tone);
     }
@@ -818,66 +307,6 @@ static void claim_send(int round)
 
 /* ---------- the lines ---------- */
 
-static const char *tag_skip(const char *text, size_t *tag_len);
-
-/* The tag of a line ("GUESS"), "" if none */
-static void tag_of(const char *text, char *tag, size_t size)
-{
-    size_t len = 0;
-    tag_skip(text, &len);
-    const char *start = text + strspn(text, " \n");
-    snprintf(tag, size, "%.*s", (int)(len < size ? len : size - 1), start);
-}
-
-/* A word of a list of tags ("RIDDLE WRONG") */
-static bool tag_in(const char *list, size_t list_len, const char *tag)
-{
-    size_t tag_len = strlen(tag);
-    for (const char *p = list; p < list + list_len; ) {
-        p += strspn(p, " ,");
-        size_t n = strcspn(p, " ,;");
-        if (p + n > list + list_len) {
-            n = list + list_len - p;
-        }
-        if (n && n == tag_len && strncmp(p, tag, n) == 0) {
-            return true;
-        }
-        p += n ? n : 1;
-    }
-    return false;
-}
-
-/*
- * turns: "GUESS>RIDDLE WRONG; RIGHT>GUESS": after a line tagged GUESS, the BOX of the last line tagged RIDDLE or
- * WRONG says the next one (no claim). 0 when the line's tag has no such rule (the earliest claim speaks).
- */
-/* The right side of the rule of this tag in "A>B C; D>E" (copied in out; false: no rule) */
-static bool rule_of(const char *rules, const char *tag, char *out, size_t size)
-{
-    for (const char *r = rules; tag[0] && *r; ) {
-        r += strspn(r, " ;");
-        size_t len = strcspn(r, ";");
-        const char *gt = memchr(r, '>', len);
-        if (gt) {
-            size_t left = gt - r;
-            while (left && r[left - 1] == ' ') {
-                left--;
-            }
-            if (left == strlen(tag) && strncmp(r, tag, left) == 0) {
-                const char *right = gt + 1 + strspn(gt + 1, " ");
-                size_t n = r + len - right;
-                while (n && right[n - 1] == ' ') {
-                    n--;
-                }
-                snprintf(out, size, "%.*s", (int)n, right);
-                return true;
-            }
-        }
-        r += len;
-    }
-    return false;
-}
-
 /* The tags this line may have (next: after the last line's tag), "" if free */
 static void next_tags(char *out, size_t size)
 {
@@ -885,44 +314,28 @@ static void next_tags(char *out, size_t size)
     const cJSON *last = cJSON_GetArrayItem(s_history, cJSON_GetArraySize(s_history) - 1);
     const cJSON *tag = last ? cJSON_GetObjectItem(last, "tag") : NULL;
     if (cJSON_IsString(tag)) {
-        rule_of(s_games[s_game].next, tag->valuestring, out, size);
+        game_rule_of(game_def(s_game)->next, tag->valuestring, out, size);
     }
 }
 
+/*
+ * turns: "GUESS>RIDDLE WRONG; RIGHT>GUESS": after a line tagged GUESS, the BOX of the last line tagged RIDDLE or
+ * WRONG says the next one (no claim). 0 when the line's tag has no such rule (the earliest claim speaks).
+ */
 static uint64_t owner_after(const char *tag)
 {
-    const char *rules = s_games[s_game].turns;
-    if (!tag[0] || !rules[0]) {
+    char right[64];
+    if (!tag[0] || !game_rule_of(game_def(s_game)->turns, tag, right, sizeof(right))) {
         return 0;
     }
-    for (const char *r = rules; *r; ) {
-        r += strspn(r, " ;");
-        size_t len = strcspn(r, ";");
-        const char *gt = memchr(r, '>', len);
-        if (gt) {
-            char left[16];
-            snprintf(left, sizeof(left), "%.*s", (int)(gt - r), r);
-            trim(left);
-            for (char *e = left + strlen(left); e > left && e[-1] == ' '; e--) {
-                e[-1] = '\0';
-            }
-            if (strcmp(left, tag) == 0) {
-                // The last line (before this one) whose tag is on the right
-                const char *right = gt + 1;
-                size_t right_len = r + len - right;
-                int count = cJSON_GetArraySize(s_history);
-                for (int i = count - 2; i >= 0; i--) {
-                    const cJSON *item = cJSON_GetArrayItem(s_history, i);
-                    const cJSON *t = cJSON_GetObjectItem(item, "tag");
-                    if (cJSON_IsString(t) && tag_in(right, right_len, t->valuestring)) {
-                        const cJSON *id = cJSON_GetObjectItem(item, "id");
-                        return cJSON_IsString(id) ? strtoull(id->valuestring, NULL, 16) : 0;
-                    }
-                }
-                return 0;
-            }
+    // The last line (before this one) whose tag is on the right
+    for (int i = cJSON_GetArraySize(s_history) - 2; i >= 0; i--) {
+        const cJSON *item = cJSON_GetArrayItem(s_history, i);
+        const cJSON *t = cJSON_GetObjectItem(item, "tag");
+        if (cJSON_IsString(t) && game_tag_in(right, strlen(right), t->valuestring)) {
+            const cJSON *id = cJSON_GetObjectItem(item, "id");
+            return cJSON_IsString(id) ? strtoull(id->valuestring, NULL, 16) : 0;
         }
-        r += len;
     }
     return 0;
 }
@@ -1016,13 +429,10 @@ static void start_setup(int game, uint32_t nonce)
 
 bool game_try_start(const char *text)
 {
-    if (!s_queue || s_sock < 0 || !s_games_lock) {
+    if (!s_net_ready) {
         return false;
     }
-    xSemaphoreTake(s_games_lock, portMAX_DELAY);
-    games_load_locked();
-    int game = game_of(text);
-    xSemaphoreGive(s_games_lock);
+    int game = game_phrase(text);
     if (game < 0) {
         return false;
     }
@@ -1032,11 +442,7 @@ bool game_try_start(const char *text)
     // Started by the main task, which plays the game (this is the SR handler task)
     game_msg_t msg = { .from = s_my_id, .turn = game };
     strlcpy(msg.type, "start", sizeof(msg.type));
-    if (xQueueSend(s_queue, &msg, 0) != pdTRUE) {
-        return false;
-    }
-    assistant_save_soon();
-    return true;
+    return game_net_post(&msg);
 }
 
 /* The phrase of a game heard here: this BOX claims its first line */
@@ -1054,13 +460,13 @@ static void game_start(int game)
     start_setup(game, seen ? s_claim_seen.nonce : esp_random());
     if (seen) {
         // Another BOX heard it too and claims already: this one claims in the same election
-        ESP_LOGI(TAG, "%s: the claim of another BOX already received", s_games[game].id);
+        ESP_LOGI(TAG, "%s: the claim of another BOX already received", game_def(game)->id);
         claim_take(&s_claim_seen);
     }
     s_claim_seen_us = 0;
     claim_send(0);
     assistant_show(app_lang_get()->game_organizing);
-    ESP_LOGI(TAG, "%s: looking for the other BOX", s_games[game].id);
+    ESP_LOGI(TAG, "%s: looking for the other BOX", game_def(game)->id);
 }
 
 bool game_stop(void)
@@ -1085,123 +491,13 @@ static bool blunder_allowed(const game_def_t *g)
     }
     const cJSON *tag = cJSON_GetObjectItem(last, "tag");
     return cJSON_IsString(tag) && tag->valuestring[0] &&
-           tag_in(g->blunder_after, strlen(g->blunder_after), tag->valuestring);
-}
-
-/* ---------- what the games used lately ---------- */
-
-/* The items of this game used lately, oldest first, separated by "\n" (allocated; NULL: none) */
-static char *used_read(const char *game)
-{
-    FILE *f = fopen(GAMES_USED_FILE, "r");
-    if (!f) {
-        return NULL;
-    }
-    char *out = NULL;
-    size_t size = 0;
-    FILE *mem = open_memstream(&out, &size);
-    char line[160];
-    size_t id_len = strlen(game);
-    while (mem && fgets(line, sizeof(line), f)) {
-        line[strcspn(line, "\r\n")] = '\0';
-        if (strncmp(line, game, id_len) == 0 && line[id_len] == '\t' && line[id_len + 1]) {
-            fprintf(mem, "%s\n", line + id_len + 1);
-        }
-    }
-    fclose(f);
-    if (mem) {
-        fclose(mem);
-    }
-    if (out && !out[0]) {
-        free(out);
-        out = NULL;
-    }
-    return out;
-}
-
-/* One more item used by this game: the file keeps the last GAMES_USED_KEPT lines */
-static void used_add(const char *game, const char *item)
-{
-    char *old = NULL;
-    size_t size = 0;
-    FILE *f = fopen(GAMES_USED_FILE, "r");
-    if (f) {
-        FILE *mem = open_memstream(&old, &size);
-        char line[160];
-        while (mem && fgets(line, sizeof(line), f)) {
-            fputs(line, mem);
-        }
-        if (mem) {
-            fclose(mem);
-        }
-        fclose(f);
-    }
-    int lines = 0;
-    for (const char *p = old; p && *p; p++) {
-        lines += *p == '\n';
-    }
-    const char *from = old;
-    for (; from && lines >= GAMES_USED_KEPT; lines--) {
-        const char *nl = strchr(from, '\n');
-        from = nl ? nl + 1 : from + strlen(from);
-    }
-    f = fopen(GAMES_USED_FILE, "w");
-    if (f) {
-        if (from) {
-            fputs(from, f);
-        }
-        fprintf(f, "%s\t%.120s\n", game, item);
-        fclose(f);
-    }
-    free(old);
-}
-
-/* The item is in the list ("a\nb\n"), case ignored */
-static bool used_has(const char *used, const char *item)
-{
-    size_t len = strlen(item);
-    for (const char *p = used; p && *p; ) {
-        const char *nl = strchr(p, '\n');
-        size_t n = nl ? (size_t)(nl - p) : strlen(p);
-        if (n == len && strncasecmp(p, item, n) == 0) {
-            return true;
-        }
-        p += n + (nl != NULL);
-    }
-    return false;
-}
-
-/* A theme of the game drawn, not one used lately if possible (copied in theme) */
-static void theme_draw(const game_def_t *g, const char *used, char *theme, size_t size)
-{
-    theme[0] = '\0';
-    int count = 0;
-    for (const char *p = g->themes; p && *p; p++) {
-        count += *p == '|';
-    }
-    count++;
-    for (int tries = 0; tries < 12; tries++) {
-        int pick = (int)(esp_random() % count);
-        const char *p = g->themes;
-        for (int i = 0; i < pick; i++) {
-            p = strchr(p, '|') + 1;
-        }
-        p += strspn(p, " ");
-        size_t n = strcspn(p, "|");
-        while (n && p[n - 1] == ' ') {
-            n--;
-        }
-        snprintf(theme, size, "%.*s", (int)n, p);
-        if (!used_has(used, theme)) {
-            return;
-        }
-    }
+           game_tag_in(g->blunder_after, strlen(g->blunder_after), tag->valuestring);
 }
 
 /* The question to the model: the rules, then the lines so far */
 static char *line_make(void)
 {
-    const game_def_t *g = &s_games[s_game];
+    const game_def_t *g = game_def(s_game);
     const app_lang_t *lang = app_lang_get();
     char *system = NULL;
     char *character = NULL;
@@ -1256,17 +552,17 @@ static char *line_make(void)
             }
         }
         // A theme drawn (each line: the model uses it when it asks or opens something new), and what was used
-        char *used = used_read(g->id);
+        char *used = game_used_read(g->id);
         if (g->themes && g->themes[0] && (!g->theme_first || cJSON_GetArraySize(s_history) == 0)) {
             char theme[64];
-            theme_draw(g, used, theme, sizeof(theme));
+            game_theme_draw(g, used, theme, sizeof(theme));
             const char *rule = g->theme_rule && strstr(g->theme_rule, "%s") ? g->theme_rule
                                : "Theme of anything new in this line: %s.";
             const char *at = strstr(rule, "%s");
             fprintf(out, " %.*s%s%s", (int)(at - rule), rule, theme, at + 2);
             ESP_LOGI(TAG, "theme: %s", theme);
             if (!g->secret[0] && cJSON_GetArraySize(s_history) == 0) {
-                used_add(g->id, theme);     // a debate's topic: not drawn again soon
+                game_used_add(g->id, theme);     // a debate's topic: not drawn again soon
             }
         }
         if (used && g->secret[0]) {
@@ -1321,42 +617,12 @@ static void on_speech(tts_event_t event)
     }
 }
 
-/*
- * The tag a line may start with ("RIGHT: Correct !"), asked by the rules: an upper-case word and a colon. Returns
- * the text after it (and its spaces), the text itself without a tag; its length in *tag_len (0: none)
- */
-static const char *tag_skip(const char *text, size_t *tag_len)
-{
-    const char *p = text;
-    while (*p == ' ' || *p == '\n') {
-        p++;
-    }
-    const char *word = p;
-    while (*p >= 'A' && *p <= 'Z') {
-        p++;
-    }
-    size_t len = p - word;
-    while (*p == ' ') {
-        p++;
-    }
-    if (len < 2 || len > 12 || *p != ':') {
-        *tag_len = 0;
-        return text;
-    }
-    *tag_len = len;
-    p++;
-    while (*p == ' ' || *p == '\n') {
-        p++;
-    }
-    return p;
-}
-
 /* short_after: a line starting with this tag keeps only its first sentence (a riddle guessed: "Correct !" and
    nothing more, the one who found it asks the next one) */
 static void line_shorten(char *text, const char *short_after)
 {
     size_t tag_len = 0;
-    char *body = (char *)tag_skip(text, &tag_len);
+    char *body = (char *)game_tag_skip(text, &tag_len);
     const char *tag = text + strspn(text, " \n");
     if (!short_after[0] || tag_len != strlen(short_after) || strncmp(tag, short_after, tag_len) != 0) {
         return;
@@ -1378,7 +644,7 @@ static void line_shorten(char *text, const char *short_after)
  */
 static void line_clean(char *text)
 {
-    const game_def_t *g = &s_games[s_game];
+    const game_def_t *g = game_def(s_game);
     if (!g->short_after[0] && !g->turns[0]) {
         // A game without tags: its reasoning comes in paragraphs before the line ("Ce n'est pas le début du
         // débat, donc je réponds...", a blank line, then the line): only the last paragraph is kept
@@ -1401,7 +667,7 @@ static void line_clean(char *text)
     for (char *p = text; *p; p++) {
         if (p == text || p[-1] == '\n') {
             size_t tag_len = 0;
-            tag_skip(p, &tag_len);
+            game_tag_skip(p, &tag_len);
             // The secret ("ANSWER:" on a line of its own) belongs to the line before it
             if (tag_len && !(g->secret[0] && tag_len == strlen(g->secret) &&
                              strncmp(p + strspn(p, " \n"), g->secret, tag_len) == 0)) {
@@ -1432,7 +698,7 @@ static void line_sentences(char *text, int max)
         return;
     }
     size_t tag_len = 0;
-    char *p = (char *)tag_skip(text, &tag_len);
+    char *p = (char *)game_tag_skip(text, &tag_len);
     int count = 0;
     for (; *p; p++) {
         if (*p != '.' && *p != '!' && *p != '?') {
@@ -1474,7 +740,7 @@ static void line_say(char *text)
     if (!open) {
         return;
     }
-    const char *secret = s_games[s_game].secret;
+    const char *secret = game_def(s_game)->secret;
     if (secret[0]) {
         for (char *p = strstr(open, secret); p; p = strstr(p + 1, secret)) {
             const char *after = p + strlen(secret);
@@ -1489,7 +755,7 @@ static void line_say(char *text)
                     answer[n - 1] = '\0';
                 }
                 if (answer[0]) {
-                    used_add(s_games[s_game].id, answer);
+                    game_used_add(game_def(s_game)->id, answer);
                 }
                 *p = '\0';
                 break;
@@ -1500,13 +766,13 @@ static void line_say(char *text)
         }
     }
     char tag[16];
-    tag_of(text, tag, sizeof(tag));
+    game_tag_of(text, tag, sizeof(tag));
     cJSON *m = msg_new("speak");
     cJSON_AddNumberToObject(m, "turn", turn);
     cJSON_AddStringToObject(m, "tag", tag);
     send_all(m);
     size_t tag_len;
-    const char *said = tag_skip(open, &tag_len);
+    const char *said = game_tag_skip(open, &tag_len);
     ui_ctrl_reply_show_scrolled(said);
     s_spoken = false;
     tts_stream_begin(on_speech);
@@ -1572,7 +838,7 @@ static void line_heard(void)
  */
 static char *document_write(void)
 {
-    const game_def_t *g = &s_games[s_game];
+    const game_def_t *g = game_def(s_game);
     if (!g->document[0] || !g->document_rule || cJSON_GetArraySize(s_history) == 0) {
         return NULL;
     }
@@ -1740,9 +1006,9 @@ static void elect(void)
             s_turns_max = best->turns_max;
         }
         char title[96];
-        snprintf(title, sizeof(title), app_lang_get()->game_title, s_games[s_game].name);
+        snprintf(title, sizeof(title), app_lang_get()->game_title, game_def(s_game)->name);
         assistant_show(title);
-        ESP_LOGI(TAG, "%s: %d BOX, %s, %d lines at most", s_games[s_game].id, s_player_count,
+        ESP_LOGI(TAG, "%s: %d BOX, %s, %d lines at most", game_def(s_game)->id, s_player_count,
                  s_tone_text ? s_tone_text : "-", s_turns_max);
     }
     decided(best->id);
@@ -1787,7 +1053,7 @@ static void message(game_msg_t *m)
                 cJSON *j = msg_new("join");
                 cJSON_AddNumberToObject(j, "tone", s_my_tone);
                 send_all(j);
-                ESP_LOGI(TAG, "%s: joined", s_games[game].id);
+                ESP_LOGI(TAG, "%s: joined", game_def(game)->id);
             } else if (s_state == G_IDLE) {
                 // Busy (the phrase heard here too, being transcribed): kept, claimed once transcribed
                 s_claim_seen = *m;
@@ -1864,7 +1130,7 @@ static void message(game_msg_t *m)
 void game_poll(void)
 {
     game_msg_t m;
-    while (s_queue && xQueueReceive(s_queue, &m, 0) == pdTRUE) {
+    while (game_net_receive(&m)) {
         message(&m);
     }
     if (s_stop_requested) {
@@ -1906,8 +1172,8 @@ void game_poll(void)
         next_tags(allowed, sizeof(allowed));
         if (text && allowed[0]) {
             line_clean(text);
-            tag_of(text, tag, sizeof(tag));
-            if (!tag[0] || !tag_in(allowed, strlen(allowed), tag)) {
+            game_tag_of(text, tag, sizeof(tag));
+            if (!tag[0] || !game_tag_in(allowed, strlen(allowed), tag)) {
                 ESP_LOGW(TAG, "line tagged \"%s\" instead of %s: asked again", tag, allowed);
                 free(text);
                 text = line_make();
@@ -1919,8 +1185,8 @@ void game_poll(void)
             return;
         }
         line_clean(text);
-        line_shorten(text, s_games[s_game].short_after);
-        line_sentences(text, s_games[s_game].sentences);
+        line_shorten(text, game_def(s_game)->short_after);
+        line_sentences(text, game_def(s_game)->sentences);
         line_say(text);
         free(text);
         break;

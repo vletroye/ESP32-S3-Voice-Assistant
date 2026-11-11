@@ -1456,7 +1456,22 @@ static void line_clean(char *text)
 {
     const game_def_t *g = &s_games[s_game];
     if (!g->short_after[0] && !g->turns[0]) {
-        return;     // a game without tags
+        // A game without tags: its reasoning comes in paragraphs before the line ("Ce n'est pas le début du
+        // débat, donc je réponds...", a blank line, then the line): only the last paragraph is kept
+        size_t len = strlen(text);
+        while (len && (text[len - 1] == '\n' || text[len - 1] == ' ')) {
+            text[--len] = '\0';
+        }
+        char *last = NULL;
+        for (char *p = strstr(text, "\n\n"); p; p = strstr(p + 1, "\n\n")) {
+            last = p;
+        }
+        if (last) {
+            last += strspn(last, "\n ");
+            ESP_LOGW(TAG, "the model thought aloud: only its last paragraph kept");
+            memmove(text, last, strlen(last) + 1);
+        }
+        return;
     }
     char *keep = NULL;
     for (char *p = text; *p; p++) {

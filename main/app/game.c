@@ -545,7 +545,7 @@ static void game_reset(void)
 /* The end, said on screen (and spoken), back to sleep */
 static void game_end(const char *why)
 {
-    ESP_LOGI(TAG, "Game over: %s", why);
+    ESP_LOGI(TAG, "Game over: %s", why ? why : "(quietly)");     // NULL in a printf: a crash
     game_reset();
     if (why && why[0]) {
         assistant_say_final(why);

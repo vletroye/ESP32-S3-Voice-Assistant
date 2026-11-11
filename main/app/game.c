@@ -417,6 +417,9 @@ static void start_setup(int game, uint32_t nonce)
     s_history = cJSON_CreateArray();
     char *max = settings_read_value("Game_turns_max");
     s_turns_max = max ? atoi(max) : GAME_TURNS_DEFAULT;
+    if (game_def(game)->lines > 0) {
+        s_turns_max = game_def(game)->lines;    // a guessing game: its own length
+    }
     s_turns_max = s_turns_max < 2 ? 2 : s_turns_max > 100 ? 100 : s_turns_max;
     free(max);
     tone_choose();

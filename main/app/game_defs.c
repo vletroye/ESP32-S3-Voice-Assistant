@@ -77,6 +77,7 @@ static const game_key_t s_keys[] = {
     KEY_F("character", plain, "no"),
     KEY_T("characters", characters),
     KEY_I("sentences", sentences),
+    KEY_I("lines", lines),
     KEY_F("reasoning", reasoning, "yes"),
     KEY_T("themes", themes),
     KEY_T("theme_rule", theme_rule),

@@ -43,6 +43,7 @@ typedef struct {
     char *characters;       /* "a | b | c": this game's characters (Game_tone = random), else the firmware's list */
     char *last;             /* the instruction of the last line */
     int sentences;          /* each line cut after this many sentences (0: not cut) */
+    int lines;              /* this game's number of lines (a guessing game is longer), else Game_turns_max */
     bool reasoning;         /* reasoning = yes: its lines and document made in the reasoning mode */
     char document[24];      /* the file written at the end by the BOX ending the game ("project.txt") */
     char *document_rule;    /* what it is */

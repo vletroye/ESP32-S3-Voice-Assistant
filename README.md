@@ -239,7 +239,8 @@ settings of the [Quick start](#1-quick-start).
   agenda (Google Calendar: "Qu'est-ce que j'ai demain ?" / "What do I have tomorrow?") (see
   [Google: Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar)).
 - **Games between BOX**: "Disputez-vous" / "Argue with each other", "Concours de devinettes" / "Riddle contest",
-  "Création collaborative" / "Collaborative creation":
+  "Création collaborative" / "Collaborative creation", "Qui suis-je ?" / "Who am I?", "Devine l'animal" / "Guess
+  the animal", "Plus ou moins" / "Higher or lower", "Le procès" / "The trial":
   two BOX or more take turns out loud, each with its own voice, hearing each other (see
   [Games between BOX](#29-games-between-box)).
 - **Any MCP server** whose tools the model can use, besides the Homey (see [MCP servers](#312-mcp-servers)).
@@ -753,6 +754,10 @@ asleep, join in), then a game's phrase:
 | --- | --- |
 | "Disputez-vous" / "Argue with each other" | A real fight of words, quick-fire: one asserts a bold opinion as an obvious fact, then each hits back in one short sharp sentence (12 words at most), arrogant and ironic ("j'ai raison, tu as tort" / "I'm right, you're wrong", "laisse tomber, tu ne peux pas me contredire" / "give up, you can't contradict me"), with colourful insults in the style of Captain Haddock ("bachi-bouzouk", "moule à gaufres", "ectoplasme à roulettes" / "bashi-bazouk", "nincompoop"…), never vulgar |
 | "Création collaborative" / "Collaborative creation", "Inventez ensemble" / "Invent together" | A brainstorming of experts (a visionary scientist, an engineer, an economist, a lawyer, a civil servant, an investor, an ethicist, a sceptic…): the first announces a totally new invention in a field drawn (science, technology, law, economics, public administration, health…), the others build the plan to make it real, each bringing a step, a solution, a cost, a law, a risk or an objection (never naming the others' roles); the last line sums the plan up, then the BOX ending the game writes the requirements for a specialised subcontractor in **PROJECT.TXT** (configuration drive, replaced each time) |
+| "Qui suis-je ?" / "Who am I?" | One thinks of a famous person, the other asks yes / no questions ("Est-ce une femme ?" / "Is it a woman?"), answered "oui", "non" or "plus ou moins" only, and guesses when it knows; the one who found it thinks of the next one (40 lines) |
+| "Devine l'animal" / "Guess the animal" | One says "J'ai un animal en tête. Trouve-le !" / "I have an animal in mind. Find it!", the other asks only questions starting with "Est-ce…" ("Est-ce un mammifère ?", "Est-ce qu'il est plus grand qu'un chat ?", "Est-ce qu'il saute ?"), answered "oui", "non" or "plus ou moins", and has a single guess; then it thinks of an animal in turn (40 lines) |
+| "Plus ou moins" / "Higher or lower" | One thinks of a number from 1 to 1000 or of the year of a famous event, the other guesses, answered "c'est plus" / "c'est moins" (a hint for a year) (40 lines) |
+| "Faites un procès" / "Hold a trial" | A prosecutor and a defence lawyer plead an absurd case drawn ("le chat accusé d'avoir volé le croissant" / "the cat accused of stealing the croissant") with mock solemnity, alibis, precedents and objections; the last line is the judge's verdict |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers (wrong on purpose about one time in three, with humour); right ("c'est correct" / "that's right"): the one who found it asks the next one; wrong: the one who asked gives the answer and asks another |
 
 - The BOX take turns **out loud**, each with **its own voice** and **its own model**, and **hear each other with
@@ -798,6 +803,7 @@ asleep, join in), then a game's phrase:
   | `last` | The instruction of the last line (the creation: sum up the plan) |
   | `character = no` | Plain lines, without the characters of `Game_tone` (the riddles) |
   | `characters = a \| b \| c` | This game's characters instead of the firmware's list (the creation: its experts) |
+  | `lines = 40` | This game's number of lines instead of `Game_turns_max` (the guessing games are longer) |
   | `sentences = 1` | Each line cut after that many sentences (the debate: the model made three of 40 words when asked for one) |
   | `reasoning = yes` | Its lines and document made in the reasoning mode of the model, when it reasons (the creation: better ideas, but each line takes tens of seconds) |
   | `themes = a \| b \| c`, `theme_rule` (`%s`: the theme), `theme_for = first` | A theme drawn for each line (or the first one only: the debate's topic), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time) |

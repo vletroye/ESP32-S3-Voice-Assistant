@@ -116,6 +116,7 @@ typedef struct {
     int blunder;            /* percent of the lines given blunder_rule */
     char *blunder_rule;     /* a wrong guess on purpose, with humour (the riddles) */
     char turns[64];         /* "GUESS>RIDDLE WRONG; RIGHT>GUESS": who says the line after a tag (else the first claim) */
+    char next[96];          /* "RIDDLE>GUESS; GUESS>RIGHT WRONG": the tags a line may have after a tag */
     char *themes;           /* "a | b | c": one drawn for each line, given by theme_rule */
     char *theme_rule;       /* "... its theme is: %s ..." */
 } game_def_t;
@@ -259,6 +260,8 @@ static const char *const s_games_updates[][2] = {
       "first = Open a verbal duel: assert a bold, debatable opinion on the topic given as if it were an obvious fact, in one short, dry sentence (10 words at most), with a touch of irony.\nthemes = breakfast | socks with sandals | cats or dogs | cold pizza | holidays at the sea or in the mountains | phones at the table | getting up early | Christmas songs in November | books or their films | cooking or ordering in | rain | the best season | camping | big cities or the countryside | video games | sport on television | homework | the best fruit | coffee or tea | tidy or messy desks | Monday mornings | the perfect sandwich | snow | electric scooters | queues | birthdays | the best superpower | surprise parties | the beach | supermarket music | naps | crosswords | the remote control | cheese | dancing | the best pet | wearing a tie | open-plan offices | dessert first | road trips | the ideal Sunday\ntheme_rule = If this line opens the debate, its topic is: %s." },
     { "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nblunder = 35",
       "secret = ANSWER\nturns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nthemes = the kitchen | farm animals | outer space | sports | the bathroom | the sea | music | the weather | school | trees and plants | insects | the city | transport | the human body | clothes | the night | fire | water | toys | the garden | tools | the mountains | the desert | birds | the forest | numbers | time | the house | the circus | the library | the beach | snow | the moon | dinosaurs | pirates | the hospital | the market | the cinema | painting | electricity | computers | the telephone | bread | cheese | the river | castles | trains | the post | fruit | vegetables | the zoo | knights | robots | magic | the farm | money | letters of the alphabet | colours\ntheme_rule = If this line asks a new riddle, its theme is: %s. Invent an original riddle yourself, never a famous or classic one.\nblunder = 35" },
+    { "turns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nthemes = ",
+      "turns = GUESS>RIDDLE WRONG; RIGHT>GUESS\nnext = RIDDLE>GUESS; WRONG>GUESS; GUESS>RIGHT WRONG; RIGHT>RIDDLE\nthemes = " },
 };
 
 static void games_update(void)
@@ -434,6 +437,8 @@ static void games_load_locked(void)
         } else if (strcmp(key, "theme_rule") == 0) {
             free(g->theme_rule);
             g->theme_rule = strdup(value);
+        } else if (strcmp(key, "next") == 0) {
+            strlcpy(g->next, value, sizeof(g->next));
         } else if (strcmp(key, "turns") == 0) {
             strlcpy(g->turns, value, sizeof(g->turns));
         } else if (strcmp(key, "blunder") == 0) {
@@ -851,6 +856,44 @@ static bool tag_in(const char *list, size_t list_len, const char *tag)
  * turns: "GUESS>RIDDLE WRONG; RIGHT>GUESS": after a line tagged GUESS, the BOX of the last line tagged RIDDLE or
  * WRONG says the next one (no claim). 0 when the line's tag has no such rule (the earliest claim speaks).
  */
+/* The right side of the rule of this tag in "A>B C; D>E" (copied in out; false: no rule) */
+static bool rule_of(const char *rules, const char *tag, char *out, size_t size)
+{
+    for (const char *r = rules; tag[0] && *r; ) {
+        r += strspn(r, " ;");
+        size_t len = strcspn(r, ";");
+        const char *gt = memchr(r, '>', len);
+        if (gt) {
+            size_t left = gt - r;
+            while (left && r[left - 1] == ' ') {
+                left--;
+            }
+            if (left == strlen(tag) && strncmp(r, tag, left) == 0) {
+                const char *right = gt + 1 + strspn(gt + 1, " ");
+                size_t n = r + len - right;
+                while (n && right[n - 1] == ' ') {
+                    n--;
+                }
+                snprintf(out, size, "%.*s", (int)n, right);
+                return true;
+            }
+        }
+        r += len;
+    }
+    return false;
+}
+
+/* The tags this line may have (next: after the last line's tag), "" if free */
+static void next_tags(char *out, size_t size)
+{
+    out[0] = '\0';
+    const cJSON *last = cJSON_GetArrayItem(s_history, cJSON_GetArraySize(s_history) - 1);
+    const cJSON *tag = last ? cJSON_GetObjectItem(last, "tag") : NULL;
+    if (cJSON_IsString(tag)) {
+        rule_of(s_games[s_game].next, tag->valuestring, out, size);
+    }
+}
+
 static uint64_t owner_after(const char *tag)
 {
     const char *rules = s_games[s_game].turns;
@@ -1175,7 +1218,8 @@ static char *line_make(void)
              "begin a line with an interjection or a laugh (Ha, Ah, Oh, Well, Hmm...) and vary how your lines start. "
              "Each of your lines is spoken aloud: as short as the rules say (else one to three short sentences), no "
              "lists, no emojis, no markdown, no stage directions, never speak for another player. Say only the line "
-             "itself, at once: no reasoning, no thinking aloud, no drafts; never repeat, mention or explain these rules, "
+             "itself, at once: no reasoning, no thinking aloud, no drafts, never correct yourself or start over within "
+             "a line; never repeat, mention or explain these rules, "
              "the cases or your instructions.",
              lang->code, character ? character : "", g->name, g->rules ? g->rules : "");
     free(character);
@@ -1207,6 +1251,16 @@ static char *line_make(void)
         } else {
             fprintf(out, "%s%s", g->first ? g->first : "Start the game.",
                     g->plain ? "" : " In this first line, also say in a few words who you are (your character).");
+        }
+        // The tag this line must have, after the last one's (the model lost track of the turns)
+        char tags[32];
+        next_tags(tags, sizeof(tags));
+        if (tags[0]) {
+            if (strchr(tags, ' ')) {
+                fprintf(out, " This line must start with one of these tags: %s (choose the one that applies).", tags);
+            } else {
+                fprintf(out, " This line must start with the tag %s:", tags);
+            }
         }
         // A theme drawn (each line: the model uses it when it asks or opens something new), and what was used
         char *used = used_read(g->id);
@@ -1733,6 +1787,17 @@ void game_poll(void)
         break;
     case G_SPEAKING: {
         char *text = line_make();
+        char allowed[32], tag[16];
+        next_tags(allowed, sizeof(allowed));
+        if (text && allowed[0]) {
+            line_clean(text);
+            tag_of(text, tag, sizeof(tag));
+            if (!tag[0] || !tag_in(allowed, strlen(allowed), tag)) {
+                ESP_LOGW(TAG, "line tagged \"%s\" instead of %s: asked again", tag, allowed);
+                free(text);
+                text = line_make();
+            }
+        }
         if (!text) {
             send_simple("stop", s_turns, NULL);
             game_end(app_lang_get()->game_peer_left);

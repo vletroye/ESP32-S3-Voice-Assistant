@@ -787,7 +787,8 @@ asleep, join in), then a game's phrase:
   answer, to judge the other's guess); `themes = a | b | c` and `theme_rule` (`%s` for the theme): a theme drawn for each line, not one used
   lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the
   answers of the riddles are remembered (the last 60, in the state partition) and never asked again;
-  `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS`: who says the line after a
+  `next = RIDDLE>GUESS; GUESS>RIGHT WRONG`: the tag a line must have after a line's tag (given to the model,
+  checked, asked again once if not followed); `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS`: who says the line after a
   tag (after a GUESS line, the BOX of the last RIDDLE or WRONG line; else the first BOX to have heard it); `blunder = 35`, `blunder_after` and `blunder_rule`: that instruction added
   to 35 % of the lines following a line of the other with one of these tags (the riddles: a wrong guess on purpose,
   a funny one, teased by the other). A story told in turns, a quiz, a game of "who am I"… Emptied, the

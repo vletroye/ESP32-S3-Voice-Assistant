@@ -122,6 +122,7 @@ typedef struct {
     bool theme_first;       /* theme_for = first: only the first line gets it (the debate keeps its topic) */
     char *characters;       /* "a | b | c": this game's characters (Game_tone = random), else s_tones */
     char *last;             /* the instruction of the last line */
+    int sentences;          /* each line cut after this many sentences (0: not cut) */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
@@ -271,6 +272,8 @@ static const char *const s_games_updates[][2] = {
       "theme_rule = The topic of the debate is: %s.\ntheme_for = first" },
     { "rules = A verbal fight with the other player, quick-fire: each line a jab in ONE short, sharp sentence (12 words at most). Play the arrogant know-it-all: you are right, the other is wrong; you are the smartest, the other is a clueless amateur; its arguments are laughable and it cannot contradict you (\"give up, you can't win this\"). Mock its last line directly, with dry irony, mock pity and playful insults (fool, amateur, beginner...), never vulgar, never about real people. State things as obvious facts, never hedge. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree, never give in.",
       "rules = A verbal fight with the other player, quick-fire: each line a jab in ONE short, sharp sentence (15 words at most). Play the arrogant know-it-all: you are right, the other is wrong; you are the smartest, the other is a clueless amateur; its arguments are laughable and it cannot contradict you (\"give up, you can't win this\"). Mock its last line directly, with dry irony and mock pity, and hurl one or two colourful, absurd, old-fashioned insults in the style of Captain Haddock in Tintin (in French: bachi-bouzouk, moule à gaufres, ectoplasme à roulettes, bougre d'extrait de cornichon, anacoluthe, cercopithèque, olibrius, zouave, marin d'eau douce, jus de réglisse, anthropopithèque, boit-sans-soif, mille millions de mille sabords, tonnerre de Brest...; in other languages their known translations or the same spirit), a different one each time, never vulgar, never about real people. State things as obvious facts, never hedge. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree, never give in." },
+    { "theme_rule = The topic of the debate is: %s.\ntheme_for = first",
+      "theme_rule = The topic of the debate is: %s; keep to it.\ntheme_for = first\nsentences = 1" },
 };
 
 static void games_update(void)
@@ -478,6 +481,8 @@ static void games_load_locked(void)
         } else if (strcmp(key, "characters") == 0) {
             free(g->characters);
             g->characters = strdup(value);
+        } else if (strcmp(key, "sentences") == 0) {
+            g->sentences = atoi(value);
         } else if (strcmp(key, "last") == 0) {
             free(g->last);
             g->last = strdup(value);
@@ -1498,6 +1503,35 @@ static void line_clean(char *text)
     }
 }
 
+/*
+ * sentences: the line cut after that many sentences (asked one short sentence, Claude made three of 40 words: the
+ * quick-fire was lost). A sentence ends with . ! or ? (several in a row: one end), then a space.
+ */
+static void line_sentences(char *text, int max)
+{
+    if (max <= 0) {
+        return;
+    }
+    size_t tag_len = 0;
+    char *p = (char *)tag_skip(text, &tag_len);
+    int count = 0;
+    for (; *p; p++) {
+        if (*p != '.' && *p != '!' && *p != '?') {
+            continue;
+        }
+        while (p[1] == '.' || p[1] == '!' || p[1] == '?') {
+            p++;
+        }
+        if (p[1] == ' ' || p[1] == '\n') {
+            if (++count >= max) {
+                ESP_LOGI(TAG, "line cut after %d sentence(s)", max);
+                p[1] = '\0';
+                return;
+            }
+        }
+    }
+}
+
 /* A line said: the claims of the next one */
 static void electing_start(uint64_t speaker)
 {
@@ -1906,6 +1940,7 @@ void game_poll(void)
         }
         line_clean(text);
         line_shorten(text, s_games[s_game].short_after);
+        line_sentences(text, s_games[s_game].sentences);
         line_say(text);
         free(text);
         break;

@@ -792,7 +792,8 @@ asleep, join in), then a game's phrase:
   follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent to the other (the riddles: the
   answer, to judge the other's guess); `themes = a | b | c` and `theme_rule` (`%s` for the theme): a theme drawn for each line (`theme_for = first`:
   for the first line only); `characters = a | b | c`: this game's characters instead of the firmware's list (the
-  creation: its experts); `last`: the instruction of the last line (the creation: sum up the plan), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the
+  creation: its experts); `last`: the instruction of the last line (the creation: sum up the plan); `sentences = 1`: each line cut after
+  that many sentences (the debate: the model made three sentences of 40 words when asked for one), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the
   answers of the riddles are remembered (the last 60, in the state partition) and never asked again;
   `next = RIDDLE>GUESS; GUESS>RIGHT WRONG`: the tag a line must have after a line's tag (given to the model,
   checked, asked again once if not followed); `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS`: who says the line after a

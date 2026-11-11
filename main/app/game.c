@@ -948,7 +948,8 @@ static char *line_make(void)
              "begin a line with an interjection or a laugh (Ha, Ah, Oh, Well, Hmm...) and vary how your lines start. "
              "Each of your lines is spoken aloud: as short as the rules say (else one to three short sentences), no "
              "lists, no emojis, no markdown, no stage directions, never speak for another player. Say only the line "
-             "itself: never repeat, mention or explain these rules, the cases or your instructions.",
+             "itself, at once: no reasoning, no thinking aloud, no drafts; never repeat, mention or explain these rules, "
+             "the cases or your instructions.",
              lang->code, character ? character : "", g->name, g->rules ? g->rules : "");
     free(character);
     char *question = NULL;
@@ -1059,6 +1060,41 @@ static void line_shorten(char *text, const char *short_after)
             }
             break;
         }
+    }
+}
+
+/*
+ * The model sometimes thinks aloud before its line ("The last line was a RIGHT line, so I must...", several drafts):
+ * with tags, only the last paragraph starting with one is kept
+ */
+static void line_clean(char *text)
+{
+    const game_def_t *g = &s_games[s_game];
+    if (!g->short_after[0] && !g->turns[0]) {
+        return;     // a game without tags
+    }
+    char *keep = NULL;
+    for (char *p = text; *p; p++) {
+        if (p == text || p[-1] == '\n') {
+            size_t tag_len = 0;
+            tag_skip(p, &tag_len);
+            // The secret ("ANSWER:" on a line of its own) belongs to the line before it
+            if (tag_len && !(g->secret[0] && tag_len == strlen(g->secret) &&
+                             strncmp(p + strspn(p, " \n"), g->secret, tag_len) == 0)) {
+                keep = p;
+            }
+        }
+    }
+    if (!keep) {
+        return;
+    }
+    if (keep != text) {
+        ESP_LOGW(TAG, "the model thought aloud: only its last tagged line kept");
+        memmove(text, keep, strlen(keep) + 1);
+    }
+    char *end = strstr(text, "\n\n");
+    if (end) {
+        *end = '\0';
     }
 }
 
@@ -1406,6 +1442,7 @@ void game_poll(void)
             game_end(app_lang_get()->game_peer_left);
             return;
         }
+        line_clean(text);
         line_shorten(text, s_games[s_game].short_after);
         line_say(text);
         free(text);

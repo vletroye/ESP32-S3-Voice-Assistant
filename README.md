@@ -769,8 +769,9 @@ joins in), then a game's phrase:
   isolation" on the Wi-Fi).
 - **Your own games**: **GAMES.INI** of the configuration drive, one section per game: its name per language
   (`name_fr`…), the phrases starting it (`phrases_fr = disputez-vous | débattez`, the start of what is said, case
-  and accents ignored), the instruction of the first line (`first`) and the rules of every line (`rules`), in English
-  (the model speaks the language of the BOX anyway). A story told in turns, a quiz, a game of "who am I"… Emptied, the
+  and accents ignored), the instruction of the first line (`first`), the rules of every line (`rules`), both in English
+  (the model speaks the language of the BOX anyway), and `character = no` for plain lines (no character, no
+  introduction: the riddles). A story told in turns, a quiz, a game of "who am I"… Emptied, the
   file comes back as the firmware gives it; a line still as an older firmware gave it is updated by a new one
   (your own lines and games are kept).
 

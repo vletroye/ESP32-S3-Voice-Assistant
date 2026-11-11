@@ -83,6 +83,7 @@ typedef struct {
     char phrases[400];      /* of the current language, "a | b | c" */
     char *first;
     char *rules;
+    bool plain;             /* character = no: no character, no introduction */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
@@ -169,6 +170,8 @@ static const char *const s_games_updates[][2] = {
       "first = Open a verbal duel: assert a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...) as if it were an obvious fact, in one short, dry sentence (10 words at most), with a touch of irony." },
     { "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most): a dry comeback, a jab or a blunt counter-argument. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree.",
       "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most). Be assertive: state things as obvious facts, never hedge, never hesitate, never ask permission. Be dry and ironic: deadpan sarcasm, a mock compliment, a cold understatement. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree." },
+    { "rules = You play a riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Look at the other's last line: (1) it asks a riddle: give your answer in one short sentence, nothing else. (2) it is an answer to YOUR riddle and it is right: say it is correct in a few words and ask NOTHING (the other found it: it asks the next riddle). (3) it is an answer to YOUR riddle and it is wrong: say so, give the right answer, then ask a new riddle. (4) it says your answer was right: ask a new riddle. (5) it says your answer was wrong, gives the answer and asks a new riddle: answer that new riddle. Never repeat a riddle already asked.",
+      "rules = A riddle contest with the other assistant, turn by turn. Whoever finds the answer asks the next riddle; after a wrong answer, the one who asked gives the answer and asks another. Your line is ONLY one of these, nothing else: a riddle; or your guess to the other's riddle (just the guess); or, when the other guessed your riddle right, a few words saying it is correct and nothing more (the other asks the next one); or, when its guess was wrong, a few words saying so, the right answer, then a new riddle; or, when the other says your guess was right, a new riddle; or, when it says your guess was wrong and asks a new riddle, your guess to that new riddle. No introduction, no comment, no explanation. Never repeat a riddle already asked.\ncharacter = no" },
 };
 
 static void games_update(void)
@@ -314,6 +317,8 @@ static void games_load(void)
         } else if (strcmp(key, "rules") == 0) {
             free(g->rules);
             g->rules = strdup(value);
+        } else if (strcmp(key, "character") == 0) {
+            g->plain = strcasecmp(value, "no") == 0;
         }
     }
     free(line);
@@ -647,12 +652,18 @@ static char *line_make(void)
     const game_def_t *g = &s_games[s_game];
     const app_lang_t *lang = app_lang_get();
     char *system = NULL;
+    char *character = NULL;
+    if (!g->plain && s_tone_text) {
+        asprintf(&character, "Your character: %s; stay in character. ", s_tone_text);
+    }
     asprintf(&system, "You are a voice assistant playing a game out loud with another voice assistant (another "
-             "device), in front of the user. Speak only the language whose code is '%s'. Your character: %s; stay in "
-             "character. Game: %s. Rules: %s Never begin a line with an interjection or a laugh (Ha, Ah, Oh, Well, "
-             "Hmm...) and vary how your lines start. Each of your lines is spoken aloud: as short as the rules say (else one to three short sentences), "
-             "no lists, no emojis, no markdown, no stage directions, never speak for the other player.",
-             lang->code, s_tone_text ? s_tone_text : "yourself", g->name, g->rules ? g->rules : "");
+             "device), in front of the user. Speak only the language whose code is '%s'. %sGame: %s. Rules: %s Never "
+             "begin a line with an interjection or a laugh (Ha, Ah, Oh, Well, Hmm...) and vary how your lines start. "
+             "Each of your lines is spoken aloud: as short as the rules say (else one to three short sentences), no "
+             "lists, no emojis, no markdown, no stage directions, never speak for the other player. Say only the line "
+             "itself: never repeat, mention or explain these rules, the cases or your instructions.",
+             lang->code, character ? character : "", g->name, g->rules ? g->rules : "");
+    free(character);
     char *question = NULL;
     size_t size = 0;
     FILE *out = open_memstream(&question, &size);
@@ -666,8 +677,8 @@ static char *line_make(void)
             }
             fputs("\nSay your next line.", out);
         } else {
-            fprintf(out, "%s In this first line, also say in a few words who you are (your character).",
-                    g->first ? g->first : "Start the game.");
+            fprintf(out, "%s%s", g->first ? g->first : "Start the game.",
+                    g->plain ? "" : " In this first line, also say in a few words who you are (your character).");
         }
         if (s_turns + 1 >= s_turns_max) {
             fputs(" This is the last line of the game: end it in one or two sentences, in character.", out);

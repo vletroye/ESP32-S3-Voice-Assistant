@@ -748,7 +748,7 @@ joins in), then a game's phrase:
 
 | You say | They do |
 | --- | --- |
-| "Disputez-vous" / "Argue with each other" | A verbal duel, quick-fire and dry: one throws out a bold opinion, the other hits back in one short sharp sentence (10 words at most), and so on |
+| "Disputez-vous" / "Argue with each other" | A verbal duel, quick-fire, assertive and dry, with irony: one asserts a bold opinion as an obvious fact, the other hits back in one short sharp sentence (10 words at most), and so on |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers; right ("c'est correct" / "that's right"): the one who found it asks the next one; wrong: the one who asked gives the answer and asks another |
 
 - The two BOX take turns **out loud**, each with **its own voice** and **its own model**; each line is shown only on

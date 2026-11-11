@@ -165,6 +165,10 @@ static const char *const s_games_updates[][2] = {
       "first = Open a verbal duel: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short, sharp sentence (10 words at most)." },
     { "rules = You are in a fast verbal sparring match with the other assistant: quick-fire repartee, back and forth. Answer its last line with ONE short punchy sentence (15 words at most): a witty comeback, a jab or a sharp counter-argument, never a speech. Never agree. Stay good-natured.",
       "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most): a dry comeback, a jab or a blunt counter-argument. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree." },
+    { "first = Open a verbal duel: throw out a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...), in one short, sharp sentence (10 words at most).",
+      "first = Open a verbal duel: assert a bold, debatable opinion on an everyday topic of your choice (food, holidays, pets, technology...) as if it were an obvious fact, in one short, dry sentence (10 words at most), with a touch of irony." },
+    { "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most): a dry comeback, a jab or a blunt counter-argument. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree.",
+      "rules = A fast, dry verbal duel with the other assistant, quick-fire. Hit back at its last line in ONE short, sharp sentence (10 words at most). Be assertive: state things as obvious facts, never hedge, never hesitate, never ask permission. Be dry and ironic: deadpan sarcasm, a mock compliment, a cold understatement. Straight to the point: no preamble, no interjection, no laughing, never a speech. Never agree." },
 };
 
 static void games_update(void)

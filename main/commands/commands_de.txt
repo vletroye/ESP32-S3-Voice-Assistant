@@ -179,6 +179,12 @@ denk (gut|gründlich) nach
 (deaktiviere|beende|stoppe) [das ](nachdenken|denken)
 schalte [das ](nachdenken|denken) aus
 
+[s_continue_conversation]
+# Nach einer Pause geweckt (außerhalb des Denkmodus): das vorige Gespräch bleibt, sonst beginnt ein neues
+(setze|führe|setzen wir|führen wir) [das ](vorige |letzte |)gespräch fort
+(mach|machen wir) (weiter mit dem|mit dem) (vorigen |letzten |)gespräch weiter
+weiter mit dem (vorigen |letzten |)gespräch
+
 [s_new_conversation]
 (lass uns|wir) ein neues gespräch (beginnen|anfangen|starten)
 (beginne|starte|fang) ein neues gespräch[ an]

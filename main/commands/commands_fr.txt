@@ -169,6 +169,10 @@ mode (raisonnement|réflexion)
 [s_reasoning_off]
 (désactive|arrête|coupe|éteins|enlève) [le ](raisonnement|mode raisonnement|mode réflexion)
 
+[s_continue_conversation]
+# Réveillé après une pause (hors mode raisonnement) : la conversation précédente est gardée, sinon une nouvelle commence
+(continue|continuons|reprends|reprenons|on continue|on reprend) [la ](conversation|discussion)[ (précédente|d avant)]
+
 [s_new_conversation]
 (démarrons|commençons|[on ](démarre|commence)) une nouvelle (discussion|conversation)
 (on recommence|recommençons) à zéro

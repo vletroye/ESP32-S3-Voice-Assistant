@@ -87,6 +87,7 @@ static PHRASE_LIST(s_change_stt);
 static PHRASE_LIST(s_change_tts);
 /* A new conversation, as after "au revoir" (normalized: lowercase, apostrophes as spaces) */
 static PHRASE_LIST(s_new_conversation);
+static PHRASE_LIST(s_continue_conversation);
 /* The reasoning mode: "j'ai une question difficile" (a question may follow), "désactive le raisonnement" */
 static PHRASE_LIST(s_reasoning_on);
 static PHRASE_LIST(s_reasoning_off);
@@ -1249,6 +1250,13 @@ void voice_cmd_reply_spoken(void)
     }
 }
 
+bool voice_cmd_is_continue(const char *text)
+{
+    char norm[CMD_NORM_SIZE];
+    app_text_normalize(text, norm, sizeof(norm));
+    return starts_with(norm, phrases_of(&s_continue_conversation), NULL);
+}
+
 bool voice_cmd_is_goodbye(const char *text)
 {
     char norm[CMD_NORM_SIZE];
@@ -1283,7 +1291,7 @@ void voice_cmd_init(void)
         &s_test_llm, &s_fastest_models, &s_radio_station, &s_radio_music,
         &s_radio_next, &s_radio_previous, &s_radio_stop, &s_radio_resume, &s_radio_what, &s_radio_fav_add,
         &s_radio_fav_remove, &s_radio_favorites, &s_change_lang, &s_lang_shortcut, &s_change_model, &s_model_shortcut, &s_change_voice, &s_voice_shortcut, &s_change_stt, &s_change_tts,
-        &s_new_conversation, &s_reasoning_on, &s_reasoning_off, &s_edit_config, &s_restart, &s_version, &s_mark, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
+        &s_new_conversation, &s_continue_conversation, &s_reasoning_on, &s_reasoning_off, &s_edit_config, &s_restart, &s_version, &s_mark, &s_clock_on, &s_clock_off, &s_open_settings, &s_change_country, &s_change_city,
         &s_answer_prefix, &s_yes, &s_no, &s_cancel, &s_courtesy, &s_one_alone,
     };
     for (size_t i = 0; i < sizeof(lists) / sizeof(lists[0]); i++) {
@@ -1720,6 +1728,15 @@ static voice_cmd_t handle(const char *text, char **reply)
     }
 
     size_t len = 0;
+    if (starts_with(norm, phrases_of(&s_continue_conversation), &len)) {
+        // "Continue la conversation précédente": alone, answered here and listened to (the conversation kept);
+        // followed by a question, the model answers it
+        const char *rest = norm + len + (norm[len] == ' ');
+        if (!*rest || starts_with(rest, phrases_of(&s_courtesy), NULL)) {
+            *reply = reply_dup(app_lang_get()->resume_yes);
+            return VOICE_CMD_LISTEN;
+        }
+    }
     if (starts_with(norm, phrases_of(&s_new_conversation), &len)) {
         // Alone (or with "s'il te plaît"): answered here; followed by a question: the model answers it
         const char *rest = norm + len + (norm[len] == ' ');

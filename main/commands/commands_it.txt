@@ -165,6 +165,10 @@ modalità ragionamento
 [s_reasoning_off]
 (disattiva|spegni|ferma) il ragionamento
 
+[s_continue_conversation]
+# Svegliato dopo una pausa (fuori dalla modalità ragionamento): la conversazione precedente resta, altrimenti ne inizia una nuova
+(continua|continuiamo|riprendi|riprendiamo) [la ](conversazione|discussione)[ precedente]
+
 [s_new_conversation]
 (iniziamo|cominciamo|inizia|comincia) una nuova (conversazione|discussione|chiacchierata)
 (ricominciamo|ripartiamo) da (zero|capo)

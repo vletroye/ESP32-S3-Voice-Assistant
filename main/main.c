@@ -356,10 +356,15 @@ static void on_reply_audio(tts_event_t event)
 }
 
 /*
- * Woken up after a pause of Resume_ask_min or more in a conversation (the reasoning mode or not; after a restart too,
- * its time kept with it): "Veux-tu continuer la conversation précédente ?" is asked instead of listening at once (its
- * answer is listened to after it, voice_cmd.c). Called from app_audio.c (SR handler task); false: listen as usual.
+ * Woken up after a pause of Resume_ask_min or more in a conversation (after a restart too, its time kept with it):
+ * - in the reasoning mode, "Veux-tu continuer la conversation précédente ?" is asked instead of listening at once (its
+ *   answer is listened to after it, voice_cmd.c);
+ * - otherwise nothing is asked: listened to as usual, and the first question starts a new conversation unless it
+ *   starts with "continue la conversation précédente" (s_fresh_pending).
+ * Called from app_audio.c (SR handler task); false: listen as usual.
  */
+static volatile bool s_fresh_pending = false;
+
 bool assistant_resume_ask(void)
 {
     int64_t last_us = llm_last_exchange_us();
@@ -367,10 +372,15 @@ bool assistant_resume_ask(void)
     if (sys_param->resume_ask_min <= 0 || !last_us || pause_us < sys_param->resume_ask_min * 60 * 1000000LL) {
         return false;
     }
-    ESP_LOGI(TAG, "%s, %lld min since the last answer: going on?", llm_reasoning() ? "Reasoning mode" : "Conversation",
-             pause_us / 60000000LL);
-    // Asked once for this pause: the answer (or a follow-up) does not ask it again
+    // Once for this pause: the answer (or a follow-up) does not come here again
     llm_exchange_touch();
+    if (!llm_reasoning()) {
+        ESP_LOGI(TAG, "Conversation, %lld min since the last answer: a new one unless continued",
+                 pause_us / 60000000LL);
+        s_fresh_pending = true;
+        return false;
+    }
+    ESP_LOGI(TAG, "Reasoning mode, %lld min since the last answer: going on?", pause_us / 60000000LL);
     s_cancelled = false;
     llm_cancel_clear();
     voice_cmd_expect_resume();
@@ -1031,6 +1041,18 @@ void assistant_listen_end(void)
 
     // The transcript is there: the answer is being prepared
     ui_ctrl_label_show_text(UI_CTRL_LABEL_LISTEN_SPEAK, app_lang_get()->thinking);
+
+    if (s_fresh_pending) {
+        // The first question after a pause (outside the reasoning mode): a new conversation, unless it starts with
+        // "continue la conversation précédente"
+        s_fresh_pending = false;
+        if (!voice_cmd_is_continue(text)) {
+            ESP_LOGI(TAG, "After the pause: a new conversation");
+            llm_reset();
+        } else {
+            ESP_LOGI(TAG, "After the pause: the previous conversation goes on");
+        }
+    }
 
     if (voice_cmd_is_goodbye(text)) {
         // Back to sleep: no answer, no follow-up listening, the next conversation starts afresh

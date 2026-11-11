@@ -55,6 +55,9 @@ voice_cmd_t voice_cmd_handle(const char *text, char **reply);
 /* Around a part of a reply shown but never spoken (the last test time of a model in a list) */
 #define VOICE_CMD_SHOWN_ONLY    "\x1F"
 
+/** The transcript starts with "continue la conversation précédente" (the conversation kept after a pause) */
+bool voice_cmd_is_continue(const char *text);
+
 /** The whole transcript is a closing phrase ("au revoir", "bonne nuit"): back to sleep, conversation cleared */
 bool voice_cmd_is_goodbye(const char *text);
 

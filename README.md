@@ -750,7 +750,7 @@ asleep, join in), then a game's phrase:
 
 | You say | They do |
 | --- | --- |
-| "Disputez-vous" / "Argue with each other" | A verbal duel, quick-fire, assertive and dry, with irony: one asserts a bold opinion as an obvious fact, the other hits back in one short sharp sentence (10 words at most), and so on |
+| "Disputez-vous" / "Argue with each other" | A real fight of words, quick-fire: one asserts a bold opinion as an obvious fact, then each hits back in one short sharp sentence (12 words at most), arrogant and ironic ("j'ai raison, tu as tort" / "I'm right, you're wrong", "laisse tomber, tu ne peux pas me contredire" / "give up, you can't contradict me"), with playful insults, never vulgar |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers (wrong on purpose about one time in three, with humour); right ("c'est correct" / "that's right"): the one who found it asks the next one; wrong: the one who asked gives the answer and asks another |
 
 - The BOX take turns **out loud**, each with **its own voice** and **its own model**, and **hear each other with

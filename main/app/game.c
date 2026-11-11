@@ -51,8 +51,8 @@ static const char *TAG = "game";
 #define GAME_HEARD_WAIT_MS  3000
 /* Nobody claimed the next line this long after the end of a line: the lowest id goes on */
 #define GAME_DONE_WAIT_MS   12000
-/* The BOX elected silent this long: the game ends */
-#define GAME_SPEAK_WAIT_MS  60000
+/* The BOX elected silent this long: the game ends (a line in the reasoning mode may take up to 2 minutes) */
+#define GAME_SPEAK_WAIT_MS  150000
 /* A listening waits this long for the speech of the line (the speaker's voice comes a second after its "speak") */
 #define GAME_LISTEN_WAIT_MS 15000
 /* The speaker done: a listening started again after its pause stops after this; the first one after this */
@@ -125,6 +125,7 @@ typedef struct {
     char *last;             /* the instruction of the last line */
     int sentences;          /* each line cut after this many sentences (0: not cut) */
     char document[24];      /* the file written at the end by the BOX ending the game ("project.txt") */
+    bool reasoning;         /* reasoning = yes: its lines and document made in the reasoning mode */
     char *document_rule;    /* what it is */
 } game_def_t;
 
@@ -309,6 +310,8 @@ static const char *const s_games_updates[][2] = {
       "rules = A brainstorming of experts out loud, building together the plan to make real the invention of the first line. Each line (two or three short sentences, 40 words at most) brings ONE useful contribution from your expert's point of view: a concrete step of the plan, a technical solution, a cost or a business model, a law or a rule to deal with, a risk, a test, a doubt, or a strong objection to the last line with a better alternative. Disagree when it makes sense, diverge, propose another way; never repeat what was said, always move the plan forward. Never name or mention the others' roles, professions or characters, nor your own: speak about the idea, not about the people." },
     { "last = This is the last line of the game: sum up the plan agreed in two or three sentences, in character.",
       "last = This is the last line of the game: sum up the plan agreed in two or three sentences.\ndocument = project.txt\ndocument_rule = Write the requirements specification of this invention for a specialised subcontractor who will develop it, from what the brainstorming decided or implies: title; context and goal; scope; functional requirements; technical requirements; legal and regulatory constraints; budget and business model; risks and how to handle them; milestones and deliverables; acceptance criteria. Numbered sections and short numbered requirements, plain text without markdown symbols." },
+    { "last = This is the last line of the game: sum up the plan agreed in two or three sentences.\n",
+      "reasoning = yes\nlast = This is the last line: sum up the plan agreed in two or three sentences.\n" },
 };
 
 static void games_update(void)
@@ -517,6 +520,8 @@ static void games_load_locked(void)
         } else if (strcmp(key, "characters") == 0) {
             free(g->characters);
             g->characters = strdup(value);
+        } else if (strcmp(key, "reasoning") == 0) {
+            g->reasoning = strcasecmp(value, "yes") == 0;
         } else if (strcmp(key, "document") == 0) {
             strlcpy(g->document, value, sizeof(g->document));
         } else if (strcmp(key, "document_rule") == 0) {
@@ -1408,7 +1413,7 @@ static char *line_make(void)
         fclose(out);
     }
     char *answer = NULL;
-    llm_error_t err = system && question ? llm_ask_apart(system, question, &answer) : LLM_ERR_OTHER;
+    llm_error_t err = system && question ? llm_ask_apart(system, question, &answer, g->reasoning) : LLM_ERR_OTHER;
     free(system);
     free(question);
     if (err != LLM_OK) {
@@ -1703,7 +1708,7 @@ static char *document_write(void)
         fclose(out);
     }
     char *answer = NULL;
-    llm_error_t err = system && question ? llm_ask_apart(system, question, &answer) : LLM_ERR_OTHER;
+    llm_error_t err = system && question ? llm_ask_apart(system, question, &answer, g->reasoning) : LLM_ERR_OTHER;
     free(system);
     free(question);
     char path[48], name[24];

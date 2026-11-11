@@ -232,8 +232,9 @@ llm_error_t llm_probe(const llm_model_t *model, const char *question, llm_stats_
  *        no tools; the conversation, its instructions and its tools given back after. Blocking (until the end of the
  *        answer). The games between two devices (game.c).
  * @param answer The whole answer (allocated, to be freed), NULL on error
+ * @param reasoning In the reasoning mode (its effort, its longer wait), when the model reasons
  */
-llm_error_t llm_ask_apart(const char *system_prompt, const char *question, char **answer);
+llm_error_t llm_ask_apart(const char *system_prompt, const char *question, char **answer, bool reasoning);
 
 /**
  * Provider serving a model id: its section of AGENTS.INI; for a model not listed, "vendor/model" is OpenRouter,

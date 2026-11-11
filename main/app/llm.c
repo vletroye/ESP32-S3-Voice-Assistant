@@ -1719,7 +1719,7 @@ void llm_set_system_prompt(const char *system_prompt)
 
 static llm_error_t client_stream(const char *text, llm_text_cb_t on_text, void *ctx, char **full_text);
 
-llm_error_t llm_ask_apart(const char *system_prompt, const char *question, char **answer)
+llm_error_t llm_ask_apart(const char *system_prompt, const char *question, char **answer, bool reasoning)
 {
     *answer = NULL;
     if (!s_ready || !s_lock) {
@@ -1728,12 +1728,23 @@ llm_error_t llm_ask_apart(const char *system_prompt, const char *question, char 
     xSemaphoreTake(s_lock, portMAX_DELAY);
     // The conversation, the instructions and the tools of the assistant set aside, then given back
     cJSON *saved = cJSON_Duplicate(history_get(), true);
+    // The reasoning mode for this question only (a game's "reasoning = yes"): the client set up with its effort
+    bool reasoning_was = s_reasoning;
+    bool reason = reasoning && llm_reasoning_possible() && !s_reasoning;
+    if (reason) {
+        s_reasoning = true;
+        client_init(s_model, true);
+    }
     history_set(cJSON_CreateArray());
     backend()->set_instructions(backend()->state, system_prompt);
     if (backend()->set_tools) {
         backend()->set_tools(backend()->state, NULL, NULL);
     }
     llm_error_t err = client_stream(question, NULL, NULL, answer);
+    if (reason) {
+        s_reasoning = reasoning_was;
+        client_init(s_model, true);
+    }
     history_set(saved);
     backend()->set_instructions(backend()->state, s_system ? s_system : "");
     if (backend()->set_tools) {

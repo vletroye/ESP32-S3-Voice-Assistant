@@ -793,7 +793,9 @@ asleep, join in), then a game's phrase:
   follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent to the other (the riddles: the
   answer, to judge the other's guess); `themes = a | b | c` and `theme_rule` (`%s` for the theme): a theme drawn for each line (`theme_for = first`:
   for the first line only); `characters = a | b | c`: this game's characters instead of the firmware's list (the
-  creation: its experts); `last`: the instruction of the last line (the creation: sum up the plan); `document = project.txt` and
+  creation: its experts); `last`: the instruction of the last line (the creation: sum up the plan); `reasoning = yes`: its lines and document made in the reasoning mode
+  of the model in use, when it reasons (the creation: better ideas, but each line takes tens of seconds);
+  `document = project.txt` and
   `document_rule`: at the end the BOX ending the game writes that file from all the lines, as the rule asks
   (shown on the configuration drive, replaced each time); `sentences = 1`: each line cut after
   that many sentences (the debate: the model made three sentences of 40 words when asked for one), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the

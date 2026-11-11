@@ -120,6 +120,8 @@ typedef struct {
     char *themes;           /* "a | b | c": one drawn for each line, given by theme_rule */
     char *theme_rule;       /* "... its theme is: %s ..." */
     bool theme_first;       /* theme_for = first: only the first line gets it (the debate keeps its topic) */
+    char *characters;       /* "a | b | c": this game's characters (Game_tone = random), else s_tones */
+    char *last;             /* the instruction of the last line */
 } game_def_t;
 
 static game_def_t *s_games = NULL;      /* PSRAM */
@@ -304,6 +306,36 @@ static void games_update(void)
         text = next;
         changed = true;
     }
+    // Games added by a newer firmware: their section appended once ("# added: <id>" left to know it)
+    static const char *const s_games_added[] = { "create" };
+    for (size_t i = 0; i < sizeof(s_games_added) / sizeof(s_games_added[0]); i++) {
+        char mark[48], header[32];
+        snprintf(mark, sizeof(mark), "# added: %s", s_games_added[i]);
+        snprintf(header, sizeof(header), "[%s]", s_games_added[i]);
+        const char *from = strstr(s_games_default_start, mark);
+        if (strstr(text, mark) || strstr(text, header) || !from) {
+            continue;
+        }
+        const char *end = strstr(strstr(from, header) ? strstr(from, header) : from, "\n#");
+        size_t add = end ? (size_t)(end - from + 1) : strlen(from);
+        size_t len = strlen(text);
+        char *next = heap_caps_malloc(len + add + 3, MALLOC_CAP_SPIRAM);
+        if (!next) {
+            break;
+        }
+        memcpy(next, text, len);
+        size_t at = len;
+        if (at && next[at - 1] != '\n') {
+            next[at++] = '\n';
+        }
+        next[at++] = '\n';
+        memcpy(next + at, from, add);
+        next[at + add] = '\0';
+        free(text);
+        text = next;
+        changed = true;
+        ESP_LOGI(TAG, "game added: %s", s_games_added[i]);
+    }
     if (changed) {
         f = fopen(GAMES_FILE, "w");
         bool ok = f && fputs(text, f) >= 0;
@@ -343,6 +375,8 @@ static void games_free(void)
         free(s_games[i].rules);
         free(s_games[i].blunder_rule);
         free(s_games[i].themes);
+        free(s_games[i].characters);
+        free(s_games[i].last);
         free(s_games[i].theme_rule);
     }
     s_game_count = 0;
@@ -439,6 +473,12 @@ static void games_load_locked(void)
         } else if (strcmp(key, "themes") == 0) {
             free(g->themes);
             g->themes = strdup(value);
+        } else if (strcmp(key, "characters") == 0) {
+            free(g->characters);
+            g->characters = strdup(value);
+        } else if (strcmp(key, "last") == 0) {
+            free(g->last);
+            g->last = strdup(value);
         } else if (strcmp(key, "theme_for") == 0) {
             g->theme_first = strcasecmp(value, "first") == 0;
         } else if (strcmp(key, "theme_rule") == 0) {
@@ -741,11 +781,33 @@ static void tone_choose(void)
         asprintf(&s_tone_text, "%s %s", persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY));
         return;
     }
+    // This game's characters (the creation: experts), else the firmware's list
+    const char *list = s_game >= 0 ? s_games[s_game].characters : NULL;
+    int count = TONES_COUNT;
+    if (list && list[0]) {
+        count = 1;
+        for (const char *p = list; *p; p++) {
+            count += *p == '|';
+        }
+    }
     int tries = 0;
     do {
-        s_my_tone = (int)(esp_random() % TONES_COUNT);
-    } while ((s_tones_seen & (1u << s_my_tone)) && ++tries < 50);
-    s_tone_text = strdup(s_tones[s_my_tone]);
+        s_my_tone = (int)(esp_random() % count);
+    } while ((s_tones_seen & (1u << (s_my_tone % 32))) && ++tries < 50);
+    if (list && list[0]) {
+        const char *p = list;
+        for (int i = 0; i < s_my_tone; i++) {
+            p = strchr(p, '|') + 1;
+        }
+        p += strspn(p, " ");
+        size_t n = strcspn(p, "|");
+        while (n && p[n - 1] == ' ') {
+            n--;
+        }
+        s_tone_text = strndup(p, n);
+    } else {
+        s_tone_text = strdup(s_tones[s_my_tone]);
+    }
 }
 
 /* ---------- the BOX of the game and their claims ---------- */
@@ -1308,7 +1370,8 @@ static char *line_make(void)
             fprintf(out, " %s", g->blunder_rule);
         }
         if (s_turns + 1 >= s_turns_max) {
-            fputs(" This is the last line of the game: end it in one or two sentences, in character.", out);
+            fprintf(out, " %s", g->last && g->last[0] ? g->last
+                    : "This is the last line of the game: end it in one or two sentences, in character.");
         }
         fclose(out);
     }

@@ -238,7 +238,8 @@ settings of the [Quick start](#1-quick-start).
   milk to the shopping list"), your mails (Gmail: "Ai-je des nouveaux mails ?" / "Do I have new emails?") and your
   agenda (Google Calendar: "Qu'est-ce que j'ai demain ?" / "What do I have tomorrow?") (see
   [Google: Tasks, Gmail and Calendar](#311-google-tasks-gmail-and-calendar)).
-- **Games between BOX**: "Disputez-vous" / "Argue with each other", "Concours de devinettes" / "Riddle contest":
+- **Games between BOX**: "Disputez-vous" / "Argue with each other", "Concours de devinettes" / "Riddle contest",
+  "Création collaborative" / "Collaborative creation":
   two BOX or more take turns out loud, each with its own voice, hearing each other (see
   [Games between BOX](#29-games-between-box)).
 - **Any MCP server** whose tools the model can use, besides the Homey (see [MCP servers](#312-mcp-servers)).
@@ -751,6 +752,7 @@ asleep, join in), then a game's phrase:
 | You say | They do |
 | --- | --- |
 | "Disputez-vous" / "Argue with each other" | A real fight of words, quick-fire: one asserts a bold opinion as an obvious fact, then each hits back in one short sharp sentence (12 words at most), arrogant and ironic ("j'ai raison, tu as tort" / "I'm right, you're wrong", "laisse tomber, tu ne peux pas me contredire" / "give up, you can't contradict me"), with playful insults, never vulgar |
+| "Création collaborative" / "Collaborative creation", "Inventez ensemble" / "Invent together" | A brainstorming of experts (a visionary scientist, an engineer, an economist, a lawyer, a civil servant, an investor, an ethicist, a sceptic…): the first announces a totally new invention in a field drawn (science, technology, law, economics, public administration, health…), the others build the plan to make it real, each bringing a step, a solution, a cost, a law, a risk or an objection; the last line sums the plan up |
 | "Concours de devinettes" / "Riddle contest" | One asks a riddle, the other answers (wrong on purpose about one time in three, with humour); right ("c'est correct" / "that's right"): the one who found it asks the next one; wrong: the one who asked gives the answer and asks another |
 
 - The BOX take turns **out loud**, each with **its own voice** and **its own model**, and **hear each other with
@@ -785,7 +787,8 @@ asleep, join in), then a game's phrase:
   guess gets "Correct !" and nothing more, the one who found it asks the next riddle); `secret = TAG`: what
   follows "TAG:" in a line is kept by the BOX for itself, never spoken, shown nor sent to the other (the riddles: the
   answer, to judge the other's guess); `themes = a | b | c` and `theme_rule` (`%s` for the theme): a theme drawn for each line (`theme_for = first`:
-  for the first line only), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the
+  for the first line only); `characters = a | b | c`: this game's characters instead of the firmware's list (the
+  creation: its experts); `last`: the instruction of the last line (the creation: sum up the plan), not one used lately (the riddles: kitchen, space, dinosaurs… for an original riddle each time; the debate: its topic); the
   answers of the riddles are remembered (the last 60, in the state partition) and never asked again;
   `next = RIDDLE>GUESS; GUESS>RIGHT WRONG`: the tag a line must have after a line's tag (given to the model,
   checked, asked again once if not followed); `turns = GUESS>RIDDLE WRONG; RIGHT>GUESS`: who says the line after a

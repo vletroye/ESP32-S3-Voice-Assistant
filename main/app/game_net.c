@@ -139,6 +139,7 @@ static void net_task(void *arg)
             v = cJSON_GetObjectItem(json, "text");
             msg.text = cJSON_IsString(v) ? strdup(v->valuestring) : NULL;
             if (xQueueSend(s_queue, &msg, 0) != pdTRUE) {
+                ESP_LOGW(TAG, "message \"%s\" (line %d) lost: the queue is full", msg.type, msg.turn);
                 free(msg.text);
             } else {
                 assistant_save_soon();      // the main task, at once

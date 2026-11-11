@@ -1075,7 +1075,8 @@ static void message(game_msg_t *m)
         player_add(m->from);
         if (strcmp(m->type, "heard") == 0) {
             claim_take(m);
-        } else if (strcmp(m->type, "speak") == 0 && m->turn == s_turns + 1 && s_state != G_SPEAKING) {
+        } else if (strcmp(m->type, "speak") == 0 && m->turn == s_turns + 1 && s_state != G_SPEAKING &&
+                   !(s_state == G_LISTENING && s_speaker == m->from)) {
             // Another BOX says the next line: listened to with the microphone
             s_speaker = m->from;
             strlcpy(s_line_tag, m->tag, sizeof(s_line_tag));
@@ -1127,10 +1128,29 @@ static void message(game_msg_t *m)
     free(m->text);
 }
 
+/* A message logged (its copies are not): the turns of a game followed in the log */
+static void message_trace(const game_msg_t *m)
+{
+    static char s_last[48];
+    char key[48];
+    snprintf(key, sizeof(key), "%s %llx %d %d %lu", m->type, (unsigned long long)m->from, m->turn, m->round,
+             (unsigned long)m->nonce);
+    if (strcmp(m->type, "local") == 0 || strcmp(key, s_last) != 0) {
+        strlcpy(s_last, key, sizeof(s_last));
+        ESP_LOGI(TAG, "received %s, line %d, from %s, game %s (state %d, line %d, speaker %s)", m->type, m->turn,
+                 m->from == s_my_id ? "this BOX" : m->from == s_speaker ? "the speaker" : "another BOX",
+                 m->nonce == s_nonce ? "this one" : "another", (int)s_state, s_turns + 1,
+                 s_speaker ? "known" : "none");
+    }
+}
+
 void game_poll(void)
 {
     game_msg_t m;
     while (game_net_receive(&m)) {
+        if (s_state != G_IDLE || strcmp(m.type, "claim") == 0) {
+            message_trace(&m);
+        }
         message(&m);
     }
     if (s_stop_requested) {

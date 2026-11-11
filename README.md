@@ -775,6 +775,10 @@ asleep, join in), then a game's phrase:
   chef, a sports commentator, an old sailor, a butler, a knight, a science-fiction fan, a grandmother full of
   proverbs), not one already drawn by another BOX; it gives each one its style and tone, never introduced nor named aloud. `persona` keeps each one's
   `PERSO_<XX>.TXT`.
+- **Mistral's voices refuse some lines**: their moderation blocks many insults, even Haddock's (the BOX then stays
+  silent for that line): "Ma voix refuse de prononcer certains noms d'oiseaux (le service Mistral les bloque) : choisis
+  une autre voix pour les jeux." / "My voice refuses to say some colourful insults (the Mistral service blocks them):
+  choose another voice for the games." is written under the line, and said once a game. An OpenAI voice says them.
 - If no other BOX answers within 8 seconds: "Je ne trouve pas d'autre BOX sur le réseau." / "I can't find another
   BOX on the network." All BOX must have this firmware, be close enough to hear each other, and the router must
   let them talk to each other (no "client isolation" on the Wi-Fi).

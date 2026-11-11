@@ -189,6 +189,7 @@ static cJSON *s_history = NULL;     /* [{"id":"..","me":true,"tag":"GUESS","text
 static int64_t s_since = 0;         /* the start of the current wait (esp_timer, us) */
 
 static int64_t s_reclaim_us = 0;    /* a tie: this BOX claims again at this time (0: no) */
+static bool s_refusal_said = false; /* the moderation of the voice explained aloud (once a game) */
 
 /* The line being listened to */
 static uint64_t s_speaker = 0;     /* the BOX speaking the line listened to */
@@ -1048,6 +1049,7 @@ static void game_reset(void)
     s_last_speaker = 0;
     s_tones_seen = 0;
     s_reclaim_us = 0;
+    s_refusal_said = false;
     s_done_seen = false;
     free(s_heard);
     s_heard = NULL;
@@ -1560,6 +1562,23 @@ static void line_say(char *text)
     int64_t t0 = esp_timer_get_time();
     while (!s_spoken && !s_stop_requested && esp_timer_get_time() - t0 < 60 * 1000000LL) {
         vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    if (tts_stream_moderated() && !s_stop_requested) {
+        // The speech service refused the line (Mistral's moderation, an insult): written under it, and said once
+        // a game (that sentence passes) so that the user knows why this BOX was silent
+        ESP_LOGW(TAG, "line %d refused by the moderation of the speech service", turn);
+        ui_ctrl_reply_append_notice(app_lang_get()->game_voice_refused);
+        if (!s_refusal_said) {
+            s_refusal_said = true;
+            s_spoken = false;
+            tts_stream_begin(on_speech);
+            tts_stream_say(app_lang_get()->game_voice_refused);
+            tts_stream_end();
+            t0 = esp_timer_get_time();
+            while (!s_spoken && !s_stop_requested && esp_timer_get_time() - t0 < 30 * 1000000LL) {
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+        }
     }
     if (!s_stop_requested) {
         cJSON *d = msg_new("done");

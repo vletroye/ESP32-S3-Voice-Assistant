@@ -170,6 +170,8 @@ static volatile bool s_failed = false;
 static volatile bool s_no_credit = false;
 /* Why the speech was refused last (llm_speech_error), LLM_OK if it was not: said by the model test */
 static volatile llm_error_t s_refusal = LLM_OK;
+/* A sentence refused by the moderation of the speech service (Mistral: "guardrail_violation") */
+static volatile bool s_moderated = false;
 static int16_t *s_resampled = NULL;
 static size_t s_resampled_cap = 0;
 /* Model test: the audio of the sentences kept here (16 kHz, PSRAM) instead of being played */
@@ -327,6 +329,10 @@ void tts_backend_no_credit(void)
 void tts_backend_refused(int status, const char *text)
 {
     s_refusal = llm_speech_error(status, text);
+    if (text && (strstr(text, "guardrail") || strstr(text, "moderation") || strstr(text, "content_policy") ||
+                 strstr(text, "content_filter"))) {
+        s_moderated = true;
+    }
     if (s_refusal == LLM_ERR_CREDIT) {
         s_no_credit = true;
     }
@@ -646,6 +652,11 @@ bool tts_stream_test(const tts_backend_t *backend, const char *base_url, const c
     return ok;
 }
 
+bool tts_stream_moderated(void)
+{
+    return s_moderated;
+}
+
 bool tts_stream_no_credit(void)
 {
     return s_no_credit;
@@ -692,6 +703,7 @@ void tts_stream_begin(tts_event_cb_t cb)
     s_failed = false;
     s_no_credit = false;
     s_refusal = LLM_OK;
+    s_moderated = false;
     drop_queued_sentences();
     s_flush = true;
     s_event_cb = cb;

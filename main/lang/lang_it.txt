@@ -536,6 +536,7 @@ game_organizing = Organizzazione della sessione...
 game_no_peer = Non trovo un'altra BOX sulla rete.
 game_peer_left = L'altra BOX non risponde più: fine della partita.
 game_over = Fine della partita!
+game_voice_refused = La mia voce si rifiuta di pronunciare alcuni insulti (il servizio Mistral li blocca): scegli un'altra voce per i giochi.
 game_end_natural = Ok, va bene così. Fermiamoci qui.
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button

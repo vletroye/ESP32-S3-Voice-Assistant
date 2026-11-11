@@ -103,6 +103,9 @@ bool tts_stream_test(const tts_backend_t *backend, const char *base_url, const c
                      const char *voice, const char *text, int16_t **audio, size_t *samples, int *first_ms,
                      int *total_ms);
 
+/** A sentence of the last reply refused by the moderation of the speech service (Mistral's "guardrail") */
+bool tts_stream_moderated(void);
+
 /** The speech of the last reply refused for lack of credit (insufficient_quota, 402...) */
 bool tts_stream_no_credit(void);
 

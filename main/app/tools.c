@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "esp_log.h"
 #include "file_lang.h"
 #include "app_volume.h"
@@ -24,6 +25,7 @@
 #include "alarm_ring.h"
 #include "file_phrases.h"
 #include "game.h"
+#include "google_auth.h"
 
 static const char *TAG = "tools";
 
@@ -98,6 +100,13 @@ static const char s_definitions_json[] =
     "tests, clock, settings, language, memory, games...). Answer with one or two natural phrases to say, never the "
     "pattern syntax; if no command does it, say so (you may do it yourself with your tools).\","
     "\"input_schema\":{\"type\":\"object\",\"properties\":{}}},"
+    "{\"name\":\"device_guide\","
+    "\"description\":\"The user guide of this device (in English: say it in the user's language): what it can do and "
+    "how each feature works and is set up, with the device's current state (language, Google linked, MCP servers, "
+    "radio). Call it when the user asks what you or the device can do, how something works, or for help. Without "
+    "topic: the list of topics; then call it again with the topic needed. It only describes: it starts nothing.\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{"
+    "\"topic\":{\"type\":\"string\",\"description\":\"A topic id from the list (e.g. 'radio')\"}}}},"
     "{\"name\":\"alarm_snooze\","
     "\"description\":\"Ring the timer, alarm or reminder that is ringing or just rang (within 10 minutes) again in some minutes ('encore 5 minutes', 'snooze').\","
     "\"input_schema\":{\"type\":\"object\",\"properties\":{"
@@ -448,6 +457,80 @@ static char *voice_commands_run(void)
     return text;
 }
 
+/* The user guide (main/guide/guide.txt): "[id] summary" lines, each followed by its text */
+extern const char s_guide_start[] asm("_binary_guide_txt_start");
+
+/* Where the device stands, added to every answer of device_guide */
+static void guide_status(cJSON *o)
+{
+    cJSON *st = cJSON_AddObjectToObject(o, "status");
+    cJSON_AddStringToObject(st, "language", app_lang_get()->code);
+    static const char *const google[] = { "not configured (no client in CONFIG.INI)", "configured, account not linked",
+                                          "linking", "linked", "link refused: to link again" };
+    google_state_t g = google_auth_state();
+    cJSON_AddStringToObject(st, "google", (size_t)g < sizeof(google) / sizeof(google[0]) ? google[g] : "?");
+    static const char *const states[] = { "off", "connecting", "ready", "unreachable" };
+    cJSON *servers = cJSON_AddArrayToObject(st, "mcp_servers");
+    for (int i = 0; i < mcp_count(); i++) {
+        int tools = 0;
+        mcp_state_t s = mcp_state(i, &tools);
+        char line[96];
+        snprintf(line, sizeof(line), "%s: %s, %d tools", mcp_name(i),
+                 (size_t)s < sizeof(states) / sizeof(states[0]) ? states[s] : "?", tools);
+        cJSON_AddItemToArray(servers, cJSON_CreateString(line));
+    }
+    cJSON_AddStringToObject(st, "radio", radio_playing() ? radio_station_name() : "not playing");
+    cJSON_AddBoolToObject(st, "deep_thinking", llm_reasoning());
+}
+
+static char *device_guide_run(const cJSON *input)
+{
+    const char *topic = string_input(input, "topic");
+    cJSON *o = cJSON_CreateObject();
+    char *topics = NULL, *text = NULL;
+    size_t topics_size = 0, text_size = 0;
+    FILE *list = open_memstream(&topics, &topics_size);
+    FILE *body = open_memstream(&text, &text_size);
+    bool in_topic = false;
+    for (const char *p = s_guide_start; *p;) {
+        size_t n = strcspn(p, "\n");
+        if (*p == '[') {
+            size_t id_len = strcspn(p + 1, "]");
+            in_topic = topic && strlen(topic) == id_len && strncasecmp(p + 1, topic, id_len) == 0;
+            if (list) {
+                fprintf(list, "%.*s\n", (int)n, p);
+            }
+        } else if (in_topic && *p != '#' && body) {
+            fprintf(body, "%.*s\n", (int)n, p);
+        }
+        p += n + (p[n] == '\n');
+    }
+    if (list) {
+        fclose(list);
+    }
+    if (body) {
+        fclose(body);
+    }
+    if (text && text[0]) {
+        cJSON_AddStringToObject(o, "topic", topic);
+        cJSON_AddStringToObject(o, "text", text);
+    } else {
+        if (topic && topic[0]) {
+            cJSON_AddStringToObject(o, "note", "unknown topic: the topics are listed");
+        }
+        cJSON_AddStringToObject(o, "topics", topics ? topics : "");
+    }
+    free(topics);
+    free(text);
+    guide_status(o);
+    cJSON_AddStringToObject(o, "rules", "Say it in the user's language, short and spoken (no lists read out as "
+                            "such); never say the wake word aloud, call it 'the wake word'; for the exact phrase of "
+                            "a command, use voice_commands. This guide starts nothing.");
+    char *result = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    return result;
+}
+
 static char *alarm_snooze_run(const cJSON *input, bool *is_error)
 {
     const cJSON *minutes = cJSON_GetObjectItem(input, "minutes");
@@ -494,6 +577,8 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
         result = alarm_snooze_run(input, is_error);
     } else if (strcmp(name, "voice_commands") == 0) {
         result = voice_commands_run();
+    } else if (strcmp(name, "device_guide") == 0) {
+        result = device_guide_run(input);
     } else if (google_tasks_has(name)) {
         result = google_tasks_run(name, input, is_error);
     } else if (google_calendar_has(name)) {

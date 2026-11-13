@@ -31,6 +31,8 @@ idf_component_register(
         # Games between BOX: the firmware's (built in) and GAMES.INI as installed on SPIFFS (main/app/game.c)
         "games/games.ini"
         "games/games_user.ini"
+        # The user guide given to the model (tool device_guide, main/app/tools.c)
+        "guide/guide.txt"
         # Who the assistant is, per language (PERSO_FR.TXT...), installed on SPIFFS when missing (main/app/file_persona.c)
         "persona/persona_fr.txt"
         "persona/persona_en.txt"

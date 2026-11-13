@@ -1,0 +1,184 @@
+# The user guide of the device, for the model (tool device_guide): one topic per "[id] summary" line, its text
+# below it. Written in English; the model says it in the user's language. Lines starting with # are comments.
+# Never say the wake word aloud (it would wake the other BOX of the room up): call it "the wake word".
+
+[overview] What the device is and everything it can do, in short
+An ESP32-S3-BOX-3: a small screen with a speaker and microphones, a voice assistant answering through an AI model
+of the cloud. It can: hold a spoken conversation (asked by the wake word, "Bonjour ESP" in French or "Hi ESP" in
+English, or a touch on the screen); play internet radios; set timers, alarms and reminders; give the weather and
+search the web; remember notes about the user; use the user's Google account (tasks and shopping list, mail,
+agenda); drive a Homey home automation box and other MCP servers; play games out loud between several BOX; speak
+six languages (French, English, Dutch, German, Spanish, Italian, others can be added) with many voices and models;
+show the time, the costs, the Wi-Fi and the battery on its sleep screen; be set up from its Settings screen or from
+files on a USB drive (configuration mode). Topics: conversation, gestures, radio, alarms, weather, memory,
+google, homey, mcp, games, languages, models, voices, settings, screens, config, update, costs, troubleshooting.
+For the exact phrase of a command, use the tool voice_commands.
+
+[conversation] Talking to the assistant: waking it, follow-ups, ending, a new conversation, deep thinking
+- Wake it with the wake word or a touch on the screen: a beep, "J'écoute" (listening) is shown; ask the question.
+  After a short silence it is sent: "Entendu" (heard), then "Je réfléchis" (thinking), then the answer is shown
+  and spoken sentence by sentence.
+- After an answer it keeps listening 8 seconds without a beep: go on without the wake word.
+- To interrupt an answer: say the wake word again, or double-tap the screen; it stops and listens.
+- "Au revoir" / "Goodbye" said alone: back to sleep at once and the conversation is cleared. An answer ending
+  with a goodbye also ends the conversation.
+- The conversation is kept across sleep and restarts. After a pause, a new conversation starts unless the first
+  phrase asks to go on with the previous one ("continue la conversation précédente").
+- "Nouvelle discussion" / "New conversation": starts afresh without sleeping.
+- "Abandon" / "Cancel": drops a question the device asked (which model, which town...) and listens again.
+- Deep thinking (reasoning mode) can be switched on or off by voice for the models that reason: slower, better
+  answers to hard questions.
+- It knows the date and time with each question, and the user's country and town (for local answers).
+
+[gestures] Touches on the screen
+- Touch while asleep: wakes the assistant up, like the wake word.
+- Double tap during an answer: stops it and listens.
+- Double tap while listening or thinking (anywhere, the robot included): the question is dropped, back to sleep.
+- Tap the Wi-Fi icon or the battery (bottom right of the sleep screen): the Wi-Fi and battery screen.
+- Tap the volume (bottom left): the radio screen. Tap the time: the alarms and reminders screen.
+- Tap the gear: the Settings screen; a long press on the gear: the System screen (firmware version, memory...).
+- Tap the cost at the top right: the detailed costs.
+- While a radio plays on the sleep screen, a double tap on the robot's head stops it.
+
+[radio] Internet radio: stations, genres, favourites, the radio screen
+- Played from the free Radio-Browser directory. Ask a station by its name ("joue la radio Nostalgie" / "play the
+  radio Nostalgie"), a genre ("joue du jazz" / "play some jazz"), a country ("joue de la musique italienne"), or
+  both. The model can also choose for free requests ("mets un truc calme pour dîner" / "something calm for
+  dinner").
+- While it plays: "suivante" / "next", "précédente" / "previous", "stop", "qu'est-ce qui passe" / "what's
+  playing" (station and title); "remets la radio" / "resume the radio" plays it again. It pauses while the user
+  talks to the assistant and comes back after.
+- Favourites: "ajoute cette radio aux favoris" / "add this radio to my favourites", "retire cette radio des
+  favoris", "joue mes favoris" / "play my favourites"; kept in RADIO.TXT on the configuration drive.
+- The radio screen (tap the volume on the sleep screen): the station, the title, the buttons and the volume.
+- The volume: "parle plus fort" / "louder", "baisse le son" / "quieter", "mets le volume à 50".
+
+[alarms] Timers, alarms and reminders
+- Asked in the user's own words: "minuteur de 10 minutes pour les pâtes" / "10-minute timer for the pasta",
+  "réveille-moi à 7 h en semaine" / "wake me at 7 on weekdays", "réveille-moi demain à 7 h avec Classic 21" (an
+  alarm with a radio), "rappelle-moi jeudi à 15 h d'appeler Paul" / "remind me Thursday at 3 pm to call Paul".
+- Repetitions: every day, weekdays, the weekend, chosen days, every month (same day, "the second Tuesday", "the
+  last Friday", the last day), every year (birthdays).
+- When due: a chime (or the radio) rising from silence, then its label said. A reminder: a short chime and its
+  text. Stop it with a touch or the wake word; then "encore 5 minutes" / "5 more minutes" rings it again later.
+  Not stopped, it stops by itself after 3 minutes.
+- Ask what is set ("quelles alarmes ai-je ?", "combien de temps reste-t-il ?"), delete one ("supprime l'alarme de
+  7 h"). On the sleep screen, letters near the time show what is set, a timer's countdown is shown at the top;
+  tap the time for the list.
+- Kept across restarts; a reminder missed during a power cut is said once the clock is back.
+
+[weather] Weather, news and web search
+- The weather now and for up to 7 days, anywhere (Open-Meteo): "quel temps fait-il à Namur ?", "va-t-il pleuvoir
+  demain ?". Without a place, the user's town (set by "change ma ville" / "change my town", or City in CONFIG.INI).
+- Current information (news, results, hours, prices) by a web search: the models of providers with their own
+  search, or Perplexity's search for the others when a Perplexity key is set.
+
+[memory] Long-term memory notes
+- "Souviens-toi que ..." / "Remember that ...": a note used in every answer from now on.
+- "Oublie que ..." / "Forget that ...", "oublie tout" / "forget everything", "dis-moi ce que tu as mémorisé" /
+  "what do you remember?".
+- The notes are in MEMORY.TXT on the configuration drive, editable there.
+- Who the assistant is (its name, personality, how it speaks) is in PERSO_<XX>.TXT, one per language.
+
+[google] Google account: Tasks and shopping list, Gmail, Calendar
+- Lists and tasks ("ajoute du lait à la liste de courses" / "add milk to the shopping list", "qu'est-ce qu'il
+  reste sur ma liste ?"), mails ("ai-je des nouveaux mails ?", read, summarize), agenda ("qu'est-ce que j'ai
+  demain ?", add an event).
+- Setting it up (once): a Google Cloud project of the user with the Tasks, Gmail and Calendar APIs and an OAuth
+  client of type "Desktop app"; its client id and secret go into CONFIG.INI (Google_client, Google_secret); then
+  the account is linked from the configuration mode (a link to open on the PC, the code given back). The README of
+  the project explains each step.
+- The current state is in the "status" of this tool's result.
+
+[homey] Home automation with a Homey Pro
+- Switch devices on and off, set them, activate moods, start flows, tell who is home and the energy used: "allume
+  la lumière du salon", "active l'ambiance cinéma", "lance le flow Bonne nuit", "qui est à la maison ?".
+- Setting it up: install the MCP AI Bridge app on the Homey, then add it in CONFIG.INI as an MCP server named Homey
+  (Mcp1_name = Homey, Mcp1_url = its address, Mcp1_key = its key), and restart.
+- Only with the models that take tools.
+
+[mcp] Other MCP servers (tools for the model)
+- Any MCP server reachable over HTTP (a home server, a local service, an online one with a key): its tools are
+  offered to the model, which uses them when a question needs them.
+- Added in CONFIG.INI, section [MCP]: McpN_name, McpN_url, McpN_key (optional), McpN_tools (to choose its tools),
+  McpN_on. The MCP servers page of the Settings screen shows each one (tools, connecting, unreachable, off) with a
+  box to switch it on or off.
+
+[games] Games played out loud between several BOX
+- Two BOX or more on the same network take turns out loud, each with its own voice, hearing each other with their
+  microphones. Say the phrase of a game to one BOX (after the wake word): the others join by themselves.
+- The games: a debate (a fight of words on a topic), a riddle contest, a collaborative creation (an idea invented
+  together, its requirements written to PROJECT.TXT on the configuration drive), "who am I?" (a famous person to
+  find by yes/no questions), Akinator (a person, an object, an animal or a film to find), "higher or lower" (a
+  number or a year to find), the trial (a prosecutor and a lawyer plead an absurd case, the judge's verdict at
+  the end).
+- A touch on any BOX stops the game on all. A guessing game ends with the answer revealed.
+- Their phrases: the tool voice_commands. The number of lines: Game_turns_max in CONFIG.INI; the games can be
+  changed or new ones added in GAMES.INI on the configuration drive.
+
+[languages] Languages
+- Six languages given: French, English, Dutch, German, Spanish, Italian: the screen, the transcription, the
+  answers and the voice. Switched by voice ("parle anglais" / "speak French", "change la langue") or from the
+  Settings screen.
+- Another language can be added in CONFIG.INI (Languages); the device then makes its files (LANG_, VOICE_,
+  PERSO_<XX>.TXT) from the English ones, to be translated on the configuration drive.
+
+[models] The AI models answering
+- Claude (Anthropic, the default), GPT (OpenAI), Gemini (Google), Grok (xAI), Mistral, Perplexity (with web
+  search), and many models through OpenRouter, free ones included. Each provider needs its API key in CONFIG.INI.
+- Change by voice ("change de modèle" / "change the model", "utilise le modèle 3" / "use model 3") or from the
+  Settings screen; the models offered are listed in AGENTS.INI, and can be ticked or unticked in the Settings.
+- "Teste les modèles" / "test the models" measures how fast each one answers; "quels sont les modèles les plus
+  rapides ?" gives the best three.
+- The transcription (STT) and the speech (TTS) models are chosen the same way ("change de transcription", "change
+  de synthèse vocale").
+
+[voices] Voices
+- Voices of OpenAI, Mistral (natural voices per language, with an emotion or a pace), Deepgram Aura-2 (also through
+  OpenRouter), ElevenLabs, depending on the keys set. "Change de voix" / "change the voice", "prends la voix
+  Cedar"; or the Settings screen. The new voice introduces itself.
+- A voice may refuse to say some words (Mistral blocks insults): another voice then.
+
+[settings] The Settings screen on the device
+- Opened by the gear of the sleep screen; eight pages: language and model; transcription, speech and voice; the
+  LLM, STT and TTS models (ticked or not, a long press tests one); the MCP servers; the beep after a reply; the
+  debug traces.
+- The folder-and-gear icon opens the configuration mode. Two icons there reset the device: the soft reset (the
+  settings and the texts back to the firmware's, Wi-Fi, keys and MCP servers kept) and the factory reset
+  (everything erased).
+- The clock on the sleep screen: "affiche l'heure" / "cache l'heure". The country and town: "change mon pays",
+  "change ma ville". The firmware version: "quelle est ta version ?". A restart by voice too.
+
+[screens] What the screens show
+- The sleep screen: the robot asleep, the time and date (if shown), the volume, the Wi-Fi signal, the battery with
+  the BOX-3-SENSOR dock (whose presence sensor also switches the screen off when nobody is there), the costs.
+- Listening, thinking and answering: the robot, the words heard, the answer scrolling.
+- The radio screen, the alarms screen, the Wi-Fi and battery screen, the System screen, the Settings screen.
+
+[config] The configuration mode and the files of the USB drive
+- Opened by "édite la config" / "edit the config", or Settings, folder-and-gear icon. The BOX restarts and shows up
+  on the PC as a USB drive named ESP-BOX.
+- Its files: CONFIG.INI (Wi-Fi, API keys, settings, MCP servers, Google), MEMORY.TXT (memory notes), AGENTS.INI
+  (models and voices offered), LANG_<XX>.TXT (texts of the device), VOICE_<XX>.TXT (phrases of the voice
+  commands), PERSO_<XX>.TXT (who the assistant is), COUNTRY.TXT, RADIO.TXT (favourite radios), GAMES.INI (games),
+  PROJECT.TXT (the last collaborative creation), COSTS.TXT and SPEED.TXT (written by the device), DEBUG.TXT,
+  BOOTS.TXT (the last starts).
+- Edit, save, then wait about 10 seconds (longer for a big file) before pressing Restart on the screen.
+- An emptied file comes back as the firmware's version at the next start.
+
+[update] Updating the firmware
+- From the releases of the project on GitHub: three small files (partitions, app, config) flashed with
+  esptool-js in a browser, without erasing anything; or the full image (erases the settings).
+- After an update, the new texts and phrases are added to the existing files; the soft reset gives the new
+  versions of all of them.
+
+[costs] Costs
+- Each provider is paid by use (except the free models). The cost of the conversation and of the day are shown at
+  the top right of the screen; a tap opens the details per kind (transcription, model, speech) and per month.
+  Everything is counted in COSTS.TXT.
+
+[troubleshooting] When something goes wrong
+- A missing credit, a refused key or a network problem is said and shown, with the provider.
+- No Wi-Fi or no key: the device starts in configuration mode; fill CONFIG.INI.
+- Not understood: speak closer; a phrase of a command not recognised can be added to VOICE_<XX>.TXT.
+- The debug traces (Settings, last page) can be dumped to DEBUG.TXT for the developer.

@@ -773,7 +773,10 @@ asleep, join in), then a game's phrase:
 - **A touch** on any BOX (or the wake word to one not listening) **stops the game on all**. Otherwise it ends
   after `Game_turns_max` lines (20 by default, `CONFIG.INI`, the one of the BOX that started), the last one
   concluding it; the BOX elected next then says "Ok, c'est bon. Arrêtons-nous là." / "Okay, that's enough. Let's
-  stop there.", and none listens afterwards. Each line is a question to the model in use, and each BOX listening
+  stop there.", and none listens afterwards. In a guessing game (a `secret`), the last line is said instead by the
+  BOX holding the answer, and nothing after it: "Oui, tu as gagné ! La bonne réponse était bien Marie Curie." / "Yes,
+  you won! The answer was indeed Marie Curie." or "Hélas, tu as perdu. La bonne réponse n'était pas Einstein, mais
+  Marie Curie." / "Alas, you lost. The answer was not Einstein, but Marie Curie." Each line is a question to the model in use, and each BOX listening
   transcribes it (with Claude Haiku or a free OpenRouter model, a game of 20 lines costs a few cents at most).
 - **Their characters** (`Game_tone` in `CONFIG.INI`): `random` (the default) draws one for each BOX from the
   firmware's list (a pompous philosopher, a blasé teenager, a pirate, an absent-minded professor, a dramatic poet, a

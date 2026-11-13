@@ -303,10 +303,38 @@ static void claim_send(int round)
 
 /* ---------- the lines ---------- */
 
+/*
+ * The last line of a game with a secret (a guessing game): said by the BOX holding it (its last line with a tag
+ * of secret_with), who tells the others whether they won and gives the answer, without a tag; no end phrase after
+ * it (the "Arrêtons-nous là" was abrupt)
+ */
+static bool reveal_line(void)
+{
+    const game_def_t *g = game_def(s_game);
+    return g->secret[0] && g->secret_with[0] && s_turns + 1 >= s_turns_max;
+}
+
+/* The BOX of the last line (from the one before the index "before") whose tag is in a list, 0 if none */
+static uint64_t last_with(const char *tags, int before)
+{
+    for (int i = before - 1; i >= 0; i--) {
+        const cJSON *item = cJSON_GetArrayItem(s_history, i);
+        const cJSON *t = cJSON_GetObjectItem(item, "tag");
+        if (cJSON_IsString(t) && game_tag_in(tags, strlen(tags), t->valuestring)) {
+            const cJSON *id = cJSON_GetObjectItem(item, "id");
+            return cJSON_IsString(id) ? strtoull(id->valuestring, NULL, 16) : 0;
+        }
+    }
+    return 0;
+}
+
 /* The tags this line may have (next: after the last line's tag), "" if free */
 static void next_tags(char *out, size_t size)
 {
     out[0] = '\0';
+    if (reveal_line()) {
+        return;     // the reveal: no tag
+    }
     const cJSON *last = cJSON_GetArrayItem(s_history, cJSON_GetArraySize(s_history) - 1);
     const cJSON *tag = last ? cJSON_GetObjectItem(last, "tag") : NULL;
     if (cJSON_IsString(tag)) {
@@ -325,15 +353,7 @@ static uint64_t owner_after(const char *tag)
         return 0;
     }
     // The last line (before this one) whose tag is on the right
-    for (int i = cJSON_GetArraySize(s_history) - 2; i >= 0; i--) {
-        const cJSON *item = cJSON_GetArrayItem(s_history, i);
-        const cJSON *t = cJSON_GetObjectItem(item, "tag");
-        if (cJSON_IsString(t) && game_tag_in(right, strlen(right), t->valuestring)) {
-            const cJSON *id = cJSON_GetObjectItem(item, "id");
-            return cJSON_IsString(id) ? strtoull(id->valuestring, NULL, 16) : 0;
-        }
-    }
-    return 0;
+    return last_with(right, cJSON_GetArraySize(s_history) - 1);
 }
 
 static void history_add(uint64_t id, const char *tag, const char *text)
@@ -919,8 +939,11 @@ static void decided(uint64_t winner)
             send_simple("stop", s_turns);
             char *document = document_write();
             char *said = NULL;
-            asprintf(&said, "%s%s%s", app_lang_get()->game_end_natural, document ? " " : "", document ? document : "");
-            game_end(said ? said : app_lang_get()->game_end_natural);
+            // After the reveal of a guessing game, nothing more (else "Ok, c'est bon. Arrêtons-nous là.")
+            const game_def_t *g = game_def(s_game);
+            const char *end = g->secret[0] && g->secret_with[0] ? "" : app_lang_get()->game_end_natural;
+            asprintf(&said, "%s%s%s", end, end[0] && document ? " " : "", document ? document : "");
+            game_end(said && said[0] ? said : NULL);
             free(said);
             free(document);
         } else {
@@ -992,6 +1015,13 @@ static void elect(void)
     uint64_t owner = !start && cJSON_IsString(last_tag) ? owner_after(last_tag->valuestring) : 0;
     if (owner && owner != s_last_speaker && player_find(owner)) {
         decided(owner);
+        return;
+    }
+    // The reveal: by the BOX holding the secret (even if it said the line before)
+    uint64_t holder = !start && reveal_line() ? last_with(game_def(s_game)->secret_with,
+                      cJSON_GetArraySize(s_history)) : 0;
+    if (holder && player_find(holder)) {
+        decided(holder);
         return;
     }
     player_t *best = NULL;

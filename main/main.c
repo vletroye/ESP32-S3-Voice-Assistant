@@ -563,7 +563,8 @@ static void speak_message(const char *message)
 static const char s_help_rule[] = "When the user asks what you or the device can do, how a feature works or is set "
                                   "up, or for help, always call device_guide first and answer from it, never from "
                                   "memory or from your list of tools; when the user asks which phrase or command to "
-                                  "say, call voice_commands first.";
+                                  "say, call voice_commands first. Call these two tools without saying anything "
+                                  "before (no \"I am checking the guide\"): your first words are the answer.";
 
 static char *build_system_prompt(void)
 {

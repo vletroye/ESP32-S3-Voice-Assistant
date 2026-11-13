@@ -22,6 +22,8 @@
 #include "gmail.h"
 #include "alarms.h"
 #include "alarm_ring.h"
+#include "file_phrases.h"
+#include "game.h"
 
 static const char *TAG = "tools";
 
@@ -89,6 +91,13 @@ static const char s_definitions_json[] =
     "\"id\":{\"type\":\"integer\"},"
     "\"all\":{\"type\":\"boolean\"},"
     "\"kind\":{\"type\":\"string\",\"enum\":[\"timer\",\"alarm\",\"reminder\",\"any\"],\"description\":\"With all=true: the kind deleted\"}}}},"
+    "{\"name\":\"voice_commands\","
+    "\"description\":\"The device's own voice commands, handled on the device without you, with the phrases that "
+    "start them in the user's language, and the games between BOX. Call it when the user asks how to ask for, "
+    "start or do something on the device, or which command or phrase to say (radio, favorites, models, voices, "
+    "tests, clock, settings, language, memory, games...). Answer with one or two natural phrases to say, never the "
+    "pattern syntax; if no command does it, say so (you may do it yourself with your tools).\","
+    "\"input_schema\":{\"type\":\"object\",\"properties\":{}}},"
     "{\"name\":\"alarm_snooze\","
     "\"description\":\"Ring the timer, alarm or reminder that is ringing or just rang (within 10 minutes) again in some minutes ('encore 5 minutes', 'snooze').\","
     "\"input_schema\":{\"type\":\"object\",\"properties\":{"
@@ -421,6 +430,24 @@ static char *alarm_delete_run(const cJSON *input, bool *is_error)
     return strdup("{\"error\":\"give id, or all=true\"}");
 }
 
+static char *voice_commands_run(void)
+{
+    char *commands = phrases_help();
+    char *games = game_help();
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "syntax", "One pattern per line under each [section] (the command, named by the "
+                            "section and its # comments): [optional part], (one|of|these). A phrase is said to "
+                            "the device after its wake word ('Bonjour ESP'), alone or followed by what it needs.");
+    cJSON_AddStringToObject(o, "commands", commands ? commands : "");
+    cJSON_AddStringToObject(o, "games", games ? games : "");
+    cJSON_AddStringToObject(o, "games_note", "Said to one BOX, the others of the network join; a touch stops it.");
+    free(commands);
+    free(games);
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    return text;
+}
+
 static char *alarm_snooze_run(const cJSON *input, bool *is_error)
 {
     const cJSON *minutes = cJSON_GetObjectItem(input, "minutes");
@@ -465,6 +492,8 @@ char *tools_run(const char *name, const cJSON *input, bool *is_error)
         result = alarm_delete_run(input, is_error);
     } else if (strcmp(name, "alarm_snooze") == 0) {
         result = alarm_snooze_run(input, is_error);
+    } else if (strcmp(name, "voice_commands") == 0) {
+        result = voice_commands_run();
     } else if (google_tasks_has(name)) {
         result = google_tasks_run(name, input, is_error);
     } else if (google_calendar_has(name)) {

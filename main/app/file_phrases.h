@@ -69,6 +69,14 @@ const char *const *phrases_of(phrase_list_t *list);
  */
 int phrases_expand(const char *pattern, char **out, int max);
 
+/**
+ * @brief The voice commands of the current language, for the model (the tool voice_commands): the sections of its
+ *        file with their comments and patterns, without the lists that are not commands (yes, no, articles...).
+ *
+ * @return Allocated text (to be freed), NULL if none
+ */
+char *phrases_help(void);
+
 #ifdef __cplusplus
 }
 #endif

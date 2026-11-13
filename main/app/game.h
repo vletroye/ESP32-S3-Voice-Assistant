@@ -55,6 +55,9 @@ void game_poll(void);
 /** A listening of the game (another BOX's line) is asked or under way: its transcript goes to game_heard() */
 bool game_listening(void);
 
+/** The games and the phrases starting them, in the current language, one per line (for the model; allocated) */
+char *game_help(void);
+
 /** The transcript of that listening (allocated, taken; NULL: nothing heard), from the SR handler task */
 void game_heard(char *text);
 

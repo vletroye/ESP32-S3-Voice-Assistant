@@ -583,6 +583,7 @@ No fixed wording: Claude decides when to use a tool.
 | Web search | "Quelles sont les dernières nouvelles ?" / "What are the latest news?", "Cherche sur internet …" / "Search the web for …" |
 | Radio | "Mets un truc calme pour dîner" / "Put something calm on for dinner", "Une radio d'infos belge" / "A Belgian news radio" (`play_radio`; the usual phrases are handled by the device, see [Radio](#26-radio)) |
 | Homey | "Allume la lumière du salon" / "Turn on the living room light", "Éteins tout au rez-de-chaussée" / "Switch everything off downstairs", "Active l'ambiance cinéma" / "Activate the cinema mood", "Lance le flow Bonne nuit" / "Start the Good night flow", "Qui est à la maison ?" / "Who is home?", "Combien je consomme en ce moment ?" / "How much power am I using right now?" |
+| Voice commands (help) | "Comment je lance la radio ?" / "How do I start the radio?", "Quelle est la commande pour changer de voix ?" / "What is the command to change the voice?", "Comment lancer un jeu ?" / "How do I start a game?" (`voice_commands`: the device's own commands and games, read from `VOICE_<XX>.TXT` and the games of the current language, edits included; the model answers with a phrase or two to say) |
 | Date and time | "Quel jour sommes-nous ?" / "What day is it?", "Dans combien de jours est Noël ?" / "How many days until Christmas?" (no tool: the date comes with each question) |
 
 ### 2.6 Radio

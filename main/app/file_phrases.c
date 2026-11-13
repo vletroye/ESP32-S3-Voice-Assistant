@@ -644,6 +644,49 @@ static const char **make_phrases(char **patterns, int pattern_count)
     return (const char **)all;
 }
 
+/* Lists that are not commands (words inside answers, debug): left out of phrases_help() */
+static const char *const s_not_commands[] = {
+    "s_answer_prefix", "s_yes", "s_no", "s_courtesy", "s_one_alone", "s_mark",
+};
+
+char *phrases_help(void)
+{
+    int slot = lang_index(app_lang_get()->code);
+    if (slot < 0) {
+        slot = lang_index(PHRASES_FALLBACK_LANG);
+    }
+    const char *text = slot >= 0 ? s_texts[slot] : NULL;
+    if (!text) {
+        return NULL;
+    }
+    char *out = NULL;
+    size_t size = 0;
+    FILE *f = open_memstream(&out, &size);
+    if (!f) {
+        return NULL;
+    }
+    // Line by line: the header (before the first section) and the sections left out are skipped
+    bool keep = false;
+    for (const char *p = text; *p;) {
+        size_t n = strcspn(p, "\n");
+        if (*p == '[' && p[1] == 's' && p[2] == '_') {
+            keep = true;
+            for (size_t i = 0; i < sizeof(s_not_commands) / sizeof(s_not_commands[0]); i++) {
+                size_t len = strlen(s_not_commands[i]);
+                if (n > len + 1 && strncmp(p + 1, s_not_commands[i], len) == 0 && p[len + 1] == ']') {
+                    keep = false;
+                }
+            }
+        }
+        if (keep && n) {
+            fprintf(f, "%.*s\n", (int)n, p);
+        }
+        p += n + (p[n] == '\n');
+    }
+    fclose(f);
+    return out;
+}
+
 const char *const *phrases_of(phrase_list_t *list)
 {
     static const char *s_empty[] = { NULL };

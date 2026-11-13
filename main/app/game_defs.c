@@ -19,6 +19,7 @@
 #include "file_lang.h"
 #include "file_state.h"
 #include "file_phrases.h"
+#include "game.h"
 #include "game_internal.h"
 
 static const char *TAG = "game";
@@ -299,6 +300,22 @@ void games_init(void)
 {
     s_games_lock = xSemaphoreCreateMutex();
     games_install();
+}
+
+char *game_help(void)
+{
+    // As loaded (at start-up, on a change of language): no file read from the model's task
+    char *out = NULL;
+    size_t size = 0;
+    FILE *f = open_memstream(&out, &size);
+    if (!f) {
+        return NULL;
+    }
+    for (int i = 0; i < s_game_count; i++) {
+        fprintf(f, "%s: %s\n", s_games[i].name, s_games[i].phrases);
+    }
+    fclose(f);
+    return out;
 }
 
 const game_def_t *game_def(int game)

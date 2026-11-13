@@ -540,6 +540,8 @@ game_voice_refused = La mia voce si rifiuta di pronunciare alcuni insulti (il se
 game_document_writing = Stesura del capitolato...
 game_document_written = Il capitolato è salvato in %s, visibile in modalità configurazione.
 game_end_natural = Ok, va bene così. Fermiamoci qui.
+# Said instead of the wake word (never spoken: it would wake the other BOX up)
+wake_word_spoken = la parola di attivazione
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

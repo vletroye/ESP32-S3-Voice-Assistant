@@ -541,6 +541,8 @@ game_voice_refused = Mijn stem weigert sommige scheldwoorden uit te spreken (de 
 game_document_writing = De vereisten worden opgesteld...
 game_document_written = De vereisten staan in %s, zichtbaar in de configuratiemodus.
 game_end_natural = Oké, het is goed zo. Laten we het hierbij laten.
+# Said instead of the wake word (never spoken: it would wake the other BOX up)
+wake_word_spoken = het wekwoord
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

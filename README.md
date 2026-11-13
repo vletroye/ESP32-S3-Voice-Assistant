@@ -428,6 +428,10 @@ patterns in one file per language (see [Writing voice phrases](#39-writing-voice
 | "Bonjour ESP" | Wakes the assistant up (beep, then listening); during an answer, interrupts it and listens |
 | "Hi ESP" | Same (English pronunciation) |
 
+The device never says them, which would wake the other BOX of the room up: in an answer or a game line, a
+greeting followed by "ESP" ("Bonjour ESP", "Hi ESP", "Bonjour, E.S.P.") is spoken as "le mot de réveil" / "the
+wake word" (`wake_word_spoken` of `LANG_<XX>.TXT`); the screen shows the text as written.
+
 #### 2.5.2 Closing phrases: back to sleep, conversation cleared
 
 Recognised only when said **alone**. The French list is used when the assistant is in French, the English one

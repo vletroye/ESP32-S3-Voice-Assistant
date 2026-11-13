@@ -541,6 +541,8 @@ game_voice_refused = Meine Stimme weigert sich, manche Schimpfwörter auszusprec
 game_document_writing = Das Lastenheft wird geschrieben...
 game_document_written = Das Lastenheft ist in %s gespeichert, sichtbar im Konfigurationsmodus.
 game_end_natural = Okay, das reicht. Lassen wir es dabei.
+# Said instead of the wake word (never spoken: it would wake the other BOX up)
+wake_word_spoken = das Aktivierungswort
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

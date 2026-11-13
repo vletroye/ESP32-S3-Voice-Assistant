@@ -540,6 +540,8 @@ game_voice_refused = My voice refuses to say some colourful insults (the Mistral
 game_document_writing = Writing the requirements...
 game_document_written = The requirements are saved in %s, shown in configuration mode.
 game_end_natural = Okay, that's enough. Let's stop there.
+# Said instead of the wake word (never spoken: it would wake the other BOX up)
+wake_word_spoken = the wake word
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

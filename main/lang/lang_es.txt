@@ -540,6 +540,8 @@ game_voice_refused = Mi voz se niega a pronunciar algunos insultos (el servicio 
 game_document_writing = Redactando el pliego de requisitos...
 game_document_written = El pliego de requisitos está guardado en %s, visible en el modo de configuración.
 game_end_natural = Vale, ya está. Dejémoslo aquí.
+# Said instead of the wake word (never spoken: it would wake the other BOX up)
+wake_word_spoken = la palabra de activación
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

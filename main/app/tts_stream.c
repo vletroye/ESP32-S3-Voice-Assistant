@@ -15,6 +15,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <inttypes.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -34,6 +35,7 @@
 #include "app_audio.h"
 #include "tts_backend.h"
 #include "llm_common.h"
+#include "file_lang.h"
 
 #define TTS_SAMPLE_RATE_IN      24000   /* audio given by the services: 24 kHz, 16-bit signed, mono */
 #define TTS_AUDIO_BUFFER_BYTES  (256 * 1024)    /* 8 s of 16 kHz mono audio, in PSRAM */
@@ -714,8 +716,78 @@ void tts_stream_prewarm(void)
     s_prewarm = true;
 }
 
+/*
+ * The wake words ("Bonjour ESP", "Hi ESP") are never spoken: they would wake the other BOX of the room up (a game,
+ * an answer explaining a command). A greeting followed by "ESP" (or "E.S.P.", "E S P") is said as wake_word_spoken
+ * of LANG_<XX>.TXT ("le mot de réveil"); the screen keeps the text as written. Allocated, NULL if none is found.
+ */
+static bool is_word_char(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || (c & 0x80);
+}
+
+/* The end of "ESP" written at p (spaces, dots, hyphens between the letters allowed), NULL if not */
+static const char *esp_at(const char *p)
+{
+    const char letters[] = "esp";
+    for (int i = 0; i < 3; i++) {
+        if ((*p | 0x20) != letters[i]) {
+            return NULL;
+        }
+        p++;
+        if (i < 2) {
+            p += strspn(p, " .-");
+        }
+    }
+    p += *p == '.';
+    return is_word_char(*p) ? NULL : p;
+}
+
+static char *wake_words_masked(const char *text)
+{
+    static const char *const greetings[] = { "bonjour", "hi", "hey", "hello", "salut" };
+    const char *said = app_lang_get()->wake_word_spoken;
+    char *out = NULL;
+    size_t size = 0;
+    FILE *f = NULL;
+    const char *copied = text;
+    for (const char *p = text; *p; p++) {
+        if (p > text && is_word_char(p[-1])) {
+            continue;
+        }
+        for (size_t g = 0; g < sizeof(greetings) / sizeof(greetings[0]); g++) {
+            size_t n = strlen(greetings[g]);
+            if (strncasecmp(p, greetings[g], n) != 0 || is_word_char(p[n])) {
+                continue;
+            }
+            const char *end = esp_at(p + n + strspn(p + n, " ,.!-"));
+            if (!end) {
+                continue;
+            }
+            if (!f && !(f = open_memstream(&out, &size))) {
+                return NULL;
+            }
+            fprintf(f, "%.*s%s", (int)(p - copied), copied, said && said[0] ? said : "");
+            copied = end;
+            p = end - 1;
+            break;
+        }
+    }
+    if (!f) {
+        return NULL;
+    }
+    fputs(copied, f);
+    fclose(f);
+    ESP_LOGI(TAG, "wake word not spoken: \"%s\"", out);
+    return out;
+}
+
 void tts_stream_say(const char *sentence)
 {
+    char *masked = wake_words_masked(sentence);
+    if (masked) {
+        sentence = masked;
+    }
     size_t len = strlen(sentence) + 1;
     sentence_item_t item = {
         .text = heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT),
@@ -728,6 +800,7 @@ void tts_stream_say(const char *sentence)
         ESP_LOGW(TAG, "Sentence queue full, dropped: %.40s", sentence);
         free(item.text);
     }
+    free(masked);
 }
 
 void tts_stream_end(void)

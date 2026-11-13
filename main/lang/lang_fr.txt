@@ -540,6 +540,8 @@ game_voice_refused = Ma voix refuse de prononcer certains noms d'oiseaux (le ser
 game_document_writing = Rédaction du cahier des charges...
 game_document_written = Le cahier des charges est enregistré dans %s, visible en mode configuration.
 game_end_natural = Ok, c'est bon. Arrêtons-nous là.
+# Said instead of the wake word (never spoken: it would wake the other BOX up)
+wake_word_spoken = le mot de réveil
 
 # Debug page (Debug = on in CONFIG.INI): its title, the switch, what is kept (%u lines, %u KB), the Dump button
 settings_debug_title = Debug

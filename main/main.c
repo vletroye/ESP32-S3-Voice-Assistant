@@ -556,6 +556,15 @@ static void speak_message(const char *message)
  * Instructions given to the model: the base ones, who the assistant is (PERSO_<XX>.TXT) and the notes the user asked
  * to remember (MEMORY.TXT). Allocated, to be freed.
  */
+/*
+ * Help questions answered from the device's own guide and commands (tools.c), never from the tools the model
+ * happens to know: it listed Homey, the radio and the alarms, and forgot the games, the memory, the voices...
+ */
+static const char s_help_rule[] = "When the user asks what you or the device can do, how a feature works or is set "
+                                  "up, or for help, always call device_guide first and answer from it, never from "
+                                  "memory or from your list of tools; when the user asks which phrase or command to "
+                                  "say, call voice_commands first.";
+
 static char *build_system_prompt(void)
 {
     const app_lang_t *lang = app_lang_get();
@@ -585,7 +594,7 @@ static char *build_system_prompt(void)
              !voice || !voice->gender ? "no gender said" : voice->gender == 'f' ? "a woman's" : "a man's");
     const char *parts[] = {
         persona_get(PERSONA_IDENTITY), persona_get(PERSONA_PERSONALITY), persona_get(PERSONA_INSTRUCTIONS), gender,
-        lang->system_prompt, location, home, home_rules,
+        lang->system_prompt, s_help_rule, location, home, home_rules,
     };
     char *prompt = NULL;
     size_t size = 0;
